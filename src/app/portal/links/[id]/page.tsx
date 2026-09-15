@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { getRepositories } from "@/db";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ClicksOverTime, BucketBars } from "@/components/links/charts";
+import { ClicksOverTime, BucketBars, formatBucket } from "@/components/links/charts";
 import { LinkQrCustomizer } from "@/components/links/link-qr-customizer";
 import { shortLinkUrl } from "@/components/links/urls";
 import { requireActor } from "@/server/auth/actor";
@@ -31,14 +31,13 @@ export default async function LinkAnalyticsPage({ params }: { params: Promise<{ 
 	const config = getAppConfig();
 	const origin = config.APP_BASE_URL ?? "https://code.local";
 	const url = shortLinkUrl(origin, stats.link.slug);
-	const total = stats.series.reduce((sum, point) => sum + point.count, 0);
-	const topReferrer = [...stats.referrers].sort((a, b) => b.count - a.count)[0]?.bucket ?? "—";
-	const topDevice = [...stats.devices].sort((a, b) => b.count - a.count)[0]?.bucket ?? "—";
+	const topReferrer = [...stats.referrers].sort((a, b) => b.count - a.count)[0]?.bucket ?? "None";
+	const topDevice = [...stats.devices].sort((a, b) => b.count - a.count)[0]?.bucket ?? "None";
 	const tiles = [
-		{ label: "Total clicks", value: total },
-		{ label: "Days tracked", value: stats.series.length },
-		{ label: "Top referrer", value: topReferrer },
-		{ label: "Top device", value: topDevice },
+		{ label: "Filtered clicks", value: stats.filteredClicks },
+		{ label: "Lifetime clicks", value: stats.lifetimeClicks },
+		{ label: "Top source", value: topReferrer === "None" ? topReferrer : formatBucket(topReferrer) },
+		{ label: "Top device", value: topDevice === "None" ? topDevice : formatBucket(topDevice) },
 	];
 
 	return (
@@ -73,19 +72,19 @@ export default async function LinkAnalyticsPage({ params }: { params: Promise<{ 
 					<Card>
 						<CardHeader>
 							<CardTitle>Clicks over time</CardTitle>
-							<CardDescription>Last {Math.min(30, stats.series.length)} days with activity.</CardDescription>
+							<CardDescription>{stats.query.from} to {stats.query.to}, grouped by {stats.query.granularity} in {stats.query.timezone}.</CardDescription>
 						</CardHeader>
 						<CardContent>
-							<ClicksOverTime data={stats.series.slice(-30)} />
+							<ClicksOverTime data={stats.series} />
 						</CardContent>
 					</Card>
 					<div className="grid gap-5 sm:grid-cols-2">
 						<Card>
 							<CardHeader>
-								<CardTitle className="text-base">Referrers</CardTitle>
+								<CardTitle className="text-base">Traffic source</CardTitle>
 							</CardHeader>
 							<CardContent>
-								<BucketBars label="Referrers" data={stats.referrers} />
+								<BucketBars label="Traffic source" data={stats.referrers.map((row) => ({ ...row, bucket: formatBucket(row.bucket) }))} />
 							</CardContent>
 						</Card>
 						<Card>

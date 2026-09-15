@@ -11,7 +11,13 @@ export async function proxySharedApiRequest(request: Request, path: string): Pro
 	headers.delete("cookie");
 	headers.delete("host");
 
-	return fetch(new URL(path, config.SHARED_API_BASE_URL), {
+	const target = new URL(path, config.SHARED_API_BASE_URL);
+	const explicitParams = new Set(target.searchParams.keys());
+	for (const [name, value] of new URL(request.url).searchParams) {
+		if (!explicitParams.has(name)) target.searchParams.append(name, value);
+	}
+
+	return fetch(target, {
 		method: request.method,
 		headers,
 		body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,

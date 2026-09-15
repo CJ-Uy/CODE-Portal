@@ -9,6 +9,13 @@ export type RedirectDependencies = {
 	previewImageBaseUrl: string;
 };
 
+function isQrScan(params: URLSearchParams): boolean {
+	const canonical = params.getAll("source");
+	if (canonical.length > 0) return canonical.length === 1 && canonical[0] === "qr";
+	const legacy = params.getAll("s");
+	return legacy.length === 1 && legacy[0] === "qr";
+}
+
 export async function buildRedirectResponse(deps: RedirectDependencies, request: Request, routeSlug?: string): Promise<Response> {
 	const requestUrl = new URL(request.url);
 	const slug = routeSlug ?? requestUrl.pathname.replace(/^\//, "");
@@ -16,23 +23,6 @@ export async function buildRedirectResponse(deps: RedirectDependencies, request:
 	if (!link) return new Response("Not found", { status: 404 });
 
 	const userAgent = request.headers.get("user-agent");
-	// Two sources only: a QR scan (its URL carries ?s=qr) or a placed/pasted link.
-	// Referrer headers are unreliable since messaging/native apps strip them, so everything
-	// that isn't a scan is just "direct".
-	const scanned = requestUrl.searchParams.get("s") === "qr";
-	const clickedAt = new Date();
-	const clickedAtIso = clickedAt.toISOString();
-	deps.scheduleBackground(
-		deps
-			.recordClick(link.id, {
-				date: clickedAtIso.slice(0, 10),
-				hour: clickedAtIso.slice(0, 13) + ":00",
-				referrerBucket: scanned ? "qr scan" : "direct",
-				deviceBucket: deviceBucket(userAgent),
-			})
-			.catch(() => {}),
-	);
-
 	if (isCrawlerUserAgent(userAgent)) {
 		const imageUrl = link.previewImageKey
 			? new URL(`/api/uploads/${encodeURIComponent(link.previewImageKey)}`, deps.previewImageBaseUrl).toString()
@@ -45,6 +35,18 @@ export async function buildRedirectResponse(deps: RedirectDependencies, request:
 		});
 		return new Response(html, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
 	}
+
+	const clickedAtIso = new Date().toISOString();
+	deps.scheduleBackground(
+		deps
+			.recordClick(link.id, {
+				date: clickedAtIso.slice(0, 10),
+				hour: clickedAtIso.slice(0, 13) + ":00",
+				referrerBucket: isQrScan(requestUrl.searchParams) ? "qr scan" : "direct",
+				deviceBucket: deviceBucket(userAgent),
+			})
+			.catch(() => {}),
+	);
 
 	return new Response(null, { status: 302, headers: { location: link.destinationUrl } });
 }

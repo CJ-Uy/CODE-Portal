@@ -39,11 +39,7 @@ async function createHandlers() {
 		},
 		canEditLink: async (actor, linkId) => {
 			const { links } = await getRepositories();
-			try {
-				return Boolean(await links.getById(actor, linkId));
-			} catch {
-				return false;
-			}
+			return links.canEditLink(actor, linkId);
 		},
 	});
 }

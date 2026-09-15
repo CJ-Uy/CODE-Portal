@@ -128,6 +128,41 @@ describe("upload handlers", () => {
 		);
 		expect(res.status).toBe(200);
 	});
+
+	it("uses link edit permission, not uploader identity, for link object deletes", async () => {
+		const storage = new MemoryStorage();
+		await storage.putObject({ key: "links/lnk_ok/other/img.png", body: "image", contentType: "image/png" });
+		await storage.putObject({ key: "links/lnk_no/mem_upload/img.png", body: "image", contentType: "image/png" });
+		const handlers = createHandlers(memberActor, { storage, canEditLink: async (_actor, id) => id === "lnk_ok" });
+
+		const moderatorDelete = await handlers.object(
+			new Request("https://example.com/api/uploads/key", { method: "DELETE" }),
+			"links/lnk_ok/other/img.png",
+		);
+		const uploaderDelete = await handlers.object(
+			new Request("https://example.com/api/uploads/key", { method: "DELETE" }),
+			"links/lnk_no/mem_upload/img.png",
+		);
+
+		expect(moderatorDelete.status).toBe(204);
+		expect(uploaderDelete.status).toBe(403);
+	});
+
+	it("allows a link moderator to delete an orphaned link object", async () => {
+		const storage = new MemoryStorage();
+		const key = "links/lnk_removed/other/img.png";
+		await storage.putObject({ key, body: "image", contentType: "image/png" });
+		const moderator: Actor = { memberId: "mem_mod", roles: ["member", "link"] };
+		const handlers = createHandlers(moderator, { storage, canEditLink: async () => false });
+
+		const response = await handlers.object(
+			new Request("https://example.com/api/uploads/key", { method: "DELETE" }),
+			key,
+		);
+
+		expect(response.status).toBe(204);
+		expect(storage.keys()).not.toContain(key);
+	});
 });
 
 function imageForm(): FormData {
