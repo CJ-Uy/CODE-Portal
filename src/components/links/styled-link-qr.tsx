@@ -181,7 +181,7 @@ export function StyledLinkQr({ url, style, downloadName = "short-link-qr", edita
 	return (
 		<div className={cn("grid min-w-0 gap-6", editable && "lg:grid-cols-[minmax(240px,0.9fr)_minmax(0,1.1fr)] lg:items-start")}>
 			<section className="min-w-0">
-				<div className={cn("mx-auto aspect-square w-full max-w-80 overflow-hidden rounded-lg border border-border p-2", qrStyle.transparentBackground ? CHECKERBOARD : "bg-white")} aria-busy={validation === "checking"}>
+				<div className={cn("mx-auto aspect-square w-full max-w-60 overflow-hidden rounded-lg border border-border p-2 sm:max-w-80", qrStyle.transparentBackground ? CHECKERBOARD : "bg-white")} aria-busy={validation === "checking"}>
 					{rendered ? (
 						<img src={rendered.svgUrl} alt={`QR code for ${url}`} className={cn("size-full", !currentRender && "opacity-50")} />
 					) : (
@@ -231,9 +231,11 @@ export function StyledLinkQr({ url, style, downloadName = "short-link-qr", edita
 			</section>
 
 			{editable ? (
-				<section className="min-w-0 border-t border-border pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+				<details className="min-w-0 border-t border-border pt-3 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+					<summary className="flex min-h-11 cursor-pointer items-center font-semibold text-primary">Customize QR code</summary>
+					<div className="mt-3 border-t border-border pt-4">
 					<div className="flex items-center justify-between gap-3">
-						<h3 className="font-heading text-xl">Customize QR code</h3>
+						<p className="text-sm text-muted-foreground">Pattern, corners, colors, and logo</p>
 						<Button type="button" variant="ghost" size="sm" className="min-h-11" onClick={() => onChange ? onChange(ORG_QR_STYLE) : setLocalStyle({ key: localSourceKey, value: ORG_QR_STYLE })}>
 							<RotateCcw /> Reset
 						</Button>
@@ -333,7 +335,8 @@ export function StyledLinkQr({ url, style, downloadName = "short-link-qr", edita
 							<Save /> Save QR style
 						</Button>
 					) : null}
-				</section>
+					</div>
+				</details>
 			) : null}
 
 			<DialogPrimitive.Root open={fullscreen} onOpenChange={setFullscreen}>

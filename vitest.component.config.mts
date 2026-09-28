@@ -9,6 +9,6 @@ export default defineConfig({
 	},
 	test: {
 		environment: "node",
-		include: ["src/app/portal/calendar/[eventId]/event-manage-panel.test.ts"],
+		include: ["src/app/portal/calendar/[eventId]/event-manage-panel.test.ts", "src/components/links/links-workspace.test.ts"],
 	},
 });

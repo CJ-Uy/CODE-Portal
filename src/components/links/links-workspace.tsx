@@ -95,6 +95,8 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 			}
 		});
 	}, [filtered, sort]);
+	const hasFilters = view === "mine" || Boolean(search.trim()) || selectedTags.length > 0;
+	const emptyMessage = links.length ? "No links match these filters." : "No short links yet. Create your first one to get started.";
 
 	function toggleSort(key: SortKey) {
 		setSort((current) =>
@@ -311,7 +313,7 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 
 			{status ? <p role="status" aria-live="polite" className="text-sm text-muted-foreground">{status}</p> : null}
 
-			<div className="rounded-lg border bg-card">
+			<div className="hidden rounded-lg border bg-card md:block">
 				<Table>
 					<TableHeader>
 						<TableRow>
@@ -363,12 +365,34 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 								</TableCell>
 							</TableRow>
 						))}
-						{!sorted.length ? <TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground">{links.length ? "No links match these filters." : "No short links yet. Create your first one to get started."}</TableCell></TableRow> : null}
 					</TableBody>
 				</Table>
 			</div>
+			<div className="grid gap-2 md:hidden">
+				{sorted.map((link) => (
+					<article key={link.id} className="min-w-0 rounded-lg border bg-card p-4">
+						<div className="flex items-start justify-between gap-3">
+							<div className="min-w-0 flex-1">
+								<button type="button" className="block max-w-full text-left font-semibold hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => openDialog(link.id)}>{link.title}</button>
+								<p className="mt-0.5 break-all text-sm font-semibold text-primary">{baseLabel}/{link.slug}</p>
+							</div>
+							<span className="shrink-0 text-xs text-muted-foreground tabular-nums">{link.clickCount} clicks</span>
+						</div>
+						<p className="mt-2 truncate text-xs text-muted-foreground" title={link.destinationUrl}>To {link.destinationUrl}</p>
+						<div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+							<span className="text-xs text-muted-foreground">{link.owner?.name ?? "CODE"}</span>
+							<div className="flex gap-2">
+								<Button variant="outline" size="sm" className="min-h-11" aria-label={`Copy ${link.title} short link`} onClick={(event) => copy(event, link)}><Copy /> Copy</Button>
+								<Button variant="outline" size="sm" className="min-h-11" aria-label={`View ${link.title} details and QR code`} onClick={() => openDialog(link.id)}><QrCode /> QR</Button>
+								{canEdit(link) ? <Button variant="ghost" size="icon" className="size-11" aria-label={`Delete ${link.title}`} onClick={() => setConfirmDeleteId(link.id)}><Trash2 /></Button> : null}
+							</div>
+						</div>
+					</article>
+				))}
+			</div>
+			{!sorted.length ? <div className="grid justify-items-center gap-3 rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground"><p>{emptyMessage}</p>{hasFilters ? <Button type="button" variant="outline" size="sm" className="min-h-11" onClick={() => { setView("all"); setSearch(""); setSelectedTags([]); }}>Clear filters</Button> : null}</div> : null}
 			<div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
-				<p>{hasMore ? `Showing the newest ${links.length} links. Load older links to search the full history.` : `Showing all ${links.length} links.`}</p>
+				<p>{hasFilters ? `Showing ${sorted.length} of ${links.length} loaded links${hasMore ? ". Load older links to search the full history." : "."}` : hasMore ? `Showing the newest ${links.length} links. Load older links to search the full history.` : `Showing all ${links.length} ${links.length === 1 ? "link" : "links"}.`}</p>
 				{hasMore ? <Button type="button" variant="outline" className="min-h-11" onClick={() => void loadMore()} disabled={linksLoading}>{linksLoading ? <RefreshCw className="animate-spin motion-reduce:animate-none" /> : null}{linksLoading ? "Loading" : "Load older links"}</Button> : null}
 			</div>
 
@@ -478,17 +502,17 @@ function CreateLinkDialog({ triggerRef, open, onOpenChange, form, setForm, onSub
 					<DialogPrimitive.Description className="mt-1 text-sm text-muted-foreground">Point a memorable CODE address at any web page.</DialogPrimitive.Description>
 					<form className="mt-4 grid gap-4" onSubmit={onSubmit}>
 						<label className="grid gap-1 text-sm font-medium">
+							Destination
+						<Input className="min-h-11" value={form.destinationUrl} placeholder="https://example.com" onChange={(event) => setForm({ ...form, destinationUrl: event.target.value })} required />
+							<span className="text-xs font-normal text-muted-foreground">Where people go when they open the short link.</span>
+						</label>
+						<label className="grid gap-1 text-sm font-medium">
 							Custom ending (slug)
 							<div className="flex items-center rounded-md border border-input focus-within:ring-1 focus-within:ring-ring">
 								<span className="whitespace-nowrap border-r border-input px-2 py-2 text-sm text-muted-foreground">{baseLabel}/</span>
 								<Input value={form.slug} placeholder="welcome" onChange={(event) => setForm({ ...form, slug: event.target.value })} required className="min-h-11 border-0 shadow-none focus-visible:ring-0" />
 							</div>
-							<span className="text-xs font-normal text-muted-foreground">No need to type a slash. Just the custom ending. Your link will be <span className="font-medium text-foreground">{baseLabel}/{form.slug || "your-slug"}</span></span>
-						</label>
-						<label className="grid gap-1 text-sm font-medium">
-							Destination
-							<Input className="min-h-11" value={form.destinationUrl} placeholder="https://example.com" onChange={(event) => setForm({ ...form, destinationUrl: event.target.value })} required />
-							<span className="text-xs font-normal text-muted-foreground">Where people go when they open the short link.</span>
+							<span className="text-xs font-normal text-muted-foreground">Your link will be <span className="font-medium text-foreground">{baseLabel}/{form.slug || "your-slug"}</span></span>
 						</label>
 						<label className="grid gap-1 text-sm font-medium">
 							Title
@@ -533,7 +557,17 @@ function TagInput({ value, suggestions, onChange, hint }: { value: string[]; sug
 
 function LinkDialog({ link, url, baseLabel, stats, loading, statsError, editable, onLoadStats, onSave, onUpload }: { link: LinkView; url: string; baseLabel: string; stats: StatsView | null; loading: boolean; statsError: string; editable: boolean; onLoadStats(query?: StatsQuery): void; onSave(patch: Partial<LinkView>): void; onUpload(file: File): void }) {
 	const [tab, setTab] = useState<"details" | "stats">("details");
+	const [copyStatus, setCopyStatus] = useState("");
 	const tabs = [["details", "Details"], ["stats", "Statistics"]] as const;
+
+	async function copyLink() {
+		try {
+			await navigator.clipboard.writeText(url || `${window.location.origin}/${link.slug}`);
+			setCopyStatus("Link copied.");
+		} catch {
+			setCopyStatus("Could not copy the link. Try again.");
+		}
+	}
 
 	function moveTab(event: KeyboardEvent<HTMLButtonElement>, index: number) {
 		if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
@@ -546,11 +580,14 @@ function LinkDialog({ link, url, baseLabel, stats, loading, statsError, editable
 	return (
 		<div className="grid gap-4">
 			<div className="grid gap-1 pr-10">
-				<DialogPrimitive.Title className="font-heading text-2xl">{link.title}</DialogPrimitive.Title>
-				<DialogPrimitive.Description className="break-all text-sm text-muted-foreground">
-					<a href={url || `/${link.slug}`} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center font-medium text-primary hover:underline">{baseLabel}/{link.slug}</a>
-					{" "}forwards to {link.destinationUrl}
-				</DialogPrimitive.Description>
+				<p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Short link</p>
+				<DialogPrimitive.Title className="break-all font-heading text-2xl text-primary"><a href={url || `/${link.slug}`} target="_blank" rel="noreferrer" className="hover:underline">{baseLabel}/{link.slug}</a></DialogPrimitive.Title>
+				<DialogPrimitive.Description className="text-sm text-muted-foreground">{link.title}</DialogPrimitive.Description>
+				<div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+					<p className="min-w-0 break-all text-xs text-muted-foreground">To {link.destinationUrl}</p>
+					<Button type="button" variant="outline" size="sm" className="min-h-11" onClick={() => void copyLink()}><Copy /> Copy link</Button>
+				</div>
+				{copyStatus ? <p role="status" aria-live="polite" className="text-xs text-muted-foreground">{copyStatus}</p> : null}
 			</div>
 
 			<div role="tablist" aria-label="Link sections" className="flex gap-1 border-b border-border">
@@ -672,16 +709,24 @@ function StatsDetails({ stats, loading, error, onLoad }: { stats: StatsView; loa
 				<div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-6">
 					<Stat label="Filtered clicks" value={formatWhole(stats.filteredClicks)} />
 					<Stat label="Lifetime clicks" value={formatWhole(stats.lifetimeClicks)} />
-					<Stat label="Previous period" value={formatChange(change, changePct)} />
-					<Stat label={`Average per ${stats.query.granularity}`} value={formatAverage(chartAverage)} />
-					<Stat label={`Active ${stats.query.granularity}s`} value={`${chartActive}/${Math.max(1, stats.series.length)}`} />
-					<Stat label={`Best ${stats.query.granularity}`} value={chartPeak.count ? `${chartPeak.count} on ${formatStatsPoint(chartPeak.date)}` : "None"} />
+					{stats.filteredClicks > 0 ? <>
+						<Stat label="Previous period" value={formatChange(change, changePct)} />
+						<Stat label={`Average per ${stats.query.granularity}`} value={formatAverage(chartAverage)} />
+						<Stat label={`Active ${stats.query.granularity}s`} value={`${chartActive}/${Math.max(1, stats.series.length)}`} />
+						<Stat label={`Best ${stats.query.granularity}`} value={chartPeak.count ? `${chartPeak.count} on ${formatStatsPoint(chartPeak.date)}` : "None"} />
+					</> : null}
 				</div>
-
-				<div className="mt-4 grid gap-3">
-					<div className="flex flex-wrap gap-2"><SettingToggle checked={showAverage} label="Average line" onChange={setShowAverage} /><SettingToggle checked={cumulative} label="Cumulative" onChange={setCumulative} /></div>
-					<ClicksOverTime data={stats.series} average={showAverage && !cumulative ? chartAverage : undefined} cumulative={cumulative} verbose />
-				</div>
+				{stats.filteredClicks === 0 ? (
+					<div role="status" className="mt-4 rounded-md bg-secondary/50 p-4 text-sm">
+						<p className="font-semibold">No clicks in this range</p>
+						<p className="mt-1 text-muted-foreground">This link has {formatWhole(stats.lifetimeClicks)} lifetime clicks. Try a longer date range or clear the source and device filters.</p>
+					</div>
+				) : (
+					<div className="mt-4 grid gap-3">
+						<div className="flex flex-wrap gap-2"><SettingToggle checked={showAverage} label="Average line" onChange={setShowAverage} /><SettingToggle checked={cumulative} label="Cumulative" onChange={setCumulative} /></div>
+						<ClicksOverTime data={stats.series} average={showAverage && !cumulative ? chartAverage : undefined} cumulative={cumulative} verbose />
+					</div>
+				)}
 				<p className="mt-3 text-xs text-muted-foreground">{historyLabel(stats)}</p>
 			</div>
 
@@ -720,7 +765,7 @@ function StatsDetails({ stats, loading, error, onLoad }: { stats: StatsView; loa
 				</form>
 			</details>
 
-			<div className="grid gap-4 sm:grid-cols-2">
+			{stats.filteredClicks > 0 ? <div className="grid gap-4 sm:grid-cols-2">
 				<div className="rounded-lg border bg-card p-4">
 					<div className="mb-3 flex items-start justify-between gap-3">
 						<div>
@@ -741,7 +786,7 @@ function StatsDetails({ stats, loading, error, onLoad }: { stats: StatsView; loa
 					</div>
 					<DonutChart data={deviceData} label="Devices" />
 				</div>
-			</div>
+			</div> : null}
 		</section>
 	);
 }
@@ -778,11 +823,9 @@ function formatRange(start: string, end: string): string {
 
 function historyLabel(stats: StatsView): string {
 	const { history } = stats;
-	const rows = `${formatWhole(history.rowsRead)} of ${formatWhole(history.maxRows)} allowed hourly aggregate rows read, including the comparison window.`;
-	if (!history.earliestHour || !history.latestHour) return `${rows} No hourly history is recorded for this link yet.${history.note ? ` ${history.note}` : ""}`;
+	if (!history.earliestHour || !history.latestHour) return history.complete ? "No matching activity in this range." : "Activity may be missing from this range. Try a shorter range.";
 	const range = `${formatStatsPoint(history.earliestHour)} to ${formatStatsPoint(history.latestHour)}`;
-	const coverage = history.complete ? `Available rows span ${range}.` : `Partial hourly history spans ${range}. Narrow the range for complete results.`;
-	return `${rows} ${coverage}${history.note ? ` ${history.note}` : ""}`;
+	return history.complete ? `Recorded activity: ${range}.` : `Activity shown from ${range}. Choose a shorter range for complete results.`;
 }
 
 function sourceFilterLabel(source: StatsQuery["source"]): string {
