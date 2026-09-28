@@ -313,7 +313,7 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 
 			{status ? <p role="status" aria-live="polite" className="text-sm text-muted-foreground">{status}</p> : null}
 
-			<div className="hidden rounded-lg border bg-card md:block">
+			<div className="hidden rounded-lg border bg-card xl:block">
 				<Table>
 					<TableHeader>
 						<TableRow>
@@ -368,7 +368,7 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 					</TableBody>
 				</Table>
 			</div>
-			<div className="grid gap-2 md:hidden">
+			<div className="grid gap-2 xl:hidden">
 				{sorted.map((link) => (
 					<article key={link.id} className="min-w-0 rounded-lg border bg-card p-4">
 						<div className="flex items-start justify-between gap-3">
