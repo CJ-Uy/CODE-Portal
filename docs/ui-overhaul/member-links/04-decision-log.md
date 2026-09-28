@@ -30,3 +30,4 @@
 - Decision: short-link implementation slice approved; continue with calendar.
 - Human comment, verbatim: "Approve short links and continue calendar (Recommended)".
 - Evidence: `slices/01-focused-polish.md`, implementation commit `90c308d`.
+- Prototype source is preserved in commit `3d16431`; the fake-data route was removed before beta integration.

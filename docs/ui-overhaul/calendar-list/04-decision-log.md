@@ -30,3 +30,4 @@
 - Decision: calendar implementation slice approved for beta integration.
 - Human comment, verbatim: "Approve calendar slice and prepare beta integration (Recommended)".
 - Evidence: `slices/01-time-sections.md`, implementation commit `1da5ac3`.
+- Prototype source is preserved in commit `3d16431`; the fake-data route was removed before beta integration.
