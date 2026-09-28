@@ -427,7 +427,7 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 				<DialogPrimitive.Portal>
 					<DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/45" />
 					<DialogPrimitive.Content
-						className="fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[min(100%-1.5rem,1080px)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border bg-background p-5 shadow-lg"
+						className="fixed left-1/2 top-1/2 z-50 max-h-[94dvh] w-[min(100%-1.5rem,1320px)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border bg-background p-5 shadow-lg sm:p-6"
 						onCloseAutoFocus={(event) => {
 							event.preventDefault();
 							const target = dialogTriggerRef.current?.isConnected ? dialogTriggerRef.current : createTriggerRef.current;
@@ -579,14 +579,13 @@ function LinkDialog({ link, url, baseLabel, stats, loading, statsError, editable
 
 	return (
 		<div className="grid gap-4">
-			<div className="grid gap-1 pr-10">
-				<p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Short link</p>
-				<DialogPrimitive.Title className="break-all font-heading text-2xl text-primary"><a href={url || `/${link.slug}`} target="_blank" rel="noreferrer" className="hover:underline">{baseLabel}/{link.slug}</a></DialogPrimitive.Title>
-				<DialogPrimitive.Description className="text-sm text-muted-foreground">{link.title}</DialogPrimitive.Description>
-				<div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-					<p className="min-w-0 break-all text-xs text-muted-foreground">To {link.destinationUrl}</p>
+			<div className="grid gap-2 pr-10">
+				<DialogPrimitive.Title className="font-heading text-2xl text-primary">{link.title}</DialogPrimitive.Title>
+				<div className="flex flex-wrap items-center gap-2">
+					<a href={url || `/${link.slug}`} target="_blank" rel="noreferrer" className="min-w-0 break-all text-sm font-medium text-primary hover:underline">{baseLabel}/{link.slug}</a>
 					<Button type="button" variant="outline" size="sm" className="min-h-11" onClick={() => void copyLink()}><Copy /> Copy link</Button>
 				</div>
+				<DialogPrimitive.Description className="break-all text-xs text-muted-foreground">To {link.destinationUrl}</DialogPrimitive.Description>
 				{copyStatus ? <p role="status" aria-live="polite" className="text-xs text-muted-foreground">{copyStatus}</p> : null}
 			</div>
 
@@ -599,10 +598,8 @@ function LinkDialog({ link, url, baseLabel, stats, loading, statsError, editable
 			</div>
 
 			{tab === "details" ? (
-				<div id={`${link.id}-details-panel`} role="tabpanel" aria-labelledby={`${link.id}-details-tab`} tabIndex={0} className={cn("grid gap-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", editable && "lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)]")}>
-					<section className="grid content-start gap-3 rounded-lg border p-4">
-						<h2 className="font-semibold">QR code</h2>
-						<p className="text-sm text-muted-foreground">Print it, project it, or download it. Anyone who scans it lands on your short link.</p>
+				<div id={`${link.id}-details-panel`} role="tabpanel" aria-labelledby={`${link.id}-details-tab`} tabIndex={0} className="grid gap-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+					<section className="min-w-0 rounded-xl border border-border bg-card p-4 sm:p-6">
 						{url ? <LinkQrCustomizer url={url} style={link.qrStyle} editable={editable} linkId={link.id} onSave={(qrStyle: QrStyle) => onSave({ qrStyle } as Partial<LinkView>)} /> : null}
 					</section>
 					{editable ? <EditPanel link={link} onSave={onSave} onUpload={onUpload} /> : null}

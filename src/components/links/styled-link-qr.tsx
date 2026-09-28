@@ -179,9 +179,15 @@ export function StyledLinkQr({ url, style, downloadName = "short-link-qr", edita
 					: message || "The scan check could not finish. Retry before downloading.";
 
 	return (
-		<div className={cn("grid min-w-0 gap-6", editable && "lg:grid-cols-[minmax(240px,0.9fr)_minmax(0,1.1fr)] lg:items-start")}>
+		<div className={cn("grid min-w-0 gap-6", editable && "lg:grid-cols-2 lg:items-start")}>
 			<section className="min-w-0">
-				<div className={cn("mx-auto aspect-square w-full max-w-60 overflow-hidden rounded-lg border border-border p-2 sm:max-w-80", qrStyle.transparentBackground ? CHECKERBOARD : "bg-white")} aria-busy={validation === "checking"}>
+				{editable ? (
+					<>
+						<h2 className="font-heading text-2xl text-primary">Your CODE QR code</h2>
+						<p className="mt-1 text-base text-muted-foreground">Print it, project it, or download it. Scans open your short link.</p>
+					</>
+				) : null}
+				<div className={cn("mx-auto aspect-square w-full max-w-80 overflow-hidden rounded-lg border border-border p-3", editable && "mt-5 max-w-[28rem]", qrStyle.transparentBackground ? CHECKERBOARD : "bg-white")} aria-busy={validation === "checking"}>
 					{rendered ? (
 						<img src={rendered.svgUrl} alt={`QR code for ${url}`} className={cn("size-full", !currentRender && "opacity-50")} />
 					) : (
@@ -192,23 +198,23 @@ export function StyledLinkQr({ url, style, downloadName = "short-link-qr", edita
 					)}
 				</div>
 
-				<fieldset className="mx-auto mt-4 max-w-80">
-					<legend className="mb-2 text-xs font-medium">Export background</legend>
+				<fieldset className="mx-auto mt-5 max-w-[28rem]">
+					<legend className="mb-2 text-sm font-medium">Download background</legend>
 					<div className="grid grid-cols-3 gap-2">
 						{(["light", "dark", "transparent"] as const).map((mode) => (
-							<Button key={mode} type="button" variant={qrBackgroundMode(qrStyle) === mode ? "default" : "outline"} className="min-h-11 px-2 capitalize" aria-pressed={qrBackgroundMode(qrStyle) === mode} onClick={() => chooseBackground(mode)}>
+							<Button key={mode} type="button" variant="outline" className={cn("min-h-11 px-2 capitalize", qrBackgroundMode(qrStyle) === mode && "border-primary bg-secondary text-primary")} aria-pressed={qrBackgroundMode(qrStyle) === mode} onClick={() => chooseBackground(mode)}>
 								{mode}
 							</Button>
 						))}
 					</div>
 				</fieldset>
 
-				<div role={validation === "failed" || validation === "contrast" || validation === "error" ? "alert" : "status"} className={cn("mx-auto mt-3 flex min-h-10 max-w-80 items-start gap-2 text-xs leading-relaxed", validation === "passed" ? "text-emerald-700" : validation === "checking" ? "text-muted-foreground" : "text-destructive")}>
+				<div role={validation === "failed" || validation === "contrast" || validation === "error" ? "alert" : "status"} className={cn("mx-auto mt-3 flex min-h-10 max-w-[28rem] items-start gap-2 text-xs leading-relaxed", validation === "passed" ? "text-emerald-700" : validation === "checking" ? "text-muted-foreground" : "text-destructive")}>
 					{validation === "passed" ? <CheckCircle2 className="mt-0.5 size-4 shrink-0" /> : validation === "checking" ? <LoaderCircle className="mt-0.5 size-4 shrink-0 animate-spin motion-reduce:animate-none" /> : <TriangleAlert className="mt-0.5 size-4 shrink-0" />}
 					<span>{validationMessage}</span>
 				</div>
 
-				<div className="mx-auto mt-3 grid max-w-80 gap-3">
+				<div className="mx-auto mt-3 grid max-w-[28rem] gap-3">
 					<label className="grid gap-1 text-xs font-medium">
 						Export size
 						<Select value={exportSize} onChange={(event) => setExportSize(Number(event.target.value) as (typeof QR_EXPORT_SIZES)[number])}>
@@ -227,13 +233,13 @@ export function StyledLinkQr({ url, style, downloadName = "short-link-qr", edita
 						<Expand /> Full screen
 					</Button>
 				</div>
-				<p className="mx-auto mt-3 max-w-80 text-xs text-muted-foreground">Includes <code>?source=qr</code>. The saved destination does not change.</p>
+				<p className="mx-auto mt-3 max-w-[28rem] text-xs text-muted-foreground">Includes <code>?source=qr</code>. The saved destination does not change.</p>
 			</section>
 
 			{editable ? (
-				<details className="min-w-0 border-t border-border pt-3 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
-					<summary className="flex min-h-11 cursor-pointer items-center font-semibold text-primary">Customize QR code</summary>
-					<div className="mt-3 border-t border-border pt-4">
+				<section className="min-w-0 border-t border-border pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+					<h2 className="font-heading text-2xl text-primary">Customize QR code</h2>
+					<div className="mt-1">
 					<div className="flex items-center justify-between gap-3">
 						<p className="text-sm text-muted-foreground">Pattern, corners, colors, and logo</p>
 						<Button type="button" variant="ghost" size="sm" className="min-h-11" onClick={() => onChange ? onChange(ORG_QR_STYLE) : setLocalStyle({ key: localSourceKey, value: ORG_QR_STYLE })}>
@@ -242,10 +248,10 @@ export function StyledLinkQr({ url, style, downloadName = "short-link-qr", edita
 					</div>
 
 					<fieldset className="mt-5">
-						<legend className="mb-2 text-sm font-medium">Module pattern</legend>
+						<legend className="mb-2 text-base font-semibold">Dot pattern</legend>
 						<div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
 							{QR_PATTERNS.map((option) => (
-								<Button key={option.value} type="button" variant={qrStyle.pattern === option.value ? "default" : "outline"} className="min-h-11 px-2 text-xs" aria-pressed={qrStyle.pattern === option.value} onClick={() => patch({ pattern: option.value })}>
+								<Button key={option.value} type="button" variant="outline" className={cn("min-h-11 px-2 text-sm", qrStyle.pattern === option.value && "border-primary bg-secondary text-primary")} aria-pressed={qrStyle.pattern === option.value} onClick={() => patch({ pattern: option.value })}>
 									{option.label}
 								</Button>
 							))}
@@ -253,10 +259,10 @@ export function StyledLinkQr({ url, style, downloadName = "short-link-qr", edita
 					</fieldset>
 
 					<fieldset className="mt-5">
-						<legend className="mb-2 text-sm font-medium">Corner style</legend>
+						<legend className="mb-2 text-base font-semibold">Corner style</legend>
 						<div className="grid grid-cols-3 gap-2">
 							{QR_CORNERS.map((option) => (
-								<Button key={option.value} type="button" variant={qrStyle.cornerStyle === option.value ? "default" : "outline"} className="min-h-11 px-2 text-xs" aria-pressed={qrStyle.cornerStyle === option.value} onClick={() => patch({ cornerStyle: option.value })}>
+								<Button key={option.value} type="button" variant="outline" className={cn("min-h-11 px-2 text-sm", qrStyle.cornerStyle === option.value && "border-primary bg-secondary text-primary")} aria-pressed={qrStyle.cornerStyle === option.value} onClick={() => patch({ cornerStyle: option.value })}>
 									{option.label}
 								</Button>
 							))}
@@ -264,12 +270,12 @@ export function StyledLinkQr({ url, style, downloadName = "short-link-qr", edita
 					</fieldset>
 
 					<div className="mt-5 grid gap-3 sm:grid-cols-2">
-						<ColorField label="Foreground" value={qrStyle.foreground} onChange={(foreground) => patch({ foreground })} />
+						<ColorField label="QR color" value={qrStyle.foreground} onChange={(foreground) => patch({ foreground })} />
 						<ColorField label="Background" value={qrStyle.background} onChange={(background) => patch({ background, transparentBackground: false })} />
 					</div>
 
 					<fieldset className="mt-5 border-t border-border pt-4">
-						<legend className="pr-2 text-sm font-medium">Center logo</legend>
+						<legend className="pr-2 text-base font-semibold">Center logo</legend>
 						<label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm">
 							Show logo
 							<input type="checkbox" role="switch" className="size-5 accent-primary" checked={qrStyle.showLogo} onChange={(event) => patch({ showLogo: event.target.checked })} />
@@ -278,7 +284,7 @@ export function StyledLinkQr({ url, style, downloadName = "short-link-qr", edita
 						{qrStyle.showLogo ? (
 							<div className="mt-3 grid gap-4 border-l-2 border-secondary pl-4">
 								<div className="flex flex-wrap gap-2">
-									<Button type="button" variant={qrStyle.logoUrl === CODE_LOGO || qrStyle.logoUrl === CODE_LOGO_WHITE ? "default" : "outline"} className="min-h-11" aria-pressed={qrStyle.logoUrl === CODE_LOGO || qrStyle.logoUrl === CODE_LOGO_WHITE} onClick={useCodeLogo}>Use CODE logo</Button>
+									<Button type="button" variant="outline" className={cn("min-h-11", (qrStyle.logoUrl === CODE_LOGO || qrStyle.logoUrl === CODE_LOGO_WHITE) && "border-primary bg-secondary text-primary")} aria-pressed={qrStyle.logoUrl === CODE_LOGO || qrStyle.logoUrl === CODE_LOGO_WHITE} onClick={useCodeLogo}>Use CODE logo</Button>
 									{onUploadLogo ? (
 										<Button asChild variant="outline" className="min-h-11">
 											<label className={cn("cursor-pointer focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2", uploading && "pointer-events-none opacity-50")} aria-disabled={uploading}>
@@ -336,7 +342,7 @@ export function StyledLinkQr({ url, style, downloadName = "short-link-qr", edita
 						</Button>
 					) : null}
 					</div>
-				</details>
+				</section>
 			) : null}
 
 			<DialogPrimitive.Root open={fullscreen} onOpenChange={setFullscreen}>
@@ -371,7 +377,7 @@ export function StyledLinkQr({ url, style, downloadName = "short-link-qr", edita
 
 function ColorField({ label, value, onChange }: { label: string; value: string; onChange(value: string): void }) {
 	return (
-		<label className="grid gap-1 text-xs font-medium">
+		<label className="grid gap-1 text-sm font-medium">
 			{label}
 			<span className="flex h-11 items-center gap-2 rounded-md border border-input bg-background pr-3">
 				<input type="color" aria-label={label} className="size-10 cursor-pointer rounded-md border-0 bg-transparent p-1" value={value} onChange={(event) => onChange(event.target.value)} />

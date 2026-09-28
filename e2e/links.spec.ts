@@ -36,13 +36,18 @@ test("a member can create, customize, verify, and inspect a short link", async (
 	const patterns = ["Classic", "Rounded", "Dots", "Soft", "Classy", "Classy rounded"];
 	const corners = ["Square", "Rounded", "Dot"];
 	const backgrounds = ["light", "dark", "transparent"];
-	const patternGroup = dialog.getByRole("group", { name: "Module pattern" });
+	const patternGroup = dialog.getByRole("group", { name: "Dot pattern" });
 	const cornerGroup = dialog.getByRole("group", { name: "Corner style" });
-	const backgroundGroup = dialog.getByRole("group", { name: "Export background" });
+	const backgroundGroup = dialog.getByRole("group", { name: "Download background" });
 	const logoSwitch = dialog.getByRole("switch", { name: "Show logo" });
 	const slider = dialog.getByRole("slider", { name: /Logo size/i });
 	const pngButton = dialog.getByRole("button", { name: "PNG", exact: true });
 	const svgButton = dialog.getByRole("button", { name: "SVG", exact: true });
+	await expect(dialog.getByRole("heading", { name: "Customize QR code" })).toBeVisible();
+	await expect(patternGroup.getByRole("button", { name: "Classic" })).toBeVisible();
+	await expect(dialog.getByText(/Scan check passed/)).toBeVisible({ timeout: 20_000 });
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await page.screenshot({ path: testInfo.outputPath("shortlinks-qr-default-desktop.png"), fullPage: true });
 	async function expectSafeExport() {
 		await expect(dialog.getByText(/Scan check passed/)).toBeVisible({ timeout: 20_000 });
 		await expect(pngButton).toBeEnabled();
@@ -101,6 +106,9 @@ test("a member can create, customize, verify, and inspect a short link", async (
 	await expectSafeExport();
 
 	await page.setViewportSize({ width: 1280, height: 800 });
+	const previewHeading = await dialog.getByRole("heading", { name: "Your CODE QR code" }).boundingBox();
+	const customizeHeading = await dialog.getByRole("heading", { name: "Customize QR code" }).boundingBox();
+	expect(previewHeading && customizeHeading && customizeHeading.x > previewHeading.x).toBe(true);
 	await expect(page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).resolves.toBe(true);
 	await dialog.evaluate((element) => { element.scrollTop = 0; });
 	await page.screenshot({ path: testInfo.outputPath("shortlinks-qr-desktop.png"), fullPage: true });
@@ -160,8 +168,11 @@ test("a member can create, customize, verify, and inspect a short link", async (
 
 	await page.setViewportSize({ width: 390, height: 844 });
 	await expect(page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).resolves.toBe(true);
+	await expect(dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).resolves.toBe(true);
 	await dialog.evaluate((element) => { element.scrollTop = 0; });
 	await page.screenshot({ path: testInfo.outputPath("shortlinks-qr-mobile-390.png"), fullPage: true });
+	await dialog.getByRole("heading", { name: "Customize QR code" }).scrollIntoViewIfNeeded();
+	await page.screenshot({ path: testInfo.outputPath("shortlinks-qr-customize-mobile-390.png"), fullPage: true });
 	await page.setViewportSize({ width: 320, height: 700 });
 	await expect(page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).resolves.toBe(true);
 	await page.setViewportSize({ width: 1280, height: 720 });
