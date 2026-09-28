@@ -301,7 +301,16 @@ export function LinksWorkspace({ initialPage, actorMemberId, canModerate }: Link
 			{status ? <p role="status" aria-live="polite" className="text-sm text-muted-foreground">{status}</p> : null}
 
 			<div className="hidden rounded-lg border bg-card 2xl:block">
-				<Table>
+				<Table className="table-fixed">
+					<colgroup>
+						<col className="w-[20%]" />
+						<col className="w-[21%]" />
+						<col className="w-[11%]" />
+						<col className="w-[8%]" />
+						<col className="w-[15%]" />
+						<col className="w-[10%]" />
+						<col className="w-[15%]" />
+					</colgroup>
 					<TableHeader>
 						<TableRow>
 							<SortHeader label="Title" column="title" sort={sort} onSort={toggleSort} />
@@ -324,14 +333,8 @@ export function LinksWorkspace({ initialPage, actorMemberId, canModerate }: Link
 									openDialog(link.id);
 								}}
 							>
-								{/* One bounded box around both lines. truncate needs a bounded box, and a
-							    table cell in auto layout grows to fit its widest content, so without this
-							    the destination URL set the column width and pushed the row into a
-							    horizontal scroll. Kept deliberately narrow: titles are short in practice
-							    and the URL is only there for recognition, not for reading in full, which
-							    the hover title covers. */}
-							<TableCell className="min-w-40">
-								<div className="max-w-56">
+								<TableCell>
+									<div className="min-w-0">
 									<button type="button" className="block min-h-11 max-w-full truncate rounded text-left font-medium hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" title={link.title} onClick={(event) => { event.stopPropagation(); openDialog(link.id); }}>{link.title}</button>
 									<p className="truncate text-xs text-muted-foreground" title={link.destinationUrl}>
 										to {link.destinationUrl}
@@ -454,8 +457,8 @@ function SortHeader({ label, column, sort, onSort, align = "left" }: { label: st
 function ShortLinkCell({ origin, baseLabel, slug }: { origin: string; baseLabel: string; slug: string }) {
 	const href = origin ? shortLinkUrl(origin, slug) : `/${slug}`;
 	return (
-		<a href={href} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className="inline-flex min-h-11 max-w-[16rem] items-center gap-1 font-medium text-primary hover:underline">
-			<span className="truncate">{baseLabel}/{slug}</span>
+		<a href={href} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className="inline-flex min-h-11 max-w-full min-w-0 items-center gap-1 font-medium text-primary hover:underline" title={`${baseLabel}/${slug}`}>
+			<span className="min-w-0 truncate">{baseLabel}/{slug}</span>
 			<ExternalLink className="size-3.5 shrink-0 opacity-60" />
 		</a>
 	);
@@ -463,12 +466,12 @@ function ShortLinkCell({ origin, baseLabel, slug }: { origin: string; baseLabel:
 
 function Owner({ owner }: { owner: LinkView["owner"] }) {
 	if (!owner) return <span className="text-muted-foreground">None</span>;
-	return <span className="flex items-center gap-2"><Avatar image={owner.image} name={owner.name} size="sm" /><span className="max-w-32 truncate">{owner.name ?? "Member"}</span></span>;
+	return <span className="flex min-w-0 items-center gap-2"><Avatar image={owner.image} name={owner.name} size="sm" /><span className="min-w-0 flex-1 truncate" title={owner.name ?? "Member"}>{owner.name ?? "Member"}</span></span>;
 }
 
 function TagList({ tags }: { tags: string[] }) {
 	if (!tags.length) return <span className="text-muted-foreground">None</span>;
-	return <span className="flex flex-wrap gap-1">{tags.map((tag) => <Badge key={tag} variant="secondary">{tag}</Badge>)}</span>;
+	return <span className="flex min-w-0 flex-wrap gap-1">{tags.map((tag) => <Badge key={tag} variant="secondary" className="max-w-full truncate" title={tag}>{tag}</Badge>)}</span>;
 }
 
 function CreateLinkDialog({ triggerRef, open, onOpenChange, form, setForm, onSubmit, tagOptions, baseLabel }: {
