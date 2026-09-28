@@ -33,6 +33,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 		loadEventTypes(() => repositories.eventTypeRules.list()),
 	]);
 	if (!event) notFound();
+	const isPast = inclusiveEndDate(event.startsAt, event.endsAt) < toIsoDate(new Date());
 
 	// Management view keys off the viewer-scoped capability flags on the event record.
 	const isStaff = managed ? managed.myRole !== null || managed.canModerate : false;
@@ -110,13 +111,16 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 					<h1 className="min-w-0 break-words font-heading text-3xl font-semibold leading-tight text-foreground">
 						{event.title}
 					</h1>
-					{event.readOnly ? (
-						<Badge variant="secondary">Informational</Badge>
-					) : (
-						<Badge variant={event.iAttended ? "default" : "secondary"}>
-							{event.iAttended ? "Attended" : event.myRsvp === "going" ? "Going" : "Not going"}
-						</Badge>
-					)}
+					<div className="flex flex-wrap items-center gap-2">
+						{isPast ? <Badge variant="secondary">Past event</Badge> : null}
+						{event.readOnly ? (
+							<Badge variant="secondary">Informational</Badge>
+						) : (
+							<Badge variant={event.iAttended ? "default" : "secondary"}>
+								{event.iAttended ? "Attended" : event.myRsvp === "going" ? "Going" : "Not going"}
+							</Badge>
+						)}
+					</div>
 				</div>
 				<p className="text-sm text-muted-foreground">
 					{event.place} · {formatEventRange(event.startsAt, event.endsAt, event.allDay)} UTC+8
@@ -124,6 +128,11 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 				{event.readOnly ? (
 					<p className="rounded-lg border border-border bg-secondary/30 p-3 text-sm text-muted-foreground">
 						Informational event — no signup or check-in.
+					</p>
+				) : null}
+				{isPast && !event.readOnly ? (
+					<p className="rounded-lg border border-border bg-secondary/30 p-3 text-sm text-muted-foreground">
+						This event has ended. You can still review its details below.
 					</p>
 				) : null}
 				{shareLinks ? (

@@ -12,7 +12,8 @@ import { can } from "@/server/auth/permissions";
 import { isFeatureEnabled } from "@/server/features";
 import { CreateEventSheet } from "./create-event-sheet";
 import { CreateEventSkeleton, EventsListSkeleton, MonthGridSkeleton } from "./calendar-skeletons";
-import { EventsList, type EventListItem } from "./events-list";
+import { EventsList } from "./events-list";
+import { loadEventList } from "./load-events";
 
 export const dynamic = "force-dynamic";
 
@@ -198,26 +199,6 @@ async function ListBody() {
 	const actor = await requireActor();
 	const repositories = await getRepositories();
 	const typeLoad = await loadEventTypes(() => repositories.eventTypeRules.list());
-	return <EventsList events={await loadEventList(repositories, actor)} types={typeLoad.ok ? typeLoad.rows : []} />;
-}
-
-// List view keys off the viewer-scoped `myRole` field from listPublished (plan Shared Seam).
-// Falls back to empty until the member-owned backend (Codex phase B3) lands listPublished.
-async function loadEventList(
-	repositories: Awaited<ReturnType<typeof getRepositories>>,
-	actor: Awaited<ReturnType<typeof requireActor>>,
-): Promise<EventListItem[]> {
-	const events = await repositories.events.listPublished(actor).catch(() => []);
-	return events.map((e) => ({
-		id: e.id,
-		title: e.title,
-		type: e.type,
-		place: e.place,
-		startsAt: e.startsAt,
-		endsAt: e.endsAt,
-		allDay: Boolean(e.allDay),
-		readOnly: Boolean(e.readOnly),
-		myRole: e.myRole,
-		canModerate: e.canModerate,
-	}));
+	const events = await loadEventList(repositories, actor).catch(() => null);
+	return <EventsList events={events ?? []} types={typeLoad.ok ? typeLoad.rows : []} loadFailed={events === null} />;
 }

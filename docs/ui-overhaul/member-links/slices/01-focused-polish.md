@@ -1,6 +1,6 @@
 # Slice: Short-link focused polish
 
-Status: implemented, awaiting Human Gate 4 review
+Status: approved, Human Gate 4
 
 ## Evidence
 
@@ -31,7 +31,7 @@ Status: implemented, awaiting Human Gate 4 review
 
 ## Human Gate 4
 
-- Decision: pending.
-- Approved by:
-- Date:
-- Comments:
+- Decision: approved.
+- Approved by: user.
+- Date: 2026-09-28.
+- Comments, verbatim: "Approve short links and continue calendar (Recommended)".

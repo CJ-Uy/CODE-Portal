@@ -23,3 +23,10 @@
 - Human comment, verbatim: "A · Balanced table and mobile rows (recommended)".
 - Reference: `/design-lab/links-calendar/a#links` in the `links-calendar-prototypes` worktree.
 - Next gate: review the implemented short-link slice before the next slice or a beta deployment.
+
+## 2026-09-28, Human Gate 4
+
+- Status: approved.
+- Decision: short-link implementation slice approved; continue with calendar.
+- Human comment, verbatim: "Approve short links and continue calendar (Recommended)".
+- Evidence: `slices/01-focused-polish.md`, implementation commit `90c308d`.
