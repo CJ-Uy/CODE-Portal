@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatPoints, heatStep, quantizePoints } from "./points";
+import { formatPoints, quantizePoints } from "./points";
 
 describe("quantizePoints", () => {
 	it("leaves a whole number alone", () => {
@@ -33,33 +33,5 @@ describe("formatPoints", () => {
 
 	it("never renders float dust", () => {
 		expect(formatPoints(0.1 + 0.2)).toBe("0.3");
-	});
-});
-
-describe("heatStep", () => {
-	it("gives an empty day no shade", () => {
-		expect(heatStep(0, 10)).toBe(0);
-	});
-
-	it("shades a negative day as empty rather than inverting", () => {
-		expect(heatStep(-5, 10)).toBe(0);
-	});
-
-	it("puts the busiest day in the top bucket", () => {
-		expect(heatStep(10, 10)).toBe(4);
-	});
-
-	it("spreads the range across four buckets", () => {
-		expect(heatStep(2.5, 10)).toBe(1);
-		expect(heatStep(5, 10)).toBe(2);
-		expect(heatStep(7.5, 10)).toBe(3);
-	});
-
-	it("gives the smallest fraction a visible bucket", () => {
-		expect(heatStep(0.25, 100)).toBe(1);
-	});
-
-	it("never divides by a zero maximum", () => {
-		expect(heatStep(5, 0)).toBe(0);
 	});
 });

@@ -37,18 +37,28 @@ describe("buildRedirectResponse", () => {
 		expect(d.recordClick).toHaveBeenCalledWith("lnk_1", expect.objectContaining({ hour: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:00$/) }));
 	});
 
-	it("records a QR scan (?s=qr) as its own bucket, not a referrer", async () => {
+	it.each([
+		["?source=qr", "qr scan"],
+		["?s=qr", "qr scan"],
+		["?source=qr&s=legacy-is-ignored", "qr scan"],
+		["", "direct"],
+		["?source=link", "direct"],
+		["?source=qr&source=qr", "direct"],
+		["?source=qr&source=link", "direct"],
+		["?s=qr&s=qr", "direct"],
+		["?s=invalid", "direct"],
+	])("classifies %s as %s", async (query, expectedBucket) => {
 		const d = deps();
 		await buildRedirectResponse(
 			d,
-			new Request("https://app.example/welcome?s=qr", {
+			new Request(`https://app.example/welcome${query}`, {
 				headers: { "user-agent": "Mozilla/5.0 (iPhone) Safari", referer: "https://www.google.com/" },
 			}),
 		);
-		expect(d.recordClick).toHaveBeenCalledWith("lnk_1", expect.objectContaining({ referrerBucket: "qr scan" }));
+		expect(d.recordClick).toHaveBeenCalledWith("lnk_1", expect.objectContaining({ referrerBucket: expectedBucket }));
 	});
 
-	it("serves OG HTML to a crawler and does not need the click to succeed", async () => {
+	it("serves OG HTML to a crawler without recording a click", async () => {
 		const d = deps({
 			recordClick: vi.fn(async () => {
 				throw new Error("stats down");
@@ -63,6 +73,8 @@ describe("buildRedirectResponse", () => {
 		const body = await res.text();
 		expect(body).toContain('property="og:title" content="Preview Title"');
 		expect(body).toContain("links%2Flnk_1%2Fpreview%2Fimg.png");
+		expect(d.recordClick).not.toHaveBeenCalled();
+		expect(d.scheduleBackground).not.toHaveBeenCalled();
 	});
 
 	it("404s an unknown slug", async () => {

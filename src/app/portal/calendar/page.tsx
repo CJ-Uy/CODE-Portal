@@ -4,7 +4,7 @@ import { CalendarDays, ChevronLeft, ChevronRight, List } from "lucide-react";
 import { getRepositories } from "@/db";
 import { allowedEventTypes } from "@/db/repositories/eventTypeRules";
 import { Button } from "@/components/ui/button";
-import { CalendarMonth, type PointsMode } from "@/components/calendar-month";
+import { CalendarMonth } from "@/components/calendar-month";
 import { loadEventTypes } from "@/lib/event-type-load";
 import { utc8Parts } from "@/lib/date-slots";
 import { requireActor } from "@/server/auth/actor";
@@ -12,15 +12,10 @@ import { can } from "@/server/auth/permissions";
 import { isFeatureEnabled } from "@/server/features";
 import { CreateEventSheet } from "./create-event-sheet";
 import { CreateEventSkeleton, EventsListSkeleton, MonthGridSkeleton } from "./calendar-skeletons";
-import { EventsList, type EventListItem } from "./events-list";
+import { EventsList } from "./events-list";
+import { loadEventList } from "./load-events";
 
 export const dynamic = "force-dynamic";
-
-// Two ways to read the same month: exact figures per day, or shape at a glance.
-const POINTS_TABS = [
-	{ id: "badge" as const, label: "Points" },
-	{ id: "heat" as const, label: "Heatmap" },
-];
 
 const MONTH_NAMES = [
 	"January", "February", "March", "April", "May", "June",
@@ -39,13 +34,12 @@ const MONTH_NAMES = [
 export default async function CalendarPage({
 	searchParams,
 }: {
-	searchParams: Promise<{ year?: string; month?: string; view?: string; points?: string }>;
+	searchParams: Promise<{ year?: string; month?: string; view?: string }>;
 }) {
 	const params = await searchParams;
 	const view = params.view === "list" ? "list" : "calendar";
 	// Points overlay only exists where the points surface itself is enabled.
 	const showPoints = isFeatureEnabled("retention");
-	const pointsMode: PointsMode = params.points === "heat" ? "heat" : "badge";
 	const today = utc8Parts(new Date());
 	const year = Number(params.year) || today.year;
 	const month = Number(params.month) || today.month;
@@ -95,35 +89,13 @@ export default async function CalendarPage({
 					})}
 				</div>
 
-				{view === "calendar" && showPoints ? (
-					<div className="inline-flex rounded-lg border border-border p-0.5" role="group" aria-label="Points display">
-						{POINTS_TABS.map((tab) => {
-							const active = pointsMode === tab.id;
-							return (
-								<Link
-									key={tab.id}
-									href={monthHref(year, month, tab.id)}
-									aria-current={active ? "true" : undefined}
-									className={
-										active
-											? "rounded-md bg-secondary px-3 py-1.5 text-sm font-semibold text-foreground"
-											: "rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-									}
-								>
-									{tab.label}
-								</Link>
-							);
-						})}
-					</div>
-				) : null}
-
 				{view === "calendar" ? (
 					<div className="flex w-full items-center justify-between gap-1 sm:w-auto sm:justify-start sm:gap-2">
 						<Button asChild variant="outline" size="sm">
-							<Link href={monthHref(today.year, today.month, pointsMode)}>Today</Link>
+						<Link href={monthHref(today.year, today.month)}>Today</Link>
 						</Button>
 						<Button asChild variant="outline" size="icon" aria-label="Previous month">
-							<Link href={monthHref(prev.year, prev.month, pointsMode)}>
+							<Link href={monthHref(prev.year, prev.month)}>
 								<ChevronLeft />
 							</Link>
 						</Button>
@@ -131,7 +103,7 @@ export default async function CalendarPage({
 							{MONTH_NAMES[month - 1]} {year}
 						</span>
 						<Button asChild variant="outline" size="icon" aria-label="Next month">
-							<Link href={monthHref(next.year, next.month, pointsMode)}>
+							<Link href={monthHref(next.year, next.month)}>
 								<ChevronRight />
 							</Link>
 						</Button>
@@ -140,11 +112,11 @@ export default async function CalendarPage({
 			</div>
 
 			<Suspense
-				key={`${view}-${year}-${month}-${pointsMode}`}
+				key={`${view}-${year}-${month}`}
 				fallback={view === "calendar" ? <MonthGridSkeleton /> : <EventsListSkeleton />}
 			>
 				{view === "calendar" ? (
-					<MonthBody year={year} month={month} pointsMode={pointsMode} showPoints={showPoints} />
+					<MonthBody year={year} month={month} showPoints={showPoints} />
 				) : (
 					<ListBody />
 				)}
@@ -169,12 +141,10 @@ async function CreateEventControl() {
 async function MonthBody({
 	year,
 	month,
-	pointsMode,
 	showPoints,
 }: {
 	year: number;
 	month: number;
-	pointsMode: PointsMode;
 	showPoints: boolean;
 }) {
 	const actor = await requireActor();
@@ -185,39 +155,18 @@ async function MonthBody({
 		? await repositories.retention.myPointsByDay(actor, { year, month }).catch(() => [])
 		: [];
 	return (
-		<CalendarMonth items={items} year={year} month={month} pointsByDay={pointsByDay} pointsMode={pointsMode} />
+		<CalendarMonth items={items} year={year} month={month} pointsByDay={pointsByDay} />
 	);
 }
 
-function monthHref(year: number, month: number, pointsMode: PointsMode): string {
-	const points = pointsMode === "heat" ? "&points=heat" : "";
-	return `/portal/calendar?year=${year}&month=${month}${points}`;
+function monthHref(year: number, month: number): string {
+	return `/portal/calendar?year=${year}&month=${month}`;
 }
 
 async function ListBody() {
 	const actor = await requireActor();
 	const repositories = await getRepositories();
 	const typeLoad = await loadEventTypes(() => repositories.eventTypeRules.list());
-	return <EventsList events={await loadEventList(repositories, actor)} types={typeLoad.ok ? typeLoad.rows : []} />;
-}
-
-// List view keys off the viewer-scoped `myRole` field from listPublished (plan Shared Seam).
-// Falls back to empty until the member-owned backend (Codex phase B3) lands listPublished.
-async function loadEventList(
-	repositories: Awaited<ReturnType<typeof getRepositories>>,
-	actor: Awaited<ReturnType<typeof requireActor>>,
-): Promise<EventListItem[]> {
-	const events = await repositories.events.listPublished(actor).catch(() => []);
-	return events.map((e) => ({
-		id: e.id,
-		title: e.title,
-		type: e.type,
-		place: e.place,
-		startsAt: e.startsAt,
-		endsAt: e.endsAt,
-		allDay: Boolean(e.allDay),
-		readOnly: Boolean(e.readOnly),
-		myRole: e.myRole,
-		canModerate: e.canModerate,
-	}));
+	const events = await loadEventList(repositories, actor).catch(() => null);
+	return <EventsList events={events ?? []} types={typeLoad.ok ? typeLoad.rows : []} loadFailed={events === null} />;
 }

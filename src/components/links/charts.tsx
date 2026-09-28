@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { hitZones, stepIndex } from "./chart-geometry";
+import { formatStatsPoint } from "./stats-utils";
 
 type Point = { date: string; count: number };
 type Bucket = { bucket: string; count: number };
@@ -11,21 +12,8 @@ function maxCount(rows: Array<{ count: number }>): number {
 	return Math.max(1, ...rows.map((row) => row.count));
 }
 
-function formatDateLabel(value: string): string {
-	if (/^\d{4}-\d{2}-\d{2}T\d{2}:00$/.test(value)) {
-		const date = new Date(`${value}:00.000Z`);
-		return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "numeric", timeZone: "UTC" }).format(date);
-	}
-	if (/^\d{4}-\d{2}$/.test(value)) {
-		const [year, month] = value.split("-").map(Number);
-		return new Intl.DateTimeFormat("en", { month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(year, month - 1, 1)));
-	}
-	const [year, month, day] = value.split("-").map(Number);
-	return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(year, month - 1, day)));
-}
-
 function niceTicks(max: number): number[] {
-	if (max <= 2) return [max, Math.max(1, Math.round(max / 2)), 0];
+	if (max <= 2) return [...new Set([max, Math.max(1, Math.round(max / 2)), 0])];
 	const step = Math.max(1, Math.ceil(max / 2));
 	return [step * 2, step, 0];
 }
@@ -34,6 +22,7 @@ function niceTicks(max: number): number[] {
 export function formatBucket(bucket: string): string {
 	if (bucket === "qr scan") return "QR code scanned";
 	if (bucket === "direct") return "Direct link";
+	if (bucket === "unknown") return "Unknown history";
 	return bucket.charAt(0).toUpperCase() + bucket.slice(1);
 }
 
@@ -113,7 +102,7 @@ export function ClicksOverTime({ data, average, cumulative = false, verbose = fa
 					// as the arrow keys move through them, not just a static chart title.
 					aria-label={
 						active
-							? `Clicks over time. ${formatDateLabel(active.date)}: ${clickLabel(active.count)}.`
+							? `Clicks over time. ${formatStatsPoint(active.date)}: ${clickLabel(active.count)}.`
 							: `Clicks over time. ${visibleData.length} points, peak ${max}. Focus the chart and use the arrow keys to read each value.`
 					}
 					tabIndex={0}
@@ -172,7 +161,7 @@ export function ClicksOverTime({ data, average, cumulative = false, verbose = fa
 						: <circle cx={pad.left + plotWidth / 2} cy={points[0].y} r="4.5" fill="currentColor" />}
 					{verbose ? labelIndexes.map((index) => {
 						const point = points[index];
-						return <text key={`label-${point.key}`} x={point.x} y={height - 8} textAnchor={index === 0 ? "start" : index === visibleData.length - 1 ? "end" : "middle"} className="fill-muted-foreground text-[11px]">{formatDateLabel(point.date)}</text>;
+						return <text key={`label-${point.key}`} x={point.x} y={height - 8} textAnchor={index === 0 ? "start" : index === visibleData.length - 1 ? "end" : "middle"} className="fill-muted-foreground text-[11px]">{formatStatsPoint(point.date)}</text>;
 					}) : null}
 					{active ? (
 						<g pointerEvents="none">
@@ -196,7 +185,7 @@ export function ClicksOverTime({ data, average, cumulative = false, verbose = fa
 						/>
 					))}
 					{active ? (
-						<ChartTooltip x={active.x} y={active.y} heading={formatDateLabel(active.date)} value={clickLabel(active.count)} chartWidth={width} />
+					<ChartTooltip x={active.x} y={active.y} heading={formatStatsPoint(active.date)} value={clickLabel(active.count)} chartWidth={width} />
 					) : null}
 				</svg>
 				<span className="pointer-events-none absolute right-3 top-2 text-xs font-medium text-muted-foreground">peak {max}</span>
@@ -207,7 +196,7 @@ export function ClicksOverTime({ data, average, cumulative = false, verbose = fa
 					<div className="flex flex-wrap gap-1.5">
 						{recent.map((point) => (
 							<span key={point.date} className="rounded bg-background px-2 py-1 tabular-nums text-foreground">
-								{formatDateLabel(point.date)}: {point.count}
+								{formatStatsPoint(point.date)}: {point.count}
 							</span>
 						))}
 					</div>
@@ -226,8 +215,7 @@ function textLabel(label: string, x: number, y: number) {
 	return <text x={x} y={y} textAnchor="end" className="fill-muted-foreground text-[11px]">{label}</text>;
 }
 
-// Mid-bright hues that stay legible on both the white (light) and navy (dark) card backgrounds.
-const DONUT_PALETTE = ["#2DD4BF", "#F59E0B", "#8B5CF6", "#F43F5E", "#38BDF8", "#A3E635"];
+const DONUT_PALETTE = ["#0C315C", "#90B4CC", "#3D5266", "#717D89", "#AAAFB5", "#343B41"];
 
 export function DonutChart({ data, label }: { data: Bucket[]; label: string }) {
 	const [hovered, setHovered] = useState<string | null>(null);

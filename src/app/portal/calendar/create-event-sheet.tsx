@@ -86,7 +86,7 @@ export function CreateEventSheet({
 		setError(null);
 		startTransition(async () => {
 			try {
-				const { id } = await createEventAction({
+				const result = await createEventAction({
 					title,
 					type,
 					place,
@@ -102,9 +102,13 @@ export function CreateEventSheet({
 					allDay,
 					readOnly,
 				});
+				if (!result.ok) {
+					setError(result.error);
+					return;
+				}
 				setOpen(false);
 				reset();
-				router.push(`/portal/calendar/${id}`);
+				router.push(`/portal/calendar/${result.id}`);
 			} catch (e) {
 				setError(e instanceof Error ? e.message : "Could not create the event.");
 			}
@@ -142,12 +146,13 @@ export function CreateEventSheet({
 				<SheetHeader className="sticky top-0 z-10 border-b bg-background pr-12">
 					<SheetTitle className="font-heading text-xl">Create event</SheetTitle>
 					<SheetDescription>Anyone can host. Your event goes on the calendar right away.</SheetDescription>
+					{error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
 				</SheetHeader>
 
 				<div className="grid gap-4 px-4 pb-2">
 					<label className="grid gap-1.5 text-sm">
 						<span className="font-medium">Title</span>
-						<input className={FIELD} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Study jam" />
+						<input className={FIELD} maxLength={160} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Study jam" />
 					</label>
 
 					<label className="grid gap-1.5 text-sm">
@@ -183,6 +188,7 @@ export function CreateEventSheet({
 						<span className="font-medium">Place</span>
 						<input
 							className={FIELD}
+							maxLength={160}
 							value={place}
 							onChange={(e) => setPlace(e.target.value)}
 							placeholder="Leong Hall"
@@ -296,6 +302,7 @@ export function CreateEventSheet({
 						<span className="font-medium">Description</span>
 						<textarea
 							className={FIELD}
+							maxLength={4000}
 							rows={4}
 							value={description}
 							onChange={(e) => setDescription(e.target.value)}
@@ -312,6 +319,7 @@ export function CreateEventSheet({
 								<input
 									type="number"
 									min={1}
+									max={100000}
 									className={FIELD}
 									value={capacity}
 									onChange={(e) => setCapacity(e.target.value)}
@@ -337,7 +345,6 @@ export function CreateEventSheet({
 						</>
 					)}
 
-					{error ? <p className="text-sm text-destructive">{error}</p> : null}
 				</div>
 
 				<SheetFooter className="sticky bottom-0 z-10 mt-0 flex-row gap-2 border-t bg-background pb-[max(1rem,env(safe-area-inset-bottom))]">

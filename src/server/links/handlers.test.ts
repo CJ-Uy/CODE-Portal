@@ -7,6 +7,7 @@ const owner: Actor = { memberId: "mem_owner", roles: ["member"] };
 
 function depsWith(overrides: Record<string, unknown>) {
 	const repo = {
+		searchVisible: vi.fn(async () => ({ links: [], total: 0, tags: [] })),
 		listVisible: vi.fn(async () => []),
 		listOwn: vi.fn(async () => []),
 		listAll: vi.fn(async () => []),
@@ -41,6 +42,16 @@ describe("links handlers", () => {
 
 		expect(deps.repo.listVisible).toHaveBeenCalledOnce();
 		expect(deps.repo.listOwn).toHaveBeenCalledOnce();
+	});
+
+	it("passes pagination and filters to the full-list search", async () => {
+		const deps = depsWith({});
+		const handlers = createLinksHandlers(deps);
+		const res = await handlers.collection(new Request("https://app/api/links?scope=search&limit=25&offset=25&query=Gamma&own=true&tag=older&sort=title&direction=asc"));
+		expect(res.status).toBe(200);
+		expect(deps.repo.searchVisible).toHaveBeenCalledWith(owner, {
+			limit: 25, offset: 25, query: "Gamma", own: true, tags: ["older"], sort: "title", direction: "asc",
+		});
 	});
 
 	it("creates a link from a POST body", async () => {
@@ -99,5 +110,36 @@ describe("links handlers", () => {
 		const res = await handlers.item(new Request("https://app/api/links/lnk_1", { method: "DELETE" }), "lnk_1");
 		expect(res.status).toBe(204);
 		expect(deps.repo.remove).toHaveBeenCalledWith(owner, "lnk_1");
+	});
+
+	it("validates and forwards analytics filters", async () => {
+		const deps = depsWith({});
+		const handlers = createLinksHandlers(deps);
+		const res = await handlers.stats(
+			new Request("https://app/api/links/lnk_1/stats?from=2026-06-01&to=2026-06-30&timezone=Asia%2FManila&granularity=week&source=qr&device=mobile"),
+			"lnk_1",
+		);
+		expect(res.status).toBe(200);
+		expect(deps.repo.getStats).toHaveBeenCalledWith(owner, "lnk_1", {
+			from: "2026-06-01",
+			to: "2026-06-30",
+			timezone: "Asia/Manila",
+			granularity: "week",
+			source: "qr",
+			device: "mobile",
+		});
+	});
+
+	it("returns the first actionable analytics validation issue", async () => {
+		const deps = depsWith({});
+		const handlers = createLinksHandlers(deps);
+		const res = await handlers.stats(
+			new Request("https://app/api/links/lnk_1/stats?timezone=Mars%2FOlympus"),
+			"lnk_1",
+		);
+
+		expect(res.status).toBe(400);
+		expect(await res.json()).toEqual({ error: "Timezone must be a valid IANA timezone." });
+		expect(deps.repo.getStats).not.toHaveBeenCalled();
 	});
 });

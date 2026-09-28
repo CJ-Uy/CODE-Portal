@@ -35,12 +35,16 @@ const createSchema = z
 
 export async function createEventAction(input: z.input<typeof createSchema>) {
 	const actor = await requireActor();
-	const parsed = createSchema.parse(input);
+	const parsed = createSchema.safeParse(input);
+	if (!parsed.success) {
+		const issue = parsed.error.issues[0];
+		return { ok: false as const, error: issue ? `${issue.path.join(".") || "Event"}: ${issue.message}` : "Check the event details." };
+	}
 	const repositories = await getRepositories();
 	// points stays null on create — only Events-role CRS admins set the value (spec §4).
 	// readOnly is passed through and re-checked against event:moderate in the repository, which is
 	// the gate that also covers the HTTP routes.
-	const event = await repositories.events.create(actor, { ...parsed, points: null });
+	const event = await repositories.events.create(actor, { ...parsed.data, points: null });
 	revalidatePath("/portal/calendar");
-	return { id: event.id };
+	return { ok: true as const, id: event.id };
 }

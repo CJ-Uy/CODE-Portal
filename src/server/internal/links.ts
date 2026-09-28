@@ -1,10 +1,11 @@
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import * as schema from "@/db/schema";
-import { linksContract } from "@/db/contract/links";
+import { linksContract, linkStatsInputFromUrl, searchLinksInputFromUrl } from "@/db/contract/links";
 import { createAuditRepository } from "@/db/repositories/audit";
 import { createLinksRepository, linkErrorStatus } from "@/db/repositories/links";
 import type { DeployEnv } from "@/server/env";
 import { buildRedirectResponse } from "@/server/links/redirect";
+import { z } from "zod";
 import { getInternalCorsHeaders } from "./cors";
 import { resolveSharedActor } from "./shared-actor";
 
@@ -44,7 +45,9 @@ export function createLinksInternalHandlers({ db, deployEnv, allowedOrigins = []
 	}
 
 	function fail(error: unknown, headers: Headers | undefined): Response {
-		const message = error instanceof Error ? error.message : "Internal request failed.";
+		const message = error instanceof z.ZodError
+			? error.issues[0]?.message ?? "Internal request failed."
+			: error instanceof Error ? error.message : "Internal request failed.";
 		return Response.json({ error: message }, { status: linkErrorStatus(error), headers });
 	}
 
@@ -57,6 +60,7 @@ export function createLinksInternalHandlers({ db, deployEnv, allowedOrigins = []
 				if (request.method === "GET") {
 					const url = new URL(request.url);
 					const scope = url.searchParams.get("scope");
+					if (scope === "search") return Response.json(await repository.searchVisible(actor, searchLinksInputFromUrl(url)), { headers });
 					const op = scope === "all" ? linksContract.listAll : scope === "own" ? linksContract.listOwn : linksContract.listVisible;
 					const input = op.input.parse({
 						limit: url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : undefined,
@@ -112,7 +116,9 @@ export function createLinksInternalHandlers({ db, deployEnv, allowedOrigins = []
 			if (early || !actor) return early!;
 			if (request.method !== "GET") return new Response("Method not allowed", { status: 405, headers });
 			try {
-				return Response.json(await repository.getStats(actor, id), { headers });
+				const { id: parsedId, ...query } = linkStatsInputFromUrl(request, id);
+				void parsedId;
+				return Response.json(await repository.getStats(actor, id, query), { headers });
 			} catch (error) {
 				return fail(error, headers);
 			}
@@ -123,7 +129,6 @@ export function createLinksInternalHandlers({ db, deployEnv, allowedOrigins = []
 			const { early } = await guard(request);
 			if (early) return early;
 			const url = new URL(request.url);
-			const redirectRequest = new Request(new URL(`/${encodeURIComponent(slug)}`, url.origin), request);
 			let background: Promise<unknown> = Promise.resolve();
 			const response = await buildRedirectResponse(
 				{
@@ -134,7 +139,7 @@ export function createLinksInternalHandlers({ db, deployEnv, allowedOrigins = []
 					},
 					previewImageBaseUrl: url.origin,
 				},
-				redirectRequest,
+				request,
 				slug,
 			);
 			await background;

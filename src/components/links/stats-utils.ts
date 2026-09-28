@@ -23,10 +23,41 @@ function formatIsoHour(date: Date): string {
 	return date.toISOString().slice(0, 13) + ":00";
 }
 
+export function formatStatsPoint(value: string): string {
+	const hour = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):00(?:Z|([+-]\d{2}:\d{2}))?$/);
+	if (hour) {
+		const [, year, month, day, clock, offset] = hour;
+		const label = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "numeric", timeZone: "UTC" })
+			.format(new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), Number(clock))));
+		return offset ? `${label} UTC${offset}` : label;
+	}
+	if (/^\d{4}-\d{2}$/.test(value)) {
+		const [year, month] = value.split("-").map(Number);
+		return new Intl.DateTimeFormat("en", { month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(year, month - 1, 1)));
+	}
+	const [year, month, day] = value.split("-").map(Number);
+	return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(year, month - 1, day)));
+}
+
 export function shiftIsoDay(value: string, days: number): string {
 	const date = parseIsoDay(value);
 	date.setUTCDate(date.getUTCDate() + days);
 	return formatIsoDay(date);
+}
+
+export function todayInTimeZone(timeZone: string, now = new Date()): string {
+	try {
+		const parts = new Intl.DateTimeFormat("en", {
+			timeZone,
+			year: "numeric",
+			month: "2-digit",
+			day: "2-digit",
+		}).formatToParts(now);
+		const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+		return `${value.year}-${value.month}-${value.day}`;
+	} catch {
+		return now.toISOString().slice(0, 10);
+	}
 }
 
 export function daysInRange(range: DateRange): number {
@@ -89,6 +120,12 @@ export function trendSeries(series: StatsPoint[], range: DateRange, granularity:
 
 export function hourlyTrendSeries(series: HourlyStatsPoint[], range: DateRange): StatsPoint[] {
 	const counts = hourPointMap(series);
+	if (series.some((point) => /[+-]\d{2}:\d{2}$/.test(point.hour))) {
+		return series
+			.filter((point) => point.hour.slice(0, 10) >= range.start && point.hour.slice(0, 10) <= range.end)
+			.sort((a, b) => Date.parse(a.hour) - Date.parse(b.hour))
+			.map(({ hour: date, count }) => ({ date, count }));
+	}
 	const start = parseIsoHour(`${range.start}T00:00`);
 	const end = parseIsoHour(`${range.end}T23:00`);
 	const hours = Math.max(1, Math.round((end.getTime() - start.getTime()) / (60 * 60 * 1000)) + 1);
