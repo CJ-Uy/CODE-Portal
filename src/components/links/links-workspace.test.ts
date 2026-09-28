@@ -23,11 +23,11 @@ it("keeps link actions visible in the mobile list", () => {
 		owner: { id: "member-1", name: "Member", image: null },
 	};
 	const html = renderToStaticMarkup(createElement(LinksWorkspace, {
-		initialLinks: [link], actorMemberId: "member-1", canModerate: false,
+		initialPage: { links: [link], total: 1, tags: [] }, actorMemberId: "member-1", canModerate: false,
 	}));
-	expect(html).toContain('class="grid gap-2 md:hidden"');
+	expect(html).toContain('class="grid gap-2 2xl:hidden"');
 	expect(html).toContain('aria-label="Copy Membership form short link"');
 	expect(html).toContain('aria-label="View Membership form details and QR code"');
 	expect(html.match(/aria-label="Delete Membership form"/g)).toHaveLength(2);
-	expect(html).toContain("Showing all 1 link.");
+	expect(html).toContain("Showing 1–1 of 1 link");
 });

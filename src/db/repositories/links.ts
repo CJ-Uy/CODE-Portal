@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lte, or, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type { InferSelectModel } from "drizzle-orm";
 import * as schema from "@/db/schema";
@@ -27,6 +27,16 @@ export type QrStyle = {
 	transparentBackground: boolean;
 };
 export type LinkListItem = Omit<ShortLink, "tags" | "qrStyle"> & { owner: LinkOwner | null; tags: string[]; qrStyle: QrStyle };
+export type LinkSearchInput = {
+	limit: number;
+	offset: number;
+	query: string;
+	own: boolean;
+	tags: string[];
+	sort: "title" | "slug" | "clicks" | "owner" | "created";
+	direction: "asc" | "desc";
+};
+export type LinkSearchResult = { links: LinkListItem[]; total: number; tags: string[] };
 
 export const DEFAULT_QR_STYLE: QrStyle = {
 	foreground: "#06192F",
@@ -96,6 +106,7 @@ export type LinkStats = {
 };
 
 export type LinksRepository = {
+	searchVisible(actor: Actor, input: LinkSearchInput): Promise<LinkSearchResult>;
 	listVisible(actor: Actor, input?: { limit?: number; offset?: number }): Promise<LinkListItem[]>;
 	listOwn(actor: Actor, input?: { limit?: number; offset?: number }): Promise<LinkListItem[]>;
 	listAll(actor: Actor, input?: { limit?: number; offset?: number }): Promise<LinkListItem[]>;
@@ -355,6 +366,33 @@ async function runAtomic(db: LinkDb, queries: unknown[]): Promise<void> {
 
 export function createLinksRepository(db: LinkDb, audit: AuditRepository): LinksRepository {
 	return {
+		async searchVisible(actor, input) {
+			const term = input.query.trim().toLowerCase();
+			const filters = [
+				input.own ? eq(shortLinks.ownerMemberId, actor.memberId) : undefined,
+				term ? or(
+					sql`instr(lower(${shortLinks.title}), ${term}) > 0`,
+					sql`instr(lower(${shortLinks.slug}), ${term}) > 0`,
+					sql`instr(lower(${shortLinks.destinationUrl}), ${term}) > 0`,
+				) : undefined,
+				input.tags.length ? or(...input.tags.map((tag) => sql`exists (select 1 from json_each(case when json_valid(${shortLinks.tags}) then ${shortLinks.tags} else '[]' end) where value = ${tag})`)) : undefined,
+			];
+			const where = and(...filters);
+			const sortColumn = input.sort === "clicks" ? shortLinks.clickCount
+				: input.sort === "slug" ? sql`lower(${shortLinks.slug})`
+				: input.sort === "owner" ? sql`lower(coalesce(${members.name}, ''))`
+				: input.sort === "title" ? sql`lower(${shortLinks.title})`
+				: shortLinks.createdAt;
+			const order = input.direction === "asc" ? asc(sortColumn) : desc(sortColumn);
+			const [rows, countRows, tagRows] = await Promise.all([
+				listQuery(db).where(where).orderBy(order, asc(shortLinks.id)).limit(input.limit).offset(input.offset),
+				db.select({ count: sql<number>`count(*)` }).from(shortLinks).where(where),
+				db.selectDistinct({ tag: sql<string>`tag.value` })
+					.from(sql`short_links, json_each(case when json_valid(short_links.tags) then short_links.tags else '[]' end) as tag`)
+					.orderBy(sql`tag.value`),
+			]);
+			return { links: rows.map(rowToListItem), total: countRows[0]?.count ?? 0, tags: tagRows.map((row) => row.tag).filter((tag): tag is string => typeof tag === "string") };
+		},
 		async listVisible(actor, input) {
 			void actor;
 			const page = ensurePage(input);
@@ -582,6 +620,7 @@ export function createUnavailableLinksRepository(): LinksRepository {
 		throw new Error("Links are unavailable through this repository adapter.");
 	};
 	return {
+		searchVisible: unavailable,
 		listVisible: unavailable,
 		listOwn: unavailable,
 		listAll: unavailable,

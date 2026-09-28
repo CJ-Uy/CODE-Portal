@@ -1,9 +1,9 @@
 "use client";
 
-import { type FormEvent, type KeyboardEvent, type MouseEvent, type RefObject, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { type FormEvent, type KeyboardEvent, type MouseEvent, type RefObject, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { ArrowDown, ArrowUp, CalendarDays, ChevronsUpDown, Copy, ExternalLink, ImageUp, Info, Plus, QrCode, RefreshCw, Save, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
-import type { LinkListItem, LinkStats, QrStyle } from "@/db/repositories/links";
+import type { LinkListItem, LinkSearchResult, LinkStats, QrStyle } from "@/db/repositories/links";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -25,10 +25,12 @@ type SortState = { key: SortKey; dir: "asc" | "desc" };
 type StatsQuery = LinkStats["query"];
 
 type LinksWorkspaceProps = {
-	initialLinks: LinkView[];
+	initialPage: Omit<LinkSearchResult, "links"> & { links: LinkView[] };
 	actorMemberId: string;
 	canModerate: boolean;
 };
+
+const PAGE_SIZE = 25;
 
 function subscribeOrigin() {
 	return () => {};
@@ -42,8 +44,12 @@ function getServerOrigin() {
 	return "";
 }
 
-export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: LinksWorkspaceProps) {
-	const [links, setLinks] = useState(initialLinks);
+export function LinksWorkspace({ initialPage, actorMemberId, canModerate }: LinksWorkspaceProps) {
+	const [links, setLinks] = useState(initialPage.links);
+	const [total, setTotal] = useState(initialPage.total);
+	const [tagOptions, setTagOptions] = useState(initialPage.tags);
+	const [page, setPage] = useState(0);
+	const [reloadKey, setReloadKey] = useState(0);
 	const origin = useSyncExternalStore(subscribeOrigin, getClientOrigin, getServerOrigin);
 	const [status, setStatus] = useState("");
 	const [view, setView] = useState<ViewMode>("all");
@@ -52,6 +58,7 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 	const [sort, setSort] = useState<SortState>({ key: "created", dir: "desc" });
 	const [createOpen, setCreateOpen] = useState(false);
 	const [activeId, setActiveId] = useState("");
+	const [activeOverride, setActiveOverride] = useState<LinkView | null>(null);
 	const [confirmDeleteId, setConfirmDeleteId] = useState("");
 	const [stats, setStats] = useState<StatsView | null>(null);
 	const [statsLoading, setStatsLoading] = useState(false);
@@ -59,46 +66,47 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 	const statsRequestId = useRef(0);
 	const createTriggerRef = useRef<HTMLButtonElement>(null);
 	const dialogTriggerRef = useRef<HTMLElement | null>(null);
-	const [hasMore, setHasMore] = useState(initialLinks.length === 50);
 	const [linksLoading, setLinksLoading] = useState(false);
+	const firstLoad = useRef(true);
 	const [form, setForm] = useState({ slug: "", destinationUrl: "", title: "", tags: [] as string[] });
 
 	const baseLabel = origin ? origin.replace(/^https?:\/\//, "") : "your-code-site";
-	const tagOptions = useMemo(() => Array.from(new Set(links.flatMap((link) => link.tags))).sort(), [links]);
-	const active = useMemo(() => links.find((link) => link.id === activeId) ?? null, [activeId, links]);
+	const active = useMemo(() => links.find((link) => link.id === activeId) ?? activeOverride, [activeId, activeOverride, links]);
 	const activeUrl = active && origin ? shortLinkUrl(origin, active.slug) : "";
 
-	const filtered = useMemo(() => {
-		const term = search.trim().toLowerCase();
-		return links.filter((link) => {
-			if (view === "mine" && link.ownerMemberId !== actorMemberId) return false;
-			if (selectedTags.length && !selectedTags.some((tag) => link.tags.includes(tag))) return false;
-			if (!term) return true;
-			return [link.title, link.slug, link.destinationUrl].some((value) => value.toLowerCase().includes(term));
-		});
-	}, [actorMemberId, links, search, selectedTags, view]);
-
-	const sorted = useMemo(() => {
-		const dir = sort.dir === "asc" ? 1 : -1;
-		return [...filtered].sort((a, b) => {
-			switch (sort.key) {
-				case "clicks":
-					return (a.clickCount - b.clickCount) * dir;
-				case "created":
-					return (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) * dir;
-				case "owner":
-					return (a.owner?.name ?? "￿").localeCompare(b.owner?.name ?? "￿") * dir;
-				case "slug":
-					return a.slug.localeCompare(b.slug) * dir;
-				default:
-					return a.title.localeCompare(b.title) * dir;
-			}
-		});
-	}, [filtered, sort]);
 	const hasFilters = view === "mine" || Boolean(search.trim()) || selectedTags.length > 0;
-	const emptyMessage = links.length ? "No links match these filters." : "No short links yet. Create your first one to get started.";
+	const emptyMessage = hasFilters ? "No links match these filters." : "No short links yet. Create your first one to get started.";
+	const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+	useEffect(() => {
+		if (firstLoad.current) {
+			firstLoad.current = false;
+			return;
+		}
+		const controller = new AbortController();
+		const timer = setTimeout(async () => {
+			const params = new URLSearchParams({ scope: "search", limit: String(PAGE_SIZE), offset: String(page * PAGE_SIZE), query: search.trim(), own: String(view === "mine"), sort: sort.key, direction: sort.dir });
+			for (const tag of selectedTags) params.append("tag", tag);
+			setLinksLoading(true);
+			try {
+				const response = await fetch(`/api/links?${params}`, { credentials: "same-origin", signal: controller.signal });
+				const body = await response.json() as { links?: LinkView[]; total?: number; tags?: string[]; error?: string };
+				if (!response.ok || !body.links || typeof body.total !== "number" || !body.tags) throw new Error(body.error ?? "Could not load links.");
+				setLinks(body.links);
+				setTotal(body.total);
+				setTagOptions(body.tags);
+				setStatus("");
+			} catch (error) {
+				if (!controller.signal.aborted) setStatus(error instanceof Error ? error.message : "Could not load links.");
+			} finally {
+				if (!controller.signal.aborted) setLinksLoading(false);
+			}
+		}, search ? 250 : 0);
+		return () => { controller.abort(); clearTimeout(timer); };
+	}, [page, reloadKey, search, selectedTags, sort, view]);
 
 	function toggleSort(key: SortKey) {
+		setPage(0);
 		setSort((current) =>
 			current.key === key
 				? { key, dir: current.dir === "asc" ? "desc" : "asc" }
@@ -106,42 +114,7 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 		);
 	}
 
-	async function refresh() {
-		const response = await fetch("/api/links?limit=50", { credentials: "same-origin" });
-		const body = await response.json() as { links?: LinkView[]; error?: string };
-		if (!response.ok || !body.links) {
-			setStatus(body.error ?? "Could not refresh links.");
-			return;
-		}
-		setLinks(body.links);
-		setHasMore(body.links.length === 50);
-		setStatus("Links refreshed.");
-	}
-
-	async function loadMore() {
-		setLinksLoading(true);
-		let response: Response;
-		let body: { links?: LinkView[]; error?: string };
-		try {
-			response = await fetch(`/api/links?limit=50&offset=${links.length}`, { credentials: "same-origin" });
-			body = await response.json() as { links?: LinkView[]; error?: string };
-		} catch {
-			setLinksLoading(false);
-			setStatus("Could not reach the links service.");
-			return;
-		}
-		setLinksLoading(false);
-		if (!response.ok || !body.links) {
-			setStatus(body.error ?? "Could not load older links.");
-			return;
-		}
-		setLinks((current) => {
-			const known = new Set(current.map((link) => link.id));
-			return [...current, ...body.links!.filter((link) => !known.has(link.id))];
-		});
-		setHasMore(body.links.length === 50);
-		setStatus(body.links.length ? "Older links loaded." : "All links are shown.");
-	}
+	function refresh() { setReloadKey((current) => current + 1); }
 
 	async function createLink(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
@@ -156,11 +129,18 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 			setStatus(body.error ?? "Could not create link.");
 			return;
 		}
-		setLinks((current) => [body.link!, ...current]);
+		setLinks((current) => [body.link!, ...current].slice(0, PAGE_SIZE));
+		setTotal((current) => current + 1);
+		setTagOptions((current) => Array.from(new Set([...current, ...body.link!.tags])).sort());
+		setPage(0);
+		setView("all");
+		setSearch("");
+		setSelectedTags([]);
+		setSort({ key: "created", dir: "desc" });
 		setForm({ slug: "", destinationUrl: "", title: "", tags: [] });
 		setCreateOpen(false);
 		setStatus("Link created.");
-		openDialog(body.link.id);
+		openDialog(body.link.id, body.link);
 	}
 
 	async function updateLink(id: string, patch: Partial<LinkView>) {
@@ -176,6 +156,8 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 			return;
 		}
 		setLinks((current) => current.map((link) => (link.id === body.link!.id ? body.link! : link)));
+		if (activeId === body.link.id) setActiveOverride(body.link);
+		refresh();
 		setStatus("Link saved.");
 	}
 
@@ -187,6 +169,9 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 			return;
 		}
 		setLinks((current) => current.filter((link) => link.id !== id));
+		setTotal((current) => Math.max(0, current - 1));
+		if (links.length === 1 && page > 0) setPage(page - 1);
+		else refresh();
 		if (activeId === id) setActiveId("");
 		setConfirmDeleteId("");
 		setStatus("Link deleted.");
@@ -219,9 +204,10 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 		setStats(body);
 	}
 
-	function openDialog(id: string) {
+	function openDialog(id: string, link?: LinkView) {
 		const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 		dialogTriggerRef.current = activeElement?.closest<HTMLElement>("button,a,[tabindex]") ?? createTriggerRef.current;
+		setActiveOverride(link ?? links.find((item) => item.id === id) ?? null);
 		setActiveId(id);
 		setStats(null);
 		void loadStats(id);
@@ -230,6 +216,7 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 	function closeDialog() {
 		statsRequestId.current += 1;
 		setActiveId("");
+		setActiveOverride(null);
 		setStatsLoading(false);
 		setStatsError("");
 	}
@@ -288,7 +275,7 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 			<div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-3">
 				<div className="flex rounded-md border bg-background p-1">
 					{(["all", "mine"] as ViewMode[]).map((mode) => (
-						<button key={mode} type="button" aria-pressed={view === mode} onClick={() => setView(mode)} className={cn("min-h-11 rounded px-3 text-xs font-semibold", view === mode ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>
+						<button key={mode} type="button" aria-pressed={view === mode} onClick={() => { setView(mode); setPage(0); }} className={cn("min-h-11 rounded px-3 text-xs font-semibold", view === mode ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>
 							{mode === "mine" ? "My links" : "All links"}
 						</button>
 					))}
@@ -296,17 +283,17 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 				<label className="relative min-w-56 flex-1">
 					<span className="sr-only">Search links</span>
 					<Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-					<Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by title, slug, or destination" className="min-h-11 pl-9" />
+					<Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} placeholder="Search by title, slug, or destination" className="min-h-11 pl-9" />
 				</label>
 				{tagOptions.length ? (
 					<div className="flex flex-wrap items-center gap-1">
 						<span className="mr-1 text-xs text-muted-foreground">Tags:</span>
 						{tagOptions.map((tag) => (
-							<button key={tag} type="button" aria-pressed={selectedTags.includes(tag)} onClick={() => setSelectedTags((current) => current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag])} className={cn("min-h-11 rounded-md px-3 text-xs font-semibold", selectedTags.includes(tag) ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground")}>
+							<button key={tag} type="button" aria-pressed={selectedTags.includes(tag)} onClick={() => { setSelectedTags((current) => current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]); setPage(0); }} className={cn("min-h-11 rounded-md px-3 text-xs font-semibold", selectedTags.includes(tag) ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground")}>
 								{tag}
 							</button>
 						))}
-						{selectedTags.length ? <button type="button" onClick={() => setSelectedTags([])} className="min-h-11 px-2 text-xs text-muted-foreground underline">Clear tags</button> : null}
+						{selectedTags.length ? <button type="button" onClick={() => { setSelectedTags([]); setPage(0); }} className="min-h-11 px-2 text-xs text-muted-foreground underline">Clear tags</button> : null}
 					</div>
 				) : null}
 			</div>
@@ -327,7 +314,7 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 						</TableRow>
 					</TableHeader>
 					<TableBody>
-						{sorted.map((link) => (
+						{links.map((link) => (
 							<TableRow
 								key={link.id}
 								className="cursor-pointer"
@@ -369,7 +356,7 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 				</Table>
 			</div>
 			<div className="grid gap-2 2xl:hidden">
-				{sorted.map((link) => (
+				{links.map((link) => (
 					<article key={link.id} className="min-w-0 rounded-lg border bg-card p-4">
 						<div className="flex items-start justify-between gap-3">
 							<div className="min-w-0 flex-1">
@@ -390,10 +377,14 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 					</article>
 				))}
 			</div>
-			{!sorted.length ? <div className="grid justify-items-center gap-3 rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground"><p>{emptyMessage}</p>{hasFilters ? <Button type="button" variant="outline" size="sm" className="min-h-11" onClick={() => { setView("all"); setSearch(""); setSelectedTags([]); }}>Clear filters</Button> : null}</div> : null}
+			{!links.length && !linksLoading ? <div className="grid justify-items-center gap-3 rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground"><p>{emptyMessage}</p>{hasFilters ? <Button type="button" variant="outline" size="sm" className="min-h-11" onClick={() => { setView("all"); setSearch(""); setSelectedTags([]); setPage(0); }}>Clear filters</Button> : null}</div> : null}
 			<div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
-				<p>{hasFilters ? `Showing ${sorted.length} of ${links.length} loaded links${hasMore ? ". Load older links to search the full history." : "."}` : hasMore ? `Showing the newest ${links.length} links. Load older links to search the full history.` : `Showing all ${links.length} ${links.length === 1 ? "link" : "links"}.`}</p>
-				{hasMore ? <Button type="button" variant="outline" className="min-h-11" onClick={() => void loadMore()} disabled={linksLoading}>{linksLoading ? <RefreshCw className="animate-spin motion-reduce:animate-none" /> : null}{linksLoading ? "Loading" : "Load older links"}</Button> : null}
+				<p aria-live="polite">{linksLoading ? "Loading links..." : total ? `Showing ${page * PAGE_SIZE + 1}–${page * PAGE_SIZE + links.length} of ${total} ${total === 1 ? "link" : "links"}` : "0 links"}</p>
+				{pageCount > 1 ? <nav aria-label="Links pages" className="flex items-center gap-2">
+					<Button type="button" variant="outline" className="min-h-11" onClick={() => setPage((current) => current - 1)} disabled={page === 0 || linksLoading}>Previous</Button>
+					<span className="whitespace-nowrap tabular-nums">Page {page + 1} of {pageCount}</span>
+					<Button type="button" variant="outline" className="min-h-11" onClick={() => setPage((current) => current + 1)} disabled={page + 1 >= pageCount || linksLoading}>Next</Button>
+				</nav> : null}
 			</div>
 
 			<DialogPrimitive.Root open={Boolean(confirmDeleteId)} onOpenChange={(open) => !open && setConfirmDeleteId("")}>

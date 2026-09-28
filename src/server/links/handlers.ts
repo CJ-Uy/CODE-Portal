@@ -1,4 +1,4 @@
-import { linksContract, linkStatsInputFromUrl } from "@/db/contract/links";
+import { linksContract, linkStatsInputFromUrl, searchLinksInputFromUrl } from "@/db/contract/links";
 import { linkErrorStatus } from "@/db/repositories/links";
 import type { Repositories } from "@/db/repositories";
 import type { Actor } from "@/server/auth/permissions";
@@ -28,6 +28,13 @@ export function createLinksHandlers(deps: LinksHandlerDependencies) {
 			if (request.method === "GET") {
 				const url = new URL(request.url);
 				const scope = url.searchParams.get("scope");
+				if (scope === "search") {
+					try {
+						return Response.json(await links.searchVisible(actor, searchLinksInputFromUrl(url)));
+					} catch (error) {
+						return fail(error);
+					}
+				}
 				const op = scope === "all" ? linksContract.listAll : scope === "own" ? linksContract.listOwn : linksContract.listVisible;
 				const input = op.input.parse({
 					limit: url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : undefined,

@@ -1,6 +1,6 @@
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import * as schema from "@/db/schema";
-import { linksContract, linkStatsInputFromUrl } from "@/db/contract/links";
+import { linksContract, linkStatsInputFromUrl, searchLinksInputFromUrl } from "@/db/contract/links";
 import { createAuditRepository } from "@/db/repositories/audit";
 import { createLinksRepository, linkErrorStatus } from "@/db/repositories/links";
 import type { DeployEnv } from "@/server/env";
@@ -60,6 +60,7 @@ export function createLinksInternalHandlers({ db, deployEnv, allowedOrigins = []
 				if (request.method === "GET") {
 					const url = new URL(request.url);
 					const scope = url.searchParams.get("scope");
+					if (scope === "search") return Response.json(await repository.searchVisible(actor, searchLinksInputFromUrl(url)), { headers });
 					const op = scope === "all" ? linksContract.listAll : scope === "own" ? linksContract.listOwn : linksContract.listVisible;
 					const input = op.input.parse({
 						limit: url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : undefined,

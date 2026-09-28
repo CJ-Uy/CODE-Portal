@@ -88,6 +88,21 @@ describe("links repository on D1", () => {
 		expect(first.qrStyle).toMatchObject({ pattern: "classic", cornerStyle: "square", showLogo: true, logoSize: 0.24, showLogoBacking: false });
 	});
 
+	it("searches, filters, sorts, and counts links across pages", async () => {
+		const repository = repo();
+		await repository.create(owner, { slug: "alpha-link", destinationUrl: "https://e.com/a", title: "Alpha", tags: ["older"] });
+		await repository.create(other, { slug: "beta-link", destinationUrl: "https://e.com/b", title: "Beta", tags: ["news"] });
+		await repository.create(owner, { slug: "gamma-link", destinationUrl: "https://e.com/c", title: "Gamma", tags: ["older"] });
+		const input = { limit: 1, offset: 0, query: "", own: false, tags: [], sort: "title" as const, direction: "asc" as const };
+		const secondPage = await repository.searchVisible(owner, { ...input, offset: 1 });
+		expect(secondPage.links.map((link) => link.title)).toEqual(["Beta"]);
+		expect(secondPage.total).toBe(3);
+		expect(secondPage.tags).toEqual(["news", "older"]);
+		const older = await repository.searchVisible(owner, { ...input, query: "gamma", tags: ["older"], own: true });
+		expect(older.links.map((link) => link.title)).toEqual(["Gamma"]);
+		expect(older.total).toBe(1);
+	});
+
 	it("round-trips tags and qr style on update", async () => {
 		const repository = repo();
 		const link = await repository.create(owner, { slug: "welcome", destinationUrl: "https://e.com", title: "x" });

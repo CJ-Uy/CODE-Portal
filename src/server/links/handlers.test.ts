@@ -7,6 +7,7 @@ const owner: Actor = { memberId: "mem_owner", roles: ["member"] };
 
 function depsWith(overrides: Record<string, unknown>) {
 	const repo = {
+		searchVisible: vi.fn(async () => ({ links: [], total: 0, tags: [] })),
 		listVisible: vi.fn(async () => []),
 		listOwn: vi.fn(async () => []),
 		listAll: vi.fn(async () => []),
@@ -41,6 +42,16 @@ describe("links handlers", () => {
 
 		expect(deps.repo.listVisible).toHaveBeenCalledOnce();
 		expect(deps.repo.listOwn).toHaveBeenCalledOnce();
+	});
+
+	it("passes pagination and filters to the full-list search", async () => {
+		const deps = depsWith({});
+		const handlers = createLinksHandlers(deps);
+		const res = await handlers.collection(new Request("https://app/api/links?scope=search&limit=25&offset=25&query=Gamma&own=true&tag=older&sort=title&direction=asc"));
+		expect(res.status).toBe(200);
+		expect(deps.repo.searchVisible).toHaveBeenCalledWith(owner, {
+			limit: 25, offset: 25, query: "Gamma", own: true, tags: ["older"], sort: "title", direction: "asc",
+		});
 	});
 
 	it("creates a link from a POST body", async () => {

@@ -134,7 +134,33 @@ const pageInput = z.object({
 	offset: z.number().int().min(0).default(0),
 });
 
+export const searchLinksInputSchema = pageInput.extend({
+	query: z.string().trim().max(120).default(""),
+	own: z.boolean().default(false),
+	tags: z.array(z.string().min(1).max(24)).max(20).default([]),
+	sort: z.enum(["title", "slug", "clicks", "owner", "created"]).default("created"),
+	direction: z.enum(["asc", "desc"]).default("desc"),
+});
+
+export function searchLinksInputFromUrl(url: URL) {
+	return searchLinksInputSchema.parse({
+		limit: url.searchParams.has("limit") ? Number(url.searchParams.get("limit")) : undefined,
+		offset: url.searchParams.has("offset") ? Number(url.searchParams.get("offset")) : undefined,
+		query: url.searchParams.get("query") ?? undefined,
+		own: url.searchParams.get("own") === "true",
+		tags: url.searchParams.getAll("tag"),
+		sort: url.searchParams.get("sort") ?? undefined,
+		direction: url.searchParams.get("direction") ?? undefined,
+	});
+}
+
 export const linksContract = {
+	searchVisible: operation({
+		input: searchLinksInputSchema,
+		output: z.object({ links: z.array(linkListItemSchema), total: z.number().int().nonnegative(), tags: z.array(z.string()) }),
+		auth: "member",
+		sharedDev: "allow",
+	}),
 	listVisible: operation({
 		input: pageInput,
 		output: z.object({ links: z.array(linkListItemSchema) }),
