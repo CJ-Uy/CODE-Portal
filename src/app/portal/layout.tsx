@@ -21,22 +21,22 @@ export default async function PortalLayout({ children }: { children: React.React
 	if (!actor) redirect("/signin");
 
 	const repositories = await getRepositories();
+	const flags = getFeatureFlags();
 	// notifications is unavailable through the shared-dev adapter until a future
 	// phase wires an internal proxy route for it; degrade to an empty feed
 	// instead of crashing every authed page.
 	const [member, feed, unreadCount, navPins] = await Promise.all([
 		repositories.members.getById(actor, actor.memberId),
-		repositories.notifications.listFeed(actor, { limit: 10 }).catch(() => []),
-		repositories.notifications.unreadCount(actor).catch(() => 0),
+		flags.notifications ? repositories.notifications.listFeed(actor, { limit: 10 }).catch(() => []) : Promise.resolve([]),
+		flags.notifications ? repositories.notifications.unreadCount(actor).catch(() => 0) : Promise.resolve(0),
 		repositories.navPins.listVisible(actor).catch(() => []),
 	]);
 	if (!member) redirect("/signin");
 
 	const displayName = member.nickname ?? member.fullName ?? member.name ?? member.email;
-	const flags = getFeatureFlags();
 	const showAdmin = hasAnyAdminScope(actor);
 	const adminGroups = showAdmin
-		? visibleGroups(actor).map((group) => ({
+		? visibleGroups(actor, flags).map((group) => ({
 				segment: group.segment,
 				label: group.label,
 				href: group.href,

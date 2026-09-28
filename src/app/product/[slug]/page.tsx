@@ -7,20 +7,19 @@ import { PlaceholderBlock } from "@/components/public/placeholder-block";
 import { SiteFooter } from "@/components/public/site-footer";
 import { SiteHeader } from "@/components/public/site-header";
 import { ARTICLES, getArticle } from "@/content/site";
+import { isFeatureEnabled } from "@/server/features";
 
-export const dynamic = "force-static";
-
-export function generateStaticParams() {
-	return ARTICLES.map((article) => ({ slug: article.id }));
-}
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+	if (!isFeatureEnabled("publicSite")) notFound();
 	const { slug } = await params;
 	const article = getArticle(slug);
 	return { title: article ? `${article.title} — CODE` : "Article — CODE" };
 }
 
 export default async function ArticlePage({ params }: { params: Promise<{ slug: string }> }) {
+	if (!isFeatureEnabled("publicSite")) notFound();
 	const { slug } = await params;
 	const article = getArticle(slug);
 	if (!article) notFound();

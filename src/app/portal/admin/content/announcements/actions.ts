@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getRepositories } from "@/db";
 import { requireActor } from "@/server/auth/actor";
+import { assertFeatureEnabled } from "@/server/features";
 
 const announcementSchema = z.object({
 	tag: z.string().trim().min(1).max(24),
@@ -29,6 +30,7 @@ function revalidate(): void {
 }
 
 export async function createAnnouncementAction(formData: FormData): Promise<void> {
+	assertFeatureEnabled("announcements");
 	const actor = await requireActor();
 	const repositories = await getRepositories();
 	await repositories.announcements.create(actor, parse(formData));
@@ -36,6 +38,7 @@ export async function createAnnouncementAction(formData: FormData): Promise<void
 }
 
 export async function updateAnnouncementAction(formData: FormData): Promise<void> {
+	assertFeatureEnabled("announcements");
 	const actor = await requireActor();
 	const id = z.string().min(1).parse(formData.get("id"));
 	const repositories = await getRepositories();
@@ -44,6 +47,7 @@ export async function updateAnnouncementAction(formData: FormData): Promise<void
 }
 
 export async function deleteAnnouncementAction(formData: FormData): Promise<void> {
+	assertFeatureEnabled("announcements");
 	const actor = await requireActor();
 	const id = z.string().min(1).parse(formData.get("id"));
 	const repositories = await getRepositories();

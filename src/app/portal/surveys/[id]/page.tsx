@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { getActor } from "@/server/auth/actor";
+import { isFeatureEnabled } from "@/server/features";
 import { submitResponseAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +18,7 @@ export default async function MemberSurveyPage({
 	params: Promise<{ id: string }>;
 	searchParams: Promise<{ t?: string; done?: string }>;
 }) {
+	if (!isFeatureEnabled("surveys")) notFound();
 	const actor = await getActor();
 	if (!actor) redirect("/signin");
 

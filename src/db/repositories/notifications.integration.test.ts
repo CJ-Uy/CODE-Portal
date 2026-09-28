@@ -1,13 +1,16 @@
 import { env } from "cloudflare:test";
 import { drizzle } from "drizzle-orm/d1";
 import { eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as schema from "@/db/schema";
 import { notifications } from "@/db/schema";
 import type { Actor } from "@/server/auth/permissions";
+import { isFeatureEnabled } from "@/server/features";
 import { createNotificationsRepository, notify } from "./notifications";
 
 const actor: Actor = { memberId: "mem_nf", roles: ["member"] };
+
+vi.mock("@/server/features", () => ({ isFeatureEnabled: vi.fn(() => true) }));
 
 async function seedMember() {
 	await env.DB.prepare("INSERT INTO members (id, email, name, status) VALUES (?, ?, ?, ?)")
@@ -20,6 +23,7 @@ async function seedMember() {
 
 describe("notifications repository on D1", () => {
 	beforeEach(async () => {
+		vi.mocked(isFeatureEnabled).mockReturnValue(true);
 		for (const table of ["notifications", "members"]) {
 			await env.DB.prepare(`DELETE FROM ${table}`).run();
 		}
@@ -36,6 +40,13 @@ describe("notifications repository on D1", () => {
 
 		expect(feed.map((item) => item.kind)).toEqual(["event_approved", "points_awarded"]);
 		expect(await repository.unreadCount(actor)).toBe(2);
+	});
+
+	it("does not store notifications while the feature is disabled", async () => {
+		vi.mocked(isFeatureEnabled).mockReturnValue(false);
+		const db = drizzle(env.DB, { schema });
+		await notify(db, { memberId: "mem_nf", kind: "points_awarded", title: "Points added", body: "5 points" });
+		expect(await db.select().from(notifications)).toHaveLength(0);
 	});
 
 	it("only lists the requesting member's own notifications", async () => {
