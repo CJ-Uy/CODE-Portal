@@ -8,6 +8,8 @@
 | Build | `pnpm build` |
 | Lint | `pnpm lint` |
 | Typecheck | `pnpm typecheck` |
+| Unit and integration tests | `pnpm test` |
+| E2E tests | `pnpm test:e2e` |
 | Generate migration | `pnpm db:generate` |
 | Apply local D1 migration | `pnpm db:migrate:local` |
 | Apply shared/dev D1 migration | `pnpm db:migrate:dev` |
@@ -25,4 +27,12 @@ pnpm exec wrangler whoami
 pnpm exec wrangler d1 list
 pnpm exec wrangler r2 bucket list
 pnpm exec wrangler tail code-nest
+```
+
+Before E2E tests, seed the local DB:
+
+```bash
+pnpm db:migrate:local:sqlite
+pnpm db:seed:local
+pnpm test:e2e
 ```

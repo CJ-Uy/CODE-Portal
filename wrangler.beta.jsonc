@@ -1,0 +1,65 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "code-nest-beta",
+	"account_id": "83376df5e0bae067afa197b07430168d",
+	"main": ".open-next/worker.js",
+	"workers_dev": true,
+	"routes": [
+		{
+			"pattern": "beta.ateneocode.org",
+			"custom_domain": true
+		}
+	],
+	"compatibility_date": "2026-06-10",
+	"compatibility_flags": [
+		"nodejs_compat",
+		"global_fetch_strictly_public"
+	],
+	"assets": {
+		"binding": "ASSETS",
+		"directory": ".open-next/assets"
+	},
+	"images": {
+		"binding": "IMAGES"
+	},
+	"services": [
+		{
+			"binding": "WORKER_SELF_REFERENCE",
+			"service": "code-nest-beta"
+		}
+	],
+	"observability": {
+		"enabled": true
+	},
+	"upload_source_maps": true,
+	"vars": {
+		"APP_ENV": "production",
+		"DEPLOY_ENV": "dev",
+		"STORAGE_MODE": "binding",
+		"LOCAL_SQLITE_PATH": "./.local/dev.db",
+		"LOCAL_STORAGE_DIR": "./.local/uploads",
+		"NEXT_PRIVATE_MINIMAL_MODE": "1",
+		// Beta is where unfinished surfaces get exercised, so every flag is on here.
+		"FEATURE_RETENTION": "true",
+		"FEATURE_LIBRARY": "true",
+		"FEATURE_ANNOUNCEMENTS": "true",
+		"FEATURE_NOTIFICATIONS": "true",
+		"FEATURE_SURVEYS": "true",
+		"FEATURE_PUBLIC_SITE": "true",
+		"FEATURE_LEADERBOARD": "true"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "code-nest-beta-db",
+			"database_id": "ffe974a7-4b89-4ac7-b07e-ad62f4530ca2",
+			"migrations_dir": "drizzle/migrations"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "BUCKET",
+			"bucket_name": "code-nest-dev-uploads"
+		}
+	]
+}

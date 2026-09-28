@@ -19,7 +19,7 @@ Results:
 | --- | --- | --- |
 | `next dev` with `initOpenNextCloudflareForDev()` | Works | `auth()` reached D1 through Drizzle once the top-level local D1 binding was migrated. The dev server uses the top-level `DB` local simulation unless run through a specific Wrangler env. |
 | `opennextjs-cloudflare preview` | Works | `auth()` reached D1 through Drizzle. Preview used the secure cookie name `__Secure-authjs.session-token`. |
-| Deployed dev Worker | Not proven | `pnpm exec wrangler deploy --env dev` stalled after asset upload and during Worker version creation. The deployed `/__auth-spike` endpoint returned 404, so the spike build was not confirmed as published. |
+| Deployed beta Worker | Not proven | `pnpm exec wrangler deploy --config wrangler.beta.jsonc` stalled after asset upload and during Worker version creation. The deployed `/__auth-spike` endpoint returned 404, so the spike build was not confirmed as published. |
 
 Additional finding:
 

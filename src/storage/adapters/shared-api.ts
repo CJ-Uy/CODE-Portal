@@ -20,16 +20,8 @@ export class SharedApiStorageAdapter implements StorageAdapter {
 	}
 
 	async putObject(input: Parameters<StorageAdapter["putObject"]>[0]): Promise<{ key: string }> {
-		const response = await this.request("/internal/uploads", {
-			method: "POST",
-			body: input.body,
-			headers: {
-				"Content-Type": input.contentType ?? "application/octet-stream",
-				"X-Object-Key": input.key,
-			},
-		});
-		if (!response.ok) throw new Error("Shared API failed to store upload.");
-		return response.json();
+		void input;
+		throw new Error("Shared uploads must use the authenticated upload endpoint so the server can assign the object key.");
 	}
 
 	async getObject(key: string): Promise<{ body: ReadableStream | null; contentType?: string }> {
@@ -43,7 +35,7 @@ export class SharedApiStorageAdapter implements StorageAdapter {
 	}
 
 	async deleteObject(key: string): Promise<void> {
-		const response = await this.request(`/internal/uploads/${encodeURIComponent(key)}`, { method: "DELETE" });
-		if (!response.ok && response.status !== 404) throw new Error("Shared API failed to delete upload.");
+		void key;
+		throw new Error("Shared development does not allow destructive storage operations.");
 	}
 }

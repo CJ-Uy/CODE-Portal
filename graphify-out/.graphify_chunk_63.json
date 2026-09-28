@@ -1,0 +1,41 @@
+{
+  "nodes": [
+    {
+      "id": "01_falcon_logo_only_code_logo_01_white_falcon_asset",
+      "label": "White Falcon Logo Asset",
+      "file_type": "image",
+      "source_file": "docs/[OSG 2425] Brand Manual — Logos, Colors, Fonts-20260603T140636Z-3-001/[OSG 2425] Brand Manual — Logos, Colors, Fonts/01 Falcon (Logo Only)/CODE Logo-01.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "01_falcon_logo_only_code_logo_01_falcon_mark",
+      "label": "Ateneo CODE Falcon Mark",
+      "file_type": "concept",
+      "source_file": "docs/[OSG 2425] Brand Manual — Logos, Colors, Fonts-20260603T140636Z-3-001/[OSG 2425] Brand Manual — Logos, Colors, Fonts/01 Falcon (Logo Only)/CODE Logo-01.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "01_falcon_logo_only_code_logo_01_white_falcon_asset",
+      "target": "01_falcon_logo_only_code_logo_01_falcon_mark",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/[OSG 2425] Brand Manual — Logos, Colors, Fonts-20260603T140636Z-3-001/[OSG 2425] Brand Manual — Logos, Colors, Fonts/01 Falcon (Logo Only)/CODE Logo-01.png",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

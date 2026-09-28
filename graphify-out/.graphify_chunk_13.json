@@ -1,0 +1,62 @@
+{
+  "nodes": [
+    {
+      "id": "assets_falcon_transparent_stylized_falcon_emblem",
+      "label": "Stylized Falcon Emblem",
+      "file_type": "image",
+      "source_file": "design/assets/falcon-transparent.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "assets_falcon_transparent_falcon_silhouette",
+      "label": "Falcon Silhouette",
+      "file_type": "concept",
+      "source_file": "design/assets/falcon-transparent.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "assets_falcon_transparent_circular_swoop",
+      "label": "Circular Swoop",
+      "file_type": "concept",
+      "source_file": "design/assets/falcon-transparent.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "assets_falcon_transparent_stylized_falcon_emblem",
+      "target": "assets_falcon_transparent_falcon_silhouette",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "design/assets/falcon-transparent.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "assets_falcon_transparent_stylized_falcon_emblem",
+      "target": "assets_falcon_transparent_circular_swoop",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "design/assets/falcon-transparent.png",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

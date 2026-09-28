@@ -1,0 +1,104 @@
+{
+  "nodes": [
+    {
+      "id": "uploads_04_google_form_full_details_cover_1_light_full_details_cover",
+      "label": "Light Ateneo CODE Full Details Form Cover",
+      "file_type": "image",
+      "source_file": "design/uploads/04 Google Form - Full Details Cover-1.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "uploads_04_google_form_full_details_cover_1_ateneo_code_identity",
+      "label": "Ateneo CODE Identity",
+      "file_type": "concept",
+      "source_file": "design/uploads/04 Google Form - Full Details Cover-1.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "uploads_04_google_form_full_details_cover_1_organization_name",
+      "label": "Consultants for Organization Development and Empowerment",
+      "file_type": "concept",
+      "source_file": "design/uploads/04 Google Form - Full Details Cover-1.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "uploads_04_google_form_full_details_cover_1_contact_details",
+      "label": "MVP 216 and Organization Email",
+      "file_type": "concept",
+      "source_file": "design/uploads/04 Google Form - Full Details Cover-1.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "uploads_04_google_form_full_details_cover_1_falcon_symbol",
+      "label": "Falcon Symbol",
+      "file_type": "concept",
+      "source_file": "design/uploads/04 Google Form - Full Details Cover-1.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "uploads_04_google_form_full_details_cover_1_light_full_details_cover",
+      "target": "uploads_04_google_form_full_details_cover_1_ateneo_code_identity",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design/uploads/04 Google Form - Full Details Cover-1.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "uploads_04_google_form_full_details_cover_1_ateneo_code_identity",
+      "target": "uploads_04_google_form_full_details_cover_1_organization_name",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design/uploads/04 Google Form - Full Details Cover-1.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "uploads_04_google_form_full_details_cover_1_light_full_details_cover",
+      "target": "uploads_04_google_form_full_details_cover_1_contact_details",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design/uploads/04 Google Form - Full Details Cover-1.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "uploads_04_google_form_full_details_cover_1_light_full_details_cover",
+      "target": "uploads_04_google_form_full_details_cover_1_falcon_symbol",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design/uploads/04 Google Form - Full Details Cover-1.png",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

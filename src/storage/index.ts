@@ -2,11 +2,10 @@ import { getOptionalCloudflareEnv } from "@/server/cloudflare";
 import { getAppConfig } from "@/server/env";
 import { LocalFileStorageAdapter } from "./adapters/local-fs";
 import { R2BindingStorageAdapter } from "./adapters/r2-binding";
-import { R2S3StorageAdapter } from "./adapters/r2-s3";
 import { SharedApiStorageAdapter } from "./adapters/shared-api";
 import type { StorageAdapter } from "./types";
 
-export function getStorageAdapter(): StorageAdapter {
+export async function getStorageAdapter(): Promise<StorageAdapter> {
 	const config = getAppConfig();
 
 	if (config.APP_ENV === "production" && config.ALLOW_PRODUCTION_STORAGE_MODE_OVERRIDE !== "true") {
@@ -18,6 +17,8 @@ export function getStorageAdapter(): StorageAdapter {
 	}
 
 	if (config.STORAGE_MODE === "r2-s3") {
+		const load = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<typeof import("./adapters/r2-s3")>;
+		const { R2S3StorageAdapter } = await load("./adapters/r2-s3");
 		return new R2S3StorageAdapter();
 	}
 

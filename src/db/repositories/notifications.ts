@@ -1,23 +1,19 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { notifications } from "@/db/schema";
 import { createId } from "@/lib/ids";
+import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type { Actor } from "@/server/auth/permissions";
+import type * as schema from "@/db/schema";
+import { isFeatureEnabled } from "@/server/features";
 
-// Drizzle's D1 and local SQLite clients expose the same query builder at runtime,
-// but their overloaded select signatures do not intersect cleanly as a union.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
-type NotificationRow = {
-	id: string;
-	kind: string;
-	title: string;
-	body: string;
-	href: string | null;
-	readAt: Date | number | null;
-	createdAt: Date | number | null;
-};
+// The repository registry passes the getDb() handle, whose static type is the
+// union of the sync better-sqlite3 and async D1 Drizzle databases. That union
+// does not unify the query-builder overloads, so we narrow to the async D1
+// shape (what production and the tests run on); the local better-sqlite3 handle
+// is structurally compatible at runtime, matching the existing members repo.
+type Db = DrizzleD1Database<typeof schema>;
 
-export type NotificationKind = "event_approved" | "survey_assigned" | "forum_reply" | "points_awarded";
+export type NotificationKind = "event_approved" | "event_invite" | "survey_assigned" | "forum_reply" | "points_awarded";
 
 export type FeedItem = {
 	id: string;
@@ -58,6 +54,7 @@ function toMs(value: Date | number | null): number | null {
  * triggers; Phase 4's forum-reply and points-award write paths call it too.
  */
 export async function notify(db: Db, input: NotifyInput): Promise<void> {
+	if (!isFeatureEnabled("notifications")) return;
 	await db.insert(notifications).values({
 		id: createId("ntf"),
 		memberId: input.memberId,
@@ -82,7 +79,7 @@ export function createNotificationsRepository(db: Db): NotificationsRepository {
 				.orderBy(desc(notifications.createdAt), desc(sql`rowid`))
 				.limit(limit);
 
-			return rows.map((row: NotificationRow) => ({
+			return rows.map((row) => ({
 				id: row.id,
 				kind: row.kind as NotificationKind,
 				title: row.title,

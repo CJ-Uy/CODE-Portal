@@ -6,7 +6,7 @@ import { getStorageAdapter } from "@/storage";
 
 export async function GET() {
 	const database = getDatabaseAdapter();
-	const storage = getStorageAdapter();
+	const storage = await getStorageAdapter();
 
 	return NextResponse.json({
 		...getPublicEnvStatus(),
@@ -20,3 +20,4 @@ export async function GET() {
 		},
 	});
 }
+

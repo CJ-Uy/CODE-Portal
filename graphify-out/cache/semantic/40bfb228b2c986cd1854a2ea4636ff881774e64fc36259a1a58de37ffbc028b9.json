@@ -1,0 +1,1 @@
+{"nodes": [{"id": "nextauth_route_handlers", "label": "GET/POST (NextAuth catch-all route)", "file_type": "code", "source_file": "src/app/api/auth/[...nextauth]/route.ts", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null}], "edges": [], "hyperedges": []}

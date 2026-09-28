@@ -1,5 +1,5 @@
 packages:
-  - .
+  - "."
 
 allowBuilds:
   better-sqlite3: true

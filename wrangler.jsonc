@@ -1,6 +1,6 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "code-nest",
+	"name": "code-nest-prod",
 	"account_id": "8527ec1369d46f55304a6f59ab5356e4",
 	"main": ".open-next/worker.js",
 	"workers_dev": true,
@@ -25,7 +25,9 @@
 	"services": [
 		{
 			"binding": "WORKER_SELF_REFERENCE",
-			"service": "code-nest"
+			// Must match this file's own "name". It said code-nest, which no longer exists,
+			// so every production upload failed with code 10143 until it was corrected.
+			"service": "code-nest-prod"
 		}
 	],
 	"observability": {
@@ -38,13 +40,23 @@
 		"STORAGE_MODE": "binding",
 		"LOCAL_SQLITE_PATH": "./.local/dev.db",
 		"LOCAL_STORAGE_DIR": "./.local/uploads",
-		"NEXT_PRIVATE_MINIMAL_MODE": "1"
+		"NEXT_PRIVATE_MINIMAL_MODE": "1",
+		// Unfinished surfaces stay hidden in production until each one ships. Only "true" enables.
+		"FEATURE_RETENTION": "false",
+		"FEATURE_LIBRARY": "false",
+		"FEATURE_ANNOUNCEMENTS": "false",
+		"FEATURE_NOTIFICATIONS": "false",
+		"FEATURE_SURVEYS": "false",
+		"FEATURE_PUBLIC_SITE": "false",
+		"FEATURE_LEADERBOARD": "false"
 	},
 	"d1_databases": [
 		{
 			"binding": "DB",
 			"database_name": "code-nest-prod-db",
 			"database_id": "a66fac5e-c122-466d-b7fe-5910ba6a98b9",
+			// One history now, shared by every environment. Its 0000 to 0003 are the files
+			// production has always had, so D1 sees them as applied and only 0004 is pending.
 			"migrations_dir": "drizzle/migrations"
 		}
 	],
@@ -53,51 +65,5 @@
 			"binding": "BUCKET",
 			"bucket_name": "code-nest-prod-uploads"
 		}
-	],
-	"env": {
-		"dev": {
-			"name": "code-nest-dev",
-			"routes": [
-				{
-					"pattern": "beta.ateneocode.org",
-					"custom_domain": true
-				}
-			],
-			"assets": {
-				"binding": "ASSETS",
-				"directory": ".open-next/assets"
-			},
-			"images": {
-				"binding": "IMAGES"
-			},
-			"services": [
-				{
-					"binding": "WORKER_SELF_REFERENCE",
-					"service": "code-nest-dev"
-				}
-			],
-			"vars": {
-				"APP_ENV": "production",
-				"DEPLOY_ENV": "dev",
-				"STORAGE_MODE": "binding",
-				"LOCAL_SQLITE_PATH": "./.local/dev.db",
-				"LOCAL_STORAGE_DIR": "./.local/uploads",
-				"NEXT_PRIVATE_MINIMAL_MODE": "1"
-			},
-			"d1_databases": [
-				{
-					"binding": "DB",
-					"database_name": "code-nest-dev-db",
-					"database_id": "f9d2b16f-3358-49c2-a88e-e72c9339a22b",
-					"migrations_dir": "drizzle/migrations"
-				}
-			],
-			"r2_buckets": [
-				{
-					"binding": "BUCKET",
-					"bucket_name": "code-nest-dev-uploads"
-				}
-			]
-		}
-	}
+	]
 }

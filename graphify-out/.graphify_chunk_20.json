@@ -1,0 +1,83 @@
+{
+  "nodes": [
+    {
+      "id": "screens_01_check_contact_page_capture",
+      "label": "Contact Page Capture",
+      "file_type": "image",
+      "source_file": "design/screens/01-check.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "screens_01_check_public_navigation",
+      "label": "Public Site Navigation",
+      "file_type": "concept",
+      "source_file": "design/screens/01-check.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "screens_01_check_contact_hero",
+      "label": "Let's Talk About Your Organization Contact Hero",
+      "file_type": "concept",
+      "source_file": "design/screens/01-check.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "screens_01_check_text_overlap_defect",
+      "label": "Contact Hero Text Overlap",
+      "file_type": "concept",
+      "source_file": "design/screens/01-check.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "screens_01_check_contact_page_capture",
+      "target": "screens_01_check_public_navigation",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design/screens/01-check.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "screens_01_check_contact_page_capture",
+      "target": "screens_01_check_contact_hero",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design/screens/01-check.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "screens_01_check_text_overlap_defect",
+      "target": "screens_01_check_contact_hero",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design/screens/01-check.png",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

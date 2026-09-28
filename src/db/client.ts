@@ -11,11 +11,7 @@ export function getDb() {
 	const config = getAppConfig();
 
 	if (config.APP_ENV === "production") {
-		const env = getCloudflareEnv();
-		if (!env.DB) {
-			throw new Error("Cloudflare D1 binding DB is unavailable.");
-		}
-		return drizzleD1(env.DB, { schema });
+		return getD1Db();
 	}
 
 	if (config.APP_ENV === "shared") {
@@ -28,4 +24,12 @@ export function getDb() {
 	}
 
 	return localDb;
+}
+
+export function getD1Db() {
+	const env = getCloudflareEnv();
+	if (!env.DB) {
+		throw new Error("Cloudflare D1 binding DB is unavailable.");
+	}
+	return drizzleD1(env.DB, { schema });
 }

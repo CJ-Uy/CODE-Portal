@@ -1,0 +1,1 @@
+{"nodes": [{"id": "retention_createretentionrepository", "label": "createRetentionRepository", "file_type": "code", "source_file": "src/db/repositories/retention.ts", "source_location": "2-4", "source_url": null, "captured_at": null, "author": null, "contributor": null}], "edges": [], "hyperedges": []}

@@ -1,8 +1,8 @@
 # CODE Portal — Master Design & Build Plan
 
-> **Status:** v4 — AGREED, ready to implement. Claude ⇄ Codex converged over 4 adversarial rounds (needs-rework → ready-with-changes → ready-with-changes → **ready**). No implementation has begun; each Phase becomes its own task plan.
+> **Status:** v5 — AGREED, ready to implement. v4 converged over 4 Claude⇄Codex adversarial rounds; v5 is a user-driven scope revision after a stakeholder meeting, made before any phase past Phase 0/1 (foundations, auth/RBAC, upload hardening) was built. No other implementation has begun; each Phase becomes its own task plan.
 > **For agentic workers:** Each Phase below becomes its own `superpowers:writing-plans` bite-sized task plan at implementation time. This document is the architecture contract those plans must honor.
-> **Revision log + review resolutions are at the end (§14).**
+> **Revision log + review resolutions are at the end (§14, v5 entry is the most recent).**
 
 **Goal:** Build the full Ateneo CODE web application — a public OD publishing site plus a signed-in member portal and scoped admin tools — on Cloudflare (Workers via OpenNext, D1, R2) with Drizzle as the single schema/migration source of truth across local, shared-dev, and production.
 
@@ -28,19 +28,24 @@
 - **Styling is Tailwind CSS v4** (already configured: `@tailwindcss/postcss`, tokens in `src/app/globals.css`). Style with Tailwind utility classes bound to the design tokens; no CSS-in-JS and no ad-hoc global CSS beyond `globals.css`. shadcn/ui components are themed through these same Tailwind tokens.
 - **UI is built from shadcn/ui components** wherever one fits. The repo already has a shadcn-style local registry (`src/components/ui` + `components.json`); add/generate the official component with `pnpm dlx shadcn@latest add <component>` (button, dialog, dropdown-menu, form, table, tabs, sheet, calendar, etc.) and theme it via the design tokens in `src/app/globals.css` rather than hand-rolling controls. Only write a bespoke component when shadcn has no equivalent, and build it on the same Radix/Tailwind primitives. Reuse before adding; do not duplicate an existing `ui/` component.
 - Brand: headings Unna, body Source Sans; palette navy `#06192F`, white, blue `#0C315C`, light blue `#D7DFE9`, ink `#121315`, pale blue `#90B4CC`, plus supporting grays. No logo manipulation. No em dashes in UI copy, code comments, docs, commits. Plain product language; no AI-stock phrasing. Cards stay shallow (no cards inside cards). Light + dark themes (tokens already in the design export).
+- **Minimalism, cross-cutting (v5, §14 v5):** prefer a small, fixed set of top-level surfaces with depth pushed into sheets/detail views over growing top-level chrome. Concretely: the mobile bottom nav stays at ~4-5 fixed slots forever; new per-org admin additions (pinned nav links, the member QR/barcode card) live inside the bottom-nav Menu sheet, never as new fixed icons. Apply the same instinct to every other admin surface added in v5 (reporting, roster, nav pins, quick links) — favor one well-organized screen over scattering controls across many.
 
 ---
 
 ## 1. Product Scope & Route Map
 
+> **v5 change:** the content/publishing system (public `/articles` + member Library), announcements, guided tours, and the standalone events list are all cut from v1 (§11, §14 v5). Calendar is now the sole events surface, the old Events tab is repurposed into a retention-history view, and several new admin-managed surfaces (nav pins, quick links, member roster, retention reporting) are added.
+
 ### Public (unauthenticated)
-- `/` landing; `/articles` index; `/articles/[slug]` detail (only `confidentiality = public`); `/services`; `/about` (or folded into `/`); `/contact`; `/signin` (low-emphasis Google entry).
+- `/` — simple static landing page (org info, services/about/contact, low-emphasis Google `/signin` entry). No DB-backed article/case-study content engine in v1 (§11).
+- `/signin` (low-emphasis Google entry).
 
 ### Member portal (authenticated, `/portal`, URL-addressable modules)
-- `/portal` Overview, `/portal/profile`, `/portal/library`, `/portal/library/[slug]`, `/portal/links`, `/portal/events`, `/portal/events/[id]`, `/portal/calendar`, `/portal/announcements`, `/portal/surveys/[id]`.
+- `/portal` Overview, `/portal/profile` (includes a "Show my member code" action, §6 QR/barcode), `/portal/links`, `/portal/events` (repurposed: "My Retention History" — current-term points/status summary + full chronological record list with a term selector), `/portal/calendar`, `/portal/calendar/[eventId]` (event detail: RSVP, attendance, forum, media — replaces the old `/portal/events/[id]`), `/portal/surveys/[id]`.
+- Mobile bottom nav stays fixed at ~4-5 core slots (Overview, Calendar, center Menu, Profile); the Menu opens a sheet containing the member QR/barcode card and any admin-pinned links (§12 J). No `/portal/library*`, no `/portal/announcements`.
 
 ### Admin (authenticated + scoped, `/portal/admin`)
-- dashboard, `roles`, `events` (approvals), `links` (moderation), `publishing`, `surveys`, `audit`, `members`, `tour-settings`.
+- dashboard (now shows the Quick Links widget instead of an announcements widget), `roles`, `events` (approvals + QR check-in scanning, §6), `links` (moderation + embed-preview review), `retention` (manual record entry: member checklist + term/event picker + freeform reason + points), `reporting` (per-member history / per-event roster / whole-term master xlsx export), `roster` (per-term member-email allowlist), `nav-pins`, `quick-links`, `surveys`, `audit`, `members`. No `tour-settings`.
 
 ### System routes
 - `/api/auth/[...nextauth]` (Auth.js: `/api/auth/signin/google`, `/api/auth/callback/google`, `/api/auth/signout`, session + csrf).
@@ -125,7 +130,8 @@ Auth is **Auth.js v5 (`next-auth`)** with the **`@auth/drizzle-adapter`** pointe
 - `AUTH_SECRET` set per env; `trustHost: true` (required behind the Worker proxy); `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` from env.
 
 ### 4.2 Domain gate + provisioning (takeover-safe by default)
-- **`signIn` callback** rejects unless `account.provider==='google'` AND `profile.email_verified===true` AND (`profile.email` domain ∈ `AUTH_ALLOWED_DOMAINS` OR `profile.email` ∈ `AUTH_ALLOWLIST_EMAILS`). Optionally pass `hd` in `authorization.params` as a hint (not a security boundary; the callback is authoritative).
+- **`signIn` callback** rejects unless `account.provider==='google'` AND `profile.email_verified===true` AND (`profile.email` domain ∈ `AUTH_ALLOWED_DOMAINS` OR `profile.email` ∈ `AUTH_ALLOWLIST_EMAILS`) **AND `profile.email` ∈ the current active term's roster** (§6 `term_member_roster`, v5). Optionally pass `hd` in `authorization.params` as a hint (not a security boundary; the callback is authoritative).
+- **v5 roster gate:** being on the current term's roster is now required to sign in, not just a membership-tracking nicety. A new term's roster is seeded as a copy of the previous term's (admin then removes leavers / adds newcomers) rather than starting blank. An already-provisioned member who falls off the current term's roster is flipped to `status='inactive'` (locked out; historical records are kept for past-term reporting) — see §14 v5.
 - **No `allowDangerousEmailAccountLinking`** (Auth.js default false) → the round-1 email-takeover concern is handled by the library: a Google identity links only to an account already holding that exact provider account, never auto-merging by email.
 - **Base membership is implicit, not a stored grant:** every `members` row with `status='active'` IS a base member; `member_roles` stores ONLY elevated scopes. This removes the failure mode where an Auth.js `events.createUser` side effect could leave a user with no base role. The `createUser` event is used only for an audit row + ensuring `status='active'`.
 - **No pre-provisioning by email (v1):** with dangerous email-linking off, a real member row is created ONLY by that person's first Google sign-in. Admins do NOT create login-able member rows by email (that would collide with Auth.js `createUser` on first sign-in); admin member management edits already-signed-in members and assigns elevated roles. An invite/link flow is deferred. (Seeded dev members are demo data on dev/local only and are exercised in shared mode via `shared_dev_tokens`, not real Google sign-in.)
@@ -149,8 +155,8 @@ Auth is **Auth.js v5 (`next-auth`)** with the **`@auth/drizzle-adapter`** pointe
 
 ## 5. Authorization (RBAC)
 
-- Roles: `super`, `member`, `calendar`, `publishing`, `link`, `crs`, `member_admin` (seeded from the design's `ROLE_DEFS`). `super` inherits all scopes (resolved in code).
-- `src/server/auth/permissions.ts`: `can(actor, action, resource?)` over a single action enum (`event:approve`, `points:assign`, `link:moderate`, `content:publish`, `role:assign`, `survey:configure`, `member:manage`, `library:read_confidential`, ...). Pure, exhaustively unit-tested.
+- Roles: `super`, `member`, `calendar`, `link`, `retention`, `member_admin` (seeded from the design's `ROLE_DEFS`). `super` inherits all scopes (resolved in code). **v5:** `crs` is renamed `retention` — same people/scope, renamed because it now also covers manual retention records (§6, §14 v5), not just event points. `publishing` is dropped along with the content/publishing system (§11 v5); reinstate it if that system returns.
+- `src/server/auth/permissions.ts`: `can(actor, action, resource?)` over a single action enum (`event:approve`, `points:assign`, `retention:record`, `link:moderate`, `role:assign`, `survey:configure`, `member:manage`, `roster:manage`, `nav:configure`, ...). Pure, exhaustively unit-tested. (`content:publish` / `library:read_confidential` dropped with the content/publishing system, v5.)
 - Enforced in repository/service functions (so it holds across access modes), admin layouts (gate by scope), and ownership checks (member edits only own link/list/comment unless holding the relevant admin scope). Confidential library access also checks team membership / ACL (§6).
 - Every successful admin mutation → `audit.record(actor, action, targetType, targetId, detail, category)`.
 
@@ -158,72 +164,70 @@ Auth is **Auth.js v5 (`next-auth`)** with the **`@auth/drizzle-adapter`** pointe
 
 ## 6. Data Model (Drizzle, SQLite dialect)
 
+> **v5 change:** the content/publishing tables (`articles*`, `topics`, `comments`, library favorites/lists) and `announcements`/`member_feed_state.announcements_seen_at` are dropped — that subsystem is deferred (§11, §14 v5). `point_awards` is replaced by a unified `retention_records` table. New tables: `term_member_roster`, `nav_pins`, `quick_links`. `members` drops `tour_member_done`/`tour_admin_done`. `short_links` gains embed-preview columns.
+
 One `schema.ts` (split into `schema/` re-exported if it grows). IDs are app-generated prefixed strings (`src/lib/ids.ts`). Timestamps are integer epoch-ms (`mode:"timestamp_ms"`) consistently. FK `references()` are declared (D1 enforces them) — migrations honor FK-safe ordering (§2.2). **Every table's indexes are listed; a query without a backing index fails review.** Drizzle TS property names are camelCase mapping to snake_case SQL columns; the Auth.js adapter relies on EXACT property names — `emailVerified` → column `email_verified`, `sessionToken` → `session_token`, `userId` → `user_id` — so those tables use the adapter's expected property names even though columns below are shown in SQL form.
 
 **Identity & access** (Auth.js `@auth/drizzle-adapter` tables live here; `members` IS the Auth.js `user` table, extended)
-- `members(id pk, email unique, email_verified timestamp_ms null, name null, image null, full_name null, nickname null, pronouns null, batch null, birthday null, birthday_private bool default true, avatar_key null, status['active'|'pending'|'inactive'] default 'active', tour_member_done bool default false, tour_admin_done bool default false, created_at, updated_at)` — idx: `email`, `status`. (`name`/`image`/`email_verified` are Auth.js fields; all CODE fields are nullable/defaulted so adapter `createUser` succeeds and profile is completed later.)
+- `members(id pk, email unique, email_verified timestamp_ms null, name null, image null, full_name null, nickname null, pronouns null, batch null, birthday null, birthday_private bool default true, avatar_key null, status['active'|'pending'|'inactive'] default 'active', created_at, updated_at)` — idx: `email`, `status`. (`name`/`image`/`email_verified` are Auth.js fields; all CODE fields are nullable/defaulted so adapter `createUser` succeeds and profile is completed later. **v5:** `tour_member_done`/`tour_admin_done` dropped — guided tours are cut, §11.)
 - `accounts(user_id fk→members.id, type, provider, provider_account_id, refresh_token null, access_token null, expires_at null, token_type null, scope null, id_token null, session_state null, pk(provider, provider_account_id))` — idx: `user_id`. Google identity (the old `google_sub` is now `provider='google' + provider_account_id`). No `allowDangerousEmailAccountLinking`.
 - `sessions(session_token pk, user_id fk→members.id, expires)` — Auth.js database-session table (replaces the prior custom hashed-token table) — idx: `user_id`.
 - `verification_token(identifier, token, expires, pk(identifier, token))` — adapter-required even though OAuth-only.
 - `roles(id pk, key unique, label, description, kind)`; `member_roles(member_id fk→members.id, role_id fk, assigned_by fk null, assigned_at, pk(member_id, role_id))` — idx: `role_id`.
 - `shared_dev_tokens(token_hash pk, member_id fk, label, created_at)` — maps shared bearer tokens to seeded actors (dev Worker only; never seeded into prod).
+- **`term_member_roster(term_id fk, email, member_id fk null, added_by fk, added_at, pk(term_id, email))`** — idx: `term_id`, `email`. **v5, new.** The auth gate (§4.2): an email must appear here for the *current active* term to sign in. `member_id` is backfilled once that email's member row exists (nullable beforehand since roster entries can be added before someone's first sign-in). A new term's rows are seeded by copying the prior term's roster; admins then edit (`roster:manage` permission, under the renamed `retention` scope... actually under `member_admin`, since this is membership gating not points — confirm in implementation plan if ambiguous).
 
-**Consultancy teams (for confidential content ACL)**
-- `consultancy_teams(id pk, name, created_at)`; `team_members(team_id fk, member_id fk, pk(...))` — idx: `member_id`.
+**Consultancy teams** — **v5: dropped.** These existed only to support confidential-content ACLs (`article_acl`) in the now-deferred content/publishing system. Reinstate alongside that system if/when it returns.
 
-**Content / publishing** (`articles` powers public Product Center + members Library; gated by `confidentiality` + ACL)
-- `articles(id pk, slug unique, kind['article'|'case'], confidentiality['public'|'members'|'confidential'], category, title, dek, abstract, author, client null, read_time, locked bool, date_sort int, published_at null, created_by fk, created_at, updated_at)` — idx: `slug`, `confidentiality`, `published_at`, `date_sort`, `category`.
-- `article_sections / article_components / article_questions / article_refs(id pk, article_id fk, position, ...)` — idx: `article_id`.
-- `topics(id pk, name unique)`; `article_topics(article_id fk, topic_id fk, pk(...))` — idx: `topic_id`.
-- `article_related(article_id fk, related_id fk, pk(...))`.
-- `article_acl(article_id fk, principal_type['member'|'role'|'team'], principal_id, pk(article_id, principal_type, principal_id))` — confidential articles list their allowed principals; `library:read_confidential` (content admin) bypasses. idx: `article_id`.
-
-**Library member state**
-- `favorites(member_id fk, article_id fk, created_at, pk(...))` — idx: `article_id`.
-- `lists(id pk, member_id fk, name, color, created_at)` — idx: `member_id`; `list_items(list_id fk, article_id fk, position, pk(list_id, article_id))`.
-- `comments(id pk, article_id fk, member_id fk, parent_id fk null, body, created_at)` — idx: `(article_id, created_at)`, `parent_id`. One reply level.
+**Content / publishing — v5: entire subsystem deferred (§11).** `articles`, `article_sections/components/questions/refs`, `topics`, `article_topics`, `article_related`, `article_acl`, `favorites`, `lists`/`list_items`, `comments` are all removed from the v1 schema. The data model (e.g. `article_related` + `topics` for graph search) is preserved in the design memory for when this work resumes — see the existing `deferred-library-graph-search` note, now nested under this broader deferral.
 
 **Short links**
-- `short_links(id pk, slug unique, destination_url, title, owner_member_id fk, click_count int default 0, created_at, updated_at)` — idx: `slug`, `owner_member_id`. `destination_url` validated http/https only (open-redirect guard).
+- `short_links(id pk, slug unique, destination_url, title, owner_member_id fk, click_count int default 0, preview_title null, preview_description null, preview_image_key null, created_at, updated_at)` — idx: `slug`, `owner_member_id`. `destination_url` validated http/https only (open-redirect guard). **v5:** `preview_title`/`preview_description`/`preview_image_key` are new, nullable — owner-controlled embed/OG preview shown when the link is shared in chat apps (§7, §14 v5). `preview_image_key` is an R2 object key under the existing uploads namespace pattern.
 - `reserved_slugs(slug pk)` (seeded).
 - **Analytics (rollup-primary, resolves D1 write-storm risk):** `link_daily_stats(link_id fk, date, referrer_bucket, device_bucket, count, pk(link_id, date, referrer_bucket, device_bucket))` is the source of truth for the 30-day series + referrer/device breakdowns the design shows. The `/l/[slug]` redirect resolves and 302s immediately, then records analytics (one upsert-increment into `link_daily_stats` + bump `short_links.click_count`) via `runInBackground()` (a `ctx.waitUntil` wrapper from `src/server/cloudflare.ts`) AFTER responding — analytics is fail-open and must never block or fail the redirect. Raw `link_events` are NOT stored in v1 (optional sampled+TTL later). idx: `(link_id, date)`.
+- **Embed/OG preview control — v5, new (§14 v5):** `/l/[slug]` branches on user-agent. Known crawler/bot UAs (`facebookexternalhit`, `Twitterbot`, `Slackbot`, `Discordbot`, etc., a maintained allowlist in `src/lib/`) are served a small HTML page with `<meta property="og:title">`/`og:description`/`og:image` populated from `preview_title`/`preview_description`/`preview_image_key` (falling back to `title`/destination metadata if unset) instead of a 302 — this is what produces a controlled preview card when the link is pasted into Messenger/Slack/etc. Everyone else still gets the instant 302. This crawler branch must not affect the analytics fail-open guarantee above.
 
 **CRS events**
-- `crs_events(id pk, title, type['official'|'casual'|'birthday'], status['pending'|'approved'|'rejected'], points null, place, capacity null, starts_at, ends_at null, description, created_by fk, approved_by fk null, approved_at null, checkin_secret, created_at)` — idx: `status`, `starts_at`, `type`, `created_by`.
+- `crs_events(id pk, title, type['official'|'casual'|'birthday'], status['pending'|'approved'|'rejected'], points null, place, capacity null, starts_at, ends_at null, description, created_by fk, approved_by fk null, approved_at null, checkin_secret, created_at)` — idx: `status`, `starts_at`, `type`, `created_by`. **v5:** `checkin_secret` stays but the workflow it backs flips — see `crs_attendance` below.
 - `event_rsvps(event_id fk, member_id fk, state['going'|'none'], updated_at, pk(...))` — idx: `member_id`.
-- `crs_attendance(event_id fk, member_id fk, scanned_at, scanned_by fk, pk(event_id, member_id))` — idx: `member_id`.
+- `crs_attendance(event_id fk, member_id fk, scanned_at, scanned_by fk, pk(event_id, member_id))` — idx: `member_id`. **v5 QR/barcode flip:** the table is structurally unchanged, but the workflow inverts — each MEMBER carries a static, permanent QR/barcode (client-generated from their member id, no rotation/OTP). An event admin picks the event/session first, then scans a stream of member codes against it (`scanned_by` = the scanning admin); a manual search-by-name/email fallback exists for when scanning fails. Previously the event held the rotating code and members scanned it — that model is replaced.
 - `event_media(id pk, event_id fk, r2_key, caption null, uploaded_by fk, created_at)` — idx: `event_id`.
 - `event_forum_posts(id pk, event_id fk, member_id fk, anonymous bool, parent_id fk null, body, created_at)` — idx: `(event_id, created_at)`, `parent_id`. **Anonymity:** `member_id` is ALWAYS stored (for moderation); when `anonymous=true` the API never returns author identity to members or normal admins; only `super` may reveal via an audited action.
 
-**Points / retention** (derived, not stored as truth)
-- `terms(id pk, name, retained_at int, probation_below int, starts_at, ends_at)` — idx: `(starts_at, ends_at)`.
-- `point_awards(id pk, member_id fk, term_id fk, event_id fk null, points, reason, awarded_by fk, awarded_at)` — idx: `(member_id, term_id)`, `term_id`. Retention status + leaderboard are query-derived; if profiling shows hot paths, add a cached `member_term_points` rollup later (not v1 truth).
+**Retention records** (derived status, not stored as truth) — **v5: replaces `point_awards`**
+- `terms(id pk, name, retained_at int, probation_below int, starts_at, ends_at)` — idx: `(starts_at, ends_at)`. This is the "school year" the rest of v5 keys off of (history view, roster, reporting exports).
+- `retention_records(id pk, member_id fk, term_id fk, event_id fk null, points null, reason, source['event_attendance'|'manual'] default 'manual', recorded_by fk, recorded_at)` — idx: `(member_id, term_id)`, `term_id`, `event_id`. **v5:** one row covers BOTH event-derived point awards (`source='event_attendance'`, `event_id` set) AND manual retention-admin entries (`source='manual'`, `event_id` optional) — e.g. "submitted the required medical waiver" with no points, or a logged violation with negative `points`. `points` is nullable (a record can be purely informational) and may be negative (deductions are allowed, confirmed in §14 v5). No admin-managed catalog/lookup table for record types — `reason` is freeform text entered per record; the manual-entry UI is a member checklist (multi-select) + term/event picker + freeform reason + optional point value. Retention status + leaderboard stay query-derived per `term_id`; if profiling shows hot paths, add a cached `member_term_points` rollup later (not v1 truth). Because every record carries `term_id`, a member's point total naturally resets to 0 at the start of a new term with no extra carry-over logic.
 
-**Surveys** (true anonymity via assignment token)
+**Surveys** (true anonymity via assignment token) — **v5:** unchanged structurally; the only behavior cut is automatic creation/triggering of a survey when an event closes (§11, §14 v5). Surveys (including ones tied to an event via `event_id`) remain a manual admin-created feature.
 - `surveys(id pk, event_id fk null, title, status['draft'|'running'|'closed'], sample_size null, created_by fk, created_at)` — idx: `status`, `event_id`.
 - `survey_questions(id pk, survey_id fk, position, type['scale'|'text'|'choice'], prompt, options_json null)` — idx: `survey_id`.
 - `survey_assignments(survey_id fk, member_id fk, response_token_hash unique, assigned_at, completed_at null, pk(survey_id, member_id))` — idx: `member_id`, `response_token_hash`. Random sample writes selected members + a per-assignment opaque token (only its hash is stored).
 - `survey_responses(id pk, survey_id fk, submitted_at)` + `survey_answers(id pk, response_id fk, question_id fk, value)`. **Responses carry ONLY `survey_id`** — no `member_id`, no assignment ref, no token — so there is NO join key from a response back to a member. Submit flow: client sends the raw token; server runs a conditional `UPDATE survey_assignments SET completed_at=now WHERE response_token_hash=? AND completed_at IS NULL` and proceeds ONLY if it affected exactly 1 row (enforces one-submit + valid token), then inserts the anonymous `survey_responses`/`survey_answers` via `db.batch()`. (A crash between the update and the insert leaves an assignment marked complete with no response — a rare, acceptable lost slot; documented.)
 
-**Announcements / notifications** (hybrid: derive where possible, materialize only per-member events)
-- `announcements(id pk, title, body, tag null, audience_kind['all'|'role'|'batch'], audience_value null, pinned_until null, scheduled_for null, published_at null, author_member_id fk, created_at)` — idx: `published_at`, `(audience_kind, audience_value)`, `pinned_until`.
-- `member_feed_state(member_id pk, announcements_seen_at, surveys_seen_at, events_seen_at)` — cheap per-member cursor for deriving unread counts (announcements, survey assignments, newly available events) WITHOUT fanning out a row per member per item.
-- `notifications(id pk, member_id fk, kind, title, body, href null, read_at null, created_at)` — idx: `(member_id, read_at, created_at)`. **Only materialized for genuinely per-member events** (comment reply to you, your attendance confirmed, points awarded to you, your link milestone). Announcement/survey/event-availability "notifications" are DERIVED from `announcements` + `survey_assignments` + `member_feed_state` at read time, not fanned out.
+**Notifications** — **v5: `announcements` subsystem dropped entirely** (admin CRUD, the `/portal/announcements` page, its dashboard widget — replaced by `quick_links` below — and its slice of `member_feed_state`/the calendar contract). What remains:
+- `member_feed_state(member_id pk, surveys_seen_at, events_seen_at)` — cheap per-member cursor for deriving unread counts (survey assignments, newly available events) WITHOUT fanning out a row per member per item. **v5:** `announcements_seen_at` dropped with the announcements subsystem.
+- `notifications(id pk, member_id fk, kind, title, body, href null, read_at null, created_at)` — idx: `(member_id, read_at, created_at)`. **Only materialized for genuinely per-member events** (comment reply to you, your attendance confirmed, points awarded to you, your link milestone). Survey/event-availability "notifications" are DERIVED from `survey_assignments` + `member_feed_state` at read time, not fanned out. **v5:** the feed/bell itself stays; only the notification-settings/preferences page is cut (§11, §14 v5) — there is no per-member notification-preference data to model.
+
+**Nav pins & quick links** — **v5, new.** Two intentionally separate admin-managed lists (confirmed distinct, §14 v5) even though their row shape is similar:
+- `nav_pins(id pk, label, url, icon, position int, created_by fk, created_at, updated_at)` — idx: `position`. Visible to every signed-in member (no per-role scoping in v1). `url` may be external or an internal app path. Rendered as extra top-nav items on desktop; on mobile they render as rows inside the bottom-nav Menu sheet (alongside the member QR/barcode card, §6 CRS events) rather than becoming new fixed bottom-nav icons — keeps the bar at ~4-5 slots regardless of pin count (§12 minimalism note, §14 v5).
+- `quick_links(id pk, label, url, position int, created_by fk, created_at, updated_at)` — idx: `position`. Powers the dashboard's Quick Links widget (masterfile, member directory sheet, admin guidebook, constitution, finance guide, etc.) that replaces the old announcements widget. Not the same list as `nav_pins`.
+
+**Reporting** — **v5, new.** No new tables; the per-member / per-event / whole-term xlsx exports (§12, §14 v5) are query views over `retention_records` + `crs_events`/`event_rsvps`/`crs_attendance`, filtered per export. Lives behind a new admin `reporting` route and the renamed `retention` permission scope.
 
 **Audit**
-- `audit_logs(id pk, actor_member_id fk, actor_context['session'|'shared_dev_token'] default 'session', shared_token_hash null, shared_token_label null, action, target_type, target_id, detail null, category['role'|'event'|'content'|'survey'|'link'|'member'], created_at)` — idx: `(category, created_at)`, `actor_member_id`. In shared mode the token-mapped actor is recorded as `actor_member_id` with `actor_context='shared_dev_token'` plus the token label, so attribution between two devs sharing one seeded actor is never ambiguous.
+- `audit_logs(id pk, actor_member_id fk, actor_context['session'|'shared_dev_token'] default 'session', shared_token_hash null, shared_token_label null, action, target_type, target_id, detail null, category['role'|'event'|'retention'|'survey'|'link'|'member'], created_at)` — idx: `(category, created_at)`, `actor_member_id`. In shared mode the token-mapped actor is recorded as `actor_member_id` with `actor_context='shared_dev_token'` plus the token label, so attribution between two devs sharing one seeded actor is never ambiguous. **v5:** `category` drops `'content'` (no publishing system) and gains `'retention'` (manual record entries, roster edits).
 
 **Calendar — derived, with an explicit contract**
-- No table. `calendar.getMonth(actor, range)`: union of approved `crs_events` whose audience the actor can see, members' birthdays where `birthday_private=false` OR actor has `member:manage`, term deadlines, and published announcements matching the actor's audience. Bounded date window (single month/agenda page); each source query indexed and date-bounded. Birthday privacy + announcement audience are enforced in the contract.
+- No table. `calendar.getMonth(actor, range)`: union of approved `crs_events` whose audience the actor can see, members' birthdays where `birthday_private=false` OR actor has `member:manage`, and term deadlines. Bounded date window (single month/agenda page); each source query indexed and date-bounded. Birthday privacy is enforced in the contract. **v5:** the published-announcements source is dropped (announcements subsystem cut); Calendar is now the sole events discovery surface — there is no separate events list page, and clicking an event opens its detail (RSVP/attendance/forum/media) at `/portal/calendar/[eventId]` (§1, §14 v5).
 
 ---
 
 ## 7. Storage (R2) — hardened in Phase 1 (resolves wide-open upload defect)
 
 - Uses the existing `StorageAdapter` (binding / r2-s3 / local-fs / shared-api).
-- **`/api/uploads` (POST):** require an authenticated session; the SERVER assigns the key from a fixed namespace based on purpose + actor (`avatars/{memberId}`, `events/{eventId}/{mediaId}`); the client may NOT supply `key`/`x-object-key`. Validate content-type against an allowlist (images) and enforce a max size. Authorize the namespace (e.g., event media requires the member can post to that event).
-- **`/api/uploads/[key]` (GET):** authorize by namespace (event media = members; avatars = members). **DELETE:** require session + ownership/admin; remove the current unauthenticated DELETE entirely.
-- QR codes generated client-side on demand (light/dark/transparent/logo); persisting to R2 deferred (YAGNI v1).
+- **`/api/uploads` (POST):** require an authenticated session; the SERVER assigns the key from a fixed namespace based on purpose + actor (`avatars/{memberId}`, `events/{eventId}/{mediaId}`, `links/{linkId}/preview` — v5, §14 v5). The client may NOT supply `key`/`x-object-key`. Validate content-type against an allowlist (images) and enforce a max size. Authorize the namespace (e.g., event media requires the member can post to that event; a link preview image requires the actor own that `short_links` row).
+- **`/api/uploads/[key]` (GET):** authorize by namespace (event media = members; avatars = members; link preview images = public, since they're served to crawlers, §14 v5). **DELETE:** require session + ownership/admin; remove the current unauthenticated DELETE entirely.
+- QR codes generated client-side on demand (light/dark/transparent/logo); persisting to R2 deferred (YAGNI v1). **v5:** the same client-side-generation approach is used for each member's static attendance QR/barcode (§6 CRS events) — generated on demand from the member id, never persisted to R2.
 
 ---
 
@@ -234,14 +238,14 @@ One `schema.ts` (split into `schema/` re-exported if it grows). IDs are app-gene
 - **Integration (`@cloudflare/vitest-pool-workers`):** repositories against an ephemeral D1 with `drizzle/migrations` applied in `beforeAll`; route handlers — auth callback (mocked Google token endpoint, including the takeover-fallback guard), `/l/[slug]` redirect + daily-stat upsert, RSVP, check-in scan (anti-replay), publish gating, confidential-ACL gating, upload authz (rejects caller key, rejects unauth GET/DELETE), cross-origin POST rejection.
 - **Shared-mode parity test:** for representative ops, assert the Drizzle path and the `/internal` proxy path return equal results AND enforce the same authz (a `sharedDev:'deny'` op is refused over the proxy).
 - **Migration test:** `drizzle-kit generate` is clean (no uncommitted drift); the `users→members` migration applies on a seeded copy with FK deferral.
-- **E2E (Playwright, light, Phase 10):** sign-in (mocked OAuth), create link, RSVP + simulated scan, publish article, assign role.
+- **E2E (Playwright, light, Phase 9 — v5 renumbering, was Phase 10):** sign-in (mocked OAuth), create link, RSVP + simulated scan, log a manual retention record, assign role. (Article publishing dropped from this list, v5 — content/publishing deferred, §11.)
 - **CI gates:** `pnpm typecheck`, `pnpm lint`, `pnpm test`, clean `drizzle-kit generate`, `pnpm build` (OpenNext).
 
 ---
 
 ## 9. Seeding
 
-- `src/db/seed/data.ts` from the design files (`design/data.jsx`, `member-*-data.jsx`, `admin-data.jsx`): members, roles, teams, public + members + confidential articles (sections/components/questions/refs/topics/related/acl), short links + reserved slugs + seeded `link_daily_stats`, CRS events (upcoming + past) + forum posts + attendance, point awards + a term, one running survey + assignments, announcements, audit samples, and (dev only) `shared_dev_tokens`.
+- `src/db/seed/data.ts` from the design files (`design/data.jsx`, `member-*-data.jsx`, `admin-data.jsx`): members, roles, a term + `term_member_roster`, short links (incl. embed-preview fields) + reserved slugs + seeded `link_daily_stats`, CRS events (upcoming + past) + forum posts + attendance, `retention_records` (event-derived + a few manual entries), one running survey + assignments, `nav_pins` + `quick_links` samples, audit samples, and (dev only) `shared_dev_tokens`. **v5:** teams and confidential-articles seed data dropped with the deferred content/publishing system (§11); announcements seed data dropped (§11).
 - `src/db/seed/run.ts` idempotent (insert-or-ignore by id), batched within the D1 budget. Scripts `db:seed:local`, `db:seed:dev`. Never runs against prod.
 
 ---
@@ -261,35 +265,41 @@ One `schema.ts` (split into `schema/` re-exported if it grows). IDs are app-gene
 
 ## 11. Explicitly Deferred (recorded so they resurface)
 
-1. **Graph / semantic library search** (the library "graph search" path). Candidates: Cloudflare Vectorize + Workers AI embeddings over the corpus, or a graphify-style knowledge graph traversing `article_related` + `topics` (both already in the model). *(Saved to project memory.)*
-2. **Realtime** live check-in feed + forum via Durable Objects + WebSockets (v1 polls behind the same data interface).
-3. **Email** (Cloudflare Email Service) for announcement digests / alternative auth.
-4. **Additional auth providers** (the `accounts` table already supports them; only Google is wired for v1).
-5. **Advanced link analytics** (raw event sampling, geo, bot filtering, UTM).
+1. **The entire content/publishing system — v5, newly deferred.** Both the public OD-publishing site (`/articles`, `/articles/[slug]`, ex-Phase 2) and the signed-in member Library (favorites/lists/comments/confidentiality-ACL, ex-Phase 4) are cut from v1. This was previously in scope (v1-v4); it moved to deferred after the v5 stakeholder-driven revision (§14 v5). When it resumes, restore `articles*`, `topics`, `comments`, `favorites`/`lists`, `consultancy_teams`/`team_members`/`article_acl`, the `publishing`/`library:read_confidential` permissions, and the public `/articles` routes — all removed from §1/§5/§6 in this revision.
+   - **Graph / semantic library search** (the library "graph search" path) was already deferred-within-this-deferral before v5. Candidates: Cloudflare Vectorize + Workers AI embeddings over the corpus, or a graphify-style knowledge graph traversing `article_related` + `topics` (both already in the model, when restored). *(Saved to project memory.)*
+2. **Announcements — v5, newly deferred.** Admin CRUD, the `/portal/announcements` page, its dashboard widget (now occupied by Quick Links, §6/§12), and its slice of the calendar contract / `member_feed_state`. Restore `announcements` + `member_feed_state.announcements_seen_at` + the calendar's announcement-audience union if/when it returns.
+3. **Guided tours — v5, newly deferred.** `tour_member_done`/`tour_admin_done` dropped from `members`; the "start tour" settings action and Phase 9's "guided tours (replayable)" deliverable are cut. Reinstate as new columns + a new admin/member surface, not a revert, since the columns are being dropped now rather than left unused.
+4. **Notification settings/preferences page — v5, newly deferred.** The underlying notification feed/bell stays; only a page to configure preferences is cut, since there's currently no preference data to configure.
+5. **Survey auto-trigger-on-event-close — v5, newly deferred.** Surveys remain fully usable as a manual admin-created feature (including tying one to an `event_id`); only the automation that would create/launch a survey automatically when an event ends is cut.
+6. **Realtime** live check-in feed + forum via Durable Objects + WebSockets (v1 polls behind the same data interface).
+7. **Email** (Cloudflare Email Service) for announcement digests / alternative auth. (Moot for "announcement digests" while announcements are deferred per #2; alternative-auth use case still stands.)
+8. **Additional auth providers** (the `accounts` table already supports them; only Google is wired for v1).
+9. **Advanced link analytics** (raw event sampling, geo, bot filtering, UTM) — distinct from the v5 embed/OG preview control (§6, §7), which IS in v1 scope.
 
 ---
 
 ## 12. Phased Build Sequence
 
+> **v5 restructure (§14 v5):** ex-Phase 2 (public content site) and ex-Phase 4 (Library) are removed — that subsystem is deferred (§11). The roster-as-auth-gate folds into Phase 1. QR/barcode attendance folds into the CRS-events phase (renumbered Phase 4). Manual retention records get their own new Phase 5. Reporting/export, nav pins, and quick links fold into the admin phase (renumbered Phase 8). Phases are renumbered 0-9 (was 0-10).
+
 Bottom-up; each phase ends with working, tested software and gets its own task plan.
 
-- **Phase 0 — Foundations + spikes:** add deps/scripts/test harness; **middleware-D1 spike** (§4.3); **D1 schema inventory** of remote dev/prod (§3.5); finalize `schema.ts` (all tables + indexes); generate migration; delete legacy `migrations/`; `users→members` reset/migration with FK choreography; `DEPLOY_ENV`/`APP_ENV` split in `wrangler.jsonc` + `env.ts` + `db/index.ts`; `getDb()` + repository skeletons + contract; seed module; **shared-Worker lifecycle docs in AGENTS.md / README.md / CLAUDE.md / docs (§15)**. *Acceptance:* migrations apply local+dev; seed loads within budget; repo + shared-parity tests green; spike documented; redeploy obligations written into AGENTS/README/CLAUDE; shared-dev deploy CI/PR guard in place (§15).
-- **Phase 1 — Auth, RBAC, Upload hardening:** Auth.js Google flow (`@auth/drizzle-adapter`, DB sessions) + `signIn`-callback domain gate + base-role provisioning; `getActor()` unifying real + shared-mode actors; `permissions.can()`; `/portal` layout gate; profile; sign-out; **harden `/api/uploads` + `/api/uploads/[key]` now** (before any feature uses R2). *Acceptance:* domain-restricted sign-in; role-gated test route; permission matrix tested; uploads reject caller keys + unauth GET/DELETE.
-- **Phase 2 — Public site:** DB-backed landing, `/articles` + `/articles/[slug]` (public only), services/projects, contact, `/signin`. *Acceptance:* renders from D1 seed; confidential content never leaks to public routes (tested).
-- **Phase 3 — Portal shell + Overview + Notifications:** authed shell, URL-addressable modules, overview, notifications (materialized + derived).
-- **Phase 4 — Library:** list/detail, filters/topics, favorites, lists, threaded comments, confidentiality + team/ACL gating.
-- **Phase 5 — Short links:** CRUD + ownership, reserved/format/destination validation, `/l/[slug]` redirect + daily-stat upsert, analytics views, QR export, admin moderation.
-- **Phase 6 — CRS events:** create→approve, RSVP, QR check-in (anti-replay via rotating `checkin_secret` + signed time-boxed token; scan validated server-side, idempotent), attendance, media (R2), forum (anonymity rules), point awards + retention + leaderboard.
-- **Phase 7 — Surveys:** create, random sample + tokens, anonymous response flow, admin results (identity-free).
-- **Phase 8 — Calendar + Announcements:** derived calendar with the §6 contract, announcement CRUD (pin/schedule/audience), notification derive+materialize on publish/approve/assign/reply.
-- **Phase 9 — Admin + Audit:** roles management (super inheritance), scoped queues (CRS approvals, link moderation, publishing), audit view + filters, dashboard metrics, member management, guided tours (replayable).
-- **Phase 10 — Hardening:** rate limits, security review, Playwright E2E, OpenNext caching pass (§13), docs refresh, shared-dev onboarding verification.
+- **Phase 0 — Foundations + spikes:** add deps/scripts/test harness; **middleware-D1 spike** (§4.3); **D1 schema inventory** of remote dev/prod (§3.5); finalize `schema.ts` (all tables + indexes); generate migration; delete legacy `migrations/`; `users→members` reset/migration with FK choreography; `DEPLOY_ENV`/`APP_ENV` split in `wrangler.jsonc` + `env.ts` + `db/index.ts`; `getDb()` + repository skeletons + contract; seed module; **shared-Worker lifecycle docs in AGENTS.md / README.md / CLAUDE.md / docs (§15)**. *Acceptance:* migrations apply local+dev; seed loads within budget; repo + shared-parity tests green; spike documented; redeploy obligations written into AGENTS/README/CLAUDE; shared-dev deploy CI/PR guard in place (§15). *(Already built — see `git log`.)*
+- **Phase 1 — Auth, RBAC, Upload hardening, Roster gate:** Auth.js Google flow (`@auth/drizzle-adapter`, DB sessions) + `signIn`-callback domain gate + **`term_member_roster` check (v5, §4.2, §6)** + base-role provisioning; `getActor()` unifying real + shared-mode actors; `permissions.can()` (incl. renamed `retention` scope, dropped `publishing`/`library:read_confidential`); `/portal` layout gate; profile (incl. "Show my member code" entry point, v5); sign-out; **harden `/api/uploads` + `/api/uploads/[key]` now** (before any feature uses R2). *Acceptance:* domain-AND-roster-restricted sign-in (off-roster email is rejected even if domain matches); off-roster existing members flip to `inactive`; role-gated test route; permission matrix tested; uploads reject caller keys + unauth GET/DELETE. *(Mostly already built — see `git log`; roster-gate addition is new work.)*
+- **Phase 2 — Public landing + Portal shell + Overview + Notifications:** simple static `/` (org info, services/about/contact, `/signin` entry — no DB-backed content engine, v5); authed shell, URL-addressable modules, overview, notifications (materialized + derived, settings page cut per §11).
+- **Phase 3 — Short links:** CRUD + ownership, reserved/format/destination validation, `/l/[slug]` redirect + daily-stat upsert, **embed/OG preview control (crawler-UA branch + `preview_title`/`preview_description`/`preview_image_key`, v5, §6/§7)**, analytics views, QR export, admin moderation.
+- **Phase 4 — CRS events + retention:** create→approve, RSVP, **member-carried static QR/barcode + event-admin scan flow with manual-search fallback (v5, replaces the old rotating-secret/member-scans model, §6)**, attendance, media (R2), forum (anonymity rules), **unified `retention_records` (event-derived + manual entries, v5) + retention status + leaderboard**.
+- **Phase 5 — Manual retention records:** admin UI for logging non-event retention records — member checklist (multi-select) + term/event picker + freeform reason + optional (possibly negative) points (v5, §6). Depends on Phase 4's `retention_records` table.
+- **Phase 6 — Surveys:** create, random sample + tokens, anonymous response flow, admin results (identity-free). No auto-trigger on event close (§11).
+- **Phase 7 — Calendar + My Retention History:** derived calendar with the §6 contract (announcement source removed, v5) as the sole events discovery surface; event detail at `/portal/calendar/[eventId]`; the repurposed "Events" tab as **My Retention History** (current-term summary card + full record list + term selector, v5, §1/§6); notification derive+materialize on approve/assign/reply/points-awarded.
+- **Phase 8 — Admin + Audit + Reporting + Nav/Quick Links + Roster mgmt:** roles management (super inheritance, renamed `retention` scope), scoped queues (CRS approvals, link moderation), audit view + filters, dashboard metrics + **Quick Links widget (v5, replaces announcements widget)**, member management, **per-term roster admin screen (v5, §6 `term_member_roster`)**, **admin-pinned nav links screen (v5, §6 `nav_pins`)**, **reporting screen with the three xlsx exports — per-member history, per-event roster, whole-term master (v5, §6 "Reporting")**. No guided tours (§11).
+- **Phase 9 — Hardening:** rate limits, security review, Playwright E2E, OpenNext caching pass (§13), docs refresh, shared-dev onboarding verification.
 
 ---
 
 ## 13. Caching (OpenNext) — note
 
-`open-next.config.ts` already exists (minimal defaults). Decisions: everything under `/portal/*` is dynamic (`export const dynamic = 'force-dynamic'` or per-request `cookies()` access forcing dynamic). Public article pages render SSR for v1 (DB-backed, no ISR) to keep publishing changes instant; revisit ISR + `revalidateTag` only if read load demands it (would require enabling an incremental cache override in `open-next.config.ts`). The short-link redirect is dynamic.
+`open-next.config.ts` already exists (minimal defaults). Decisions: everything under `/portal/*` is dynamic (`export const dynamic = 'force-dynamic'` or per-request `cookies()` access forcing dynamic). **v5:** `/` is now a simple static landing page (no DB-backed content, §1/§11) and can render fully static/ISR with no cache-invalidation concerns; this replaces the prior SSR-article-pages note, which no longer applies now that the content/publishing system is deferred. The short-link redirect is dynamic.
 
 ---
 
@@ -355,6 +365,31 @@ Bottom-up; each phase ends with working, tested software and gets its own task p
 
 **Open for round 4 (convergence pass):** with all blockers/majors resolved across 3 rounds, confirm whether the plan is now **ready**. Remaining genuinely-open items are deliberately pushed to implementation spikes, not plan gaps: (a) the middleware-vs-D1 result (Phase 0 spike); (b) clean-reset vs additive `users→members` (decided by the Phase 0 D1 inventory). Flag anything still blocking implementation.
 
+**Phase 0/1 implementation (accepted, ahead of v5):** Phase 0 foundations and most of Phase 1 (auth, RBAC skeleton, hardened uploads) were built against v4 before the v5 revision below — see `git log` (`ebf1a7d` through `a5acaeb`). None of the v5-affected subsystems (content/publishing, library, events list, announcements, tours, points) had been built yet, so v5 is a clean scope change rather than a rework of shipped code. The only Phase-1 follow-up v5 adds is the roster-gate check (§4.2, §12 Phase 1).
+
+**v5 (user-driven scope revision after a stakeholder/boss meeting, before Phase 2+ implementation; decided via one-at-a-time clarifying questions, all confirmed):**
+
+| # | Decision | Resolution |
+| --- | --- | --- |
+| 1 | Retention records unify event points + manual non-point entries | §6 `retention_records` replaces `point_awards`; one row per event-derived or manual record; `points` nullable AND signable (deductions allowed); `reason` is freeform — no admin-managed catalog/lookup table. |
+| 2 | Retention/CRS role renamed | §5 `crs` → `retention` (same people, now also covers manual records). |
+| 3 | Events tab repurposed; Calendar is the sole events surface | §1/§6/§12: `/portal/events` (index) removed, tab becomes "My Retention History" (summary + history + term selector); Calendar is the only discovery surface; event detail moves to `/portal/calendar/[eventId]`. |
+| 4 | QR/barcode attendance flips to member-carried codes | §6 `crs_attendance`: member holds a static, permanent, client-generated code; event admins pick the event then scan (+ manual search fallback); reachable via the mobile Menu sheet AND the desktop profile page. |
+| 5 | Admin reporting + xlsx export, three kinds | §6 "Reporting", §12 Phase 8: per-member full-year history, per-event roster, whole-term master export — all xlsx, all views over `retention_records`. |
+| 6 | Per-term member roster becomes the sign-in gate | §4.2, §6 `term_member_roster`: must be on the CURRENT term's roster (in addition to domain/allowlist) to sign in; new terms carry the roster over (admin edits) rather than starting blank; off-roster existing members are locked out (`status='inactive'`) with history preserved. Points/retention already reset to 0 per term with no extra logic needed, since records are queried by `term_id`. |
+| 7 | Admin-pinned nav links, new | §6 `nav_pins`, §1: label+URL(+icon), visible to everyone, no per-role scoping v1; on mobile they live in the Menu sheet, not new bottom-nav icons (minimalism, Global Constraints). |
+| 8 | Dashboard Quick Links CMS, new, deliberately separate from nav pins | §6 `quick_links`, §1: replaces the dashboard's old announcements widget; confirmed as a distinct admin-managed list from `nav_pins` despite the similar row shape. |
+| 9 | Short-link embed/OG preview control, new | §6 `short_links.preview_*` columns, §7: owner sets title/description/image; `/l/[slug]` branches on crawler UA to serve OG meta tags instead of an immediate redirect to bots, while real users still get the instant 302. |
+| 10 | Content/publishing system (public + member library) deferred | §11 #1, §1, §6, §12: cut entirely for v1, including the public `/articles` site, not just the member Library. `/` becomes a simple static landing page. The existing library-graph-search deferral nests inside this larger one. |
+| 11 | Announcements subsystem deferred | §11 #2, §6, §12: admin CRUD, the page, the dashboard widget (replaced by #8), and the calendar/notification slices that depended on it. |
+| 12 | Guided tours deferred, columns dropped now | §11 #3, §6: `tour_member_done`/`tour_admin_done` dropped from `members` rather than left unused, since no real member data exists yet. |
+| 13 | Notification settings page removed, feed/bell kept | §11 #4: no preference data exists to configure; the materialized/derived notification feed itself is unaffected. |
+| 14 | Survey auto-trigger-on-event-close removed | §11 #5: surveys stay a fully manual admin feature, including event-linked ones; only the automation is cut. |
+| 15 | Portal search bar removed | §1: no search UI in v1 portal nav. |
+| 16 | Duplicate top-right profile/account icon removed | §1: confirmed to be a duplicate of the bottom-left profile entry, not notifications — nothing needs a new home. |
+| 17 | Minimalism is a cross-cutting constraint, not a deliverable | Global Constraints: fixed-size mobile bottom nav (~4-5 slots) forever; new v5 admin surfaces (pins, member card) live in the Menu sheet, not as new top-level chrome. |
+| 18 | Phases renumbered 0-9 (was 0-10) | §12: ex-Phase 2 (public site) and ex-Phase 4 (library) removed; roster-gate folds into Phase 1; QR/barcode folds into the CRS-events phase; reporting/nav-pins/quick-links/roster-admin fold into the admin phase; hardening is now the last phase (was Phase 10, now Phase 9 — §15's "left to Phase 10" reference below means Phase 9 post-v5). |
+
 ---
 
 ## 15. Shared Dev Worker Lifecycle & Ops Docs
@@ -377,7 +412,7 @@ The `shared` access mode is backed by the **deployed dev Worker** (`code-nest-de
 - `AGENTS.md` — a "Shared dev Worker" section: what it is, and the redeploy/migrate triggers list above, so any agent that touches schema/contract/permissions knows to `db:migrate:dev` + `deploy:dev`.
 - `README.md` — a short "Shared dev backend" subsection pointing at the dev Worker and the redeploy rule, plus the `APP_ENV=shared` onboarding pointer.
 - `CLAUDE.md` (create a project-level one) — a concise rule: "After changing schema, migrations, the internal contract, permissions, or auth config, redeploy the dev Worker (`db:migrate:dev` + `deploy:dev`) or shared-mode developers break."
-- **Phase 0 CI/PR guard:** a lightweight check that flags when `src/db/schema.ts`, `drizzle/migrations/**`, `src/db/contract/**`, `src/app/internal/**`, `src/server/auth/permissions.ts`, or `src/auth.ts` change without a shared-dev deploy note — docs alone are the kind of rule agents miss, so this is automated rather than left to Phase 10.
+- **Phase 0 CI/PR guard:** a lightweight check that flags when `src/db/schema.ts`, `drizzle/migrations/**`, `src/db/contract/**`, `src/app/internal/**`, `src/server/auth/permissions.ts`, or `src/auth.ts` change without a shared-dev deploy note — docs alone are the kind of rule agents miss, so this is automated rather than left to Phase 9 (v5 renumbering — was Phase 10).
 - `docs/setup/shared-dev-onboarding.md` + `docs/operations/migrations.md` — expand with the lifecycle + token rotation.
 
 > Note: these doc edits are part of the build (Phase 0 deliverable), not done in this planning pass. They are listed here so the obligation is explicit and reviewable.

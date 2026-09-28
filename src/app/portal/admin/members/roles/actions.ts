@@ -15,10 +15,34 @@ const saveSchema = z.object({
 	desiredRoleKeys: z.array(z.string()).transform(normalizeRoleKeys).default([]),
 });
 
+const savePendingSchema = z.object({
+	email: z.string().min(3),
+	desiredRoleKeys: z.array(z.string()).transform(normalizeRoleKeys).default([]),
+});
+
 export async function searchMembersAction(query: string) {
 	const actor = await requireActor();
 	const repositories = await getRepositories();
-	return repositories.members.search(actor, query);
+	// Includes pending and inactive members on purpose: access is often granted before
+	// someone is activated, and filtering them out made them impossible to find here.
+	return repositories.members.search(actor, query, { includeInactive: true });
+}
+
+/** Roster entries with no member row yet, so a role can be granted before first sign-in. */
+export async function searchInvitedAction(query: string) {
+	const actor = await requireActor();
+	const repositories = await getRepositories();
+	return repositories.roles.searchInvited(actor, query);
+}
+
+export async function savePendingRolesAction(input: z.input<typeof savePendingSchema>) {
+	const actor = await requireActor();
+	if (!can(actor, "role:assign")) throw new Error("Not authorized to assign roles.");
+	const parsed = savePendingSchema.parse(input);
+	const repositories = await getRepositories();
+	const result = await repositories.roles.savePendingRoles(actor, parsed);
+	revalidatePath("/portal/admin/members/roles");
+	return result;
 }
 
 export async function loadMemberRolesAction(memberId: string) {

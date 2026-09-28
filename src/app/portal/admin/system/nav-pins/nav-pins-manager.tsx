@@ -27,7 +27,15 @@ function iconLabel(icon: string): string {
 	return icon.replace(/([a-z])([A-Z])/g, "$1 $2");
 }
 
-function IconPicker({ name = "icon", defaultValue = "Link2" }: { name?: string; defaultValue?: string }) {
+function IconPicker({
+	name = "icon",
+	defaultValue = "Link2",
+	form,
+}: {
+	name?: string;
+	defaultValue?: string;
+	form?: string;
+}) {
 	const [open, setOpen] = useState(false);
 	const [query, setQuery] = useState("");
 	const [value, setValue] = useState(navPinIconNames.includes(defaultValue as (typeof navPinIconNames)[number]) ? defaultValue : "Link2");
@@ -38,7 +46,7 @@ function IconPicker({ name = "icon", defaultValue = "Link2" }: { name?: string; 
 
 	return (
 		<div className="relative">
-			<input type="hidden" name={name} value={value} />
+			<input type="hidden" name={name} value={value} form={form} />
 			<button
 				type="button"
 				onClick={() => setOpen((current) => !current)}
@@ -92,12 +100,24 @@ function IconPicker({ name = "icon", defaultValue = "Link2" }: { name?: string; 
 export function NavPinsManager({ pins }: { pins: NavPin[] }) {
 	const [items, setItems] = useState(pins);
 	const [draggingId, setDraggingId] = useState<string | null>(null);
+	const [deletingId, setDeletingId] = useState<string | null>(null);
+	const saveFormId = "nav-pins-save-form";
 
 	function dragOver(id: string) {
 		if (!draggingId || draggingId === id) return;
 		const from = items.findIndex((item) => item.id === draggingId);
 		const to = items.findIndex((item) => item.id === id);
 		if (from >= 0 && to >= 0) setItems((current) => move(current, from, to));
+	}
+
+	async function deletePin(id: string) {
+		setDeletingId(id);
+		try {
+			await deleteNavPinAction(id);
+			setItems((current) => current.filter((item) => item.id !== id));
+		} finally {
+			setDeletingId(null);
+		}
 	}
 
 	return (
@@ -127,57 +147,45 @@ export function NavPinsManager({ pins }: { pins: NavPin[] }) {
 					<CardDescription>Drag links into order, edit details inline, then save changes.</CardDescription>
 				</CardHeader>
 				<CardContent className="grid gap-4">
-					<form action={saveNavPinsAction} className="grid gap-3">
-						<div className="flex justify-end">
-							<Button type="submit" variant="outline" disabled={items.length === 0}>
-								<Save className="size-4" />
-								Save changes
-							</Button>
-						</div>
+					<form id={saveFormId} action={saveNavPinsAction} />
+					<div className="flex justify-end">
+						<Button type="submit" form={saveFormId} variant="outline" disabled={items.length === 0}>
+							<Save className="size-4" />
+							Save changes
+						</Button>
+					</div>
 
-						<ol className="grid gap-2">
-							{items.map((pin, index) => (
-								<li
-									key={pin.id}
-									onDragOver={(event) => {
-										event.preventDefault();
-										dragOver(pin.id);
-									}}
-									className="grid gap-3 rounded-md border border-border bg-background p-3 md:grid-cols-[auto_1fr_2fr_12rem_auto] md:items-center"
+					<ol className="grid gap-2">
+						{items.map((pin, index) => (
+							<li
+								key={pin.id}
+								onDragOver={(event) => {
+									event.preventDefault();
+									dragOver(pin.id);
+								}}
+								className="grid gap-3 rounded-md border border-border bg-background p-3 md:grid-cols-[auto_1fr_2fr_12rem_auto] md:items-center"
+							>
+								<input form={saveFormId} type="hidden" name="ids" value={pin.id} />
+								<div
+									draggable
+									onDragStart={() => setDraggingId(pin.id)}
+									onDragEnd={() => setDraggingId(null)}
+									className="flex cursor-grab items-center gap-2 text-sm font-semibold text-muted-foreground active:cursor-grabbing"
+									aria-label="Drag to reorder"
 								>
-									<input type="hidden" name="ids" value={pin.id} />
-									<div
-										draggable
-										onDragStart={() => setDraggingId(pin.id)}
-										onDragEnd={() => setDraggingId(null)}
-										className="flex cursor-grab items-center gap-2 text-sm font-semibold text-muted-foreground active:cursor-grabbing"
-										aria-label="Drag to reorder"
-									>
-										<GripVertical className="size-4" />
-										{index + 1}
-									</div>
-									<Input name="labels" defaultValue={pin.label} aria-label="Label" required />
-									<Input name="urls" type="url" defaultValue={pin.url} aria-label="URL" required />
-									<IconPicker name="icons" defaultValue={pin.icon} />
-									<Button
-										type="submit"
-										form={`delete-nav-pin-${pin.id}`}
-										formNoValidate
-										variant="outline"
-										title="Delete"
-									>
-										<Trash2 className="size-4" />
-										Delete
-									</Button>
-								</li>
-							))}
-						</ol>
-					</form>
-					{items.map((pin) => (
-						<form key={pin.id} id={`delete-nav-pin-${pin.id}`} action={deleteNavPinAction} className="hidden">
-							<input type="hidden" name="id" value={pin.id} />
-						</form>
-					))}
+									<GripVertical className="size-4" />
+									{index + 1}
+								</div>
+								<Input form={saveFormId} name="labels" defaultValue={pin.label} aria-label="Label" required />
+								<Input form={saveFormId} name="urls" type="url" defaultValue={pin.url} aria-label="URL" required />
+								<IconPicker form={saveFormId} name="icons" defaultValue={pin.icon} />
+								<Button type="button" variant="outline" title="Delete" disabled={deletingId === pin.id} onClick={() => void deletePin(pin.id)}>
+									<Trash2 className="size-4" />
+									Delete
+								</Button>
+							</li>
+						))}
+					</ol>
 				</CardContent>
 			</Card>
 		</div>

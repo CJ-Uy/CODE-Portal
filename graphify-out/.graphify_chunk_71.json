@@ -1,0 +1,72 @@
+{
+  "nodes": [
+    {
+      "id": "osg_2425_brand_manual_logos_colors_fonts_04_google_form_cover_1_light_google_form_cover",
+      "label": "Light Ateneo CODE Google Form Cover",
+      "file_type": "image",
+      "source_file": "docs/[OSG 2425] Brand Manual — Logos, Colors, Fonts-20260603T140636Z-3-001/[OSG 2425] Brand Manual — Logos, Colors, Fonts/04 Google Form - Cover-1.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "osg_2425_brand_manual_logos_colors_fonts_04_google_form_cover_1_ateneo_code_organization_identity",
+      "label": "Ateneo CODE Organization Identity",
+      "file_type": "concept",
+      "source_file": "docs/[OSG 2425] Brand Manual — Logos, Colors, Fonts-20260603T140636Z-3-001/[OSG 2425] Brand Manual — Logos, Colors, Fonts/04 Google Form - Cover-1.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "osg_2425_brand_manual_logos_colors_fonts_04_google_form_cover_1_academic_year_2024_2025",
+      "label": "Academic Year 2024 to 2025",
+      "file_type": "concept",
+      "source_file": "docs/[OSG 2425] Brand Manual — Logos, Colors, Fonts-20260603T140636Z-3-001/[OSG 2425] Brand Manual — Logos, Colors, Fonts/04 Google Form - Cover-1.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "osg_2425_brand_manual_logos_colors_fonts_04_google_form_cover_1_light_google_form_cover",
+      "target": "osg_2425_brand_manual_logos_colors_fonts_04_google_form_cover_1_ateneo_code_organization_identity",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/[OSG 2425] Brand Manual — Logos, Colors, Fonts-20260603T140636Z-3-001/[OSG 2425] Brand Manual — Logos, Colors, Fonts/04 Google Form - Cover-1.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "osg_2425_brand_manual_logos_colors_fonts_04_google_form_cover_1_light_google_form_cover",
+      "target": "osg_2425_brand_manual_logos_colors_fonts_04_google_form_cover_1_academic_year_2024_2025",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/[OSG 2425] Brand Manual — Logos, Colors, Fonts-20260603T140636Z-3-001/[OSG 2425] Brand Manual — Logos, Colors, Fonts/04 Google Form - Cover-1.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "osg_2425_brand_manual_logos_colors_fonts_04_google_form_cover_1_light_google_form_cover",
+      "target": "osg_2425_brand_manual_logos_colors_fonts_04_google_form_cover_dark_google_form_cover",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "docs/[OSG 2425] Brand Manual — Logos, Colors, Fonts-20260603T140636Z-3-001/[OSG 2425] Brand Manual — Logos, Colors, Fonts/04 Google Form - Cover-1.png",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

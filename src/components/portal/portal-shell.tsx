@@ -3,14 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createElement, useState } from "react";
-import { ChevronLeft, ChevronRight, LogOut, Plus } from "lucide-react";
+import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, LogOut, Plus } from "lucide-react";
 import { MemberCodeCard } from "@/components/member-code-card";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { Breadcrumb } from "./breadcrumb";
 import { MemberAvatar } from "./member-avatar";
-import { adminNav, primaryNav, secondaryNav, type NavItem } from "./nav-items";
+import { adminNav, primaryNav, secondaryNav, visiblePrimaryNav, visibleSecondaryNav, type NavItem } from "./nav-items";
+import type { FeatureFlags } from "@/server/features";
 import { navPinIconFor } from "./nav-pin-icons";
 import { adminHeading, crumbFor } from "@/app/portal/admin/nav";
 
@@ -22,6 +23,8 @@ export type PortalShellProps = {
 	navPins: { id: string; label: string; url: string; icon: string }[];
 	showAdmin: boolean;
 	adminGroups: AdminNavGroup[];
+	/** Release flags, resolved server-side. Plain booleans so they cross the client boundary. */
+	flags: FeatureFlags;
 	bell: React.ReactNode;
 	signOutAction: () => Promise<void>;
 	children: React.ReactNode;
@@ -95,12 +98,12 @@ function RailItem({ item, pathname }: { item: NavItem; pathname: string }) {
 }
 
 function AdminNavLink({ href, label, pathname }: { href: string; label: string; pathname: string }) {
-	const on = isActive(pathname, href);
+	const on = href.split("/").filter(Boolean).length === 3 ? pathname === href : isActive(pathname, href);
 	return (
 		<Link
 			href={href}
 			className={cn(
-				"relative rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+				"relative rounded-lg px-3 py-2 text-sm font-medium transition-[color,background-color,transform] active:scale-[0.98]",
 				on ? "bg-white/10 text-primary-foreground" : "text-primary-foreground/60 hover:text-primary-foreground",
 			)}
 		>
@@ -110,15 +113,19 @@ function AdminNavLink({ href, label, pathname }: { href: string; label: string; 
 	);
 }
 
-export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups, bell, signOutAction, children }: PortalShellProps) {
+export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups, flags, bell, signOutAction, children }: PortalShellProps) {
 	const pathname = usePathname();
 	const [menuOpen, setMenuOpen] = useState(false);
 	const inAdmin = pathname.startsWith("/portal/admin");
 	const pageHeading = getPageHeading(pathname);
 
-	const sheetItems: NavItem[] = [...secondaryNav, ...(showAdmin ? [adminNav] : [])];
-	const leftTabs = primaryNav.slice(0, 2);
-	const rightTabs = primaryNav.slice(2, 4);
+	// Flagged-off destinations must not render a link. The pages themselves already 404,
+	// but a visible link to a 404 reads as a broken portal rather than an unshipped one.
+	const primary = visiblePrimaryNav(flags);
+	const secondary = visibleSecondaryNav(flags);
+	const sheetItems: NavItem[] = [...secondary, ...(showAdmin ? [adminNav] : [])];
+	const leftTabs = primary.slice(0, 2);
+	const rightTabs = primary.slice(2, 4);
 
 	return (
 		<div className="min-h-screen bg-background text-foreground lg:flex">
@@ -160,20 +167,17 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 				) : (
 					<>
 						<nav className="flex flex-col gap-1" aria-label="Portal modules">
-							{primaryNav.map((item) => (
+							{primary.map((item) => (
 								<RailItem key={item.id} item={item} pathname={pathname} />
 							))}
 						</nav>
-						{secondaryNav.length > 0 || navPins.length > 0 ? (
-							<>
-								<Separator className="my-3 bg-white/10" />
-								<nav className="flex flex-col gap-1" aria-label="More modules">
-									{secondaryNav.map((item) => (
-										<RailItem key={item.id} item={item} pathname={pathname} />
-									))}
-									{navPins.length > 0 ? (
+						<Separator className="my-3 bg-white/10" />
+						<nav className="flex flex-col gap-1" aria-label="More modules">
+							{secondary.map((item) => (
+								<RailItem key={item.id} item={item} pathname={pathname} />
+							))}
+							{navPins.length > 0 ? (
 								<>
-									{secondaryNav.length > 0 ? <Separator className="my-2 bg-white/10" /> : null}
 									<p className="px-3 pb-0.5 text-[0.6rem] font-semibold uppercase tracking-wider text-primary-foreground/45">
 										Pinned links
 									</p>
@@ -181,10 +185,8 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 										<PinnedNavLink key={pin.id} pin={pin} />
 									))}
 								</>
-									) : null}
-								</nav>
-							</>
-						) : null}
+							) : null}
+						</nav>
 					</>
 				)}
 				<div className="mt-auto pt-2">
@@ -282,13 +284,41 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 					className="max-h-[82vh] gap-0 overflow-y-auto rounded-t-2xl pb-[max(1.5rem,env(safe-area-inset-bottom))]"
 				>
 					<span className="mx-auto mt-3 h-1 w-10 shrink-0 rounded-full bg-border" aria-hidden />
-					<SheetTitle className="px-5 pt-3 font-heading text-xl">Menu</SheetTitle>
+					<SheetTitle className="px-5 pt-3 font-heading text-xl">Quick actions</SheetTitle>
 
 					<div className="px-4 pt-4">
 						<MemberCodeCard memberId={memberId} />
 					</div>
 
+					<div className="grid grid-cols-2 gap-2 px-4 pt-3">
+						<SheetClose asChild>
+							<Link
+								href="/portal/calendar?create=1"
+								className="flex flex-col items-center gap-1.5 rounded-xl border border-border py-4 text-sm font-semibold transition-colors hover:bg-muted"
+							>
+								<span className="grid size-9 place-items-center rounded-lg bg-secondary text-accent">
+									<CalendarPlus className="size-5" />
+								</span>
+								Create event
+							</Link>
+						</SheetClose>
+						<SheetClose asChild>
+							<Link
+								href="/portal/calendar"
+								className="flex flex-col items-center gap-1.5 rounded-xl border border-border py-4 text-sm font-semibold transition-colors hover:bg-muted"
+							>
+								<span className="grid size-9 place-items-center rounded-lg bg-secondary text-accent">
+									<CalendarDays className="size-5" />
+								</span>
+								Calendar
+							</Link>
+						</SheetClose>
+					</div>
+
 					<nav className="flex flex-col px-2 pt-3" aria-label="More modules">
+						<p className="px-3 pb-1 pt-2 text-[0.6rem] font-semibold uppercase tracking-wider text-muted-foreground">
+							Go to
+						</p>
 						{inAdmin ? (
 							<>
 								<SheetClose asChild>

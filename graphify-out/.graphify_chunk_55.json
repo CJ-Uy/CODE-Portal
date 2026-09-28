@@ -1,0 +1,41 @@
+{
+  "nodes": [
+    {
+      "id": "uploads_code_logo_falcon_lightblue_light_blue_falcon_asset",
+      "label": "Light Blue Falcon on Navy Asset",
+      "file_type": "image",
+      "source_file": "design/uploads/CODE_Logo-Falcon-LightBlue.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "uploads_code_logo_falcon_lightblue_falcon_mark",
+      "label": "Ateneo CODE Falcon Mark",
+      "file_type": "concept",
+      "source_file": "design/uploads/CODE_Logo-Falcon-LightBlue.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "uploads_code_logo_falcon_lightblue_light_blue_falcon_asset",
+      "target": "uploads_code_logo_falcon_lightblue_falcon_mark",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design/uploads/CODE_Logo-Falcon-LightBlue.png",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

@@ -1,0 +1,149 @@
+{
+  "nodes": [
+    {
+      "id": "screens_s5_session_five_workspace",
+      "label": "Member Portal Session 5",
+      "file_type": "image",
+      "source_file": "design/screens/s5.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "screens_s5_shared_calendar",
+      "label": "Shared Calendar",
+      "file_type": "concept",
+      "source_file": "design/screens/s5.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "screens_s5_member_profile",
+      "label": "Member Profile",
+      "file_type": "concept",
+      "source_file": "design/screens/s5.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "screens_s5_announcements_feed",
+      "label": "Announcements Feed",
+      "file_type": "concept",
+      "source_file": "design/screens/s5.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "screens_s5_crs_events",
+      "label": "CRS Events",
+      "file_type": "concept",
+      "source_file": "design/screens/s5.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "screens_s5_private_library",
+      "label": "Private Library",
+      "file_type": "concept",
+      "source_file": "design/screens/s5.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "screens_s5_session_five_workspace",
+      "target": "screens_s5_shared_calendar",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design/screens/s5.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "screens_s5_session_five_workspace",
+      "target": "screens_s5_member_profile",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design/screens/s5.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "screens_s5_session_five_workspace",
+      "target": "screens_s5_announcements_feed",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design/screens/s5.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "screens_s5_shared_calendar",
+      "target": "screens_s5_crs_events",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design/screens/s5.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "screens_s5_announcements_feed",
+      "target": "screens_s5_crs_events",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design/screens/s5.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "screens_s5_announcements_feed",
+      "target": "screens_s5_private_library",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design/screens/s5.png",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "screens_s5_connected_member_information",
+      "label": "Connected Member Information",
+      "nodes": [
+        "screens_s5_shared_calendar",
+        "screens_s5_member_profile",
+        "screens_s5_announcements_feed"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design/screens/s5.png"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

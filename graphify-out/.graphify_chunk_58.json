@@ -1,0 +1,97 @@
+{
+  "nodes": [
+    {
+      "id": "00_full_logo_text_00_code_logo_full_white_full_logo",
+      "label": "Ateneo CODE Full White Logo on Navy",
+      "file_type": "image",
+      "source_file": "docs/[OSG 2425] Brand Manual — Logos, Colors, Fonts-20260603T140636Z-3-001/[OSG 2425] Brand Manual — Logos, Colors, Fonts/00 Full (Logo + Text)/00 CODE_Logo-Full-White.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "00_full_logo_text_00_code_logo_full_white_falcon_mark",
+      "label": "White Falcon Mark",
+      "file_type": "image",
+      "source_file": "docs/[OSG 2425] Brand Manual — Logos, Colors, Fonts-20260603T140636Z-3-001/[OSG 2425] Brand Manual — Logos, Colors, Fonts/00 Full (Logo + Text)/00 CODE_Logo-Full-White.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "00_full_logo_text_00_code_logo_full_white_ateneo_code_wordmark",
+      "label": "Ateneo CODE Wordmark",
+      "file_type": "image",
+      "source_file": "docs/[OSG 2425] Brand Manual — Logos, Colors, Fonts-20260603T140636Z-3-001/[OSG 2425] Brand Manual — Logos, Colors, Fonts/00 Full (Logo + Text)/00 CODE_Logo-Full-White.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "00_full_logo_text_00_code_logo_full_white_organization_name",
+      "label": "Consultants for Organization Development and Empowerment",
+      "file_type": "concept",
+      "source_file": "docs/[OSG 2425] Brand Manual — Logos, Colors, Fonts-20260603T140636Z-3-001/[OSG 2425] Brand Manual — Logos, Colors, Fonts/00 Full (Logo + Text)/00 CODE_Logo-Full-White.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "00_full_logo_text_00_code_logo_full_white_full_logo",
+      "target": "00_full_logo_text_00_code_logo_full_white_falcon_mark",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/[OSG 2425] Brand Manual — Logos, Colors, Fonts-20260603T140636Z-3-001/[OSG 2425] Brand Manual — Logos, Colors, Fonts/00 Full (Logo + Text)/00 CODE_Logo-Full-White.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "00_full_logo_text_00_code_logo_full_white_full_logo",
+      "target": "00_full_logo_text_00_code_logo_full_white_ateneo_code_wordmark",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/[OSG 2425] Brand Manual — Logos, Colors, Fonts-20260603T140636Z-3-001/[OSG 2425] Brand Manual — Logos, Colors, Fonts/00 Full (Logo + Text)/00 CODE_Logo-Full-White.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "00_full_logo_text_00_code_logo_full_white_ateneo_code_wordmark",
+      "target": "00_full_logo_text_00_code_logo_full_white_organization_name",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/[OSG 2425] Brand Manual — Logos, Colors, Fonts-20260603T140636Z-3-001/[OSG 2425] Brand Manual — Logos, Colors, Fonts/00 Full (Logo + Text)/00 CODE_Logo-Full-White.png",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "00_full_logo_text_00_code_logo_full_white_identity_lockup",
+      "label": "Ateneo CODE White Identity Lockup",
+      "nodes": [
+        "00_full_logo_text_00_code_logo_full_white_falcon_mark",
+        "00_full_logo_text_00_code_logo_full_white_ateneo_code_wordmark",
+        "00_full_logo_text_00_code_logo_full_white_organization_name"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/[OSG 2425] Brand Manual — Logos, Colors, Fonts-20260603T140636Z-3-001/[OSG 2425] Brand Manual — Logos, Colors, Fonts/00 Full (Logo + Text)/00 CODE_Logo-Full-White.png"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

@@ -3,24 +3,38 @@ import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { getDb } from "@/db/client";
-import { accounts, memberRoles, members, roles, sessions, verificationToken } from "@/db/schema";
+import { accounts, memberRoles, members, roles, sessions, termMemberRoster, verificationToken } from "@/db/schema";
+import { createAuditRepository } from "@/db/repositories/audit";
 import { getAppConfig } from "@/server/env";
-import { roleKeys, type RoleKey } from "@/server/auth/permissions";
-
-function required(value: string | undefined, name: string): string {
-	if (!value) throw new Error(`${name} is required for Google sign-in.`);
-	return value;
-}
+import {
+	getGoogleProviderOptions,
+	getRosterDeniedRedirect,
+	isGoogleSignInAllowed,
+	splitAuthList,
+} from "@/server/auth/access";
+import { grantBootstrapSuperRole } from "@/server/auth/bootstrap";
+import { claimPendingRoles } from "@/server/auth/pending-roles";
+import { normalizeRoleKeys } from "@/server/auth/permissions";
+import { isRosterSignInAllowed, syncSignedInMemberProfile } from "@/server/auth/roster";
 
 export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
 	const config = getAppConfig();
 	const db = getDb();
+	const allowedDomains = splitAuthList(config.AUTH_ALLOWED_DOMAINS);
+
 	const baseAdapter = DrizzleAdapter(db, {
 		usersTable: members,
 		accountsTable: accounts,
 		sessionsTable: sessions,
 		verificationTokensTable: verificationToken,
-	} as never);
+	});
+
+	// The roster gate (src/server/auth/roster.ts) looks members up by a
+	// lowercased email. Google's OIDC email claim is normally already
+	// lowercase, but nothing guarantees that, so normalize here too.
+	// otherwise a mixed-case claim would create a member row the gate
+	// can never find, silently breaking the super-admin bypass and the
+	// off-roster deactivation.
 	const adapter: typeof baseAdapter = {
 		...baseAdapter,
 		createUser: (data) => baseAdapter.createUser!({ ...data, email: data.email.toLowerCase() }),
@@ -30,32 +44,32 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
 	return {
 		adapter,
 		providers: [
-			Google({
-				clientId: required(config.AUTH_GOOGLE_ID, "AUTH_GOOGLE_ID"),
-				clientSecret: required(config.AUTH_GOOGLE_SECRET, "AUTH_GOOGLE_SECRET"),
-				// Safe here because signIn only allows invited members with Google-verified email.
-				allowDangerousEmailAccountLinking: true,
-			}),
+			Google(getGoogleProviderOptions(config.AUTH_GOOGLE_ID, config.AUTH_GOOGLE_SECRET)),
 		],
 		session: { strategy: "database" },
-		secret: required(config.AUTH_SECRET, "AUTH_SECRET"),
+		secret: config.AUTH_SECRET,
 		trustHost: true,
 		callbacks: {
 			async signIn({ account, profile }) {
-				if (account?.provider !== "google" || profile?.email_verified !== true || !profile.email) return false;
-				const [member] = await db.select().from(members).where(eq(members.email, profile.email.toLowerCase())).limit(1);
-				if (!member || member.status === "inactive") return false;
-				const update: { status: "active"; updatedAt: Date; name?: string; image?: string } = { status: "active", updatedAt: new Date() };
-				if (typeof profile.name === "string" && profile.name.trim()) update.name = profile.name.trim();
-				if (typeof profile.picture === "string" && profile.picture.trim()) update.image = profile.picture.trim();
-				if (member.status === "pending" || update.name || update.image) {
-					await db.update(members).set(update).where(eq(members.id, member.id));
-				}
-				return true;
+				const allowed = isGoogleSignInAllowed(
+					{
+						provider: account?.provider,
+						email: profile?.email,
+						emailVerified: profile?.email_verified === true,
+					},
+					{ allowedDomains, bootstrapEmail: config.AUTH_BOOTSTRAP_SUPER_ADMIN_EMAIL },
+				);
+				if (!allowed) return false;
+				if (!profile?.email) return false;
+
+				const rosterAllowed = await isRosterSignInAllowed(db, profile.email, new Date(), config.AUTH_BOOTSTRAP_SUPER_ADMIN_EMAIL);
+				if (rosterAllowed) await syncSignedInMemberProfile(db, profile);
+				return rosterAllowed || getRosterDeniedRedirect(profile.email);
 			},
 			async session({ session, user }) {
 				const [member] = await db.select().from(members).where(eq(members.id, user.id)).limit(1);
 				if (!member) return session;
+
 				const elevated = await db
 					.select()
 					.from(memberRoles)
@@ -66,11 +80,54 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
 				session.user.status = member.status;
 				session.user.roles = [
 					"member",
-					...elevated
-						.map((item) => item.roles.key)
-						.filter((role): role is RoleKey => roleKeys.includes(role as RoleKey) && role !== "member"),
+					...normalizeRoleKeys(elevated.map((item) => item.roles.key)).filter((role) => role !== "member"),
 				];
 				return session;
+			},
+		},
+		events: {
+			async createUser({ user }) {
+				if (!user.id) return;
+				if (user.email) {
+					await grantBootstrapSuperRole(db, user.id, user.email, config.AUTH_BOOTSTRAP_SUPER_ADMIN_EMAIL);
+				}
+				await db.update(members).set({ status: "active", updatedAt: new Date() }).where(eq(members.id, user.id));
+				// admins can add a roster row by email before the member ever signs in;
+				// backfill the link now so reporting joins find this member.
+				let claimedRoles = 0;
+				if (user.email) {
+					await db
+						.update(termMemberRoster)
+						.set({ memberId: user.id })
+						.where(eq(termMemberRoster.email, user.email.toLowerCase()));
+					// Roles an admin granted to this email before the account existed. An invite
+					// carries no member id, so the grant waits here until there is one.
+					claimedRoles = await claimPendingRoles(db, user.id, user.email);
+				}
+				const audit = createAuditRepository(db as unknown as Parameters<typeof createAuditRepository>[0]);
+				await audit.record(
+					{ memberId: user.id, roles: ["member"], context: "session" },
+					{
+						action: "member:self_provision",
+						targetType: "member",
+						targetId: user.id,
+						category: "member",
+					},
+				);
+				// Recorded separately so a grant made before the account existed is still
+				// traceable to the sign-in that applied it.
+				if (claimedRoles > 0) {
+					await audit.record(
+						{ memberId: user.id, roles: ["member"], context: "session" },
+						{
+							action: "role:claim_pending",
+							targetType: "member",
+							targetId: user.id,
+							detail: `roles=${claimedRoles}`,
+							category: "member",
+						},
+					);
+				}
 			},
 		},
 	};

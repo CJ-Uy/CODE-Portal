@@ -1,17 +1,15 @@
-import { and, eq, ne, sql } from "drizzle-orm";
-import { auditLogs, memberRoles, members, roles } from "@/db/schema";
+import { and, eq, inArray, isNull, like, ne, sql } from "drizzle-orm";
+import type { DrizzleD1Database } from "drizzle-orm/d1";
+import { auditLogs, memberRoles, members, pendingMemberRoles, roles, termMemberRoster } from "@/db/schema";
 import { createId } from "@/lib/ids";
 import type { Actor, RoleKey } from "@/server/auth/permissions";
 import { can, normalizeRoleKey, normalizeRoleKeys, roleKeys } from "@/server/auth/permissions";
+import type * as schema from "../schema";
 
-// Drizzle's D1 and local SQLite clients expose the same query builder at runtime,
-// but their overloaded select signatures do not intersect cleanly as a union.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
-type RoleKeyRow = { key: string };
+type Db = DrizzleD1Database<typeof schema>;
 
 /** Role keys that exist but grant nothing yet: shown disabled, never assignable. */
-const INACTIVE_ROLE_KEYS: RoleKey[] = ["calendar"];
+const INACTIVE_ROLE_KEYS: RoleKey[] = [];
 /** The implicit baseline role: never surfaced or assignable on the Roles page. */
 const NON_ASSIGNABLE: RoleKey[] = ["member"];
 
@@ -21,12 +19,19 @@ export type AdminEntry = { memberId: string; displayName: string; email: string;
 
 export type SaveMemberRolesInput = { memberId: string; desiredRoleKeys: RoleKey[]; baseVersion: string };
 
+/** Someone on the roster by email who has never signed in, so has no member row yet. */
+export type InvitedEntry = { email: string; roleKeys: RoleKey[] };
+
+export type SavePendingRolesInput = { email: string; desiredRoleKeys: RoleKey[] };
+
 export type RolesRepository = {
 	listAssignableRoles(actor: Actor): Promise<AssignableRole[]>;
 	listAdmins(actor: Actor): Promise<AdminEntry[]>;
 	getMemberRoleKeys(actor: Actor, memberId: string): Promise<RoleKey[]>;
 	baseVersionOf(keys: RoleKey[]): string;
 	saveMemberRoles(actor: Actor, input: SaveMemberRolesInput): Promise<{ roleKeys: RoleKey[] }>;
+	searchInvited(actor: Actor, query: string): Promise<InvitedEntry[]>;
+	savePendingRoles(actor: Actor, input: SavePendingRolesInput): Promise<{ roleKeys: RoleKey[] }>;
 };
 
 export function createRolesRepository(db: Db): RolesRepository {
@@ -38,7 +43,7 @@ export function createRolesRepository(db: Db): RolesRepository {
 			.from(memberRoles)
 			.innerJoin(roles, eq(roles.id, memberRoles.roleId))
 			.where(eq(memberRoles.memberId, memberId));
-		return normalizeRoleKeys(rows.map((r: RoleKeyRow) => r.key)).sort();
+		return normalizeRoleKeys(rows.map((r) => r.key)).sort();
 	}
 
 	function auditStmt(actor: Actor, targetId: string, action: "role:assign" | "role:revoke", key: RoleKey) {
@@ -63,7 +68,7 @@ export function createRolesRepository(db: Db): RolesRepository {
 			if (!can(actor, "role:assign")) throw new Error("Not authorized to view roles.");
 			const rows = await db.select().from(roles);
 			const seen = new Set<RoleKey>();
-			return rows.flatMap((r: { key: string; label: string; description: string }) => {
+			return rows.flatMap((r) => {
 				const key = normalizeRoleKey(r.key);
 				if (!key || seen.has(key) || NON_ASSIGNABLE.includes(key)) return [];
 				seen.add(key);
@@ -189,18 +194,83 @@ export function createRolesRepository(db: Db): RolesRepository {
 
 			return { roleKeys: await loadKeys(input.memberId) };
 		},
-	};
-}
 
-export function createUnavailableRolesRepository(): RolesRepository {
-	const unavailable = async () => {
-		throw new Error("Roles are unavailable in shared mode.");
-	};
-	return {
-		listAssignableRoles: unavailable,
-		listAdmins: unavailable,
-		getMemberRoleKeys: unavailable,
-		baseVersionOf: (keys) => [...keys].sort().join("|"),
-		saveMemberRoles: unavailable,
+		/**
+		 * Roster entries that have no member row yet, so an admin can grant a role before
+		 * the person ever signs in. Matching is on email because that is all an invite has.
+		 */
+		async searchInvited(actor, query) {
+			if (!can(actor, "role:assign")) throw new Error("Not authorized to read invites.");
+			const term = query.trim().toLowerCase();
+			if (term.length < 2) return [];
+
+			const invited = await db
+				.selectDistinct({ email: termMemberRoster.email })
+				.from(termMemberRoster)
+				.where(and(isNull(termMemberRoster.memberId), like(termMemberRoster.email, `%${term}%`)))
+				.limit(25);
+			if (invited.length === 0) return [];
+
+			const emails = invited.map((row) => row.email);
+			const granted = await db
+				.select({ email: pendingMemberRoles.email, key: roles.key })
+				.from(pendingMemberRoles)
+				.innerJoin(roles, eq(roles.id, pendingMemberRoles.roleId))
+				.where(inArray(pendingMemberRoles.email, emails));
+
+			const byEmail = new Map<string, RoleKey[]>(emails.map((email) => [email, []]));
+			for (const row of granted) {
+				const key = normalizeRoleKey(row.key);
+				if (!key) continue;
+				byEmail.get(row.email)?.push(key);
+			}
+			return [...byEmail.entries()]
+				.map(([email, keys]) => ({ email, roleKeys: [...new Set(keys)].sort() }))
+				.sort((a, b) => a.email.localeCompare(b.email));
+		},
+
+		/**
+		 * Replaces the roles waiting for an email. Deliberately no baseVersion check: nobody
+		 * holds these yet, so a concurrent edit cannot revoke access someone is currently
+		 * relying on, and the value of a simple replace outweighs the conflict detection.
+		 */
+		async savePendingRoles(actor, input) {
+			if (!actor.memberId) throw new Error("Missing actor identity.");
+			if (!can(actor, "role:assign")) throw new Error("Not authorized to assign roles.");
+
+			const email = input.email.trim().toLowerCase();
+			if (!email) throw new Error("An email is required.");
+
+			const desired = [...new Set(input.desiredRoleKeys)];
+			for (const key of desired) {
+				if (!roleKeys.includes(key)) throw new Error(`Unknown role "${key}".`);
+				if (NON_ASSIGNABLE.includes(key) || INACTIVE_ROLE_KEYS.includes(key)) {
+					throw new Error(`Role "${key}" is not assignable.`);
+				}
+			}
+			// Same guard as saveMemberRoles: granting super early must not sidestep it.
+			if (desired.includes("super") && !actor.roles.includes("super")) {
+				throw new Error("Only Overall Admins can grant or remove Overall Admin.");
+			}
+
+			const roleRows = await db.select({ id: roles.id, key: roles.key }).from(roles);
+			const idByKey = new Map<RoleKey, string>();
+			for (const row of roleRows) {
+				const key = normalizeRoleKey(row.key);
+				if (key && !idByKey.has(key)) idByKey.set(key, row.id);
+			}
+
+			// Replace wholesale; the set is tiny and this avoids diffing rows nobody holds.
+			await db.delete(pendingMemberRoles).where(eq(pendingMemberRoles.email, email));
+			for (const key of desired) {
+				const roleId = idByKey.get(key);
+				if (!roleId) throw new Error(`Unknown role "${key}".`);
+				await db.insert(pendingMemberRoles).values({ email, roleId, assignedBy: actor.memberId });
+				// Audited against the email, since there is no member id to point at yet.
+				await auditStmt(actor, email, "role:assign", key);
+			}
+
+			return { roleKeys: [...desired].sort() };
+		},
 	};
 }

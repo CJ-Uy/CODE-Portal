@@ -1,0 +1,104 @@
+{
+  "nodes": [
+    {
+      "id": "screens_04_ds2_falcon_in_app_guideline",
+      "label": "Falcon In-App Guideline",
+      "file_type": "image",
+      "source_file": "design/screens/04-ds2.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "screens_04_ds2_falcon_mark",
+      "label": "Falcon Mark",
+      "file_type": "concept",
+      "source_file": "design/screens/04-ds2.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "screens_04_ds2_on_navy_variant",
+      "label": "On Navy Variant",
+      "file_type": "concept",
+      "source_file": "design/screens/04-ds2.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "screens_04_ds2_on_light_variant",
+      "label": "On Light Variant",
+      "file_type": "concept",
+      "source_file": "design/screens/04-ds2.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "screens_04_ds2_avatar_fallback",
+      "label": "Avatar Fallback",
+      "file_type": "concept",
+      "source_file": "design/screens/04-ds2.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "screens_04_ds2_falcon_in_app_guideline",
+      "target": "screens_04_ds2_falcon_mark",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design/screens/04-ds2.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "screens_04_ds2_falcon_mark",
+      "target": "screens_04_ds2_on_navy_variant",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design/screens/04-ds2.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "screens_04_ds2_falcon_mark",
+      "target": "screens_04_ds2_on_light_variant",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design/screens/04-ds2.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "screens_04_ds2_falcon_mark",
+      "target": "screens_04_ds2_avatar_fallback",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design/screens/04-ds2.png",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

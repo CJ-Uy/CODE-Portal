@@ -1,5 +1,7 @@
 # Shared Dev Onboarding
 
+Verified against Phase 9 on 2026-06-20.
+
 Outside developers do not need access to the Cloudflare account.
 
 They need:
@@ -26,7 +28,12 @@ Shared mode uses typed internal API endpoints:
 
 - `GET /internal/members`
 - `POST /internal/members`
-- `GET /internal/members/:id`
+- `GET /internal/members/{id}`
+- `GET /internal/links`
+- `GET /internal/events`
+- `GET /internal/retention`
+- `GET /internal/surveys`
+- `GET /internal/uploads/{key}`
 
 There is no raw SQL endpoint. D1 is not exposed as `DATABASE_URL`.
 
@@ -41,3 +48,5 @@ If a token expires or is missing, ask the project owner for a refreshed `.env.lo
 ## Backend freshness
 
 Shared mode depends on the deployed dev Worker. When schema, migrations, internal contracts, permissions, auth config, shared token seed data, or Worker runtime dependencies change, the dev Worker must be migrated, seeded when needed, and redeployed.
+
+Phase 9 verification checked `APP_ENV=shared`, `SHARED_API_BASE_URL`, `SHARED_API_TOKEN`, and the current `/internal/*` route set against the app routes.

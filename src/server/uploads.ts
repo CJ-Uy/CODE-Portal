@@ -105,8 +105,10 @@ export function createUploadHandlers(dependencies: UploadHandlerDependencies) {
 			if (!actor) return Response.json({ error: "Authentication required." }, { status: 401 });
 
 			if (request.method === "DELETE") {
-				const ownsObject = namespace.ownerMemberId === actor.memberId;
-				if (!ownsObject && !can(actor, "member:manage")) {
+				const authorized = namespace.linkId
+					? can(actor, "link:moderate") || await dependencies.canEditLink(actor, namespace.linkId)
+					: namespace.ownerMemberId === actor.memberId || can(actor, "member:manage");
+				if (!authorized) {
 					return Response.json({ error: "Not authorized to delete this object." }, { status: 403 });
 				}
 				await dependencies.storage.deleteObject(key);
@@ -118,7 +120,7 @@ export function createUploadHandlers(dependencies: UploadHandlerDependencies) {
 	};
 }
 
-function parseNamespace(key: string): { ownerMemberId: string; public: boolean } | null {
+function parseNamespace(key: string): { ownerMemberId: string; public: boolean; linkId?: string } | null {
 	if (key.includes("..") || key.startsWith("/")) return null;
 	const parts = key.split("/");
 	if (parts[0] === "avatars" && parts.length === 3 && parts.every(isSafeSegment)) {
@@ -128,7 +130,7 @@ function parseNamespace(key: string): { ownerMemberId: string; public: boolean }
 		return { ownerMemberId: parts[2], public: false };
 	}
 	if (parts[0] === "links" && parts.length === 4 && parts.every(isSafeSegment)) {
-		return { ownerMemberId: parts[2], public: true };
+		return { ownerMemberId: parts[2], public: true, linkId: parts[1] };
 	}
 	return null;
 }

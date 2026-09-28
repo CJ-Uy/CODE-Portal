@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminIntro } from "@/components/portal/admin-intro";
 import { requireActor } from "@/server/auth/actor";
+import { getFeatureFlags } from "@/server/features";
 import { visibleGroups } from "./nav";
 
 /**
@@ -10,7 +11,7 @@ import { visibleGroups } from "./nav";
  */
 export async function AdminGroupIndex({ segment, whoFor }: { segment: string; whoFor: string }) {
 	const actor = await requireActor();
-	const group = visibleGroups(actor).find((g) => g.segment === segment);
+	const group = visibleGroups(actor, getFeatureFlags()).find((g) => g.segment === segment);
 	if (!group) notFound();
 
 	return (
@@ -21,7 +22,7 @@ export async function AdminGroupIndex({ segment, whoFor }: { segment: string; wh
 					<Link
 						key={page.href}
 						href={page.href}
-						className="group flex flex-col gap-1 rounded-xl border border-border bg-card p-4 transition-colors hover:border-accent"
+						className="group flex flex-col gap-1 rounded-xl border border-border bg-card p-4 transition-[border-color,transform] hover:border-accent active:scale-[0.99]"
 					>
 						<span className="font-medium group-hover:text-accent">{page.label}</span>
 						<span className="text-sm text-muted-foreground">{page.description}</span>

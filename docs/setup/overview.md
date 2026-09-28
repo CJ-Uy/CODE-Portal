@@ -21,5 +21,4 @@ The app uses adapters so product code can call stable interfaces:
 
 Production selects Cloudflare binding adapters. Shared dev selects internal API clients. Local mode prefers local Cloudflare bindings when available and falls back to SQLite plus filesystem storage.
 
-Read next: [environment modes](environment-modes.md), [architecture overview](../architecture/overview.md).
-
+Read next: [Cloudflare, Drizzle, D1, and R2 setup](cloudflare-drizzle-d1-r2.md), [environment modes](environment-modes.md), [architecture overview](../architecture/overview.md).

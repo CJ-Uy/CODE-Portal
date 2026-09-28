@@ -1,0 +1,63 @@
+{
+  "nodes": [
+    {
+      "id": "screens_01_svc_services_page_capture",
+      "label": "Our Services Page Capture",
+      "file_type": "image",
+      "source_file": "design/screens/01-svc.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "screens_01_svc_public_navigation",
+      "label": "Public Site Navigation",
+      "file_type": "concept",
+      "source_file": "design/screens/01-svc.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "screens_01_svc_tailor_fit_service_message",
+      "label": "Tailor-fit OD, Never Generalized",
+      "file_type": "rationale",
+      "source_file": "design/screens/01-svc.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "CODE researches each engagement so services fit client-specific needs instead of generalized programs."
+    }
+  ],
+  "edges": [
+    {
+      "source": "screens_01_svc_services_page_capture",
+      "target": "screens_01_svc_public_navigation",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design/screens/01-svc.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "screens_01_svc_services_page_capture",
+      "target": "screens_01_svc_tailor_fit_service_message",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design/screens/01-svc.png",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

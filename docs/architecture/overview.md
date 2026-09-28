@@ -10,7 +10,8 @@ Server-side infrastructure code lives in:
 
 Route handlers and feature code should use adapters instead of direct Cloudflare bindings. This keeps local, shared, and production modes behind the same app-facing calls.
 
+Abuse-prone routes (auth, link-create, scan) are rate-limited by a D1 fixed-window counter in `src/server/ratelimit/`.
+
 ## Rule
 
 Only infrastructure and adapter code should import `src/server/cloudflare.ts` or call `getCloudflareContext()`.
-

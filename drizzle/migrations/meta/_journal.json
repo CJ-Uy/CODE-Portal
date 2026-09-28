@@ -3,31 +3,24 @@
   "dialect": "sqlite",
   "entries": [
     {
-      "idx": 0,
+      "idx": 4,
       "version": "6",
-      "when": 1781720174889,
-      "tag": "0000_young_bullseye",
+      "when": 1786084840257,
+      "tag": "0004_unify_schema",
       "breakpoints": true
     },
     {
-      "idx": 1,
+      "idx": 5,
       "version": "6",
-      "when": 1783267200000,
-      "tag": "0001_member_portal_links",
+      "when": 1786117238694,
+      "tag": "0005_pending_member_roles",
       "breakpoints": true
     },
     {
-      "idx": 2,
+      "idx": 6,
       "version": "6",
-      "when": 1783353600000,
-      "tag": "0002_link_workspace_fields",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1783440000000,
-      "tag": "0003_admin_members_nav",
+      "when": 1787061265029,
+      "tag": "0006_daily_kulan_gath",
       "breakpoints": true
     }
   ]

@@ -1,0 +1,66 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "code-nest-staged",
+	"account_id": "83376df5e0bae067afa197b07430168d",
+	"main": ".open-next/worker.js",
+	"workers_dev": true,
+	"routes": [
+		{
+			"pattern": "staged.ateneocode.org",
+			"custom_domain": true
+		}
+	],
+	"compatibility_date": "2026-06-10",
+	"compatibility_flags": [
+		"nodejs_compat",
+		"global_fetch_strictly_public"
+	],
+	"assets": {
+		"binding": "ASSETS",
+		"directory": ".open-next/assets"
+	},
+	"images": {
+		"binding": "IMAGES"
+	},
+	"services": [
+		{
+			"binding": "WORKER_SELF_REFERENCE",
+			"service": "code-nest-staged"
+		}
+	],
+	"observability": {
+		"enabled": true
+	},
+	"upload_source_maps": true,
+	"vars": {
+		"APP_ENV": "production",
+		"DEPLOY_ENV": "prod",
+		"STORAGE_MODE": "binding",
+		"LOCAL_SQLITE_PATH": "./.local/dev.db",
+		"LOCAL_STORAGE_DIR": "./.local/uploads",
+		"NEXT_PRIVATE_MINIMAL_MODE": "1",
+		// Unfinished surfaces stay hidden on staging until each one ships. Only "true" enables.
+		"FEATURE_RETENTION": "true",
+		"FEATURE_LIBRARY": "false",
+		"FEATURE_ANNOUNCEMENTS": "false",
+		"FEATURE_NOTIFICATIONS": "false",
+		"FEATURE_SURVEYS": "false",
+		"FEATURE_PUBLIC_SITE": "false",
+		"FEATURE_LEADERBOARD": "false"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "code-nest-staged-db",
+			"database_id": "543701fb-67ba-4f09-a931-85ffb861386f",
+			// Staging has its own database and shares the checked-in migration history.
+			"migrations_dir": "drizzle/migrations"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "BUCKET",
+			"bucket_name": "code-nest-staged-uploads"
+		}
+	]
+}

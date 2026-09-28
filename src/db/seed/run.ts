@@ -6,23 +6,27 @@ import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "@/db/schema";
 import {
-	seedAnnouncements,
-	seedArticleSections,
-	seedArticles,
 	seedAuditLogs,
+	seedAttendance,
 	seedEvents,
+	seedForumPosts,
+	seedLibraryItems,
 	seedLinkDailyStats,
+	seedLinkHourlyStats,
 	seedMemberRoles,
 	seedMembers,
+	seedNavPins,
+	seedPointTypes,
+	seedQuickLinks,
 	seedReservedSlugs,
+	seedRetentionRecords,
 	seedRoles,
 	seedSharedDevTokens,
 	seedShortLinks,
 	seedSurveyAssignments,
 	seedSurveyQuestions,
 	seedSurveys,
-	seedTeamMembers,
-	seedTeams,
+	seedTermMemberRoster,
 	seedTerms,
 } from "./data";
 
@@ -57,22 +61,26 @@ async function seedLocal() {
 
 	await insertChunks(db, schema.roles, seedRoles);
 	await insertChunks(db, schema.members, seedMembers);
+	await insertChunks(db, schema.pointTypes, seedPointTypes);
 	await insertChunks(db, schema.memberRoles, seedMemberRoles);
-	await insertChunks(db, schema.consultancyTeams, seedTeams);
-	await insertChunks(db, schema.teamMembers, seedTeamMembers);
-	await insertChunks(db, schema.articles, seedArticles);
-	await insertChunks(db, schema.articleSections, seedArticleSections);
+	await insertChunks(db, schema.terms, seedTerms);
+	await insertChunks(db, schema.termMemberRoster, seedTermMemberRoster);
 	await insertChunks(db, schema.reservedSlugs, seedReservedSlugs);
 	await insertChunks(db, schema.shortLinks, seedShortLinks);
 	await insertChunks(db, schema.linkDailyStats, seedLinkDailyStats);
+	await insertChunks(db, schema.linkHourlyStats, seedLinkHourlyStats);
 	await insertChunks(db, schema.crsEvents, seedEvents);
-	await insertChunks(db, schema.terms, seedTerms);
+	await insertChunks(db, schema.retentionRecords, seedRetentionRecords);
+	await insertChunks(db, schema.crsAttendance, seedAttendance);
+	await insertChunks(db, schema.eventForumPosts, seedForumPosts);
 	await insertChunks(db, schema.surveys, seedSurveys);
 	await insertChunks(db, schema.surveyQuestions, seedSurveyQuestions);
 	await insertChunks(db, schema.surveyAssignments, seedSurveyAssignments);
-	await insertChunks(db, schema.announcements, seedAnnouncements);
 	await insertChunks(db, schema.auditLogs, seedAuditLogs);
 	await insertChunks(db, schema.sharedDevTokens, seedSharedDevTokens);
+	await insertChunks(db, schema.navPins, seedNavPins);
+	await insertChunks(db, schema.quickLinks, seedQuickLinks);
+	await insertChunks(db, schema.libraryItems, seedLibraryItems);
 
 	sqlite.close();
 	console.log(`Seeded ${localPath}`);
@@ -81,7 +89,8 @@ async function seedLocal() {
 async function main() {
 	if (target === "dev") {
 		console.log("Dev D1 seeding requires an explicit reviewed Wrangler command after migrations are applied.");
-		console.log("Use: pnpm exec wrangler d1 execute DB --env dev --remote --file <seed-sql-file>");
+		console.log("Run `pnpm db:seed:dev:export` to build .local/dev-seed.sql, then:");
+		console.log("pnpm exec wrangler d1 execute DB --env dev --remote --file .local/dev-seed.sql");
 		return;
 	}
 

@@ -1,0 +1,97 @@
+{
+  "nodes": [
+    {
+      "id": "public_code_logo_full_navy_full_logo",
+      "label": "Ateneo CODE Full Navy Logo",
+      "file_type": "image",
+      "source_file": "public/code-logo-full-navy.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "public_code_logo_full_navy_falcon_mark",
+      "label": "Navy Falcon Mark",
+      "file_type": "image",
+      "source_file": "public/code-logo-full-navy.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "public_code_logo_full_navy_ateneo_code_wordmark",
+      "label": "Ateneo CODE Wordmark",
+      "file_type": "image",
+      "source_file": "public/code-logo-full-navy.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "public_code_logo_full_navy_organization_name",
+      "label": "Consultants for Organization Development and Empowerment",
+      "file_type": "concept",
+      "source_file": "public/code-logo-full-navy.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "public_code_logo_full_navy_full_logo",
+      "target": "public_code_logo_full_navy_falcon_mark",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "public/code-logo-full-navy.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "public_code_logo_full_navy_full_logo",
+      "target": "public_code_logo_full_navy_ateneo_code_wordmark",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "public/code-logo-full-navy.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "public_code_logo_full_navy_ateneo_code_wordmark",
+      "target": "public_code_logo_full_navy_organization_name",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "public/code-logo-full-navy.png",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "public_code_logo_full_navy_identity_lockup",
+      "label": "Ateneo CODE Navy Identity Lockup",
+      "nodes": [
+        "public_code_logo_full_navy_falcon_mark",
+        "public_code_logo_full_navy_ateneo_code_wordmark",
+        "public_code_logo_full_navy_organization_name"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "public/code-logo-full-navy.png"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

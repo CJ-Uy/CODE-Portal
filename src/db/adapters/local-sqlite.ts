@@ -4,7 +4,7 @@ import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { createId } from "@/lib/ids";
 import { getAppConfig } from "@/server/env";
 import { members } from "../schema";
-import type { CreateMemberInput, DatabaseAdapter, Member } from "../types";
+import type { CreateMemberInput, DatabaseAdapter, Member, UpdateMemberProfileInput } from "../types";
 
 type LocalDatabase = BetterSQLite3Database<{ members: typeof members }>;
 
@@ -40,5 +40,11 @@ export class LocalSqliteDatabaseAdapter implements DatabaseAdapter {
 	async getMemberById(id: string): Promise<Member | null> {
 		const member = (await this.db()).select().from(members).where(eq(members.id, id)).limit(1).get();
 		return member ?? null;
+	}
+
+	async updateMemberProfile(id: string, input: UpdateMemberProfileInput): Promise<Member> {
+		const member = (await this.db()).update(members).set({ ...input, updatedAt: new Date() }).where(eq(members.id, id)).returning().get();
+		if (!member) throw new Error("Member not found.");
+		return member;
 	}
 }

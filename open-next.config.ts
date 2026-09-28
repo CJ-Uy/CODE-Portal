@@ -1,9 +1,8 @@
 import { defineCloudflareConfig } from "@opennextjs/cloudflare";
 
-export default defineCloudflareConfig({
-	// Uncomment to enable R2 cache,
-	// It should be imported as:
-	// `import r2IncrementalCache from "@opennextjs/cloudflare/overrides/incremental-cache/r2-incremental-cache";`
-	// See https://opennext.js.org/cloudflare/caching for more details
-	// incrementalCache: r2IncrementalCache,
-});
+// v1 caching posture, master plan section 13: `/` is static at build,
+// `/portal/*` and `/[slug]` are force-dynamic, so there is no ISR
+// revalidation surface that needs a shared incremental cache. The default
+// in-Worker cache is sufficient. Revisit R2 incremental cache only if a
+// future phase introduces ISR or on-demand revalidation.
+export default defineCloudflareConfig({});

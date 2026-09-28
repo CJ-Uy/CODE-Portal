@@ -1,0 +1,104 @@
+{
+  "nodes": [
+    {
+      "id": "uploads_02_google_sheets_sample_header_branded_sheet_header",
+      "label": "Ateneo CODE Branded Sheet Header",
+      "file_type": "image",
+      "source_file": "design/uploads/02 Google Sheets - Sample Header.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "uploads_02_google_sheets_sample_header_osg_link_directory",
+      "label": "OSG Link Directory",
+      "file_type": "concept",
+      "source_file": "design/uploads/02 Google Sheets - Sample Header.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "uploads_02_google_sheets_sample_header_osg_tools_quick_links",
+      "label": "Quick Links to OSG Tools",
+      "file_type": "concept",
+      "source_file": "design/uploads/02 Google Sheets - Sample Header.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "uploads_02_google_sheets_sample_header_academic_year_2024_2025",
+      "label": "Academic Year 2024 to 2025",
+      "file_type": "concept",
+      "source_file": "design/uploads/02 Google Sheets - Sample Header.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "uploads_02_google_sheets_sample_header_falcon_symbol",
+      "label": "Falcon Symbol",
+      "file_type": "concept",
+      "source_file": "design/uploads/02 Google Sheets - Sample Header.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "uploads_02_google_sheets_sample_header_branded_sheet_header",
+      "target": "uploads_02_google_sheets_sample_header_osg_link_directory",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design/uploads/02 Google Sheets - Sample Header.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "uploads_02_google_sheets_sample_header_osg_link_directory",
+      "target": "uploads_02_google_sheets_sample_header_osg_tools_quick_links",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design/uploads/02 Google Sheets - Sample Header.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "uploads_02_google_sheets_sample_header_branded_sheet_header",
+      "target": "uploads_02_google_sheets_sample_header_academic_year_2024_2025",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design/uploads/02 Google Sheets - Sample Header.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "uploads_02_google_sheets_sample_header_branded_sheet_header",
+      "target": "uploads_02_google_sheets_sample_header_falcon_symbol",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "design/uploads/02 Google Sheets - Sample Header.png",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

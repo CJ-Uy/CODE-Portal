@@ -1,0 +1,19 @@
+{
+  "nodes": [
+    {
+      "id": "screens_02_v_blank_light_capture",
+      "label": "Blank Light Page Capture",
+      "file_type": "image",
+      "source_file": "design/screens/02-v.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [],
+  "hyperedges": [],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

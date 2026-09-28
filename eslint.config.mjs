@@ -16,6 +16,7 @@ const eslintConfig = defineConfig([
 		".remember/**",
 		"design/**",
 		"graphify-out/**",
+		".local/**",
 	]),
 ]);
 

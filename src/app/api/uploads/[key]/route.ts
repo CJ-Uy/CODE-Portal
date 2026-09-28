@@ -1,10 +1,11 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { getRepositories } from "@/db";
 import { getDb } from "@/db/client";
 import { crsEvents } from "@/db/schema";
 import { getActor } from "@/server/auth/actor";
 import { getAppConfig } from "@/server/env";
 import { assertSameOrigin } from "@/server/http/origin";
+import { proxySharedApiRequest } from "@/server/shared-api";
 import { createUploadHandlers } from "@/server/uploads";
 import { getStorageAdapter } from "@/storage";
 
@@ -31,6 +32,10 @@ async function handleObject(request: Request, context: UploadRouteContext) {
 			return Response.json({ error: "Cross-origin request rejected." }, { status: 403 });
 		}
 	}
+	if (config.APP_ENV === "shared") {
+		return proxySharedApiRequest(request, `/internal/uploads/${encodeURIComponent(decodedKey)}`);
+	}
+
 	return (await createHandlers()).object(request, decodedKey);
 }
 
@@ -42,17 +47,13 @@ async function createHandlers() {
 			const [event] = await getDb()
 				.select()
 				.from(crsEvents)
-				.where(eq(crsEvents.id, eventId))
+				.where(and(eq(crsEvents.id, eventId), isNull(crsEvents.deletedAt)))
 				.limit(1);
-			return event?.status === "approved";
+			return Boolean(event);
 		},
 		canEditLink: async (actor, linkId) => {
 			const { links } = await getRepositories();
-			try {
-				return Boolean(await links.getById(actor, linkId));
-			} catch {
-				return false;
-			}
+			return links.canEditLink(actor, linkId);
 		},
 	});
 }

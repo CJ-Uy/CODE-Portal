@@ -1,13 +1,13 @@
 import { asc, eq } from "drizzle-orm";
-import type { InferSelectModel } from "drizzle-orm";
+import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
 import { navPins } from "@/db/schema";
 import { createId } from "@/lib/ids";
 import type { Actor } from "@/server/auth/permissions";
 import { can } from "@/server/auth/permissions";
-import type { getDb } from "../client";
 import type { AuditRepository } from "./audit";
 
 export type NavPin = InferSelectModel<typeof navPins>;
+type NavPinInsert = InferInsertModel<typeof navPins>;
 
 export type NavPinInput = {
 	label: string;
@@ -16,7 +16,18 @@ export type NavPinInput = {
 	position: number;
 };
 
-export type NavPinDb = ReturnType<typeof getDb>;
+export type NavPinDb = {
+	select(): {
+		from(table: typeof navPins): {
+			orderBy(column: unknown): Promise<NavPin[]> | NavPin[];
+		};
+	};
+	insert(table: typeof navPins): { values(value: NavPinInsert): { returning(): Promise<NavPin[]> | NavPin[] } };
+	update(table: typeof navPins): {
+		set(value: Partial<NavPinInsert>): { where(condition: unknown): { returning(): Promise<NavPin[]> | NavPin[] } };
+	};
+	delete(table: typeof navPins): { where(condition: unknown): Promise<unknown> | { then: Promise<unknown>["then"] } };
+};
 
 export type NavPinsRepository = {
 	list(actor: Actor): Promise<NavPin[]>;
@@ -83,18 +94,5 @@ export function createNavPinsRepository(db: NavPinDb, audit: AuditRepository): N
 				category: "member",
 			});
 		},
-	};
-}
-
-export function createUnavailableNavPinsRepository(): NavPinsRepository {
-	const unavailable = async () => {
-		throw new Error("Nav pins are unavailable in shared mode.");
-	};
-	return {
-		list: unavailable,
-		listVisible: async () => [],
-		create: unavailable,
-		update: unavailable,
-		remove: unavailable,
 	};
 }

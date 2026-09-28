@@ -10,4 +10,8 @@ declare module "next-auth" {
 			status: MemberStatus;
 		} & DefaultSession["user"];
 	}
+
+	interface User {
+		status?: MemberStatus;
+	}
 }

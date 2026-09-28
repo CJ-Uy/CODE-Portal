@@ -1,11 +1,10 @@
-import { eq, like, or } from "drizzle-orm";
+import { and, eq, like, or } from "drizzle-orm";
 import type { InferInsertModel } from "drizzle-orm";
 import { createId } from "@/lib/ids";
 import { members } from "@/db/schema";
 import type { Actor } from "@/server/auth/permissions";
 import { can } from "@/server/auth/permissions";
-import type { CreateMemberInput, Member } from "../types";
-import type { UpdateMemberProfileInput } from "../types";
+import type { CreateMemberInput, Member, UpdateMemberProfileInput } from "../types";
 import type { AuditRepository } from "./audit";
 
 type MemberInsert = InferInsertModel<typeof members>;
@@ -36,33 +35,45 @@ export type MemberDb = {
 
 export type MembersRepository = {
 	list(actor: Actor, input?: { limit?: number }): Promise<Member[]>;
-	search(actor: Actor, query: string): Promise<Member[]>;
+	/**
+	 * Active members only by default. Pass includeInactive to also match pending and
+	 * inactive rows, which the roles page needs: someone can be granted access before
+	 * they are activated, and excluding them made them impossible to find at all.
+	 */
+	search(actor: Actor, query: string, options?: { includeInactive?: boolean }): Promise<Member[]>;
 	getById(actor: Actor, id: string): Promise<Member | null>;
 	create(actor: Actor, input: CreateMemberInput): Promise<Member>;
 	updateProfile(actor: Actor, id: string, input: UpdateMemberProfileInput): Promise<Member>;
-	updateStatus(actor: Actor, id: string, status: Member["status"]): Promise<Member>;
 	delete(actor: Actor, id: string): Promise<void>;
 };
 
-export function createMembersRepository(db: MemberDb, audit?: AuditRepository): MembersRepository {
+export function createMembersRepository(db: MemberDb, audit: AuditRepository): MembersRepository {
 	return {
 		async list(actor, input) {
 			if (!can(actor, "member:manage")) {
 				throw new Error("Not authorized to list members.");
 			}
-			return db.select().from(members).orderBy(members.createdAt).limit(Math.min(input?.limit ?? 25, 1000));
+			return db.select().from(members).orderBy(members.createdAt).limit(Math.min(input?.limit ?? 25, 50));
 		},
-		async search(actor, query) {
+		async search(actor, query, options) {
+			// Roles page authorizes on its own permission; member management also allowed.
 			if (!can(actor, "role:assign") && !can(actor, "member:manage")) {
 				throw new Error("Not authorized to search members.");
 			}
 			const q = query.trim().toLowerCase();
 			if (q.length < 2) return [];
 			const pattern = `%${q}%`;
+			const matchesName = or(
+				like(members.name, pattern),
+				like(members.fullName, pattern),
+				like(members.nickname, pattern),
+				like(members.email, pattern),
+			);
+			// SQLite LIKE is case-insensitive for ASCII; capped at 20.
 			return db
 				.select()
 				.from(members)
-				.where(or(like(members.name, pattern), like(members.fullName, pattern), like(members.email, pattern)))
+				.where(options?.includeInactive ? matchesName : and(eq(members.status, "active"), matchesName))
 				.limit(20);
 		},
 		async getById(actor, id) {
@@ -79,23 +90,33 @@ export function createMembersRepository(db: MemberDb, audit?: AuditRepository): 
 			const email = input.email.trim().toLowerCase();
 			const [existing] = await db.select().from(members).where(eq(members.email, email)).limit(1);
 			if (existing) return existing;
-			const [member] = await db.insert(members).values({ id: createId("mem"), email, name: input.name ?? null, status: "pending" }).returning();
-			await audit?.record(actor, { action: "member:invite", targetType: "member", targetId: member.id, category: "member" });
+			const [member] = await db.insert(members).values({ id: createId("mem"), email, name: input.name ?? null, status: "inactive" }).returning();
+			await audit.record(actor, {
+				action: "member:create",
+				targetType: "member",
+				targetId: member.id,
+				category: "member",
+			});
 			return member;
 		},
 		async updateProfile(actor, id, input) {
 			if (actor.memberId !== id && !can(actor, "member:manage")) {
 				throw new Error("Not authorized to update this member.");
 			}
-			const [member] = await db.update(members).set({ ...input, updatedAt: new Date() }).where(eq(members.id, id)).returning();
-			if (!member) throw new Error("Member not found.");
-			return member;
-		},
-		async updateStatus(actor, id, status) {
-			if (!can(actor, "member:manage")) throw new Error("Not authorized to update member status.");
-			const [member] = await db.update(members).set({ status, updatedAt: new Date() }).where(eq(members.id, id)).returning();
-			if (!member) throw new Error("Member not found.");
-			await audit?.record(actor, { action: `member:${status}`, targetType: "member", targetId: member.id, category: "member" });
+			const [member] = await db
+				.update(members)
+				.set({ ...input, updatedAt: new Date() })
+				.where(eq(members.id, id))
+				.returning();
+			if (!member) {
+				throw new Error("Member not found.");
+			}
+			await audit.record(actor, {
+				action: "member:profile_update",
+				targetType: "member",
+				targetId: member.id,
+				category: "member",
+			});
 			return member;
 		},
 		async delete(actor, id) {
@@ -106,7 +127,7 @@ export function createMembersRepository(db: MemberDb, audit?: AuditRepository): 
 				throw new Error("You cannot delete your own member record.");
 			}
 			await db.delete(members).where(eq(members.id, id));
-			await audit?.record(actor, {
+			await audit.record(actor, {
 				action: "member:delete",
 				targetType: "member",
 				targetId: id,

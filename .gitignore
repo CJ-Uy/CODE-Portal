@@ -60,3 +60,7 @@ drizzle/local.db
 !.dev.vars.example
 
 /.claude
+test-results/
+/output/
+/.playwright-mcp
+/.pnpm-store

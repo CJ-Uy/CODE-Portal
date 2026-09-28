@@ -1,0 +1,19 @@
+{
+  "nodes": [
+    {
+      "id": "screens_04_land_blank_light_surface",
+      "label": "Blank Light Surface",
+      "file_type": "image",
+      "source_file": "design/screens/04-land.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [],
+  "hyperedges": [],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

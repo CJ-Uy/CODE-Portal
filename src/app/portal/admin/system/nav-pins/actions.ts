@@ -67,11 +67,11 @@ export async function saveNavPinsAction(formData: FormData) {
 	revalidatePath("/portal");
 }
 
-export async function deleteNavPinAction(formData: FormData) {
+export async function deleteNavPinAction(id: string) {
 	const actor = await requireActor();
-	const id = z.string().min(1).parse(formData.get("id"));
+	const pinId = z.string().min(1).parse(id);
 	const repositories = await getRepositories();
-	await repositories.navPins.remove(actor, id);
+	await repositories.navPins.remove(actor, pinId);
 	revalidatePath("/portal/admin/system/nav-pins");
 	revalidatePath("/portal");
 }
