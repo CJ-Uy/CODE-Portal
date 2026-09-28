@@ -23,3 +23,10 @@
 - Human comment, verbatim: "A · Separate event rows (recommended)".
 - Reference: `/design-lab/links-calendar/a#calendar` in the `links-calendar-prototypes` worktree.
 - Next gate: review the implemented calendar slice before a beta deployment.
+
+## 2026-09-28, Human Gate 4
+
+- Status: approved.
+- Decision: calendar implementation slice approved for beta integration.
+- Human comment, verbatim: "Approve calendar slice and prepare beta integration (Recommended)".
+- Evidence: `slices/01-time-sections.md`, implementation commit `1da5ac3`.

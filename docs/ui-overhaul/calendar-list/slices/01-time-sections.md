@@ -1,6 +1,6 @@
 # Slice: Calendar time sections
 
-Status: implemented; Human Gate 4 pending
+Status: approved, Human Gate 4
 
 ## Evidence
 
@@ -35,7 +35,7 @@ Status: implemented; Human Gate 4 pending
 
 ## Human Gate 4
 
-- Decision: pending.
-- Approved by:
-- Date:
-- Comments:
+- Decision: approved.
+- Approved by: user.
+- Date: 2026-09-28.
+- Comments, verbatim: "Approve calendar slice and prepare beta integration (Recommended)".
