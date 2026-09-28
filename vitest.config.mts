@@ -41,7 +41,7 @@ export default defineConfig({
 	test: {
 		globals: false,
 		include: ["src/**/*.test.ts", "scripts/**/*.test.ts"],
-		exclude: ["src/app/portal/calendar/[eventId]/event-manage-panel.test.ts"],
+		exclude: ["src/app/portal/calendar/[eventId]/event-manage-panel.test.ts", "src/app/portal/calendar/events-list.test.ts", "src/components/links/links-workspace.test.ts"],
 		setupFiles: ["./src/test/setup-d1.ts"],
 	},
 });

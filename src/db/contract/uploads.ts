@@ -10,7 +10,7 @@ export const uploadsContract = {
 		}),
 		output: z.object({ key: z.string(), url: z.string().nullable() }),
 		auth: "member",
-		sharedDev: "allow",
+		sharedDev: "deny",
 	}),
 	get: operation({
 		input: z.object({ key: z.string().min(1) }),

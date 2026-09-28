@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dailyTrendSeries, hourlyTrendSeries, normalizeDateRange, presetDateRange, summarizeTrend, trendSeries } from "./stats-utils";
+import { dailyTrendSeries, formatStatsPoint, hourlyTrendSeries, normalizeDateRange, presetDateRange, summarizeTrend, todayInTimeZone, trendSeries } from "./stats-utils";
 
 const series = [
 	{ date: "2026-06-17", count: 3 },
@@ -55,5 +55,24 @@ describe("link stats utilities", () => {
 		expect(hourly[9]).toEqual({ date: "2026-06-24T09:00", count: 2 });
 		expect(hourly[10]).toEqual({ date: "2026-06-24T10:00", count: 0 });
 		expect(hourly[11]).toEqual({ date: "2026-06-24T11:00", count: 5 });
+	});
+
+	it("uses the selected timezone for today's date", () => {
+		const instant = new Date("2026-06-24T16:30:00Z");
+		expect(todayInTimeZone("Asia/Manila", instant)).toBe("2026-06-25");
+		expect(todayInTimeZone("America/Los_Angeles", instant)).toBe("2026-06-24");
+	});
+
+	it("keeps repeated DST hours distinct and labels their offsets", () => {
+		const repeated = hourlyTrendSeries([
+			{ hour: "2026-11-01T01:00-04:00", count: 2 },
+			{ hour: "2026-11-01T01:00-05:00", count: 3 },
+		], { start: "2026-11-01", end: "2026-11-01" });
+		expect(repeated).toEqual([
+			{ date: "2026-11-01T01:00-04:00", count: 2 },
+			{ date: "2026-11-01T01:00-05:00", count: 3 },
+		]);
+		expect(formatStatsPoint(repeated[0].date)).toBe("Nov 1, 1 AM UTC-04:00");
+		expect(formatStatsPoint(repeated[1].date)).toBe("Nov 1, 1 AM UTC-05:00");
 	});
 });

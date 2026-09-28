@@ -1,7 +1,7 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "code-nest-beta",
-	"account_id": "8527ec1369d46f55304a6f59ab5356e4",
+	"account_id": "83376df5e0bae067afa197b07430168d",
 	"main": ".open-next/worker.js",
 	"workers_dev": true,
 	"routes": [
@@ -52,7 +52,7 @@
 		{
 			"binding": "DB",
 			"database_name": "code-nest-beta-db",
-			"database_id": "bee2f9e5-b1dd-4408-bf07-bd132ae063a6",
+			"database_id": "ffe974a7-4b89-4ac7-b07e-ad62f4530ca2",
 			"migrations_dir": "drizzle/migrations"
 		}
 	],

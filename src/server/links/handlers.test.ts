@@ -100,4 +100,35 @@ describe("links handlers", () => {
 		expect(res.status).toBe(204);
 		expect(deps.repo.remove).toHaveBeenCalledWith(owner, "lnk_1");
 	});
+
+	it("validates and forwards analytics filters", async () => {
+		const deps = depsWith({});
+		const handlers = createLinksHandlers(deps);
+		const res = await handlers.stats(
+			new Request("https://app/api/links/lnk_1/stats?from=2026-06-01&to=2026-06-30&timezone=Asia%2FManila&granularity=week&source=qr&device=mobile"),
+			"lnk_1",
+		);
+		expect(res.status).toBe(200);
+		expect(deps.repo.getStats).toHaveBeenCalledWith(owner, "lnk_1", {
+			from: "2026-06-01",
+			to: "2026-06-30",
+			timezone: "Asia/Manila",
+			granularity: "week",
+			source: "qr",
+			device: "mobile",
+		});
+	});
+
+	it("returns the first actionable analytics validation issue", async () => {
+		const deps = depsWith({});
+		const handlers = createLinksHandlers(deps);
+		const res = await handlers.stats(
+			new Request("https://app/api/links/lnk_1/stats?timezone=Mars%2FOlympus"),
+			"lnk_1",
+		);
+
+		expect(res.status).toBe(400);
+		expect(await res.json()).toEqual({ error: "Timezone must be a valid IANA timezone." });
+		expect(deps.repo.getStats).not.toHaveBeenCalled();
+	});
 });

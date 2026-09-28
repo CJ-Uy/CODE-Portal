@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, MouseEvent, useMemo, useState, useSyncExternalStore } from "react";
+import { type FormEvent, type KeyboardEvent, type MouseEvent, type RefObject, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { ArrowDown, ArrowUp, CalendarDays, ChevronsUpDown, Copy, ExternalLink, ImageUp, Info, Plus, QrCode, RefreshCw, Save, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
 import type { LinkListItem, LinkStats, QrStyle } from "@/db/repositories/links";
@@ -9,12 +9,12 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { TabButton, TabsList } from "@/components/ui/tabs";
+import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { ClicksOverTime, DonutChart, formatBucket } from "./charts";
 import { LinkQrCustomizer } from "./link-qr-customizer";
-import { hourlyTrendSeries, normalizeDateRange, presetDateRange, summarizeTrend, trendSeries, type DateRangePreset, type TrendGranularity } from "./stats-utils";
+import { formatStatsPoint, shiftIsoDay, todayInTimeZone } from "./stats-utils";
 import { shortLinkUrl } from "./urls";
 
 type LinkView = Omit<LinkListItem, "createdAt" | "updatedAt"> & { createdAt: Date | string; updatedAt: Date | string };
@@ -22,6 +22,7 @@ type StatsView = Omit<LinkStats, "link"> & { link: LinkView };
 type ViewMode = "all" | "mine";
 type SortKey = "title" | "slug" | "clicks" | "owner" | "created";
 type SortState = { key: SortKey; dir: "asc" | "desc" };
+type StatsQuery = LinkStats["query"];
 
 type LinksWorkspaceProps = {
 	initialLinks: LinkView[];
@@ -54,6 +55,12 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 	const [confirmDeleteId, setConfirmDeleteId] = useState("");
 	const [stats, setStats] = useState<StatsView | null>(null);
 	const [statsLoading, setStatsLoading] = useState(false);
+	const [statsError, setStatsError] = useState("");
+	const statsRequestId = useRef(0);
+	const createTriggerRef = useRef<HTMLButtonElement>(null);
+	const dialogTriggerRef = useRef<HTMLElement | null>(null);
+	const [hasMore, setHasMore] = useState(initialLinks.length === 50);
+	const [linksLoading, setLinksLoading] = useState(false);
 	const [form, setForm] = useState({ slug: "", destinationUrl: "", title: "", tags: [] as string[] });
 
 	const baseLabel = origin ? origin.replace(/^https?:\/\//, "") : "your-code-site";
@@ -88,6 +95,8 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 			}
 		});
 	}, [filtered, sort]);
+	const hasFilters = view === "mine" || Boolean(search.trim()) || selectedTags.length > 0;
+	const emptyMessage = links.length ? "No links match these filters." : "No short links yet. Create your first one to get started.";
 
 	function toggleSort(key: SortKey) {
 		setSort((current) =>
@@ -98,14 +107,40 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 	}
 
 	async function refresh() {
-		const response = await fetch("/api/links", { credentials: "same-origin" });
+		const response = await fetch("/api/links?limit=50", { credentials: "same-origin" });
 		const body = await response.json() as { links?: LinkView[]; error?: string };
 		if (!response.ok || !body.links) {
 			setStatus(body.error ?? "Could not refresh links.");
 			return;
 		}
 		setLinks(body.links);
+		setHasMore(body.links.length === 50);
 		setStatus("Links refreshed.");
+	}
+
+	async function loadMore() {
+		setLinksLoading(true);
+		let response: Response;
+		let body: { links?: LinkView[]; error?: string };
+		try {
+			response = await fetch(`/api/links?limit=50&offset=${links.length}`, { credentials: "same-origin" });
+			body = await response.json() as { links?: LinkView[]; error?: string };
+		} catch {
+			setLinksLoading(false);
+			setStatus("Could not reach the links service.");
+			return;
+		}
+		setLinksLoading(false);
+		if (!response.ok || !body.links) {
+			setStatus(body.error ?? "Could not load older links.");
+			return;
+		}
+		setLinks((current) => {
+			const known = new Set(current.map((link) => link.id));
+			return [...current, ...body.links!.filter((link) => !known.has(link.id))];
+		});
+		setHasMore(body.links.length === 50);
+		setStatus(body.links.length ? "Older links loaded." : "All links are shown.");
 	}
 
 	async function createLink(event: FormEvent<HTMLFormElement>) {
@@ -157,25 +192,54 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 		setStatus("Link deleted.");
 	}
 
-	async function openDialog(id: string) {
-		setActiveId(id);
-		setStats(null);
+	async function loadStats(id: string, query?: StatsQuery) {
+		const requestId = ++statsRequestId.current;
 		setStatsLoading(true);
-		const response = await fetch(`/api/links/${encodeURIComponent(id)}/stats`, { credentials: "same-origin" });
-		if (!response.ok) {
-			setStatsLoading(false);
-			setStatus("Could not load stats.");
+		setStatsError("");
+		const params = query ? new URLSearchParams(Object.entries(query)) : null;
+		let response: Response;
+		let body: StatsView | { error?: string } | null;
+		try {
+			response = await fetch(`/api/links/${encodeURIComponent(id)}/stats${params ? `?${params}` : ""}`, { credentials: "same-origin" });
+			body = await response.json().catch(() => null) as StatsView | { error?: string } | null;
+		} catch {
+			if (requestId === statsRequestId.current) {
+				setStatsLoading(false);
+				setStatsError("Could not reach the statistics service.");
+			}
 			return;
 		}
-		setStats(await response.json() as StatsView);
+		if (requestId !== statsRequestId.current) return;
 		setStatsLoading(false);
+		if (!response.ok || !body || typeof body !== "object" || !("link" in body)) {
+			const message = body && typeof body === "object" && "error" in body ? body.error : undefined;
+			setStatsError(message ?? "Could not load statistics.");
+			return;
+		}
+		setStats(body);
+	}
+
+	function openDialog(id: string) {
+		const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+		dialogTriggerRef.current = activeElement?.closest<HTMLElement>("button,a,[tabindex]") ?? createTriggerRef.current;
+		setActiveId(id);
+		setStats(null);
+		void loadStats(id);
+	}
+
+	function closeDialog() {
+		statsRequestId.current += 1;
+		setActiveId("");
+		setStatsLoading(false);
+		setStatsError("");
 	}
 
 	function copy(event: MouseEvent, link: LinkView) {
 		event.stopPropagation();
 		if (!origin) return;
-		navigator.clipboard.writeText(shortLinkUrl(origin, link.slug));
-		setStatus("Link copied.");
+		void navigator.clipboard.writeText(shortLinkUrl(origin, link.slug))
+			.then(() => setStatus("Link copied."))
+			.catch(() => setStatus("Could not copy the link. Try again."));
 	}
 
 	function canEdit(link: LinkView): boolean {
@@ -192,11 +256,12 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 				</div>
 				<div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
 					{canModerate ? <Badge variant="info">Moderator</Badge> : null}
-					<Button variant="outline" size="sm" onClick={refresh}>
+					<Button variant="outline" className="min-h-11" onClick={refresh}>
 						<RefreshCw />
 						Refresh
 					</Button>
 					<CreateLinkDialog
+						triggerRef={createTriggerRef}
 						open={createOpen}
 						onOpenChange={setCreateOpen}
 						form={form}
@@ -217,14 +282,13 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 					<p><strong className="text-foreground">Short link</strong> - a tidy CODE web address that forwards to a longer one. Share <UrlToken>{`${baseLabel}/welcome`}</UrlToken> instead of a giant URL.</p>
 					<p><strong className="text-foreground">Slug</strong> - the custom ending you choose, the part after the slash. In <UrlToken>{`${baseLabel}/welcome`}</UrlToken> the slug is <strong className="text-foreground">welcome</strong>. Use letters, numbers, and dashes.</p>
 					<p><strong className="text-foreground">Destination</strong> - where people actually land when they open the link.</p>
-					<p><strong className="text-foreground">Clicks</strong> - every time someone opens your link we count it, so you can see what&rsquo;s getting attention. Open any link for a day-by-day breakdown and its QR code.</p>
 				</div>
 			</details>
 
 			<div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-3">
 				<div className="flex rounded-md border bg-background p-1">
 					{(["all", "mine"] as ViewMode[]).map((mode) => (
-						<button key={mode} type="button" onClick={() => setView(mode)} className={view === mode ? "rounded bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground" : "px-3 py-1.5 text-xs font-semibold text-muted-foreground"}>
+						<button key={mode} type="button" aria-pressed={view === mode} onClick={() => setView(mode)} className={cn("min-h-11 rounded px-3 text-xs font-semibold", view === mode ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>
 							{mode === "mine" ? "My links" : "All links"}
 						</button>
 					))}
@@ -232,24 +296,24 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 				<label className="relative min-w-56 flex-1">
 					<span className="sr-only">Search links</span>
 					<Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-					<Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by title, slug, or destination" className="pl-9" />
+					<Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by title, slug, or destination" className="min-h-11 pl-9" />
 				</label>
 				{tagOptions.length ? (
 					<div className="flex flex-wrap items-center gap-1">
 						<span className="mr-1 text-xs text-muted-foreground">Tags:</span>
 						{tagOptions.map((tag) => (
-							<button key={tag} type="button" onClick={() => setSelectedTags((current) => current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag])} className={selectedTags.includes(tag) ? "rounded-md bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground" : "rounded-md bg-secondary px-2 py-1 text-xs font-semibold text-secondary-foreground"}>
+							<button key={tag} type="button" aria-pressed={selectedTags.includes(tag)} onClick={() => setSelectedTags((current) => current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag])} className={cn("min-h-11 rounded-md px-3 text-xs font-semibold", selectedTags.includes(tag) ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground")}>
 								{tag}
 							</button>
 						))}
-						{selectedTags.length ? <button type="button" onClick={() => setSelectedTags([])} className="px-1 text-xs text-muted-foreground underline">clear</button> : null}
+						{selectedTags.length ? <button type="button" onClick={() => setSelectedTags([])} className="min-h-11 px-2 text-xs text-muted-foreground underline">Clear tags</button> : null}
 					</div>
 				) : null}
 			</div>
 
-			{status ? <p className="text-sm text-muted-foreground">{status}</p> : null}
+			{status ? <p role="status" aria-live="polite" className="text-sm text-muted-foreground">{status}</p> : null}
 
-			<div className="rounded-lg border bg-card">
+			<div className="hidden rounded-lg border bg-card md:block">
 				<Table>
 					<TableHeader>
 						<TableRow>
@@ -264,7 +328,15 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 					</TableHeader>
 					<TableBody>
 						{sorted.map((link) => (
-							<TableRow key={link.id} className="cursor-pointer" onClick={() => openDialog(link.id)}>
+							<TableRow
+								key={link.id}
+								className="cursor-pointer"
+								onClick={(event) => {
+									const target = event.target as HTMLElement;
+									if (target.closest("a,button,input,select,textarea,label,summary,[role='button']")) return;
+									openDialog(link.id);
+								}}
+							>
 								{/* One bounded box around both lines. truncate needs a bounded box, and a
 							    table cell in auto layout grows to fit its widest content, so without this
 							    the destination URL set the column width and pushed the row into a
@@ -273,7 +345,7 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 							    the hover title covers. */}
 							<TableCell className="min-w-40">
 								<div className="max-w-56">
-									<p className="truncate font-medium" title={link.title}>{link.title}</p>
+									<button type="button" className="block min-h-11 max-w-full truncate rounded text-left font-medium hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" title={link.title} onClick={(event) => { event.stopPropagation(); openDialog(link.id); }}>{link.title}</button>
 									<p className="truncate text-xs text-muted-foreground" title={link.destinationUrl}>
 										to {link.destinationUrl}
 									</p>
@@ -286,16 +358,42 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 								<TableCell className="whitespace-nowrap text-muted-foreground">{new Date(link.createdAt).toLocaleDateString()}</TableCell>
 								<TableCell>
 									<div className="flex justify-end gap-1">
-										<Button variant="outline" size="icon" aria-label="Copy link" onClick={(event) => copy(event, link)}><Copy /></Button>
-										<Button variant="outline" size="icon" aria-label="View details and QR code" onClick={(event) => { event.stopPropagation(); void openDialog(link.id); }}><QrCode /></Button>
-										{canEdit(link) ? <Button variant="ghost" size="icon" aria-label="Delete link" onClick={(event) => { event.stopPropagation(); setConfirmDeleteId(link.id); }}><Trash2 /></Button> : null}
+										<Button variant="outline" size="icon" className="size-11" aria-label={`Copy ${link.title} short link`} onClick={(event) => copy(event, link)}><Copy /></Button>
+										<Button variant="outline" size="icon" className="size-11" aria-label={`View ${link.title} details and QR code`} onClick={(event) => { event.stopPropagation(); openDialog(link.id); }}><QrCode /></Button>
+										{canEdit(link) ? <Button variant="ghost" size="icon" className="size-11" aria-label={`Delete ${link.title}`} onClick={(event) => { event.stopPropagation(); setConfirmDeleteId(link.id); }}><Trash2 /></Button> : null}
 									</div>
 								</TableCell>
 							</TableRow>
 						))}
-						{!sorted.length ? <TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground">{links.length ? "No links match these filters." : "No short links yet. Create your first one to get started."}</TableCell></TableRow> : null}
 					</TableBody>
 				</Table>
+			</div>
+			<div className="grid gap-2 md:hidden">
+				{sorted.map((link) => (
+					<article key={link.id} className="min-w-0 rounded-lg border bg-card p-4">
+						<div className="flex items-start justify-between gap-3">
+							<div className="min-w-0 flex-1">
+								<button type="button" className="block max-w-full text-left font-semibold hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => openDialog(link.id)}>{link.title}</button>
+								<p className="mt-0.5 break-all text-sm font-semibold text-primary">{baseLabel}/{link.slug}</p>
+							</div>
+							<span className="shrink-0 text-xs text-muted-foreground tabular-nums">{link.clickCount} clicks</span>
+						</div>
+						<p className="mt-2 truncate text-xs text-muted-foreground" title={link.destinationUrl}>To {link.destinationUrl}</p>
+						<div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+							<span className="text-xs text-muted-foreground">{link.owner?.name ?? "CODE"}</span>
+							<div className="flex gap-2">
+								<Button variant="outline" size="sm" className="min-h-11" aria-label={`Copy ${link.title} short link`} onClick={(event) => copy(event, link)}><Copy /> Copy</Button>
+								<Button variant="outline" size="sm" className="min-h-11" aria-label={`View ${link.title} details and QR code`} onClick={() => openDialog(link.id)}><QrCode /> QR</Button>
+								{canEdit(link) ? <Button variant="ghost" size="icon" className="size-11" aria-label={`Delete ${link.title}`} onClick={() => setConfirmDeleteId(link.id)}><Trash2 /></Button> : null}
+							</div>
+						</div>
+					</article>
+				))}
+			</div>
+			{!sorted.length ? <div className="grid justify-items-center gap-3 rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground"><p>{emptyMessage}</p>{hasFilters ? <Button type="button" variant="outline" size="sm" className="min-h-11" onClick={() => { setView("all"); setSearch(""); setSelectedTags([]); }}>Clear filters</Button> : null}</div> : null}
+			<div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+				<p>{hasFilters ? `Showing ${sorted.length} of ${links.length} loaded links${hasMore ? ". Load older links to search the full history." : "."}` : hasMore ? `Showing the newest ${links.length} links. Load older links to search the full history.` : `Showing all ${links.length} ${links.length === 1 ? "link" : "links"}.`}</p>
+				{hasMore ? <Button type="button" variant="outline" className="min-h-11" onClick={() => void loadMore()} disabled={linksLoading}>{linksLoading ? <RefreshCw className="animate-spin motion-reduce:animate-none" /> : null}{linksLoading ? "Loading" : "Load older links"}</Button> : null}
 			</div>
 
 			<DialogPrimitive.Root open={Boolean(confirmDeleteId)} onOpenChange={(open) => !open && setConfirmDeleteId("")}>
@@ -312,10 +410,10 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 						</DialogPrimitive.Description>
 						<div className="mt-5 flex justify-end gap-2">
 							<DialogPrimitive.Close asChild>
-								<Button variant="outline">Cancel</Button>
+								<Button variant="outline" className="min-h-11">Cancel</Button>
 							</DialogPrimitive.Close>
 							<Button
-								className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+								className="min-h-11 bg-destructive text-destructive-foreground hover:bg-destructive/90"
 								onClick={() => void removeLink(confirmDeleteId)}
 							>
 								<Trash2 /> Delete link
@@ -325,12 +423,19 @@ export function LinksWorkspace({ initialLinks, actorMemberId, canModerate }: Lin
 				</DialogPrimitive.Portal>
 			</DialogPrimitive.Root>
 
-			<DialogPrimitive.Root open={Boolean(active)} onOpenChange={(open) => !open && setActiveId("")}>
+			<DialogPrimitive.Root open={Boolean(active)} onOpenChange={(open) => !open && closeDialog()}>
 				<DialogPrimitive.Portal>
 					<DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/45" />
-					<DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[min(100%-1.5rem,1080px)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border bg-background p-5 shadow-lg">
-						{active ? <LinkDialog link={active} url={activeUrl} baseLabel={baseLabel} stats={stats} loading={statsLoading} editable={canEdit(active)} onSave={(patch) => updateLink(active.id, patch)} onUpload={(file) => uploadPreview(active.id, file, updateLink, setStatus)} /> : null}
-						<DialogPrimitive.Close className="absolute right-4 top-4 rounded-md p-2 text-muted-foreground hover:bg-secondary hover:text-foreground"><X className="size-4" /><span className="sr-only">Close</span></DialogPrimitive.Close>
+					<DialogPrimitive.Content
+						className="fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[min(100%-1.5rem,1080px)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border bg-background p-5 shadow-lg"
+						onCloseAutoFocus={(event) => {
+							event.preventDefault();
+							const target = dialogTriggerRef.current?.isConnected ? dialogTriggerRef.current : createTriggerRef.current;
+							target?.focus();
+						}}
+					>
+						{active ? <LinkDialog link={active} url={activeUrl} baseLabel={baseLabel} stats={stats} loading={statsLoading} statsError={statsError} editable={canEdit(active)} onLoadStats={(query) => void loadStats(active.id, query)} onSave={(patch) => updateLink(active.id, patch)} onUpload={(file) => uploadPreview(active.id, file, updateLink, setStatus)} /> : null}
+						<DialogPrimitive.Close className="absolute right-3 top-3 grid size-11 place-items-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"><X className="size-4" /><span className="sr-only">Close</span></DialogPrimitive.Close>
 					</DialogPrimitive.Content>
 				</DialogPrimitive.Portal>
 			</DialogPrimitive.Root>
@@ -346,8 +451,8 @@ function SortHeader({ label, column, sort, onSort, align = "left" }: { label: st
 	const activeSort = sort.key === column;
 	const Icon = !activeSort ? ChevronsUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown;
 	return (
-		<TableHead className={align === "right" ? "text-right" : undefined}>
-			<button type="button" onClick={() => onSort(column)} className={cn("inline-flex items-center gap-1 font-medium transition-colors hover:text-foreground", activeSort ? "text-foreground" : "text-muted-foreground", align === "right" && "flex-row-reverse")}>
+		<TableHead aria-sort={activeSort ? (sort.dir === "asc" ? "ascending" : "descending") : "none"} className={align === "right" ? "text-right" : undefined}>
+			<button type="button" onClick={() => onSort(column)} className={cn("inline-flex min-h-11 items-center gap-1 font-medium transition-colors hover:text-foreground", activeSort ? "text-foreground" : "text-muted-foreground", align === "right" && "flex-row-reverse")}>
 				{label}
 				<Icon className={cn("size-3.5", activeSort ? "opacity-100" : "opacity-40")} />
 			</button>
@@ -358,7 +463,7 @@ function SortHeader({ label, column, sort, onSort, align = "left" }: { label: st
 function ShortLinkCell({ origin, baseLabel, slug }: { origin: string; baseLabel: string; slug: string }) {
 	const href = origin ? shortLinkUrl(origin, slug) : `/${slug}`;
 	return (
-		<a href={href} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className="inline-flex max-w-[16rem] items-center gap-1 font-medium text-primary hover:underline">
+		<a href={href} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className="inline-flex min-h-11 max-w-[16rem] items-center gap-1 font-medium text-primary hover:underline">
 			<span className="truncate">{baseLabel}/{slug}</span>
 			<ExternalLink className="size-3.5 shrink-0 opacity-60" />
 		</a>
@@ -375,7 +480,8 @@ function TagList({ tags }: { tags: string[] }) {
 	return <span className="flex flex-wrap gap-1">{tags.map((tag) => <Badge key={tag} variant="secondary">{tag}</Badge>)}</span>;
 }
 
-function CreateLinkDialog({ open, onOpenChange, form, setForm, onSubmit, tagOptions, baseLabel }: {
+function CreateLinkDialog({ triggerRef, open, onOpenChange, form, setForm, onSubmit, tagOptions, baseLabel }: {
+	triggerRef: RefObject<HTMLButtonElement | null>;
 	open: boolean;
 	onOpenChange(open: boolean): void;
 	form: { slug: string; destinationUrl: string; title: string; tags: string[] };
@@ -387,7 +493,7 @@ function CreateLinkDialog({ open, onOpenChange, form, setForm, onSubmit, tagOpti
 	return (
 		<DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
 			<DialogPrimitive.Trigger asChild>
-				<Button size="sm"><Plus />New short link</Button>
+				<Button ref={triggerRef} className="min-h-11"><Plus />New short link</Button>
 			</DialogPrimitive.Trigger>
 			<DialogPrimitive.Portal>
 				<DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/45" />
@@ -396,32 +502,32 @@ function CreateLinkDialog({ open, onOpenChange, form, setForm, onSubmit, tagOpti
 					<DialogPrimitive.Description className="mt-1 text-sm text-muted-foreground">Point a memorable CODE address at any web page.</DialogPrimitive.Description>
 					<form className="mt-4 grid gap-4" onSubmit={onSubmit}>
 						<label className="grid gap-1 text-sm font-medium">
-							Custom ending (slug)
-							<div className="flex items-center rounded-md border border-input focus-within:ring-1 focus-within:ring-ring">
-								<span className="whitespace-nowrap border-r border-input px-2 py-2 text-sm text-muted-foreground">{baseLabel}/</span>
-								<Input value={form.slug} placeholder="welcome" onChange={(event) => setForm({ ...form, slug: event.target.value })} required className="border-0 shadow-none focus-visible:ring-0" />
-							</div>
-							<span className="text-xs font-normal text-muted-foreground">No need to type a slash. Just the custom ending. Your link will be <span className="font-medium text-foreground">{baseLabel}/{form.slug || "your-slug"}</span></span>
-						</label>
-						<label className="grid gap-1 text-sm font-medium">
 							Destination
-							<Input value={form.destinationUrl} placeholder="https://example.com" onChange={(event) => setForm({ ...form, destinationUrl: event.target.value })} required />
+						<Input className="min-h-11" value={form.destinationUrl} placeholder="https://example.com" onChange={(event) => setForm({ ...form, destinationUrl: event.target.value })} required />
 							<span className="text-xs font-normal text-muted-foreground">Where people go when they open the short link.</span>
 						</label>
 						<label className="grid gap-1 text-sm font-medium">
+							Custom ending (slug)
+							<div className="flex items-center rounded-md border border-input focus-within:ring-1 focus-within:ring-ring">
+								<span className="whitespace-nowrap border-r border-input px-2 py-2 text-sm text-muted-foreground">{baseLabel}/</span>
+								<Input value={form.slug} placeholder="welcome" onChange={(event) => setForm({ ...form, slug: event.target.value })} required className="min-h-11 border-0 shadow-none focus-visible:ring-0" />
+							</div>
+							<span className="text-xs font-normal text-muted-foreground">Your link will be <span className="font-medium text-foreground">{baseLabel}/{form.slug || "your-slug"}</span></span>
+						</label>
+						<label className="grid gap-1 text-sm font-medium">
 							Title
-							<Input value={form.title} placeholder="Welcome page" onChange={(event) => setForm({ ...form, title: event.target.value })} required />
+							<Input className="min-h-11" value={form.title} placeholder="Welcome page" onChange={(event) => setForm({ ...form, title: event.target.value })} required />
 							<span className="text-xs font-normal text-muted-foreground">A name so you can recognise this link in the list.</span>
 						</label>
 						<TagInput value={form.tags} suggestions={tagOptions} onChange={(tags) => setForm({ ...form, tags })} hint="Optional labels to group links, e.g. event, social." />
 						<div className="flex justify-end gap-2 pt-2">
 							<DialogPrimitive.Close asChild>
-								<Button type="button" variant="outline">Cancel</Button>
+								<Button type="button" variant="outline" className="min-h-11">Cancel</Button>
 							</DialogPrimitive.Close>
-							<Button type="submit"><Save />Create link</Button>
+							<Button type="submit" className="min-h-11"><Save />Create link</Button>
 						</div>
 					</form>
-					<DialogPrimitive.Close className="absolute right-4 top-4 rounded-md p-2 text-muted-foreground hover:bg-secondary hover:text-foreground"><X className="size-4" /><span className="sr-only">Close</span></DialogPrimitive.Close>
+					<DialogPrimitive.Close className="absolute right-3 top-3 grid size-11 place-items-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"><X className="size-4" /><span className="sr-only">Close</span></DialogPrimitive.Close>
 				</DialogPrimitive.Content>
 			</DialogPrimitive.Portal>
 		</DialogPrimitive.Root>
@@ -439,8 +545,8 @@ function TagInput({ value, suggestions, onChange, hint }: { value: string[]; sug
 	return (
 		<label className="grid gap-1 text-sm font-medium">
 			Tags
-			<div className="flex min-h-10 flex-wrap items-center gap-1 rounded-md border border-input px-2 py-1">
-				{value.map((tag) => <button key={tag} type="button" className="rounded bg-secondary px-2 py-1 text-xs" onClick={() => onChange(value.filter((item) => item !== tag))}>{tag} ×</button>)}
+			<div className="flex min-h-11 flex-wrap items-center gap-1 rounded-md border border-input px-2 py-1">
+				{value.map((tag) => <button key={tag} type="button" className="min-h-11 rounded bg-secondary px-2 text-xs" aria-label={`Remove ${tag} tag`} onClick={() => onChange(value.filter((item) => item !== tag))}>{tag} ×</button>)}
 				<input list="link-tag-options" value={draft} placeholder={value.length ? "" : "Type a tag, press Enter"} onChange={(event) => setDraft(event.target.value)} onBlur={() => add()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === ",") { event.preventDefault(); add(); } }} className="min-w-20 flex-1 bg-transparent text-sm outline-none" />
 				<datalist id="link-tag-options">{suggestions.map((tag) => <option key={tag} value={tag} />)}</datalist>
 			</div>
@@ -449,28 +555,51 @@ function TagInput({ value, suggestions, onChange, hint }: { value: string[]; sug
 	);
 }
 
-function LinkDialog({ link, url, baseLabel, stats, loading, editable, onSave, onUpload }: { link: LinkView; url: string; baseLabel: string; stats: StatsView | null; loading: boolean; editable: boolean; onSave(patch: Partial<LinkView>): void; onUpload(file: File): void }) {
+function LinkDialog({ link, url, baseLabel, stats, loading, statsError, editable, onLoadStats, onSave, onUpload }: { link: LinkView; url: string; baseLabel: string; stats: StatsView | null; loading: boolean; statsError: string; editable: boolean; onLoadStats(query?: StatsQuery): void; onSave(patch: Partial<LinkView>): void; onUpload(file: File): void }) {
 	const [tab, setTab] = useState<"details" | "stats">("details");
+	const [copyStatus, setCopyStatus] = useState("");
+	const tabs = [["details", "Details"], ["stats", "Statistics"]] as const;
+
+	async function copyLink() {
+		try {
+			await navigator.clipboard.writeText(url || `${window.location.origin}/${link.slug}`);
+			setCopyStatus("Link copied.");
+		} catch {
+			setCopyStatus("Could not copy the link. Try again.");
+		}
+	}
+
+	function moveTab(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+		if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+		event.preventDefault();
+		const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+		setTab(tabs[next][0]);
+		event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>("[role='tab']")[next]?.focus();
+	}
+
 	return (
 		<div className="grid gap-4">
 			<div className="grid gap-1 pr-10">
-				<DialogPrimitive.Title className="font-heading text-2xl">{link.title}</DialogPrimitive.Title>
-				<DialogPrimitive.Description className="break-all text-sm text-muted-foreground">
-					<a href={url || `/${link.slug}`} target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">{baseLabel}/{link.slug}</a>
-					{" "}forwards to {link.destinationUrl}
-				</DialogPrimitive.Description>
+				<p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Short link</p>
+				<DialogPrimitive.Title className="break-all font-heading text-2xl text-primary"><a href={url || `/${link.slug}`} target="_blank" rel="noreferrer" className="hover:underline">{baseLabel}/{link.slug}</a></DialogPrimitive.Title>
+				<DialogPrimitive.Description className="text-sm text-muted-foreground">{link.title}</DialogPrimitive.Description>
+				<div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+					<p className="min-w-0 break-all text-xs text-muted-foreground">To {link.destinationUrl}</p>
+					<Button type="button" variant="outline" size="sm" className="min-h-11" onClick={() => void copyLink()}><Copy /> Copy link</Button>
+				</div>
+				{copyStatus ? <p role="status" aria-live="polite" className="text-xs text-muted-foreground">{copyStatus}</p> : null}
 			</div>
 
 			<div role="tablist" aria-label="Link sections" className="flex gap-1 border-b border-border">
-				{([["details", "Details"], ["stats", "Statistics"]] as const).map(([id, label]) => (
-					<button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={cn("-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors", tab === id ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground")}>
+				{tabs.map(([id, label], index) => (
+					<button key={id} id={`${link.id}-${id}-tab`} type="button" role="tab" aria-selected={tab === id} aria-controls={`${link.id}-${id}-panel`} tabIndex={tab === id ? 0 : -1} onClick={() => setTab(id)} onKeyDown={(event) => moveTab(event, index)} className={cn("-mb-px min-h-11 border-b-2 px-4 text-sm font-medium transition-colors", tab === id ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground")}>
 						{label}
 					</button>
 				))}
 			</div>
 
 			{tab === "details" ? (
-				<div className={cn("grid gap-4", editable && "lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)]")}>
+				<div id={`${link.id}-details-panel`} role="tabpanel" aria-labelledby={`${link.id}-details-tab`} tabIndex={0} className={cn("grid gap-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", editable && "lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)]")}>
 					<section className="grid content-start gap-3 rounded-lg border p-4">
 						<h2 className="font-semibold">QR code</h2>
 						<p className="text-sm text-muted-foreground">Print it, project it, or download it. Anyone who scans it lands on your short link.</p>
@@ -479,70 +608,82 @@ function LinkDialog({ link, url, baseLabel, stats, loading, editable, onSave, on
 					{editable ? <EditPanel link={link} onSave={onSave} onUpload={onUpload} /> : null}
 				</div>
 			) : (
-				loading ? <p className="text-sm text-muted-foreground">Loading stats…</p> : <StatsBlock stats={stats} />
+				<div id={`${link.id}-stats-panel`} role="tabpanel" aria-labelledby={`${link.id}-stats-tab`} tabIndex={0} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+					<StatsBlock stats={stats} loading={loading} error={statsError} onLoad={onLoadStats} />
+				</div>
 			)}
 		</div>
 	);
 }
 
-const RANGE_TABS: Array<{ id: DateRangePreset; label: string }> = [
-	{ id: "today", label: "Today" },
-	{ id: "7d", label: "Last 7 days" },
-	{ id: "month", label: "This month" },
-	{ id: "all", label: "All time" },
-];
-
-const GRANULARITY_TABS: Array<{ id: TrendGranularity; label: string }> = [
+const GRANULARITY_TABS: Array<{ id: StatsQuery["granularity"]; label: string }> = [
 	{ id: "hour", label: "Hour" },
 	{ id: "day", label: "Day" },
 	{ id: "week", label: "Week" },
 	{ id: "month", label: "Month" },
 ];
 
-function StatsBlock({ stats }: { stats: StatsView | null }) {
-	if (!stats) return <p className="text-sm text-muted-foreground">Could not load stats.</p>;
-	return <StatsDetails key={stats.link.id} stats={stats} />;
+function StatsBlock({ stats, loading, error, onLoad }: { stats: StatsView | null; loading: boolean; error: string; onLoad(query?: StatsQuery): void }) {
+	if (loading && !stats) return <StatsSkeleton />;
+	if (!stats) {
+		return (
+			<div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
+				<p>{error || "Could not load statistics."}</p>
+				<Button type="button" variant="outline" className="min-h-11" onClick={() => onLoad()}><RefreshCw />Retry</Button>
+			</div>
+		);
+	}
+	return <StatsDetails key={stats.link.id} stats={stats} loading={loading} error={error} onLoad={(query) => onLoad(query)} />;
 }
 
-function StatsDetails({ stats }: { stats: StatsView }) {
-	const nowIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
-	const allRange = useMemo(() => presetDateRange("all", nowIso, stats.series), [nowIso, stats.series]);
-	const [rangeMode, setRangeMode] = useState<DateRangePreset | "custom">("all");
-	const [customStart, setCustomStart] = useState(allRange.start);
-	const [customEnd, setCustomEnd] = useState(allRange.end);
-	const [granularity, setGranularity] = useState<TrendGranularity>("day");
+function StatsSkeleton() {
+	return (
+		<div role="status" aria-label="Loading link statistics" className="grid animate-pulse gap-4 motion-reduce:animate-none">
+			<div className="grid gap-4 rounded-lg border p-4">
+				<div className="h-5 w-40 rounded bg-muted" />
+				<div className="grid grid-cols-2 gap-3 lg:grid-cols-6">{Array.from({ length: 6 }, (_, index) => <div key={index} className="h-16 rounded-lg bg-muted" />)}</div>
+				<div className="h-56 rounded-lg bg-muted" />
+			</div>
+			<div className="h-14 rounded-lg border bg-muted" />
+			<div className="grid gap-4 sm:grid-cols-2"><div className="h-48 rounded-lg border bg-muted" /><div className="h-48 rounded-lg border bg-muted" /></div>
+		</div>
+	);
+}
+
+function StatsDetails({ stats, loading, error, onLoad }: { stats: StatsView; loading: boolean; error: string; onLoad(query: StatsQuery): void }) {
+	const [defaults] = useState(stats.query);
+	const [draft, setDraft] = useState(stats.query);
 	const [showAverage, setShowAverage] = useState(true);
 	const [cumulative, setCumulative] = useState(false);
-
-	const selectedRange = useMemo(() => (
-		rangeMode === "custom"
-			? normalizeDateRange(customStart || allRange.start, customEnd || allRange.end)
-			: presetDateRange(rangeMode, nowIso, stats.series)
-	), [allRange.end, allRange.start, customEnd, customStart, nowIso, rangeMode, stats.series]);
-	const chartData = useMemo(() => (
-		granularity === "hour"
-			? hourlyTrendSeries(stats.hourly ?? [], selectedRange)
-			: trendSeries(stats.series, selectedRange, granularity)
-	), [granularity, selectedRange, stats.hourly, stats.series]);
-	const summary = useMemo(() => summarizeTrend(stats.series, selectedRange), [selectedRange, stats.series]);
-	const chartTotal = chartData.reduce((sum, row) => sum + row.count, 0);
-	const chartAverage = chartTotal / Math.max(1, chartData.length);
-	const chartActive = chartData.filter((row) => row.count > 0).length;
-	const chartPeak = chartData.reduce((best, point) => (point.count > best.count ? point : best), { date: selectedRange.start, count: 0 });
-	const total = stats.series.reduce((sum, row) => sum + row.count, 0);
+	const browserTimezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", []);
+	const chartAverage = stats.filteredClicks / Math.max(1, stats.series.length);
+	const chartActive = stats.series.filter((row) => row.count > 0).length;
+	const chartPeak = stats.series.reduce((best, point) => (point.count > best.count ? point : best), { date: stats.query.from, count: 0 });
 	const topDevice = [...stats.devices].sort((a, b) => b.count - a.count)[0]?.bucket;
 	const sourceData = stats.referrers.map((row) => ({ ...row, bucket: formatBucket(row.bucket) }));
 	const deviceData = stats.devices.map((row) => ({ ...row, bucket: formatBucket(row.bucket) }));
+	const today = todayInTimeZone(draft.timezone);
+	const change = stats.filteredClicks - stats.comparison.filteredClicks;
+	const changePct = stats.comparison.filteredClicks ? (change / stats.comparison.filteredClicks) * 100 : null;
 
-	function pickRange(id: DateRangePreset) {
-		const range = presetDateRange(id, nowIso, stats.series);
-		setRangeMode(id);
-		setCustomStart(range.start);
-		setCustomEnd(range.end);
+	function pickRecent(days: number) {
+		setDraft((current) => ({ ...current, from: shiftIsoDay(today, -days + 1), to: today }));
+	}
+
+	function resetFilters() {
+		setDraft(defaults);
+		onLoad(defaults);
 	}
 
 	return (
 		<section className="grid gap-4">
+			{error ? (
+				<div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
+					<p>{error} The last successful view is still shown.</p>
+					<Button type="button" variant="outline" size="sm" className="min-h-11" onClick={() => onLoad(stats.query)}><RefreshCw />Retry</Button>
+				</div>
+			) : null}
+
 			<div className="rounded-lg border bg-card p-4">
 				<div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
 					<div className="min-w-0">
@@ -551,83 +692,87 @@ function StatsDetails({ stats }: { stats: StatsView }) {
 							<h2 className="font-semibold">Click trends</h2>
 						</div>
 						<p className="mt-1 text-sm text-muted-foreground">
-							{formatRange(selectedRange.start, selectedRange.end)} grouped by {granularity}.
+							{formatRange(stats.query.from, stats.query.to)} in {stats.query.timezone}, grouped by {stats.query.granularity}.
 						</p>
 					</div>
-					<TabsList className="grid w-full grid-cols-2 sm:flex sm:w-auto sm:flex-wrap">
-						{RANGE_TABS.map((range) => (
-							<TabButton key={range.id} type="button" active={rangeMode === range.id} onClick={() => pickRange(range.id)} className="text-xs sm:text-sm">
-								{range.label}
-							</TabButton>
-						))}
-					</TabsList>
+					<Badge variant="info">{formatWhole(stats.filteredClicks)} filtered</Badge>
+				</div>
+				<div className="mt-3 flex flex-wrap items-center gap-1.5" aria-label="Applied filters">
+					<span className="mr-1 text-xs font-semibold uppercase text-muted-foreground">Applied</span>
+					<Badge variant="secondary">{formatRange(stats.query.from, stats.query.to)}</Badge>
+					<Badge variant="secondary">{stats.query.timezone}</Badge>
+					<Badge variant="secondary">Source: {sourceFilterLabel(stats.query.source)}</Badge>
+					<Badge variant="secondary">Device: {deviceFilterLabel(stats.query.device)}</Badge>
+					<Badge variant="secondary">By {stats.query.granularity}</Badge>
 				</div>
 
-				<div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
-					<Stat label="Range clicks" value={formatWhole(summary.total)} />
-					<Stat label={granularity === "hour" ? "Average per hour" : "Average per day"} value={formatAverage(granularity === "hour" ? chartAverage : summary.averagePerDay)} />
-					<Stat label={granularity === "hour" ? "Active hours" : "Active days"} value={granularity === "hour" ? `${chartActive}/${Math.max(1, chartData.length)}` : `${summary.activeDays}/${chartDaysLabel(selectedRange)}`} />
-					<Stat label={granularity === "hour" ? "Best hour" : "Best day"} value={chartPeak.count ? `${chartPeak.count} on ${formatShortPoint(chartPeak.date)}` : "None"} />
-					<Stat label="Previous period" value={formatChange(summary.change, summary.changePct)} />
+				<div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-6">
+					<Stat label="Filtered clicks" value={formatWhole(stats.filteredClicks)} />
+					<Stat label="Lifetime clicks" value={formatWhole(stats.lifetimeClicks)} />
+					{stats.filteredClicks > 0 ? <>
+						<Stat label="Previous period" value={formatChange(change, changePct)} />
+						<Stat label={`Average per ${stats.query.granularity}`} value={formatAverage(chartAverage)} />
+						<Stat label={`Active ${stats.query.granularity}s`} value={`${chartActive}/${Math.max(1, stats.series.length)}`} />
+						<Stat label={`Best ${stats.query.granularity}`} value={chartPeak.count ? `${chartPeak.count} on ${formatStatsPoint(chartPeak.date)}` : "None"} />
+					</> : null}
 				</div>
-
-				<details className="mt-4 rounded-lg border bg-background p-3">
-					<summary className="flex cursor-pointer items-center justify-between gap-3 text-sm font-semibold text-foreground">
-						<span className="inline-flex items-center gap-2"><SlidersHorizontal className="size-4 text-primary" />Advanced settings</span>
-						<span className="text-xs font-normal text-muted-foreground">{formatRange(selectedRange.start, selectedRange.end)} by {granularity}</span>
-					</summary>
-					<div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
-						<div className="grid gap-3 sm:grid-cols-2">
-							<label className="grid gap-1 text-sm font-medium">
-								Start date
-								<Input type="date" value={customStart} onChange={(event) => { setRangeMode("custom"); setCustomStart(event.target.value); }} />
-							</label>
-							<label className="grid gap-1 text-sm font-medium">
-								End date
-								<Input type="date" value={customEnd} onChange={(event) => { setRangeMode("custom"); setCustomEnd(event.target.value); }} />
-							</label>
-						</div>
-						<div className="grid gap-3 sm:grid-cols-[auto_auto] lg:grid-cols-1">
-							<fieldset className="grid gap-1">
-								<legend className="text-sm font-medium">Group by</legend>
-								<TabsList className="grid w-full grid-cols-2 sm:flex">
-									{GRANULARITY_TABS.map((item) => (
-										<TabButton
-											key={item.id}
-											type="button"
-											active={granularity === item.id}
-											onClick={() => setGranularity(item.id)}
-											className={cn(
-												"flex-1 px-2 text-xs",
-												granularity === item.id && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
-											)}
-										>
-											{item.label}
-										</TabButton>
-									))}
-								</TabsList>
-							</fieldset>
-							<div className="flex flex-wrap items-end gap-2">
-								<SettingToggle checked={showAverage} label="Average line" onChange={setShowAverage} />
-								<SettingToggle checked={cumulative} label="Cumulative" onChange={setCumulative} />
-							</div>
-						</div>
+				{stats.filteredClicks === 0 ? (
+					<div role="status" className="mt-4 rounded-md bg-secondary/50 p-4 text-sm">
+						<p className="font-semibold">No clicks in this range</p>
+						<p className="mt-1 text-muted-foreground">This link has {formatWhole(stats.lifetimeClicks)} lifetime clicks. Try a longer date range or clear the source and device filters.</p>
 					</div>
-				</details>
-
-				<div className="mt-4">
-					<ClicksOverTime data={chartData} average={showAverage && !cumulative ? (granularity === "hour" ? chartAverage : summary.averagePerDay) : undefined} cumulative={cumulative} verbose />
-				</div>
+				) : (
+					<div className="mt-4 grid gap-3">
+						<div className="flex flex-wrap gap-2"><SettingToggle checked={showAverage} label="Average line" onChange={setShowAverage} /><SettingToggle checked={cumulative} label="Cumulative" onChange={setCumulative} /></div>
+						<ClicksOverTime data={stats.series} average={showAverage && !cumulative ? chartAverage : undefined} cumulative={cumulative} verbose />
+					</div>
+				)}
+				<p className="mt-3 text-xs text-muted-foreground">{historyLabel(stats)}</p>
 			</div>
 
-			<div className="grid gap-4 sm:grid-cols-2">
+			<details className="rounded-lg border bg-card p-4">
+				<summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 font-semibold">
+					<span className="inline-flex items-center gap-2"><SlidersHorizontal className="size-4 text-primary" />Filter statistics</span>
+					<span className="text-xs font-normal text-muted-foreground">Dates, source, device, timezone, grouping</span>
+				</summary>
+				<form className="mt-4 grid gap-4 border-t pt-4" onSubmit={(event) => { event.preventDefault(); onLoad(draft); }}>
+					<div className="flex flex-wrap items-start justify-between gap-3">
+						<p className="text-sm text-muted-foreground">Changes take effect when you apply them.</p>
+						<div role="group" aria-label="Date presets" className="grid w-full grid-cols-3 gap-1 rounded-lg bg-muted p-1 sm:w-auto">
+							<Button type="button" variant={draft.from === today && draft.to === today ? "secondary" : "ghost"} className="min-h-11" aria-pressed={draft.from === today && draft.to === today} onClick={() => pickRecent(1)}>Today</Button>
+							<Button type="button" variant={draft.from === shiftIsoDay(today, -6) && draft.to === today ? "secondary" : "ghost"} className="min-h-11" aria-pressed={draft.from === shiftIsoDay(today, -6) && draft.to === today} onClick={() => pickRecent(7)}>7 days</Button>
+							<Button type="button" variant={draft.from === shiftIsoDay(today, -29) && draft.to === today ? "secondary" : "ghost"} className="min-h-11" aria-pressed={draft.from === shiftIsoDay(today, -29) && draft.to === today} onClick={() => pickRecent(30)}>30 days</Button>
+						</div>
+					</div>
+
+					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+						<label className="grid gap-1 text-sm font-medium">Start date<Input className="min-h-11" type="date" required value={draft.from} onChange={(event) => setDraft({ ...draft, from: event.target.value })} /></label>
+						<label className="grid gap-1 text-sm font-medium">End date<Input className="min-h-11" type="date" required value={draft.to} onChange={(event) => setDraft({ ...draft, to: event.target.value })} /></label>
+						<label className="grid gap-1 text-sm font-medium">Source<Select className="min-h-11" value={draft.source} onChange={(event) => setDraft({ ...draft, source: event.target.value as StatsQuery["source"] })}><option value="all">All sources</option><option value="qr">QR scans</option><option value="link">Direct links</option><option value="unknown">Unknown history</option></Select></label>
+						<label className="grid gap-1 text-sm font-medium">Device<Select className="min-h-11" value={draft.device} onChange={(event) => setDraft({ ...draft, device: event.target.value as StatsQuery["device"] })}><option value="all">All devices</option><option value="mobile">Mobile</option><option value="desktop">Desktop</option></Select></label>
+						<label className="grid gap-1 text-sm font-medium">Timezone<Input className="min-h-11" list="link-stats-timezones" required value={draft.timezone} onChange={(event) => setDraft({ ...draft, timezone: event.target.value })} /><datalist id="link-stats-timezones"><option value="UTC" /><option value={browserTimezone} /></datalist></label>
+					</div>
+
+					<fieldset className="grid gap-1">
+						<legend className="text-sm font-medium">Group by</legend>
+						<div className="grid w-full grid-cols-2 gap-1 rounded-lg bg-muted p-1 sm:flex sm:w-fit">
+							{GRANULARITY_TABS.map((item) => <Button key={item.id} type="button" variant={draft.granularity === item.id ? "secondary" : "ghost"} className="min-h-11" aria-pressed={draft.granularity === item.id} onClick={() => setDraft({ ...draft, granularity: item.id })}>{item.label}</Button>)}
+						</div>
+					</fieldset>
+					<p className="text-xs text-muted-foreground">Limits: 366 days overall, 14 days when grouped by hour, and 5,000 hourly aggregate rows including the comparison window.</p>
+
+					<div className="flex flex-wrap justify-end gap-2 border-t pt-3"><Button type="button" variant="ghost" className="min-h-11" onClick={resetFilters} disabled={loading}>Reset</Button><Button type="submit" className="min-h-11" disabled={loading}>{loading ? <RefreshCw className="animate-spin motion-reduce:animate-none" /> : null}{loading ? "Applying" : "Apply filters"}</Button></div>
+				</form>
+			</details>
+
+			{stats.filteredClicks > 0 ? <div className="grid gap-4 sm:grid-cols-2">
 				<div className="rounded-lg border bg-card p-4">
 					<div className="mb-3 flex items-start justify-between gap-3">
 						<div>
 							<h2 className="font-semibold">Traffic source</h2>
-							<p className="text-xs text-muted-foreground">All recorded clicks</p>
+							<p className="text-xs text-muted-foreground">Applied range and filters</p>
 						</div>
-						<Badge variant="secondary">{formatWhole(total)} total</Badge>
+						<Badge variant="secondary">{formatWhole(stats.filteredClicks)} clicks</Badge>
 					</div>
 					<DonutChart data={sourceData} label="Traffic source" />
 				</div>
@@ -635,20 +780,20 @@ function StatsDetails({ stats }: { stats: StatsView }) {
 					<div className="mb-3 flex items-start justify-between gap-3">
 						<div>
 							<h2 className="font-semibold">Devices</h2>
-							<p className="text-xs text-muted-foreground">All recorded clicks</p>
+							<p className="text-xs text-muted-foreground">Applied range and filters</p>
 						</div>
 						<Badge variant="secondary">{topDevice ? formatBucket(topDevice) : "None"}</Badge>
 					</div>
 					<DonutChart data={deviceData} label="Devices" />
 				</div>
-			</div>
+			</div> : null}
 		</section>
 	);
 }
 
 function SettingToggle({ checked, label, onChange }: { checked: boolean; label: string; onChange(value: boolean): void }) {
 	return (
-		<label className="inline-flex h-10 items-center gap-2 rounded-md border bg-card px-3 text-sm font-medium">
+		<label className="inline-flex min-h-11 items-center gap-2 rounded-md border bg-card px-3 text-sm font-medium">
 			<input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="size-4 accent-[#06192F]" />
 			{label}
 		</label>
@@ -656,7 +801,7 @@ function SettingToggle({ checked, label, onChange }: { checked: boolean; label: 
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
-	return <div className="rounded-lg border bg-background p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 truncate font-semibold tabular-nums">{value}</p></div>;
+	return <div className="rounded-lg bg-secondary/60 p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 truncate font-semibold tabular-nums">{value}</p></div>;
 }
 
 function formatWhole(value: number): string {
@@ -672,27 +817,28 @@ function formatShortDate(value: string): string {
 	return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(year, month - 1, day)));
 }
 
-function formatShortPoint(value: string): string {
-	if (value.includes("T")) {
-		return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "numeric", timeZone: "UTC" }).format(new Date(`${value}:00.000Z`));
-	}
-	return formatShortDate(value);
-}
-
 function formatRange(start: string, end: string): string {
 	return start === end ? formatShortDate(start) : `${formatShortDate(start)} to ${formatShortDate(end)}`;
 }
 
-function chartDaysLabel(range: { start: string; end: string }): number {
-	const start = new Date(`${range.start}T00:00:00Z`).getTime();
-	const end = new Date(`${range.end}T00:00:00Z`).getTime();
-	return Math.max(1, Math.round((end - start) / 86400000) + 1);
+function historyLabel(stats: StatsView): string {
+	const { history } = stats;
+	if (!history.earliestHour || !history.latestHour) return history.complete ? "No matching activity in this range." : "Activity may be missing from this range. Try a shorter range.";
+	const range = `${formatStatsPoint(history.earliestHour)} to ${formatStatsPoint(history.latestHour)}`;
+	return history.complete ? `Recorded activity: ${range}.` : `Activity shown from ${range}. Choose a shorter range for complete results.`;
+}
+
+function sourceFilterLabel(source: StatsQuery["source"]): string {
+	return source === "qr" ? "QR scans" : source === "link" ? "Direct links" : source === "unknown" ? "Unknown history" : "All";
+}
+
+function deviceFilterLabel(device: StatsQuery["device"]): string {
+	return device === "mobile" ? "Mobile" : device === "desktop" ? "Desktop" : "All";
 }
 
 function formatChange(change: number, pct: number | null): string {
 	const signed = `${change >= 0 ? "+" : ""}${formatWhole(change)}`;
-	if (pct === null) return signed;
-	return `${signed} (${pct >= 0 ? "+" : ""}${pct.toFixed(0)}%)`;
+	return pct === null ? signed : `${signed} (${pct >= 0 ? "+" : ""}${pct.toFixed(0)}%)`;
 }
 
 function EditPanel({ link, onSave, onUpload }: { link: LinkView; onSave(patch: Partial<LinkView>): void; onUpload(file: File): void }) {
@@ -704,25 +850,25 @@ function EditPanel({ link, onSave, onUpload }: { link: LinkView; onSave(patch: P
 	return (
 		<section className="grid content-start gap-3 rounded-lg border p-4">
 			<h2 className="font-semibold">Edit link</h2>
-			<label className="grid gap-1 text-sm font-medium">Title<Input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
-			<label className="grid gap-1 text-sm font-medium">Destination<Input value={destinationUrl} onChange={(event) => setDestinationUrl(event.target.value)} /></label>
+			<label className="grid gap-1 text-sm font-medium">Title<Input className="min-h-11" value={title} onChange={(event) => setTitle(event.target.value)} /></label>
+			<label className="grid gap-1 text-sm font-medium">Destination<Input className="min-h-11" value={destinationUrl} onChange={(event) => setDestinationUrl(event.target.value)} /></label>
 			<TagInput value={tags} suggestions={link.tags} onChange={setTags} />
 
 			<details className="rounded-md border p-3 text-sm">
 				<summary className="cursor-pointer font-medium">Social preview <span className="font-normal text-muted-foreground">(optional)</span></summary>
 				<p className="mt-1 text-xs text-muted-foreground">When someone shares this link on chat or social media, it can show a little preview card. These fields control what that card says. Leave them blank to use the destination page&rsquo;s own preview.</p>
 				<div className="mt-3 grid gap-3">
-					<label className="grid gap-1 font-medium">Preview title<Input value={previewTitle} onChange={(event) => setPreviewTitle(event.target.value)} /><span className="text-xs font-normal text-muted-foreground">The headline shown on the card.</span></label>
+					<label className="grid gap-1 font-medium">Preview title<Input className="min-h-11" value={previewTitle} onChange={(event) => setPreviewTitle(event.target.value)} /><span className="text-xs font-normal text-muted-foreground">The headline shown on the card.</span></label>
 					<label className="grid gap-1 font-medium">Preview description<Textarea value={previewDescription} onChange={(event) => setPreviewDescription(event.target.value)} /><span className="text-xs font-normal text-muted-foreground">A line or two under the headline.</span></label>
 					<div className="grid gap-1">
 						<span className="font-medium">Preview image</span>
-						<Button asChild variant="outline" size="sm" className="w-fit"><label className="cursor-pointer"><ImageUp />Upload image<input className="sr-only" type="file" accept="image/*" onChange={(event) => event.target.files?.[0] && onUpload(event.target.files[0])} /></label></Button>
+						<Button asChild variant="outline" size="sm" className="min-h-11 w-fit"><label className="cursor-pointer"><ImageUp />Upload image<input className="sr-only" type="file" accept="image/*" onChange={(event) => event.target.files?.[0] && onUpload(event.target.files[0])} /></label></Button>
 						<span className="text-xs font-normal text-muted-foreground">The thumbnail on the card. {link.previewImageKey ? "An image is set. Uploading replaces it." : "No image yet."} Saved as soon as it uploads.</span>
 					</div>
 				</div>
 			</details>
 
-			<Button className="w-fit" onClick={() => onSave({ title, destinationUrl, tags, previewTitle: previewTitle || null, previewDescription: previewDescription || null })}><Save />Save changes</Button>
+			<Button className="min-h-11 w-fit" onClick={() => onSave({ title, destinationUrl, tags, previewTitle: previewTitle || null, previewDescription: previewDescription || null })}><Save />Save changes</Button>
 		</section>
 	);
 }

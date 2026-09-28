@@ -37,18 +37,21 @@ export function createUploadsInternalHandlers({
 			return Boolean(event);
 		},
 		canEditLink: async (actor, linkId) => {
-			try {
-				return Boolean(await linksRepository.getById(actor, linkId));
-			} catch {
-				return false;
-			}
+			return linksRepository.canEditLink(actor, linkId);
 		},
 	});
 
 	return {
 		async collection(request: Request): Promise<Response> {
 			if (deployEnv !== "dev") return new Response("Not found", { status: 404 });
-			return withCors(request, allowedOrigins, () => uploads.collection(request));
+			return withCors(request, allowedOrigins, async () => {
+				if (request.method === "POST" && uploadsContract.put.sharedDev === "deny") {
+					const actor = await resolveSharedActor(db, request);
+					if (!actor) return Response.json({ error: "Invalid shared development token." }, { status: 401 });
+					return Response.json({ error: "Operation is disabled in shared development." }, { status: 403 });
+				}
+				return uploads.collection(request);
+			});
 		},
 		async object(request: Request, key: string): Promise<Response> {
 			if (deployEnv !== "dev") return new Response("Not found", { status: 404 });

@@ -1,9 +1,10 @@
-import { linksContract } from "@/db/contract/links";
+import { linksContract, linkStatsInputFromUrl } from "@/db/contract/links";
 import { linkErrorStatus } from "@/db/repositories/links";
 import type { Repositories } from "@/db/repositories";
 import type { Actor } from "@/server/auth/permissions";
 import { enforceRateLimit } from "@/server/ratelimit/guard";
 import { RATE_LIMITS } from "@/server/ratelimit/policies";
+import { z } from "zod";
 
 type LinksHandlerDependencies = {
 	getActor(): Promise<Actor | null>;
@@ -11,7 +12,9 @@ type LinksHandlerDependencies = {
 };
 
 function fail(error: unknown): Response {
-	const message = error instanceof Error ? error.message : "Request failed.";
+	const message = error instanceof z.ZodError
+		? error.issues[0]?.message ?? "Request failed."
+		: error instanceof Error ? error.message : "Request failed.";
 	return Response.json({ error: message }, { status: linkErrorStatus(error) });
 }
 
@@ -101,7 +104,9 @@ export function createLinksHandlers(deps: LinksHandlerDependencies) {
 			if (request.method !== "GET") return new Response("Method not allowed", { status: 405 });
 			const { links } = await deps.getRepositories();
 			try {
-				return Response.json(await links.getStats(actor, id));
+				const { id: parsedId, ...query } = linkStatsInputFromUrl(request, id);
+				void parsedId;
+				return Response.json(await links.getStats(actor, id, query));
 			} catch (error) {
 				return fail(error);
 			}

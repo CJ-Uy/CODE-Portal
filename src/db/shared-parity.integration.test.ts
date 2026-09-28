@@ -203,11 +203,25 @@ describe("shared members parity", () => {
 		expect(unauthenticated.status).toBe(401);
 		expect(authenticated.status).toBe(403);
 	});
+
+	it("keeps shared uploads read-only after authentication", async () => {
+		const db = drizzle(env.DB, { schema });
+		const handlers = createUploadsInternalHandlers({ db, deployEnv: "dev", storage: memoryStorage });
+		const unauthenticated = await handlers.collection(new Request("https://dev.example/internal/uploads", { method: "POST" }));
+		const authenticated = await handlers.collection(new Request("https://dev.example/internal/uploads", {
+			method: "POST",
+			headers: { authorization: "Bearer shared-test-token" },
+		}));
+
+		expect(unauthenticated.status).toBe(401);
+		expect(authenticated.status).toBe(403);
+	});
 });
 
 describe("shared links parity", () => {
 	beforeEach(async () => {
 		await env.DB.batch([
+			env.DB.prepare("DELETE FROM link_hourly_stats"),
 			env.DB.prepare("DELETE FROM link_daily_stats"),
 			env.DB.prepare("DELETE FROM short_links"),
 			env.DB.prepare("DELETE FROM shared_dev_tokens"),
@@ -262,6 +276,20 @@ describe("shared links parity", () => {
 		expect(response.status).toBe(404);
 	});
 
+	it("returns the first actionable analytics validation issue over the internal proxy", async () => {
+		const db = drizzle(env.DB, { schema });
+		const handlers = createLinksInternalHandlers({ db, deployEnv: "dev" });
+		const response = await handlers.stats(
+			new Request("https://dev.example/internal/links/missing/stats?timezone=Mars%2FOlympus", {
+				headers: { authorization: "Bearer links-token" },
+			}),
+			"missing",
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({ error: "Timezone must be a valid IANA timezone." });
+	});
+
 	it("resolves shared redirect requests and records clicks through the internal links handler", async () => {
 		const db = drizzle(env.DB, { schema });
 		await db.insert(schema.shortLinks).values({
@@ -274,7 +302,7 @@ describe("shared links parity", () => {
 		const handlers = createLinksInternalHandlers({ db, deployEnv: "dev" });
 
 		const response = await handlers.redirect(
-			new Request("https://dev.example/internal/links/redirect/welcome", { headers: { authorization: "Bearer links-token" } }),
+			new Request("https://dev.example/internal/links/redirect/welcome?source=qr", { headers: { authorization: "Bearer links-token" } }),
 			"welcome",
 		);
 
@@ -282,6 +310,8 @@ describe("shared links parity", () => {
 		expect(response.headers.get("location")).toBe("https://example.com/dest");
 		const [link] = await db.select().from(schema.shortLinks).where(eq(schema.shortLinks.id, "lnk_shared_redirect"));
 		expect(link.clickCount).toBe(1);
+		const [daily] = await db.select().from(schema.linkDailyStats).where(eq(schema.linkDailyStats.linkId, "lnk_shared_redirect"));
+		expect(daily.referrerBucket).toBe("qr scan");
 	});
 });
 
