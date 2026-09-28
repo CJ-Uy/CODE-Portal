@@ -27,14 +27,3 @@ export function formatPoints(value: number): string {
 export function isValidPoints(value: number): boolean {
 	return Number.isFinite(value);
 }
-
-/**
- * Bucket a day's points into 0-4 for the calendar heatmap, scaled to the busiest day in the
- * month being viewed rather than a fixed ceiling - a term where nothing exceeds 2 points
- * would otherwise render as an empty grid. Two months are therefore not comparable by colour,
- * which is why the legend names the real maximum and badge mode prints exact figures.
- */
-export function heatStep(points: number, max: number): number {
-	if (points <= 0 || max <= 0) return 0;
-	return Math.min(4, Math.ceil((points / max) * 4));
-}
