@@ -1,7 +1,7 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "code-nest-staged",
-	"account_id": "8527ec1369d46f55304a6f59ab5356e4",
+	"account_id": "83376df5e0bae067afa197b07430168d",
 	"main": ".open-next/worker.js",
 	"workers_dev": true,
 	"routes": [
@@ -52,9 +52,8 @@
 		{
 			"binding": "DB",
 			"database_name": "code-nest-staged-db",
-			"database_id": "18b0f067-101b-4aac-b724-6382a7d3cdd0",
-			// One history now, shared by every environment. Its 0000 to 0003 are the files
-			// production has always had, so D1 sees them as applied and only 0004 is pending.
+			"database_id": "543701fb-67ba-4f09-a931-85ffb861386f",
+			// Staging has its own database and shares the checked-in migration history.
 			"migrations_dir": "drizzle/migrations"
 		}
 	],
