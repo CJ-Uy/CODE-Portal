@@ -51,6 +51,27 @@ describe("members repository on D1", () => {
 		});
 	});
 
+	it("searches every member before paginating newest first", async () => {
+		for (const [id, email, createdAt] of [
+			["mem_old", "julia@student.ateneo.edu", 1000],
+			["mem_middle", "middle@student.ateneo.edu", 2000],
+			["mem_new", "new@student.ateneo.edu", 3000],
+			["mem_other", "outside@example.com", 4000],
+		] as const) {
+			await env.DB.prepare("INSERT INTO members (id, email, created_at, updated_at) VALUES (?, ?, ?, ?)")
+				.bind(id, email, createdAt, createdAt).run();
+		}
+		const db = drizzle(env.DB, { schema });
+		const repository = createMembersRepository(db, createAuditRepository(db));
+		const first = await repository.listPage(adminActor, { q: "STUDENT.ATENEO.EDU", page: 1, pageSize: 2 });
+		const second = await repository.listPage(adminActor, { q: "STUDENT.ATENEO.EDU", page: 2, pageSize: 2 });
+
+		expect(first).toMatchObject({ total: 3, page: 1, pageSize: 2 });
+		expect(first.members.map((member) => member.id)).toEqual(["mem_new", "mem_middle"]);
+		expect(second.members.map((member) => member.id)).toEqual(["mem_old"]);
+		await expect(repository.listPage(memberActor)).rejects.toThrow("Not authorized");
+	});
+
 	it("deletes members for an authorized actor and audits the change", async () => {
 		await env.DB.prepare("INSERT INTO members (id, email, name) VALUES (?, ?, ?)")
 			.bind(adminActor.memberId, "admin@example.com", "Admin")

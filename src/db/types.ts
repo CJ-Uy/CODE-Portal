@@ -14,6 +14,8 @@ import type {
 
 export type Member = InferSelectModel<typeof members>;
 export type NewMember = InferInsertModel<typeof members>;
+export type MemberPageInput = { q?: string; page?: number; pageSize?: number };
+export type MemberPage = { members: Member[]; total: number; page: number; pageSize: number };
 
 export const createMemberInputSchema = z.object({
 	email: z.string().trim().toLowerCase().email(),
@@ -69,6 +71,7 @@ export type EventAwardInput = z.infer<typeof eventAwardInputSchema>;
 export interface DatabaseAdapter {
 	readonly adapterType: "d1-binding" | "local-sqlite" | "shared-api";
 	listMembers(): Promise<Member[]>;
+	listMembersPage?(input: MemberPageInput): Promise<MemberPage>;
 	createMember(input: CreateMemberInput): Promise<Member>;
 	getMemberById(id: string): Promise<Member | null>;
 	updateMemberProfile(id: string, input: UpdateMemberProfileInput): Promise<Member>;
