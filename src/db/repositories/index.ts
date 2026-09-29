@@ -101,6 +101,10 @@ export function createSharedRepositories(adapter: DatabaseAdapter): Repositories
 	return {
 		members: {
 			list: async (_actor, input) => adapter.listMembers().then((members) => members.slice(0, input?.limit ?? 25)),
+			listPage: async (_actor, input) => {
+				if (!adapter.listMembersPage) throw new Error("Member pages are unavailable through this repository adapter.");
+				return adapter.listMembersPage(input ?? {});
+			},
 			search: async () => {
 				// Admin-critical read: fail loud in shared-dev rather than returning [] (spec §5).
 				throw new Error("Member search is only available through the shared /internal API.");

@@ -47,6 +47,15 @@ export function createMembersInternalHandlers({
 						return Response.json(output, { status: member ? 200 : 404, headers: responseHeaders });
 					}
 					const url = new URL(request.url);
+					if (url.searchParams.has("page") || url.searchParams.has("q") || url.searchParams.has("pageSize")) {
+						const input = membersContract.page.input.parse({
+							q: url.searchParams.get("q") ?? undefined,
+							page: url.searchParams.has("page") ? Number(url.searchParams.get("page")) : undefined,
+							pageSize: url.searchParams.has("pageSize") ? Number(url.searchParams.get("pageSize")) : undefined,
+						});
+						const result = await repository.listPage(actor, input);
+						return Response.json(membersContract.page.output.parse(result), { headers: responseHeaders });
+					}
 					const input = membersContract.list.input.parse({
 						limit: url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : undefined,
 					});

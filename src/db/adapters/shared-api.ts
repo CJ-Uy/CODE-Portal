@@ -1,5 +1,5 @@
 import { getAppConfig } from "@/server/env";
-import type { CreateMemberInput, DatabaseAdapter, Member, UpdateMemberProfileInput } from "../types";
+import type { CreateMemberInput, DatabaseAdapter, Member, MemberPage, MemberPageInput, UpdateMemberProfileInput } from "../types";
 
 export class SharedApiDatabaseAdapter implements DatabaseAdapter {
 	readonly adapterType = "shared-api" as const;
@@ -32,6 +32,15 @@ export class SharedApiDatabaseAdapter implements DatabaseAdapter {
 		if (!response.ok) throw new Error("Shared API failed to list members.");
 		const body = await response.json() as { members: Member[] };
 		return body.members.map(deserializeMember);
+	}
+
+	async listMembersPage(input: MemberPageInput): Promise<MemberPage> {
+		const params = new URLSearchParams({ page: String(input.page ?? 1), pageSize: String(input.pageSize ?? 25) });
+		if (input.q) params.set("q", input.q);
+		const response = await this.request(`/internal/members?${params}`);
+		if (!response.ok) throw new Error("Shared API failed to list member pages.");
+		const body = await response.json() as MemberPage;
+		return { ...body, members: body.members.map(deserializeMember) };
 	}
 
 	async createMember(input: CreateMemberInput): Promise<Member> {
