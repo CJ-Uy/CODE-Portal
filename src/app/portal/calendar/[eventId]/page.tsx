@@ -138,7 +138,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 				{shareLinks ? (
 					<EventShareBar shareUrl={shareLinks.shareUrl} googleUrl={shareLinks.googleUrl} icsUrl={shareLinks.icsUrl} />
 				) : null}
-				<p className="max-w-3xl text-sm leading-relaxed">{event.description}</p>
+				<p className="max-w-3xl whitespace-pre-wrap break-words text-sm leading-relaxed">{event.description}</p>
 				<div className="flex flex-wrap items-center gap-x-5 gap-y-3">
 					<div className="flex items-center gap-2 text-sm font-medium">
 						<span className="grid size-8 place-items-center rounded-lg bg-secondary text-accent">
