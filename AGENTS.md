@@ -1,5 +1,9 @@
 # Agent notes
 
+## Cloudflare environments
+
+Production means the Code.College Ateneo Cloudflare account (`83376df5e0bae067afa197b07430168d`) and the live `ateneocode.org` Worker. The older account (`8527ec1369d46f55304a6f59ab5356e4`) is legacy and must not be used for production checks or deployments. The live D1 IDs are production `d5505f3a-5bf4-438e-b14f-dd595b9a24d6`, staged `543701fb-67ba-4f09-a931-85ffb861386f`, and beta `ffe974a7-4b89-4ac7-b07e-ad62f4530ca2`. Verify the selected account and Worker bindings before a production operation.
+
 ## Working style
 
 - Keep the app simple and member-first.

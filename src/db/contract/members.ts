@@ -28,6 +28,22 @@ export const membersContract = {
 		permission: "member:manage",
 		sharedDev: "allow",
 	}),
+	page: operation({
+		input: z.object({
+			q: z.string().trim().max(100).default(""),
+			page: z.number().int().min(1).default(1),
+			pageSize: z.number().int().min(1).max(100).default(25),
+		}),
+		output: z.object({
+			members: z.array(memberOutputSchema),
+			total: z.number().int().nonnegative(),
+			page: z.number().int().min(1),
+			pageSize: z.number().int().min(1),
+		}),
+		auth: "admin",
+		permission: "member:manage",
+		sharedDev: "allow",
+	}),
 	get: operation({
 		input: z.object({ id: z.string().min(1) }),
 		output: z.object({ member: memberOutputSchema.nullable() }),

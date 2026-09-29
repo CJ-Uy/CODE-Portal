@@ -1,40 +1,18 @@
-import { and, eq, like, or } from "drizzle-orm";
-import type { InferInsertModel } from "drizzle-orm";
+import { and, desc, eq, like, or, sql } from "drizzle-orm";
+import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { createId } from "@/lib/ids";
+import type * as schema from "@/db/schema";
 import { members } from "@/db/schema";
 import type { Actor } from "@/server/auth/permissions";
 import { can } from "@/server/auth/permissions";
-import type { CreateMemberInput, Member, UpdateMemberProfileInput } from "../types";
+import type { CreateMemberInput, Member, MemberPage, MemberPageInput, UpdateMemberProfileInput } from "../types";
 import type { AuditRepository } from "./audit";
 
-type MemberInsert = InferInsertModel<typeof members>;
-
-export type MemberDb = {
-	select(): {
-		from(table: typeof members): {
-			orderBy(column: typeof members.createdAt): { limit(limit: number): Promise<Member[]> | Member[] };
-			where(condition: unknown): { limit(limit: number): Promise<Member[]> | Member[] };
-		};
-	};
-	insert(table: typeof members): {
-		values(value: MemberInsert): {
-			returning(): Promise<Member[]> | Member[];
-		};
-	};
-	update(table: typeof members): {
-		set(value: Partial<MemberInsert>): {
-			where(condition: unknown): {
-				returning(): Promise<Member[]> | Member[];
-			};
-		};
-	};
-	delete(table: typeof members): {
-		where(condition: unknown): Promise<unknown> | unknown;
-	};
-};
+export type MemberDb = DrizzleD1Database<typeof schema>;
 
 export type MembersRepository = {
 	list(actor: Actor, input?: { limit?: number }): Promise<Member[]>;
+	listPage(actor: Actor, input?: MemberPageInput): Promise<MemberPage>;
 	/**
 	 * Active members only by default. Pass includeInactive to also match pending and
 	 * inactive rows, which the roles page needs: someone can be granted access before
@@ -53,7 +31,26 @@ export function createMembersRepository(db: MemberDb, audit: AuditRepository): M
 			if (!can(actor, "member:manage")) {
 				throw new Error("Not authorized to list members.");
 			}
-			return db.select().from(members).orderBy(members.createdAt).limit(Math.min(input?.limit ?? 25, 50));
+			return db.select().from(members).orderBy(desc(members.createdAt)).limit(Math.min(input?.limit ?? 25, 50));
+		},
+		async listPage(actor, input) {
+			if (!can(actor, "member:manage")) throw new Error("Not authorized to list members.");
+			const q = input?.q?.trim().toLowerCase() ?? "";
+			const pattern = `%${q}%`;
+			const matches = q ? or(
+				like(members.email, pattern),
+				like(members.name, pattern),
+				like(members.fullName, pattern),
+				like(members.nickname, pattern),
+				like(members.status, pattern),
+			) : undefined;
+			const pageSize = Math.min(Math.max(input?.pageSize ?? 25, 1), 100);
+			const [{ total }] = await db.select({ total: sql<number>`count(*)` }).from(members).where(matches);
+			const page = Math.min(Math.max(input?.page ?? 1, 1), Math.max(1, Math.ceil(total / pageSize)));
+			const rows = await db.select().from(members).where(matches)
+				.orderBy(desc(members.createdAt), desc(members.id))
+				.limit(pageSize).offset((page - 1) * pageSize);
+			return { members: rows, total, page, pageSize };
 		},
 		async search(actor, query, options) {
 			// Roles page authorizes on its own permission; member management also allowed.
