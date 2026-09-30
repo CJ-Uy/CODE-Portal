@@ -4,8 +4,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getRepositories } from "@/db";
 import { requireActor } from "@/server/auth/actor";
+import { assertFeatureEnabled } from "@/server/features";
 
 export async function toggleFavoriteAction(formData: FormData): Promise<void> {
+	assertFeatureEnabled("library");
 	const actor = await requireActor();
 	const itemId = z.string().min(1).parse(formData.get("itemId"));
 	const repositories = await getRepositories();
@@ -15,6 +17,7 @@ export async function toggleFavoriteAction(formData: FormData): Promise<void> {
 }
 
 export async function addCommentAction(formData: FormData): Promise<void> {
+	assertFeatureEnabled("library");
 	const actor = await requireActor();
 	const itemId = z.string().min(1).parse(formData.get("itemId"));
 	const body = z.string().trim().min(1).max(4000).parse(formData.get("body"));
@@ -26,6 +29,7 @@ export async function addCommentAction(formData: FormData): Promise<void> {
 }
 
 export async function setCommentHiddenAction(formData: FormData): Promise<void> {
+	assertFeatureEnabled("library");
 	const actor = await requireActor();
 	const commentId = z.string().min(1).parse(formData.get("commentId"));
 	const itemId = z.string().min(1).parse(formData.get("itemId"));
@@ -36,6 +40,7 @@ export async function setCommentHiddenAction(formData: FormData): Promise<void> 
 }
 
 export async function requestAccessAction(formData: FormData): Promise<void> {
+	assertFeatureEnabled("library");
 	const actor = await requireActor();
 	const itemId = z.string().min(1).parse(formData.get("itemId"));
 	const repositories = await getRepositories();
@@ -44,6 +49,7 @@ export async function requestAccessAction(formData: FormData): Promise<void> {
 }
 
 export async function createListAction(formData: FormData): Promise<void> {
+	assertFeatureEnabled("library");
 	const actor = await requireActor();
 	const name = z.string().trim().min(1).max(60).parse(formData.get("name"));
 	const color = z.string().trim().min(1).max(20).parse(formData.get("color") || "#0c315c");
@@ -53,6 +59,7 @@ export async function createListAction(formData: FormData): Promise<void> {
 }
 
 export async function addToListAction(formData: FormData): Promise<void> {
+	assertFeatureEnabled("library");
 	const actor = await requireActor();
 	const listId = z.string().min(1).parse(formData.get("listId"));
 	const itemId = z.string().min(1).parse(formData.get("itemId"));
@@ -62,6 +69,7 @@ export async function addToListAction(formData: FormData): Promise<void> {
 }
 
 export async function removeFromListAction(formData: FormData): Promise<void> {
+	assertFeatureEnabled("library");
 	const actor = await requireActor();
 	const listId = z.string().min(1).parse(formData.get("listId"));
 	const itemId = z.string().min(1).parse(formData.get("itemId"));

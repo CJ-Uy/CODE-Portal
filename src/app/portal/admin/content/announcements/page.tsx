@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Pin, Plus, Trash2 } from "lucide-react";
 import { getRepositories } from "@/db";
 import { Badge } from "@/components/ui/badge";
@@ -9,11 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { getActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
+import { isFeatureEnabled } from "@/server/features";
 import { createAnnouncementAction, deleteAnnouncementAction, updateAnnouncementAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminAnnouncementsPage() {
+	if (!isFeatureEnabled("announcements")) notFound();
 	const actor = await getActor();
 	if (!actor) redirect("/signin");
 	if (!can(actor, "announcement:manage")) redirect("/portal");

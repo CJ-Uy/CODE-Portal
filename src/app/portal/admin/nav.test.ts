@@ -1,10 +1,20 @@
 import { describe, it, expect } from "vitest";
 import type { Actor } from "@/server/auth/permissions";
+import type { FeatureFlags } from "@/server/features";
 import { adminGroups, visibleGroups, crumbFor, adminHeading } from "./nav";
 
 const superActor: Actor = { memberId: "m1", roles: ["super"] };
 const linkOnly: Actor = { memberId: "m2", roles: ["link"] };
 const retentionActor: Actor = { memberId: "m3", roles: ["retention"] };
+const allFlags: FeatureFlags = {
+	retention: true,
+	library: true,
+	announcements: true,
+	notifications: true,
+	surveys: true,
+	publicSite: true,
+	leaderboard: true,
+};
 
 describe("admin nav registry", () => {
 	it("has 4 groups with the spec's routes", () => {
@@ -37,16 +47,16 @@ describe("admin nav registry", () => {
 	});
 
 	it("super sees every group; link role sees only Short Links + always-visible pages", () => {
-		expect(visibleGroups(superActor).length).toBe(4);
-		const visible = visibleGroups(linkOnly).flatMap((g) => g.pages.map((p) => p.href));
+		expect(visibleGroups(superActor, allFlags).length).toBe(4);
+		const visible = visibleGroups(linkOnly, allFlags).flatMap((g) => g.pages.map((p) => p.href));
 		expect(visible).toContain("/portal/admin/content/links");
 		expect(visible).toContain("/portal/admin/system/audit"); // permission null means always visible
 		expect(visible).not.toContain("/portal/admin/members/roles");
 	});
 
 	it("shows Point Types only to retention configuration holders", () => {
-		const retentionPages = visibleGroups(retentionActor).flatMap((group) => group.pages.map((page) => page.href));
-		const linkPages = visibleGroups(linkOnly).flatMap((group) => group.pages.map((page) => page.href));
+		const retentionPages = visibleGroups(retentionActor, allFlags).flatMap((group) => group.pages.map((page) => page.href));
+		const linkPages = visibleGroups(linkOnly, allFlags).flatMap((group) => group.pages.map((page) => page.href));
 		expect(retentionPages).toContain("/portal/admin/system/point-types");
 		expect(linkPages).not.toContain("/portal/admin/system/point-types");
 		expect(crumbFor("/portal/admin/system/point-types")).toEqual([
@@ -62,12 +72,21 @@ describe("admin nav registry", () => {
 			{ label: "Members & Access", href: "/portal/admin/members" },
 			{ label: "School Years" },
 		]);
-		expect(visibleGroups(retentionActor).flatMap((g) => g.pages.map((p) => p.href))).toContain(
+		expect(visibleGroups(retentionActor, allFlags).flatMap((g) => g.pages.map((p) => p.href))).toContain(
 			"/portal/admin/system/school-years",
 		);
-		expect(visibleGroups(linkOnly).flatMap((g) => g.pages.map((p) => p.href))).not.toContain(
+		expect(visibleGroups(linkOnly, allFlags).flatMap((g) => g.pages.map((p) => p.href))).not.toContain(
 			"/portal/admin/system/school-years",
 		);
+	});
+
+	it("hides disabled content surfaces even from super admins", () => {
+		const disabled: FeatureFlags = { ...allFlags, library: false, announcements: false, surveys: false, publicSite: false };
+		const visible = visibleGroups(superActor, disabled).flatMap((group) => group.pages.map((page) => page.href));
+		for (const route of ["announcements", "library", "surveys", "submissions"]) {
+			expect(visible).not.toContain(`/portal/admin/content/${route}`);
+		}
+		expect(visible).toContain("/portal/admin/content/links");
 	});
 
 	it("builds a breadcrumb trail with clickable ancestors", () => {

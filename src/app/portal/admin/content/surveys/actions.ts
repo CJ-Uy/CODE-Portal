@@ -5,8 +5,10 @@ import { redirect } from "next/navigation";
 import { getRepositories } from "@/db";
 import { createSurveyInputSchema, sampleSurveyInputSchema } from "@/db/types";
 import { requireActor } from "@/server/auth/actor";
+import { assertFeatureEnabled } from "@/server/features";
 
 export async function createSurveyAction(formData: FormData) {
+	assertFeatureEnabled("surveys");
 	const actor = await requireActor();
 	const prompts = String(formData.get("prompts") ?? "")
 		.split("\n")
@@ -29,6 +31,7 @@ export async function createSurveyAction(formData: FormData) {
 }
 
 export async function sampleSurveyAction(formData: FormData) {
+	assertFeatureEnabled("surveys");
 	const actor = await requireActor();
 	const input = sampleSurveyInputSchema.parse({
 		surveyId: formData.get("surveyId"),

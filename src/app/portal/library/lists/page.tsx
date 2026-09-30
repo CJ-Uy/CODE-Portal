@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Heart, ListPlus, Plus } from "lucide-react";
 import { getRepositories } from "@/db";
 import { Button } from "@/components/ui/button";
@@ -7,11 +7,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/portal/empty-state";
 import { getActor } from "@/server/auth/actor";
+import { isFeatureEnabled } from "@/server/features";
 import { createListAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function LibraryListsPage() {
+	if (!isFeatureEnabled("library")) notFound();
 	const actor = await getActor();
 	if (!actor) redirect("/signin");
 

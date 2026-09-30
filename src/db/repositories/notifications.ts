@@ -4,6 +4,7 @@ import { createId } from "@/lib/ids";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type { Actor } from "@/server/auth/permissions";
 import type * as schema from "@/db/schema";
+import { isFeatureEnabled } from "@/server/features";
 
 // The repository registry passes the getDb() handle, whose static type is the
 // union of the sync better-sqlite3 and async D1 Drizzle databases. That union
@@ -53,6 +54,7 @@ function toMs(value: Date | number | null): number | null {
  * triggers; Phase 4's forum-reply and points-award write paths call it too.
  */
 export async function notify(db: Db, input: NotifyInput): Promise<void> {
+	if (!isFeatureEnabled("notifications")) return;
 	await db.insert(notifications).values({
 		id: createId("ntf"),
 		memberId: input.memberId,

@@ -318,6 +318,22 @@ describe("events repository on D1", () => {
 		expect(await repo.getById(owner, event.id)).toMatchObject({ myRole: "owner" });
 	});
 
+	it.each([owner, superAdmin, eventsAdmin])("lets $roles edit a past event's description without changing its schedule", async (actor) => {
+		const event = await makeApprovedEvent();
+		const { repo } = makeRepos();
+		await repo.addStaff(owner, event.id, scanner.memberId, "scanner");
+		vi.setSystemTime(new Date("2026-07-11T12:00:00.000Z"));
+		const description = "Updated details\n\nResources: https://ateneocode.org";
+		await expect(repo.update(actor, event.id, { description })).resolves.toMatchObject({
+			description,
+			startsAt: START,
+			endsAt: END,
+			createdBy: owner.memberId,
+		});
+		await expect(repo.update(scanner, event.id, { description })).rejects.toThrow("Not authorized");
+		await expect(repo.update(outsider, event.id, { description })).rejects.toThrow("Not authorized");
+	});
+
 	it("writes the scan audit row with the scanned member id", async () => {
 		const { db, repo } = makeRepos();
 		const event = await makeApprovedEvent();

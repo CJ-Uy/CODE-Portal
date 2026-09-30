@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { getActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
+import { isFeatureEnabled } from "@/server/features";
 import { addCommentAction, setCommentHiddenAction, toggleFavoriteAction } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +19,7 @@ function paragraphs(text: string): string[] {
 }
 
 export default async function LibraryItemPage({ params }: { params: Promise<{ id: string }> }) {
+	if (!isFeatureEnabled("library")) notFound();
 	const actor = await getActor();
 	if (!actor) redirect("/signin");
 	const { id } = await params;

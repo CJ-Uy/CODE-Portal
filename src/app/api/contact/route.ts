@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getRepositories } from "@/db";
 import { enforceRateLimit } from "@/server/ratelimit/guard";
 import { clientIpFromRequest, RATE_LIMITS } from "@/server/ratelimit/policies";
+import { isFeatureEnabled } from "@/server/features";
 
 const bodySchema = z.object({
 	name: z.string().trim().min(1).max(120),
@@ -13,6 +14,7 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: Request) {
+	if (!isFeatureEnabled("publicSite")) return new Response(null, { status: 404 });
 	const ip = clientIpFromRequest(request);
 	try {
 		const { getDb } = await import("@/db/client");

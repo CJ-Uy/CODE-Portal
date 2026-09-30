@@ -81,4 +81,29 @@ describe("EventManagePanel check-in access", () => {
 		expect(isOptimisticallyRemoved(removedScans, removedRow)).toBe(true);
 		expect(isOptimisticallyRemoved(removedScans, laterCheckin)).toBe(false);
 	});
+
+	it.each(["owner", "admin"] as const)("opens editable details for a past event's %s", (myRole) => {
+		const markup = renderPanel({
+			id: "past-event",
+			title: "Past workshop",
+			type: "casual",
+			place: "Room 1",
+			description: "Saved details",
+			startsAt: new Date("2020-07-10T10:00:00.000Z"),
+			endsAt: null,
+			capacity: null,
+			graceMinutes: null,
+			rsvpForm: [],
+			rsvpResponsesPublic: false,
+			allDay: false,
+			readOnly: true,
+			myRole,
+			canModerate: false,
+			canSetPoints: false,
+			attendingCount: 0,
+		});
+		expect(markup).toContain("<textarea");
+		expect(markup).toContain("Saved details");
+		expect(markup).toContain("Save changes");
+	});
 });

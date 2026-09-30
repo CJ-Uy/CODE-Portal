@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminIntro } from "@/components/portal/admin-intro";
 import { requireActor } from "@/server/auth/actor";
+import { getFeatureFlags } from "@/server/features";
 import { visibleGroups } from "./nav";
 
 /**
@@ -10,7 +11,7 @@ import { visibleGroups } from "./nav";
  */
 export async function AdminGroupIndex({ segment, whoFor }: { segment: string; whoFor: string }) {
 	const actor = await requireActor();
-	const group = visibleGroups(actor).find((g) => g.segment === segment);
+	const group = visibleGroups(actor, getFeatureFlags()).find((g) => g.segment === segment);
 	if (!group) notFound();
 
 	return (

@@ -4,6 +4,7 @@ import { getRepositories } from "@/db";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
+import { getFeatureFlags } from "@/server/features";
 import { visibleGroups } from "./nav";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +14,7 @@ export default async function AdminDashboardPage() {
 	const repositories = await getRepositories();
 	// quick links has no shared-dev internal proxy yet; degrade to an empty list instead of crashing.
 	const quickLinks = can(actor, "nav:configure") ? await repositories.quickLinks.list(actor).catch(() => []) : [];
-	const groups = visibleGroups(actor);
+	const groups = visibleGroups(actor, getFeatureFlags());
 
 	return (
 		<div className="grid gap-6">

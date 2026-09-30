@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
 import { getRepositories } from "@/db";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { getActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
+import { isFeatureEnabled } from "@/server/features";
 import type { LibraryItem } from "@/db/repositories/library";
 import { createLibraryItemAction, deleteLibraryItemAction, updateLibraryItemAction } from "./actions";
 
@@ -98,6 +99,7 @@ function Fields({ item }: { item?: LibraryItem }) {
 }
 
 export default async function AdminLibraryPage() {
+	if (!isFeatureEnabled("library")) notFound();
 	const actor = await getActor();
 	if (!actor) redirect("/signin");
 	if (!can(actor, "library:manage")) redirect("/portal");

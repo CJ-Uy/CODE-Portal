@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getRepositories } from "@/db";
 import { requireActor } from "@/server/auth/actor";
+import { assertFeatureEnabled } from "@/server/features";
 import type { LibraryItemInput } from "@/db/repositories/library";
 
 const scalarSchema = z.object({
@@ -59,6 +60,7 @@ function revalidate(id?: string): void {
 }
 
 export async function createLibraryItemAction(formData: FormData): Promise<void> {
+	assertFeatureEnabled("library");
 	const actor = await requireActor();
 	const repositories = await getRepositories();
 	await repositories.library.createItem(actor, parseItem(formData));
@@ -66,6 +68,7 @@ export async function createLibraryItemAction(formData: FormData): Promise<void>
 }
 
 export async function updateLibraryItemAction(formData: FormData): Promise<void> {
+	assertFeatureEnabled("library");
 	const actor = await requireActor();
 	const id = z.string().min(1).parse(formData.get("id"));
 	const repositories = await getRepositories();
@@ -74,6 +77,7 @@ export async function updateLibraryItemAction(formData: FormData): Promise<void>
 }
 
 export async function deleteLibraryItemAction(formData: FormData): Promise<void> {
+	assertFeatureEnabled("library");
 	const actor = await requireActor();
 	const id = z.string().min(1).parse(formData.get("id"));
 	const repositories = await getRepositories();

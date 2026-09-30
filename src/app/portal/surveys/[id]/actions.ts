@@ -3,8 +3,10 @@
 import { redirect } from "next/navigation";
 import { getRepositories } from "@/db";
 import { submitSurveyResponseInputSchema } from "@/db/types";
+import { assertFeatureEnabled } from "@/server/features";
 
 export async function submitResponseAction(formData: FormData) {
+	assertFeatureEnabled("surveys");
 	const surveyId = String(formData.get("surveyId") ?? "");
 	const token = String(formData.get("token") ?? "");
 	const answers: Array<{ questionId: string; value: string }> = [];

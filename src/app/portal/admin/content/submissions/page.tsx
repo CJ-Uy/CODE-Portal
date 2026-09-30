@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Inbox } from "lucide-react";
 import { getRepositories } from "@/db";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/portal/empty-state";
 import { getActor } from "@/server/auth/actor";
 import { hasAnyAdminScope } from "@/server/auth/admin";
+import { isFeatureEnabled } from "@/server/features";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ export default async function AdminSubmissionsPage({
 }: {
 	searchParams: Promise<{ tab?: string }>;
 }) {
+	if (!isFeatureEnabled("publicSite")) notFound();
 	const actor = await getActor();
 	if (!actor) redirect("/signin");
 	if (!hasAnyAdminScope(actor)) redirect("/portal");
