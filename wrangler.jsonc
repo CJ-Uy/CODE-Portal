@@ -1,7 +1,7 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "code-nest-prod",
-	"account_id": "8527ec1369d46f55304a6f59ab5356e4",
+	"account_id": "83376df5e0bae067afa197b07430168d",
 	"main": ".open-next/worker.js",
 	"workers_dev": true,
 	"routes": [
@@ -42,7 +42,7 @@
 		"LOCAL_STORAGE_DIR": "./.local/uploads",
 		"NEXT_PRIVATE_MINIMAL_MODE": "1",
 		// Unfinished surfaces stay hidden in production until each one ships. Only "true" enables.
-		"FEATURE_RETENTION": "false",
+		"FEATURE_RETENTION": "true",
 		"FEATURE_LIBRARY": "false",
 		"FEATURE_ANNOUNCEMENTS": "false",
 		"FEATURE_NOTIFICATIONS": "false",
@@ -54,7 +54,7 @@
 		{
 			"binding": "DB",
 			"database_name": "code-nest-prod-db",
-			"database_id": "a66fac5e-c122-466d-b7fe-5910ba6a98b9",
+			"database_id": "d5505f3a-5bf4-438e-b14f-dd595b9a24d6",
 			// One history now, shared by every environment. Its 0000 to 0003 are the files
 			// production has always had, so D1 sees them as applied and only 0004 is pending.
 			"migrations_dir": "drizzle/migrations"
