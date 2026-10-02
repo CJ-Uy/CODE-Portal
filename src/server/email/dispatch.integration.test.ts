@@ -1,9 +1,10 @@
 import { env } from "cloudflare:test";
 import { drizzle } from "drizzle-orm/d1";
 import { eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as schema from "@/db/schema";
 import { emailCampaigns, emailDeliveries } from "@/db/schema";
+import type { Audience } from "@/lib/email/types";
 import type { EmailConfig } from "./config";
 import { runEmailDispatch } from "./dispatch";
 import { EmailQuotaError, type EmailSender, type OutgoingEmail } from "./sender";
@@ -133,6 +134,49 @@ describe("runEmailDispatch", () => {
 		const result = await runEmailDispatch(db, sender, config, new Date(NOW.getTime() - 60_000));
 		expect(result.claimed).toBe(0);
 		expect(sent).toHaveLength(0);
+	});
+
+	it("recovers a claim whose enqueue never finished once the lease has expired", async () => {
+		await db
+			.update(emailCampaigns)
+			.set({ status: "sending", updatedAt: new Date(NOW.getTime() - 16 * 60_000) })
+			.where(eq(emailCampaigns.id, "ecmp_1"));
+		await db.insert(emailDeliveries).values({ id: "edl_old", campaignId: "ecmp_1", memberId: "mem_a", email: "mem_a@example.com" });
+		const { sender, sent } = fakeSender();
+		await runEmailDispatch(db, sender, config, NOW);
+		const rows = await deliveries();
+		expect(rows.map((r) => r.memberId).sort()).toEqual(["mem_a", "mem_b", "mem_c"]);
+		expect(rows.find((r) => r.memberId === "mem_a")?.id).toBe("edl_old");
+		expect(sent.map((m) => m.to).sort()).toEqual(["mem_a@example.com", "mem_b@example.com"]);
+		expect(await campaign()).toMatchObject({ status: "sent", sentCount: 2, skippedCount: 1 });
+	});
+
+	it("does not re-enqueue a fresh claim that another tick is still enqueueing", async () => {
+		await db.update(emailCampaigns).set({ status: "sending", updatedAt: NOW }).where(eq(emailCampaigns.id, "ecmp_1"));
+		const { sender, sent } = fakeSender();
+		await runEmailDispatch(db, sender, config, NOW);
+		expect(await deliveries()).toHaveLength(0);
+		expect(sent).toHaveLength(0);
+		expect((await campaign()).status).toBe("sending");
+	});
+
+	it("keeps sending other campaigns when one campaign's enqueue throws", async () => {
+		const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+		await db.insert(emailCampaigns).values({
+			id: "ecmp_broken",
+			categoryId: "ecat_1",
+			senderId: "esnd_1",
+			subject: "Broken",
+			// No exclude list: resolveAudience throws on it.
+			audience: { match: "any", include: [{ kind: "batch", batch: "2027" }] } as unknown as Audience,
+			status: "scheduled",
+			scheduledAt: new Date(NOW.getTime() - 2000),
+		});
+		const { sender, sent } = fakeSender();
+		await runEmailDispatch(db, sender, config, NOW);
+		expect(sent.filter((m) => m.subject.startsWith("Hi "))).toHaveLength(2);
+		expect(quiet).toHaveBeenCalled();
+		quiet.mockRestore();
 	});
 
 	it("cancels pending rows left under a cancelled campaign", async () => {

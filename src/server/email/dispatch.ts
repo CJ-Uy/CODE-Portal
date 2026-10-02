@@ -14,8 +14,8 @@ export type DispatchResult = { claimed: number; sent: number; failed: number; pa
 
 const BACKOFF_MINUTES = [1, 5, 15];
 const MAX_ATTEMPTS = 3;
-// How long a picked row stays hidden from other ticks. A tick that dies mid-send retries the row after this.
-const CLAIM_MINUTES = 10;
+// Matches the 15-minute scheduled-handler limit: a claim older than this belongs to a tick that is gone.
+const LEASE_MS = 15 * 60_000;
 // A delivery insert binds 5 columns; 15 rows stays under D1's 100-parameter limit.
 const INSERT_CHUNK = 15;
 const ID_CHUNK = 90;
@@ -52,34 +52,36 @@ async function enqueue(db: EmailDb, campaign: { id: string; audience: Audience; 
 }
 
 async function claimDueCampaigns(db: EmailDb, now: Date): Promise<number> {
-	// `sending` with no startedAt means a claim whose enqueue never finished (crashed tick). Enqueue is idempotent, so redo it.
+	// `sending` with no startedAt and an expired lease is a claim whose enqueue never finished (crashed tick).
+	// Enqueue is idempotent, so the next tick takes the lease and redoes it.
+	const stale = and(eq(emailCampaigns.status, "sending"), isNull(emailCampaigns.startedAt), lte(emailCampaigns.updatedAt, new Date(now.getTime() - LEASE_MS)));
 	const due = await db
 		.select({ id: emailCampaigns.id, status: emailCampaigns.status, audience: emailCampaigns.audience, categoryId: emailCampaigns.categoryId })
 		.from(emailCampaigns)
-		.where(
-			or(
-				and(eq(emailCampaigns.status, "scheduled"), lte(emailCampaigns.scheduledAt, now)),
-				and(eq(emailCampaigns.status, "sending"), isNull(emailCampaigns.startedAt)),
-			),
-		);
+		.where(or(and(eq(emailCampaigns.status, "scheduled"), lte(emailCampaigns.scheduledAt, now)), stale));
 	let claimed = 0;
 	for (const campaign of due) {
-		if (campaign.status === "scheduled") {
-			// The conditional update is the lock: only the tick that flips the row claims it.
-			const flipped = await db
-				.update(emailCampaigns)
-				.set({ status: "sending", updatedAt: now })
-				.where(and(eq(emailCampaigns.id, campaign.id), eq(emailCampaigns.status, "scheduled")))
-				.returning({ id: emailCampaigns.id });
-			if (flipped.length === 0) continue;
-			claimed++;
-		}
-		await enqueue(db, campaign, now);
-		// startedAt marks the audience as fully enqueued. finish() leaves the campaign alone until it is set.
-		await db
+		// The conditional update is the lock: only the tick that flips (or re-leases) the row enqueues it.
+		const flipped = await db
 			.update(emailCampaigns)
-			.set({ startedAt: now })
-			.where(and(eq(emailCampaigns.id, campaign.id), isNull(emailCampaigns.startedAt)));
+			.set({ status: "sending", updatedAt: now })
+			.where(
+				and(eq(emailCampaigns.id, campaign.id), campaign.status === "scheduled" ? eq(emailCampaigns.status, "scheduled") : stale),
+			)
+			.returning({ id: emailCampaigns.id });
+		if (flipped.length === 0) continue;
+		if (campaign.status === "scheduled") claimed++;
+		try {
+			await enqueue(db, campaign, now);
+			// startedAt marks the audience as fully enqueued. finish() leaves the campaign alone until it is set.
+			await db
+				.update(emailCampaigns)
+				.set({ startedAt: now })
+				.where(and(eq(emailCampaigns.id, campaign.id), isNull(emailCampaigns.startedAt)));
+		} catch (error) {
+			// One bad campaign must not block every other send. Its lease expires and a later tick retries it.
+			console.error(`email dispatch: enqueue failed for ${campaign.id}`, error);
+		}
 	}
 	return claimed;
 }
@@ -134,7 +136,8 @@ async function drain(db: EmailDb, sender: EmailSender, config: EmailConfig, now:
 		// Per-row lock against an overlapping tick that selected the same rows. Success and failure overwrite nextAttemptAt.
 		const claim = await db
 			.update(emailDeliveries)
-			.set({ nextAttemptAt: new Date(now.getTime() + CLAIM_MINUTES * 60_000) })
+			// Lease from the wall clock at claim time (late rows in a slow tick), never earlier than the tick's now.
+			.set({ nextAttemptAt: new Date(Math.max(now.getTime(), Date.now()) + LEASE_MS) })
 			.where(
 				and(
 					eq(emailDeliveries.id, delivery.id),
@@ -142,11 +145,13 @@ async function drain(db: EmailDb, sender: EmailSender, config: EmailConfig, now:
 					or(isNull(emailDeliveries.nextAttemptAt), lte(emailDeliveries.nextAttemptAt, now)),
 				),
 			)
-			.returning({ id: emailDeliveries.id });
+			.returning({ attempts: emailDeliveries.attempts });
 		if (claim.length === 0) continue;
+		// The claimed row's count, not the pre-claim snapshot: an overlapping tick may have spent an attempt since.
+		const priorAttempts = claim[0].attempts;
 		const entry = campaigns.get(delivery.campaignId);
 		const fail = async (message: string, final: boolean) => {
-			const attempts = delivery.attempts + 1;
+			const attempts = priorAttempts + 1;
 			const done = final || attempts >= MAX_ATTEMPTS;
 			await db
 				.update(emailDeliveries)
@@ -199,7 +204,7 @@ async function drain(db: EmailDb, sender: EmailSender, config: EmailConfig, now:
 			});
 			await db
 				.update(emailDeliveries)
-				.set({ status: "sent", messageId: result.messageId, sentAt: now, attempts: delivery.attempts + 1, error: null, nextAttemptAt: null })
+				.set({ status: "sent", messageId: result.messageId, sentAt: now, attempts: priorAttempts + 1, error: null, nextAttemptAt: null })
 				.where(eq(emailDeliveries.id, delivery.id));
 			sent++;
 		} catch (error) {
