@@ -1,6 +1,7 @@
 import { createAnnouncementsRepository, createUnavailableAnnouncementsRepository } from "./announcements";
 import { createAuditRepository, createUnavailableAuditRepository } from "./audit";
 import { createCalendarRepository, type CalendarRepository } from "./calendar";
+import { createEmailRepositories, createUnavailableEmailRepositories } from "./email";
 import { createEventForumRepository } from "./event-forum";
 import { createEventMediaRepository } from "./event-media";
 import { createEventsRepository } from "./events";
@@ -59,6 +60,7 @@ export function createDrizzleRepositories(db: DrizzleDb) {
 		announcements: createAnnouncementsRepository(d1, audit),
 		library: createLibraryRepository(d1, audit),
 		submissions: createSubmissionsRepository(d1),
+		email: createEmailRepositories(d1, audit),
 		audit,
 	};
 }
@@ -135,6 +137,7 @@ export function createSharedRepositories(adapter: DatabaseAdapter): Repositories
 		announcements: createUnavailableAnnouncementsRepository(),
 		library: createUnavailableLibraryRepository(),
 		submissions: createUnavailableSubmissionsRepository(),
+		email: createUnavailableEmailRepositories(),
 		audit,
 	};
 }
