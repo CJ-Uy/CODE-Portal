@@ -1,4 +1,4 @@
-export const RESERVED_SLUG_DEFAULTS = ["portal", "admin", "api", "l", "signin", "internal", "contact", "product", "projects", "services", "favicon.ico", "robots.txt", "sitemap.xml", "_next"] as const;
+export const RESERVED_SLUG_DEFAULTS = ["portal", "admin", "api", "l", "signin", "internal", "contact", "product", "projects", "services", "unsubscribe", "favicon.ico", "robots.txt", "sitemap.xml", "_next"] as const;
 
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/;
 const MOBILE_PATTERN = /Mobi|Android|iPhone|iPad|iPod/i;
