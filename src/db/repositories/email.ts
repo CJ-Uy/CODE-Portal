@@ -1,6 +1,7 @@
 import type { AuditRepository } from "./audit";
 import type { EmailDb } from "./email-audience";
 import { createEmailCampaignsRepository } from "./email-campaigns";
+import { createEmailInboxRepository } from "./email-inbox";
 import { createEmailSettingsRepository } from "./email-settings";
 import { createEmailTemplatesRepository } from "./email-templates";
 
@@ -9,6 +10,7 @@ export function createEmailRepositories(db: EmailDb, audit: AuditRepository) {
 		settings: createEmailSettingsRepository(db, audit),
 		templates: createEmailTemplatesRepository(db, audit),
 		campaigns: createEmailCampaignsRepository(db, audit),
+		inbox: createEmailInboxRepository(db, audit),
 	};
 }
 
@@ -20,5 +22,5 @@ export function createUnavailableEmailRepositories(): EmailRepositories {
 		throw new Error("Email is unavailable through this repository adapter.");
 	};
 	const stub = new Proxy({}, { get: () => unavailable });
-	return { settings: stub, templates: stub, campaigns: stub } as unknown as EmailRepositories;
+	return { settings: stub, templates: stub, campaigns: stub, inbox: stub } as unknown as EmailRepositories;
 }

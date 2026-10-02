@@ -50,6 +50,9 @@ importers:
       next-auth:
         specifier: 5.0.0-beta.31
         version: 5.0.0-beta.31(next@16.2.6(@babel/core@7.29.7)(@playwright/test@1.59.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)
+      postal-mime:
+        specifier: ^4.0.2
+        version: 4.0.2
       qr-code-styling:
         specifier: 1.9.2
         version: 1.9.2
@@ -4687,6 +4690,10 @@ packages:
   possible-typed-array-names@1.1.0:
     resolution: {integrity: sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg==}
     engines: {node: '>= 0.4'}
+
+  postal-mime@4.0.2:
+    resolution: {integrity: sha512-b/FqJGdS+Y+leh30r2ord1gWZNPfYcTiFBR1BIPvZYvQrKJjYYqGeECh9sQ5BpkWtcjSj39ngIAiE2w6XNfMjA==}
+    engines: {node: '>=20'}
 
   postcss@8.4.31:
     resolution: {integrity: sha512-PS08Iboia9mts/2ygV3eLpY5ghnUcfLV/EXTOW1E2qYxJKGGBUtNjN76FYHnMs36RmARn41bC0AZmn+rR0OVpQ==}
@@ -10302,6 +10309,8 @@ snapshots:
   pngjs@5.0.0: {}
 
   possible-typed-array-names@1.1.0: {}
+
+  postal-mime@4.0.2: {}
 
   postcss@8.4.31:
     dependencies:
