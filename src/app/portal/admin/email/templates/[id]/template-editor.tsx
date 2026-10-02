@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { ArrowLeft, Copy, Send } from "lucide-react";
 import { BlockEditor, type EventOption, type PreviewPerson } from "@/components/email/block-editor";
 import { TaggedField } from "@/components/email/tagged-field";
@@ -31,6 +31,7 @@ export function TemplateEditor({
 	const router = useRouter();
 	const toast = useToast();
 	const [id, setId] = useState(initial.id);
+	const mounted = useRef(true);
 	const idRef = useRef(initial.id); // set synchronously so a trailing save never inserts a second row
 	const [name, setName] = useState(initial.name);
 	const [categoryId, setCategoryId] = useState(initial.categoryId);
@@ -40,6 +41,13 @@ export function TemplateEditor({
 	const [error, setError] = useState<string | null>(null);
 	const [pending, startTransition] = useTransition();
 	const category = categories.find((c) => c.id === categoryId);
+
+	useEffect(() => {
+		mounted.current = true;
+		return () => {
+			mounted.current = false;
+		};
+	}, []);
 
 	const value = useMemo(() => ({ name, categoryId, subject, preheader, blocks }), [name, categoryId, subject, preheader, blocks]);
 	const { state, flush } = useAutosave(value, async (v) => {
@@ -56,7 +64,8 @@ export function TemplateEditor({
 		if (!idRef.current) {
 			idRef.current = result.data;
 			setId(result.data);
-			window.history.replaceState(null, "", `/portal/admin/email/templates/${result.data}`);
+			// An unmount flush can finish the first insert after the user left; don't rewrite their new URL.
+			if (mounted.current && window.location.pathname.endsWith("/templates/new")) window.history.replaceState(null, "", `/portal/admin/email/templates/${result.data}`);
 		}
 		return true;
 	});

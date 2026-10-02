@@ -24,7 +24,10 @@ export function useAutosave<T>(value: T, save: (value: T) => Promise<boolean>, d
 	});
 
 	const flush = useCallback((fresh?: T) => {
-		if (fresh !== undefined) latest.current = fresh;
+		if (fresh !== undefined) {
+			if (fresh !== latest.current) dirty.current = true;
+			latest.current = fresh;
+		}
 		if (running.current) return running.current; // its loop picks up anything still dirty
 		if (!dirty.current) return Promise.resolve(true);
 		const run = (async () => {

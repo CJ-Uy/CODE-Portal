@@ -68,7 +68,14 @@ export function TaggedField({ label, value, onChange, multiline, rows = 5, maxLe
 
 	const onFocus = () => window.clearTimeout(blurTimer.current);
 	const onBlur = () => {
-		blurTimer.current = window.setTimeout(() => setOpen(false), 120);
+		blurTimer.current = window.setTimeout(() => {
+			if (open && viaBrace.current) {
+				viaBrace.current = false;
+				const { start, end } = caret.current;
+				onChange(value.slice(0, start) + "{" + value.slice(end));
+			}
+			setOpen(false);
+		}, 120);
 	};
 
 	const field = multiline ? (

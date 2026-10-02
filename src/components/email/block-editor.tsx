@@ -241,9 +241,10 @@ export function BlockEditor({ blocks, onChange, baseUrl, footer, people, events,
 								key={block.id}
 								data-block-id={block.id}
 								tabIndex={0}
-								role="button"
+								role="group"
+								aria-roledescription="block"
 								aria-label={`Block ${index + 1}: ${block.type}`}
-								aria-pressed={isSelected}
+								aria-current={isSelected ? "true" : undefined}
 								onClick={() => setSelectedId(block.id)}
 								onKeyDown={(e) => {
 									if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
