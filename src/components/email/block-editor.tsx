@@ -85,6 +85,7 @@ export function BlockEditor({ blocks, onChange, baseUrl, footer, people, events,
 	const undo = () => {
 		const previous = past.at(-1);
 		if (!previous) return;
+		lastCommit.current = 0;
 		setPast((p) => p.slice(0, -1));
 		setFuture((f) => [blocks, ...f]);
 		onChange(previous);
@@ -92,6 +93,7 @@ export function BlockEditor({ blocks, onChange, baseUrl, footer, people, events,
 	const redo = () => {
 		const next = future[0];
 		if (!next) return;
+		lastCommit.current = 0;
 		setFuture((f) => f.slice(1));
 		setPast((p) => [...p, blocks]);
 		onChange(next);
@@ -111,6 +113,7 @@ export function BlockEditor({ blocks, onChange, baseUrl, footer, people, events,
 		const next = [...blocks];
 		[next[i], next[j]] = [next[j], next[i]];
 		commit(next);
+		requestAnimationFrame(() => canvasRef.current?.querySelector<HTMLElement>(`[data-block-id="${id}"]`)?.focus());
 	};
 	const remove = (id: string) => {
 		const i = blocks.findIndex((b) => b.id === id);
@@ -221,11 +224,11 @@ export function BlockEditor({ blocks, onChange, baseUrl, footer, people, events,
 	);
 
 	const canvas = (
-		<div className="grid gap-3">
+		<div className="grid min-w-0 gap-3 [overflow-wrap:anywhere]">
 			{toolbar}
 			<div ref={canvasRef} className="rounded-xl bg-[#F5F5F6] p-3 sm:px-14 sm:py-6">
 				<div className="mx-auto rounded-xl bg-white shadow-sm transition-[max-width] duration-300 ease-out motion-reduce:transition-none" style={{ maxWidth: width }}>
-					<table role="presentation" width="100%" cellPadding={0} cellSpacing={0}>
+					<table role="presentation" width="100%" cellPadding={0} cellSpacing={0} inert>
 						<tbody dangerouslySetInnerHTML={{ __html: header }} />
 					</table>
 					{blocks.length === 0 ? (
@@ -237,7 +240,16 @@ export function BlockEditor({ blocks, onChange, baseUrl, footer, people, events,
 							<div
 								key={block.id}
 								data-block-id={block.id}
+								tabIndex={0}
+								role="button"
+								aria-label={`Block ${index + 1}: ${block.type}`}
+								aria-pressed={isSelected}
 								onClick={() => setSelectedId(block.id)}
+								onKeyDown={(e) => {
+									if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
+									e.preventDefault();
+									setSelectedId(block.id);
+								}}
 								onDragOver={(e) => {
 									if (!dragId) return;
 									e.preventDefault();
@@ -251,7 +263,7 @@ export function BlockEditor({ blocks, onChange, baseUrl, footer, people, events,
 									setDrop(null);
 								}}
 								className={cn(
-									"row-enter group relative cursor-pointer transition-[transform,box-shadow,opacity] duration-150",
+									"row-enter group relative cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#4986AC] transition-[transform,box-shadow,opacity] duration-150",
 									isSelected ? "outline outline-2 -outline-offset-2 outline-[#4986AC]" : "hover:outline hover:outline-1 hover:-outline-offset-1 hover:outline-[#90B4CC]",
 									dragId === block.id && "scale-[1.02] opacity-60 shadow-lg",
 								)}
@@ -274,7 +286,7 @@ export function BlockEditor({ blocks, onChange, baseUrl, footer, people, events,
 								>
 									<GripVertical className="size-4" />
 								</button>
-								<table role="presentation" width="100%" cellPadding={0} cellSpacing={0}>
+								<table role="presentation" width="100%" cellPadding={0} cellSpacing={0} inert>
 									<tbody dangerouslySetInnerHTML={{ __html: renderBlockHtml(block, resolve, baseUrl) }} />
 								</table>
 								{isSelected ? (
@@ -296,7 +308,7 @@ export function BlockEditor({ blocks, onChange, baseUrl, footer, people, events,
 							</div>
 						);
 					})}
-					<table role="presentation" width="100%" cellPadding={0} cellSpacing={0}>
+					<table role="presentation" width="100%" cellPadding={0} cellSpacing={0} inert>
 						<tbody dangerouslySetInnerHTML={{ __html: footerHtml }} />
 					</table>
 				</div>
@@ -387,13 +399,13 @@ export function BlockEditor({ blocks, onChange, baseUrl, footer, people, events,
 		);
 	}
 	return (
-		<div className="grid gap-4 md:grid-cols-[180px_minmax(0,1fr)] xl:grid-cols-[180px_minmax(0,1fr)_300px]">
-			<div className="grid content-start gap-2">
+		<div className="grid grid-cols-1 gap-4 md:grid-cols-[180px_minmax(0,1fr)] xl:grid-cols-[180px_minmax(0,1fr)_300px]">
+			<div className="grid min-w-0 content-start gap-2">
 				{palette}
 				{eventList}
 			</div>
 			{canvas}
-			<div className="md:col-span-2 xl:col-span-1">{inspector}</div>
+			<div className="min-w-0 md:col-span-2 xl:col-span-1">{inspector}</div>
 		</div>
 	);
 }

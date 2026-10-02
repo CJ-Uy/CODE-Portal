@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { ArrowLeft, Copy, Send } from "lucide-react";
 import { BlockEditor, type EventOption, type PreviewPerson } from "@/components/email/block-editor";
 import { TaggedField } from "@/components/email/tagged-field";
@@ -31,6 +31,7 @@ export function TemplateEditor({
 	const router = useRouter();
 	const toast = useToast();
 	const [id, setId] = useState(initial.id);
+	const idRef = useRef(initial.id); // set synchronously so a trailing save never inserts a second row
 	const [name, setName] = useState(initial.name);
 	const [categoryId, setCategoryId] = useState(initial.categoryId);
 	const [subject, setSubject] = useState(initial.subject);
@@ -41,23 +42,30 @@ export function TemplateEditor({
 	const category = categories.find((c) => c.id === categoryId);
 
 	const value = useMemo(() => ({ name, categoryId, subject, preheader, blocks }), [name, categoryId, subject, preheader, blocks]);
-	const { state } = useAutosave(value, async (v) => {
+	const { state, flush } = useAutosave(value, async (v) => {
 		if (!v.name.trim()) {
 			setError("Name the template to save it.");
 			return false;
 		}
-		const result = await saveTemplateAction({ id: id ?? undefined, ...v });
+		const result = await saveTemplateAction({ id: idRef.current ?? undefined, ...v });
 		if (!result.ok) {
 			setError(result.error);
 			return false;
 		}
 		setError(null);
-		if (!id) {
+		if (!idRef.current) {
+			idRef.current = result.data;
 			setId(result.data);
 			window.history.replaceState(null, "", `/portal/admin/email/templates/${result.data}`);
 		}
 		return true;
 	});
+
+	const flushed = async () => {
+		if (await flush(value)) return true;
+		toast({ message: "Couldn't save your changes. Fix the problem shown at the top first." });
+		return false;
+	};
 
 	const footer = useMemo(
 		() => ({ categoryName: category?.name ?? "CODE", required: category?.required ?? true, archiveUrl: `${baseUrl}/portal/mail`, preferencesUrl: `${baseUrl}/portal/mail/preferences`, unsubscribeUrl: category && !category.required ? `${baseUrl}/unsubscribe` : null }),
@@ -82,6 +90,7 @@ export function TemplateEditor({
 								disabled={pending}
 								onClick={() =>
 									startTransition(async () => {
+										if (!(await flushed())) return;
 										const result = await duplicateTemplateAction(id);
 										if (result.ok) router.push(`/portal/admin/email/templates/${result.data}`);
 										else toast({ message: result.error });
@@ -96,6 +105,7 @@ export function TemplateEditor({
 								disabled={pending}
 								onClick={() =>
 									startTransition(async () => {
+										if (!(await flushed())) return;
 										const result = await setTemplateArchivedAction(id, true);
 										if (!result.ok) return toast({ message: result.error });
 										router.push("/portal/admin/email/templates");
@@ -104,11 +114,17 @@ export function TemplateEditor({
 							>
 								Archive
 							</Button>
-							<Button asChild>
-								<Link href={`/portal/admin/email/new?template=${id}`}>
-									<Send />
-									Use in new email
-								</Link>
+							<Button
+								disabled={pending}
+								onClick={() =>
+									startTransition(async () => {
+										if (!(await flushed())) return;
+										router.push(`/portal/admin/email/new?template=${id}`);
+									})
+								}
+							>
+								<Send />
+								Use in new email
 							</Button>
 						</>
 					) : null}

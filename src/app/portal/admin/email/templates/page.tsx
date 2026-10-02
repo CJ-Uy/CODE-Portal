@@ -32,7 +32,7 @@ export default async function TemplatesPage({ searchParams }: { searchParams: Pr
 					<Input name="q" defaultValue={q} placeholder="Search templates" className="pl-8" aria-label="Search templates" />
 				</form>
 			</header>
-			<ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+			<ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
 				<li className="row-enter">
 					<Link
 						href="/portal/admin/email/templates/new"
@@ -58,7 +58,7 @@ export default async function TemplatesPage({ searchParams }: { searchParams: Pr
 								href={`/portal/admin/email/templates/${t.id}`}
 								className="group grid overflow-hidden rounded-xl border border-border bg-card transition-[border-color,transform,box-shadow] hover:-translate-y-0.5 hover:border-accent hover:shadow-md motion-reduce:hover:translate-y-0"
 							>
-								<div className="pointer-events-none relative h-44 overflow-hidden bg-[#F5F5F6]" aria-hidden>
+								<div className="pointer-events-none relative h-44 overflow-hidden bg-[#F5F5F6]" inert>
 									<div className="absolute left-1/2 top-3 w-[600px] origin-top -translate-x-1/2 scale-[0.5]" dangerouslySetInnerHTML={{ __html: bodyHtml }} />
 								</div>
 								<div className="grid gap-0.5 border-t border-border p-3">

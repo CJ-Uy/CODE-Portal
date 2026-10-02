@@ -24,6 +24,8 @@ export function TaggedField({ label, value, onChange, multiline, rows = 5, maxLe
 	const caret = useRef<{ start: number; end: number }>({ start: value.length, end: value.length });
 	const [open, setOpen] = useState(false);
 	const [active, setActive] = useState(0);
+	const viaBrace = useRef(false); // Escape only types the "{" back when the menu was opened by typing it
+	const blurTimer = useRef<number | undefined>(undefined);
 
 	const remember = () => {
 		const el = ref.current;
@@ -50,22 +52,29 @@ export function TaggedField({ label, value, onChange, multiline, rows = 5, maxLe
 				pick(MERGE_TAGS[active]);
 			} else if (e.key === "Escape") {
 				e.preventDefault();
-				insert("{");
+				if (viaBrace.current) insert("{");
+				else setOpen(false);
 			}
 			return;
 		}
 		if (e.key === "{") {
 			e.preventDefault();
 			remember();
+			viaBrace.current = true;
 			setActive(0);
 			setOpen(true);
 		}
 	};
 
+	const onFocus = () => window.clearTimeout(blurTimer.current);
+	const onBlur = () => {
+		blurTimer.current = window.setTimeout(() => setOpen(false), 120);
+	};
+
 	const field = multiline ? (
-		<Textarea id={id} ref={ref} rows={rows} value={value} maxLength={maxLength} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} onKeyDown={onKeyDown} onSelect={remember} />
+		<Textarea id={id} ref={ref} rows={rows} value={value} maxLength={maxLength} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} onKeyDown={onKeyDown} onSelect={remember} onFocus={onFocus} onBlur={onBlur} />
 	) : (
-		<Input id={id} ref={ref} value={value} maxLength={maxLength} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} onKeyDown={onKeyDown} onSelect={remember} />
+		<Input id={id} ref={ref} value={value} maxLength={maxLength} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} onKeyDown={onKeyDown} onSelect={remember} onFocus={onFocus} onBlur={onBlur} />
 	);
 
 	return (
@@ -80,6 +89,7 @@ export function TaggedField({ label, value, onChange, multiline, rows = 5, maxLe
 					onMouseDown={(e) => e.preventDefault()}
 					onClick={() => {
 						remember();
+						viaBrace.current = false;
 						setActive(0);
 						setOpen((o) => !o);
 					}}
