@@ -110,4 +110,23 @@ describe("email campaigns", () => {
 		expect(rows.find((r) => r.id === "edl_s")?.status).toBe("sent");
 		expect((await repos.campaigns.get(admin, draft.id))?.status).toBe("sending");
 	});
+
+	it("leaves a finished campaign alone when there is nothing to retry", async () => {
+		const ids = await setup();
+		const draft = await repos.campaigns.saveDraft(admin, draftInput(ids));
+		await env.DB.prepare("UPDATE email_campaigns SET status='sent' WHERE id=?").bind(draft.id).run();
+		expect(await repos.campaigns.retryFailed(admin, draft.id)).toBe(0);
+		expect((await repos.campaigns.get(admin, draft.id))?.status).toBe("sent");
+	});
+
+	it("rejects a draft pointing at a missing category with a readable error", async () => {
+		const ids = await setup();
+		await expect(repos.campaigns.saveDraft(admin, { ...draftInput(ids), categoryId: "ecat_missing" })).rejects.toThrow(
+			"That template, category, or sender no longer exists.",
+		);
+		const draft = await repos.campaigns.saveDraft(admin, draftInput(ids));
+		await expect(repos.campaigns.saveDraft(admin, { ...draftInput(ids), id: draft.id, senderId: "esnd_missing" })).rejects.toThrow(
+			"That template, category, or sender no longer exists.",
+		);
+	});
 });

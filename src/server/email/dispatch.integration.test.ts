@@ -115,6 +115,26 @@ describe("runEmailDispatch", () => {
 		expect((await campaign()).status).toBe("sent");
 	});
 
+	it("fails a delivery whose member was deleted after enqueue, without sending", async () => {
+		await runEmailDispatch(db, fakeSender(() => new EmailQuotaError("daily limit")).sender, config, NOW);
+		await env.DB.prepare("DELETE FROM members WHERE id = 'mem_a'").run();
+		const { sender, sent } = fakeSender();
+		await runEmailDispatch(db, sender, config, NOW);
+		expect(sent.map((m) => m.to)).toEqual(["mem_b@example.com"]);
+		const row = (await deliveries()).find((r) => r.email === "mem_a@example.com")!;
+		expect(row).toMatchObject({ memberId: null, status: "failed", error: "Member no longer exists" });
+	});
+
+	it.each(["E_RECIPIENT_SUPPRESSED", "E_VALIDATION_ERROR", "E_SENDER_NOT_VERIFIED", "E_HEADER_TOO_LONG"])(
+		"fails permanently without retry on %s",
+		async (code) => {
+			const { sender } = fakeSender((m) => (m.to.startsWith("mem_a") ? Object.assign(new Error("rejected"), { code }) : null));
+			await runEmailDispatch(db, sender, config, NOW);
+			const row = (await deliveries()).find((r) => r.memberId === "mem_a")!;
+			expect(row).toMatchObject({ status: "failed", attempts: 1, nextAttemptAt: null });
+		},
+	);
+
 	it("pauses on a quota error without spending an attempt", async () => {
 		const { sender } = fakeSender(() => new EmailQuotaError("daily limit"));
 		const result = await runEmailDispatch(db, sender, config, NOW);

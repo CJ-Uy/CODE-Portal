@@ -111,7 +111,10 @@ export async function setTemplateArchivedAction(id: string, archived: boolean) {
 export async function saveCampaignAction(input: CampaignInput) {
 	return runAction(async () => {
 		const { actor, email } = await context();
-		const row = await email.campaigns.saveDraft(actor, input);
+		const refs = z
+			.object({ id: idSchema.optional(), templateId: idSchema.nullable(), categoryId: idSchema.nullable(), senderId: idSchema.nullable() })
+			.parse(input);
+		const row = await email.campaigns.saveDraft(actor, { ...input, ...refs });
 		revalidatePath(BASE);
 		return { id: row.id, status: row.status };
 	});

@@ -38,7 +38,7 @@ export default async function MailPage() {
 									<span className="shrink-0 text-xs text-muted-foreground">{item.sentAt ? DATE.format(item.sentAt) : ""}</span>
 								</span>
 								<span className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
-									{item.categoryName ? <span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground">{item.categoryName}</span> : null}
+									{item.categoryName ? <span className="min-w-0 max-w-[50%] shrink-0 truncate rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground">{item.categoryName}</span> : null}
 									<span className="min-w-0 truncate">{item.preheader || item.senderName}</span>
 								</span>
 							</Link>

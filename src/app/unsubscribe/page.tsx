@@ -8,9 +8,10 @@ import { UnsubscribeCard } from "./unsubscribe-card";
 
 export const dynamic = "force-dynamic";
 
-export default async function UnsubscribePage({ searchParams }: { searchParams: Promise<{ t?: string }> }) {
+export default async function UnsubscribePage({ searchParams }: { searchParams: Promise<{ t?: string | string[] }> }) {
 	if (!isFeatureEnabled("email")) notFound();
-	const { t = "" } = await searchParams;
+	const raw = (await searchParams).t;
+	const t = typeof raw === "string" ? raw : "";
 	const payload = t ? await verifyUnsubscribeToken(emailConfigFromEnv().unsubscribeSecret, t) : null;
 	const info = payload ? await describeTokenCategory(emailDbFromEnv(), payload) : null;
 	return (

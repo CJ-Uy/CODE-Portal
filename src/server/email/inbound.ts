@@ -44,12 +44,14 @@ export async function handleInboundEmail(
 	const html = parsed?.html ? await sanitizeEmailHtml(parsed.html) : null;
 	const text = parsed?.text ?? null;
 
-	const [member] = await db.select({ id: members.id }).from(members).where(eq(members.email, fromEmail)).limit(1);
+	// The header From is sender-controlled; trust it for identity only when the envelope agrees.
+	const verified = fromEmail === envelope.from.trim().toLowerCase();
+	const [member] = verified ? await db.select({ id: members.id }).from(members).where(eq(members.email, fromEmail)).limit(1) : [];
 	const tag = plusTag(envelope.to);
 	let threadId: string | null = null;
 	let campaignId: string | null = null;
 
-	if (tag?.startsWith("eth_")) {
+	if (tag?.startsWith("eth_") && verified) {
 		// Only the thread's own correspondent may append; anyone else starts a new thread.
 		const [thread] = await db
 			.select({ id: emailThreads.id })

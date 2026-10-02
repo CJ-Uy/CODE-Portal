@@ -1,5 +1,6 @@
 import { env } from "cloudflare:test";
 import { drizzle } from "drizzle-orm/d1";
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import * as schema from "@/db/schema";
 import { emailMessages, emailThreads } from "@/db/schema";
@@ -72,6 +73,19 @@ describe("handleInboundEmail", () => {
 		expect(await db.select().from(emailThreads)).toHaveLength(2);
 		const own = await handleInboundEmail(db, null, mail({ from: "ana@example.com", to, subject: "Re: GA", body: "two" }), { from: "ana@example.com", to });
 		expect(own.threadId).toBe(first.threadId);
+	});
+
+	it("treats a header From that differs from the envelope sender as a non-member and never appends via eth_", async () => {
+		const first = await handleInboundEmail(db, null, mail({ from: "ana@example.com", to: "beta-inbox+edl_1@ateneocode.org", subject: "Re: GA", body: "one" }), {
+			from: "ANA@Example.com",
+			to: "beta-inbox+edl_1@ateneocode.org",
+		});
+		expect((await db.select().from(emailThreads))[0].memberId).toBe("mem_a");
+		const to = `beta-inbox+${first.threadId}@ateneocode.org`;
+		const spoofed = await handleInboundEmail(db, null, mail({ from: "ana@example.com", to, subject: "Re: GA", body: "spoofed" }), { from: "mallory@else.com", to });
+		expect(spoofed.threadId).not.toBe(first.threadId);
+		const [thread] = await db.select().from(emailThreads).where(eq(emailThreads.id, spoofed.threadId));
+		expect(thread.memberId).toBeNull();
 	});
 
 	it("keeps an unparseable message", async () => {

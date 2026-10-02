@@ -68,10 +68,7 @@
 		}
 	],
 	"send_email": [
-		{
-			"name": "EMAIL",
-			"allowed_sender_addresses": ["hello@ateneocode.org", "events@ateneocode.org", "officers@ateneocode.org"]
-		}
+		{ "name": "EMAIL" }
 	],
 	"triggers": {
 		"crons": ["* * * * *"]

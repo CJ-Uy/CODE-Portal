@@ -43,7 +43,7 @@ export function UnsubscribeCard({ token, categoryName, requiredNames, initiallyO
 					</Button>
 				</>
 			)}
-			{error ? <p className="text-sm text-[#343B41] dark:text-[#D7DFE9]">{error}</p> : null}
+			{error ? <p role="alert" className="text-sm text-[#343B41] dark:text-[#D7DFE9]">{error}</p> : null}
 			{requiredNames.length > 0 ? (
 				<p className="min-w-0 break-all text-sm text-muted-foreground">As a member you still get: {requiredNames.join(", ")}.</p>
 			) : null}

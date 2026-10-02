@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNull, like, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, gte, inArray, isNull, like, or, sql } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import { crsEvents, emailCampaigns, emailCategories, emailDeliveries, emailOptouts, emailSenders, members, roles, terms } from "@/db/schema";
 import { audienceSchema, emailContentSchema } from "@/lib/email/blocks";
@@ -110,11 +110,17 @@ export function createEmailCampaignsRepository(db: EmailDb, audit: AuditReposito
 			const content = emailContentSchema.parse({ subject: input.subject, preheader: input.preheader, blocks: input.blocks });
 			const audience = audienceSchema.parse(input.audience);
 			const values = { templateId: input.templateId, categoryId: input.categoryId, senderId: input.senderId, ...content, audience, updatedAt: new Date() };
+			const missingRef = (error: unknown): never => {
+				const cause = (error as { cause?: unknown })?.cause;
+				if (/FOREIGN KEY/i.test(`${error} ${cause}`)) throw new Error("That template, category, or sender no longer exists.");
+				throw error;
+			};
 			if (!input.id) {
 				const [row] = await db
 					.insert(emailCampaigns)
 					.values({ id: createId("ecmp"), ...values, createdBy: actor.memberId })
-					.returning();
+					.returning()
+					.catch(missingRef);
 				await record(actor, "email:campaign_create", row.id, content.subject);
 				return row;
 			}
@@ -122,7 +128,8 @@ export function createEmailCampaignsRepository(db: EmailDb, audit: AuditReposito
 				.update(emailCampaigns)
 				.set({ ...values, status: "draft", scheduledAt: null })
 				.where(and(eq(emailCampaigns.id, input.id), inArray(emailCampaigns.status, ["draft", "scheduled"])))
-				.returning();
+				.returning()
+				.catch(missingRef);
 			if (!row) throw new Error("This email can no longer be edited. Duplicate it to send a new version.");
 			return row;
 		},
@@ -184,15 +191,25 @@ export function createEmailCampaignsRepository(db: EmailDb, audit: AuditReposito
 			assertEmail(actor, "email:send");
 			const campaign = await get(actor, id);
 			if (!campaign || !["sent", "failed"].includes(campaign.status)) throw new Error("Only finished emails can retry failed recipients.");
-			const reset = await db
-				.update(emailDeliveries)
-				.set({ status: "pending", attempts: 0, error: null, nextAttemptAt: null })
-				.where(and(eq(emailDeliveries.campaignId, id), eq(emailDeliveries.status, "failed")))
-				.returning({ id: emailDeliveries.id });
-			if (reset.length > 0) {
-				await db.update(emailCampaigns).set({ status: "sending", finishedAt: null, updatedAt: new Date() }).where(eq(emailCampaigns.id, id));
-				await record(actor, "email:campaign_retry", id, `${reset.length} recipients`);
-			}
+			// One batch so the reset rows and the campaign flip land together. The exists guard keeps a retry with nothing to reset from reopening the campaign.
+			const [reset] = await db.batch([
+				db
+					.update(emailDeliveries)
+					.set({ status: "pending", attempts: 0, error: null, nextAttemptAt: null })
+					.where(and(eq(emailDeliveries.campaignId, id), eq(emailDeliveries.status, "failed")))
+					.returning({ id: emailDeliveries.id }),
+				db
+					.update(emailCampaigns)
+					.set({ status: "sending", finishedAt: null, updatedAt: new Date() })
+					.where(
+						and(
+							eq(emailCampaigns.id, id),
+							inArray(emailCampaigns.status, ["sent", "failed"]),
+							exists(db.select({ id: emailDeliveries.id }).from(emailDeliveries).where(and(eq(emailDeliveries.campaignId, id), eq(emailDeliveries.status, "pending")))),
+						),
+					),
+			]);
+			if (reset.length > 0) await record(actor, "email:campaign_retry", id, `${reset.length} recipients`);
 			return reset.length;
 		},
 

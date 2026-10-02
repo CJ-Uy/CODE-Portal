@@ -19,6 +19,8 @@ const LEASE_MS = 15 * 60_000;
 // A delivery insert binds 5 columns; 15 rows stays under D1's 100-parameter limit.
 const INSERT_CHUNK = 15;
 const ID_CHUNK = 90;
+// send_email binding codes that a retry cannot fix.
+const PERMANENT_CODES = new Set(["E_RECIPIENT_SUPPRESSED", "E_VALIDATION_ERROR", "E_SENDER_NOT_VERIFIED"]);
 
 export async function unsubscribeLinks(config: EmailConfig, memberId: string, categoryId: string) {
 	const token = await signUnsubscribeToken(config.unsubscribeSecret, memberId, categoryId);
@@ -169,9 +171,12 @@ async function drain(db: EmailDb, sender: EmailSender, config: EmailConfig, now:
 			continue;
 		}
 		const member = delivery.memberId ? memberById.get(delivery.memberId) : undefined;
-		const values = mergeValuesFor(member ?? { email: delivery.email, name: null, fullName: null, nickname: null, batch: null });
-		const links =
-			!entry.category.required && delivery.memberId ? await unsubscribeLinks(config, delivery.memberId, entry.category.id) : null;
+		if (!member) {
+			await fail("Member no longer exists", true);
+			continue;
+		}
+		const values = mergeValuesFor(member);
+		const links = entry.category.required ? null : await unsubscribeLinks(config, member.id, entry.category.id);
 		const rendered = renderEmail({
 			subject: entry.campaign.subject,
 			preheader: entry.campaign.preheader,
@@ -212,7 +217,8 @@ async function drain(db: EmailDb, sender: EmailSender, config: EmailConfig, now:
 				await db.update(emailDeliveries).set({ nextAttemptAt: delivery.nextAttemptAt }).where(eq(emailDeliveries.id, delivery.id));
 				return { sent, failed, paused: true };
 			}
-			await fail(error instanceof Error ? error.message : String(error), false);
+			const code = String((error as { code?: unknown })?.code ?? "");
+			await fail(error instanceof Error ? error.message : String(error), PERMANENT_CODES.has(code) || code.startsWith("E_HEADER_"));
 		}
 	}
 	return { sent, failed, paused: false };
