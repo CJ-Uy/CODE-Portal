@@ -16,4 +16,15 @@ describe("sanitizeEmailHtml", () => {
 		const html = await sanitizeEmailHtml(`<p><img src="https://tracker.example/p.gif" alt="Logo <x>"></p>`);
 		expect(html).toBe("<p>[image: Logo &lt;x&gt;]</p>");
 	});
+
+	it.each([
+		["xmp", "<xmp><img src=x onerror=alert(1)></xmp>"],
+		["noframes", "<noframes><script>alert(1)</script></noframes>"],
+		["noembed", "<noembed><img src=https://t.example/p.gif></noembed>"],
+		["plaintext", "<plaintext><img src=x onerror=alert(1)><script>alert(1)</script>"],
+	])("drops raw-text element %s without emitting its content", async (_name, vector) => {
+		const html = await sanitizeEmailHtml("<p>a</p>" + vector);
+		expect(html).not.toMatch(/<img|<script|onerror/i);
+		expect(html).toContain("<p>a</p>");
+	});
 });

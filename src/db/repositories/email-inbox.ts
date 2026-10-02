@@ -111,7 +111,7 @@ export function createEmailInboxRepository(db: EmailDb, audit: AuditRepository) 
 						.select({ address: emailSenders.address, displayName: emailSenders.displayName })
 						.from(emailCampaigns)
 						.innerJoin(emailSenders, eq(emailSenders.id, emailCampaigns.senderId))
-						.where(eq(emailCampaigns.id, thread.campaignId))
+						.where(and(eq(emailCampaigns.id, thread.campaignId), isNull(emailSenders.archivedAt)))
 						.limit(1)
 				: [];
 			if (!from) {

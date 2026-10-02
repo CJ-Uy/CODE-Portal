@@ -50,7 +50,12 @@ export async function handleInboundEmail(
 	let campaignId: string | null = null;
 
 	if (tag?.startsWith("eth_")) {
-		const [thread] = await db.select({ id: emailThreads.id }).from(emailThreads).where(eq(emailThreads.id, tag)).limit(1);
+		// Only the thread's own correspondent may append; anyone else starts a new thread.
+		const [thread] = await db
+			.select({ id: emailThreads.id })
+			.from(emailThreads)
+			.where(and(eq(emailThreads.id, tag), eq(emailThreads.fromEmail, fromEmail)))
+			.limit(1);
 		threadId = thread?.id ?? null;
 	} else if (tag?.startsWith("edl_")) {
 		const [delivery] = await db.select({ campaignId: emailDeliveries.campaignId }).from(emailDeliveries).where(eq(emailDeliveries.id, tag)).limit(1);

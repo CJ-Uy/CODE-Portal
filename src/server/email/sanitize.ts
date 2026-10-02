@@ -1,6 +1,7 @@
 const DROP = new Set([
 	"script", "style", "iframe", "frame", "frameset", "object", "embed", "applet", "form", "input", "button", "textarea", "select",
 	"option", "head", "title", "meta", "link", "base", "svg", "math", "noscript", "template", "video", "audio", "source", "picture",
+	"xmp", "noembed", "noframes", "plaintext",
 ]);
 const KEEP = new Set([
 	"a", "b", "strong", "i", "em", "u", "s", "p", "br", "div", "span", "ul", "ol", "li", "blockquote", "pre", "code", "h1", "h2", "h3",

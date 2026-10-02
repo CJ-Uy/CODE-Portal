@@ -61,6 +61,19 @@ describe("handleInboundEmail", () => {
 		expect(thread).toMatchObject({ isAuto: true, unread: false });
 	});
 
+	it("does not append to an eth_ thread when the sender is a different address", async () => {
+		const first = await handleInboundEmail(db, null, mail({ from: "ana@example.com", to: "beta-inbox+edl_1@ateneocode.org", subject: "Re: GA", body: "one" }), {
+			from: "ana@example.com",
+			to: "beta-inbox+edl_1@ateneocode.org",
+		});
+		const to = `beta-inbox+${first.threadId}@ateneocode.org`;
+		const second = await handleInboundEmail(db, null, mail({ from: "mallory@else.com", to, subject: "Re: GA", body: "injected" }), { from: "mallory@else.com", to });
+		expect(second.threadId).not.toBe(first.threadId);
+		expect(await db.select().from(emailThreads)).toHaveLength(2);
+		const own = await handleInboundEmail(db, null, mail({ from: "ana@example.com", to, subject: "Re: GA", body: "two" }), { from: "ana@example.com", to });
+		expect(own.threadId).toBe(first.threadId);
+	});
+
 	it("keeps an unparseable message", async () => {
 		const to = "beta-inbox@ateneocode.org";
 		const { threadId } = await handleInboundEmail(db, null, new Uint8Array([0, 1, 2]).buffer as ArrayBuffer, { from: "x@y.com", to });
