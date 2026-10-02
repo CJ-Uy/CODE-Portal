@@ -65,24 +65,28 @@ function TokenField({
 	const [query, setQuery] = useState("");
 	const [open, setOpen] = useState(false);
 	const [active, setActive] = useState(0);
-	const [people, setPeople] = useState<Suggestion[]>([]);
+	const [found, setFound] = useState<{ q: string; list: Suggestion[] }>({ q: "", list: [] });
 	const base = useMemo(() => baseSuggestions(options), [options]);
 	const chosen = new Set(rules.map(keyOf));
 
 	useEffect(() => {
 		const q = query.trim();
 		if (q.length < 2) return;
+		let live = true;
 		const timer = window.setTimeout(async () => {
 			const result = await searchMembersAction(q);
-			if (result.ok) {
-				setPeople(result.data.map((m) => ({ rule: { kind: "member", memberId: m.id }, label: m.name, hint: m.batch ? `${m.email} · ${m.batch}` : m.email })));
+			if (live && result.ok) {
+				setFound({ q, list: result.data.map((m) => ({ rule: { kind: "member", memberId: m.id }, label: m.name, hint: m.batch ? `${m.email} · ${m.batch}` : m.email })) });
 			}
 		}, 250);
-		return () => window.clearTimeout(timer);
+		return () => {
+			live = false;
+			window.clearTimeout(timer);
+		};
 	}, [query]);
 
 	const q = query.trim().toLowerCase();
-	const matches = (q ? [...base.filter((s) => s.label.toLowerCase().includes(q)), ...(q.length < 2 ? [] : people)] : base.slice(0, 12)).filter((s) => !chosen.has(keyOf(s.rule))).slice(0, 10);
+	const matches = (q ? [...base.filter((s) => s.label.toLowerCase().includes(q)), ...(found.q === query.trim() ? found.list : [])] : base.slice(0, 12)).filter((s) => !chosen.has(keyOf(s.rule))).slice(0, 10);
 
 	const add = (s: Suggestion) => {
 		if (s.rule.kind === "member") onLabel(s.rule.memberId, s.label);
@@ -158,7 +162,7 @@ function TokenField({
 								className={cn("flex w-full min-w-0 items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left text-sm", i === active && "bg-secondary")}
 							>
 								<span className="min-w-0 truncate">{s.label}</span>
-								<span className="shrink-0 text-xs text-muted-foreground">{s.hint}</span>
+								<span className="min-w-0 truncate text-xs text-muted-foreground">{s.hint}</span>
 							</button>
 						</li>
 					))}
@@ -172,7 +176,8 @@ export function AudiencePicker({
 	value,
 	onChange,
 	options,
-	memberLabels: initialLabels,
+	memberLabels: labels,
+	onLabel,
 	categoryId,
 	categoryName,
 	onPreview,
@@ -181,38 +186,40 @@ export function AudiencePicker({
 	onChange: (audience: Audience) => void;
 	options: AudienceOptions;
 	memberLabels: Record<string, string>;
+	onLabel: (memberId: string, name: string) => void;
 	categoryId: string | null;
 	categoryName: string | null;
 	onPreview: (preview: AudiencePreview | null) => void;
 }) {
-	const [labels, setLabels] = useState(initialLabels);
-	const [preview, setPreview] = useState<AudiencePreview | null>(null);
-	const [settled, setSettled] = useState<{ audience: Audience; categoryId: string | null } | null>(null);
+	const [result, setResult] = useState<{ audience: Audience; categoryId: string | null; preview: AudiencePreview | null } | null>(null);
+	const [attempt, setAttempt] = useState(0);
 	const [showExclude, setShowExclude] = useState(value.exclude.length > 0);
 	const [expanded, setExpanded] = useState<"recipients" | "optedOut" | null>(null);
 	const empty = value.include.length === 0;
-	// Loading until a preview for the current inputs lands; derived so the effect needs no setState before its timer.
-	const loading = !empty && (settled?.audience !== value || settled.categoryId !== categoryId);
-	const shownPreview = empty ? null : preview; // derived so clearing the audience needs no setState in the effect
-	const onLabel = (memberId: string, name: string) => setLabels((l) => ({ ...l, [memberId]: name }));
+	// Only a result for the current inputs counts; anything older is stale. Derived so the effect needs no setState before its timer.
+	const current = !empty && result?.audience === value && result.categoryId === categoryId ? result : null;
+	const loading = !empty && !current;
+	const failed = current !== null && current.preview === null;
+	const shownPreview = current?.preview ?? null;
 
 	useEffect(() => {
-		if (value.include.length === 0) {
-			onPreview(null);
-			return;
-		}
+		onPreview(null); // the old count no longer describes this audience
+		if (value.include.length === 0) return;
+		let live = true; // drops responses that arrive after the inputs changed
 		const timer = window.setTimeout(async () => {
-			const result = await previewAudienceAction(value, categoryId);
-			setSettled({ audience: value, categoryId });
-			if (result.ok) {
-				setPreview(result.data);
-				onPreview(result.data);
-			}
+			const res = await previewAudienceAction(value, categoryId);
+			if (!live) return;
+			const preview = res.ok ? res.data : null;
+			setResult({ audience: value, categoryId, preview });
+			onPreview(preview);
 		}, 300);
-		return () => window.clearTimeout(timer);
+		return () => {
+			live = false;
+			window.clearTimeout(timer);
+		};
 		// onPreview is a stable setter from the parent.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [value, categoryId]);
+	}, [value, categoryId, attempt]);
 
 	return (
 		<div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
@@ -250,8 +257,16 @@ export function AudiencePicker({
 					<span className="text-sm">Will receive</span>
 				</div>
 				<p className={cn("font-heading text-4xl tabular-nums transition-opacity", loading && "opacity-40")}>
-					{empty ? "0" : loading && !shownPreview ? "..." : (shownPreview?.willReceive ?? 0)}
+					{empty ? "0" : failed ? "-" : loading ? "..." : (shownPreview?.willReceive ?? 0)}
 				</p>
+				{failed ? (
+					<div className="grid gap-1 text-sm text-muted-foreground">
+						<span>Couldn&apos;t count recipients.</span>
+						<button type="button" className="justify-self-start underline-offset-2 hover:underline" onClick={() => setAttempt((n) => n + 1)}>
+							Try again
+						</button>
+					</div>
+				) : null}
 				{shownPreview ? (
 					<div className="grid gap-1 text-sm text-muted-foreground">
 						<span>of {shownPreview.matched} matched</span>

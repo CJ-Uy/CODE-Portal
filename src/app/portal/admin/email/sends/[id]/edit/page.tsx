@@ -27,6 +27,7 @@ export default async function EditEmailPage({ params }: { params: Promise<{ id: 
 				blocks: campaign.blocks,
 				audience: campaign.audience,
 				status: campaign.status,
+					scheduledAt: campaign.scheduledAt,
 			}}
 		/>
 	);

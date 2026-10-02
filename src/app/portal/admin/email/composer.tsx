@@ -27,6 +27,7 @@ export type ComposerProps = {
 		blocks: EmailBlock[];
 		audience: Audience;
 		status: EmailCampaignStatus;
+		scheduledAt: Date | null;
 	};
 	senders: { id: string; address: string; displayName: string }[];
 	categories: { id: string; name: string; required: boolean; defaultSenderId: string | null }[];
@@ -39,6 +40,12 @@ export type ComposerProps = {
 };
 
 const MANILA = new Intl.DateTimeFormat("en", { timeZone: "Asia/Manila", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+
+/** Parses the datetime-local value once so render never formats an Invalid Date (the input can be cleared). */
+function parseAt(at: string): { date: Date | null; label: string } {
+	const date = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(at) ? new Date(`${at}:00+08:00`) : null;
+	return date && !Number.isNaN(date.getTime()) ? { date, label: MANILA.format(date) } : { date: null, label: "Pick a time" };
+}
 
 function Step({ n, title, done, summary, children, open, onToggle }: { n: number; title: string; done: boolean; summary: string; children: React.ReactNode; open: boolean; onToggle: () => void }) {
 	return (
@@ -59,7 +66,10 @@ function Step({ n, title, done, summary, children, open, onToggle }: { n: number
 				</span>
 				<span className="shrink-0 text-sm text-accent">{open ? "Done" : "Edit"}</span>
 			</button>
-			{open ? <div className="row-enter border-t border-border p-4">{children}</div> : null}
+			{/* Always mounted so children keep their state (audience preview, hand-picked labels) while the step is closed. */}
+			<div hidden={!open} className={cn("border-t border-border p-4", open && "row-enter")}>
+				{children}
+			</div>
 		</section>
 	);
 }
@@ -70,6 +80,8 @@ export function Composer(props: ComposerProps) {
 	const toast = useToast();
 	const dialogRef = useRef<HTMLDialogElement>(null);
 	const mounted = useRef(true);
+	const lockedRef = useRef(false); // once the send is being scheduled, a late autosave must not reset it to draft
+	const statusRef = useRef(initial.status); // server-side status as of the last save
 	const idRef = useRef(initial.id); // set synchronously so a trailing save never inserts a second row
 	const [templateId, setTemplateId] = useState(initial.templateId);
 	const [categoryId, setCategoryId] = useState(initial.categoryId);
@@ -79,8 +91,9 @@ export function Composer(props: ComposerProps) {
 	const [blocks, setBlocks] = useState(initial.blocks);
 	const [audience, setAudience] = useState(initial.audience);
 	const [preview, setPreview] = useState<AudiencePreview | null>(null);
-	const [timing, setTiming] = useState<"now" | "at">("now");
-	const [at, setAt] = useState(() => toLocalInput(new Date(Date.now() + 24 * 60 * 60_000)).slice(0, 11) + "09:00");
+	const [labels, setLabels] = useState(memberLabels);
+	const [timing, setTiming] = useState<"now" | "at">(initial.scheduledAt ? "at" : "now");
+	const [at, setAt] = useState(() => (initial.scheduledAt ? toLocalInput(initial.scheduledAt) : toLocalInput(new Date(Date.now() + 24 * 60 * 60_000)).slice(0, 11) + "09:00"));
 	const [open, setOpen] = useState<number | null>(initial.id ? null : 1);
 	const [sent, setSent] = useState(false);
 	const [pending, startTransition] = useTransition();
@@ -92,11 +105,13 @@ export function Composer(props: ComposerProps) {
 		[templateId, categoryId, senderId, subject, preheader, blocks, audience],
 	);
 	const save = async (v: typeof value) => {
+		if (lockedRef.current) return true;
 		const result = await saveCampaignAction({ id: idRef.current ?? undefined, ...v });
 		if (!result.ok) {
 			toast({ message: result.error });
 			return false;
 		}
+		statusRef.current = result.data.status;
 		if (!idRef.current) {
 			idRef.current = result.data.id;
 			// An unmount flush can finish the first insert after the user left; don't rewrite their new URL.
@@ -122,10 +137,15 @@ export function Composer(props: ComposerProps) {
 		subject: subject.trim().length > 0,
 		content: blocks.length > 0,
 	};
-	const ready = checks.sender && checks.audience && checks.subject && checks.content;
-	const audienceSummary = audience.include.length ? audience.include.map((r) => ruleLabel(r, options, memberLabels)).join(", ") : "No one yet";
-	const whenLabel = timing === "now" ? "Now (you have 2 minutes to undo)" : `${MANILA.format(new Date(`${at}:00+08:00`))} Manila time`;
-	const primaryLabel = timing === "now" ? `Send to ${preview?.willReceive ?? 0} members` : `Schedule for ${MANILA.format(new Date(`${at}:00+08:00`))}`;
+	const when = parseAt(at);
+	const whenOk = timing === "now" || (when.date !== null && at > toLocalInput(new Date()));
+	const ready = checks.sender && checks.audience && checks.subject && checks.content && whenOk;
+	const labelOf = (r: Audience["include"][number]) => ruleLabel(r, options, labels);
+	const audienceSummary = audience.include.length ? audience.include.map(labelOf).join(", ") : "No one yet";
+	const everyGroup = audience.match === "all" && audience.include.filter((r) => r.kind !== "member").length > 1;
+	const toLine = `${audienceSummary}${everyGroup ? " (matching every group)" : ""}${audience.exclude.length ? `. Except: ${audience.exclude.map(labelOf).join(", ")}` : ""}`;
+	const whenLabel = timing === "now" ? "Now (you have 2 minutes to undo)" : when.date ? `${when.label} Manila time` : when.label;
+	const primaryLabel = timing === "now" ? `Send to ${preview?.willReceive ?? 0} members` : when.date ? `Schedule for ${when.label}` : when.label;
 
 	const footer = useMemo(
 		() => ({
@@ -137,6 +157,8 @@ export function Composer(props: ComposerProps) {
 		}),
 		[category, baseUrl],
 	);
+
+	const onLabel = (memberId: string, name: string) => setLabels((l) => ({ ...l, [memberId]: name }));
 
 	const applyTemplate = (t: ComposerProps["templates"][number]) => {
 		setTemplateId(t.id);
@@ -155,13 +177,18 @@ export function Composer(props: ComposerProps) {
 
 	const confirm = () =>
 		startTransition(async () => {
-			// Opened from a template and sent untouched: autosave never fired, so the first save happens here.
 			let ok = await flush(value);
-			if (ok && !idRef.current) ok = await save(value);
+			// Autosave never fires for an untouched email, so save directly when nothing is stored yet (opened from a
+			// template) or the stored copy is still "scheduled" (saving returns it to draft, which scheduling requires).
+			if (ok && (!idRef.current || statusRef.current === "scheduled")) ok = await save(value);
 			const campaignId = idRef.current;
 			if (!ok || !campaignId) return;
+			lockedRef.current = true;
 			const result = await scheduleCampaignAction(campaignId, timing === "now" ? { mode: "now" } : { mode: "at", local: at });
-			if (!result.ok) return toast({ message: result.error });
+			if (!result.ok) {
+				lockedRef.current = false;
+				return toast({ message: result.error });
+			}
 			setSent(true);
 			window.setTimeout(() => router.push(`/portal/admin/email/sends/${campaignId}`), 650);
 		});
@@ -243,7 +270,7 @@ export function Composer(props: ComposerProps) {
 					</Step>
 
 					<Step n={2} title="Audience" done={checks.audience} open={open === 2} onToggle={() => toggle(2)} summary={`${audienceSummary}${preview ? ` · ${preview.willReceive} will receive` : ""}`}>
-						<AudiencePicker value={audience} onChange={setAudience} options={options} memberLabels={memberLabels} categoryId={categoryId} categoryName={category?.name ?? null} onPreview={setPreview} />
+						<AudiencePicker value={audience} onChange={setAudience} options={options} memberLabels={labels} onLabel={onLabel} categoryId={categoryId} categoryName={category?.name ?? null} onPreview={setPreview} />
 					</Step>
 
 					<Step n={3} title="Subject and preview text" done={checks.subject} open={open === 3} onToggle={() => toggle(3)} summary={subject || "No subject"}>
@@ -292,7 +319,7 @@ export function Composer(props: ComposerProps) {
 								["From", sender ? sender.displayName : "Not set"],
 								["To", preview ? `${preview.willReceive} members` : "No one yet"],
 								["Category", category ? `${category.name}${category.required ? " (required)" : ""}` : "Not set"],
-								["When", timing === "now" ? "Now" : MANILA.format(new Date(`${at}:00+08:00`))],
+								["When", timing === "now" ? "Now" : when.label],
 							].map(([term, detail]) => (
 								<div key={term} className="flex min-w-0 justify-between gap-3">
 									<dt className="text-muted-foreground">{term}</dt>
@@ -325,14 +352,14 @@ export function Composer(props: ComposerProps) {
 				</Button>
 			</div>
 
-			<dialog ref={dialogRef} className="email-dialog m-auto w-[min(92vw,30rem)] rounded-xl border border-border bg-card p-0 text-card-foreground shadow-xl">
+			<dialog ref={dialogRef} onCancel={(e) => { if (pending || sent) e.preventDefault(); }} className="email-dialog m-auto w-[min(92vw,30rem)] rounded-xl border border-border bg-card p-0 text-card-foreground shadow-xl">
 				<div className="grid gap-4 p-5">
 					<h2 className="font-heading text-2xl">Send this email?</h2>
 					<dl className="grid gap-2 text-sm">
 						{[
 							["From", sender ? `${sender.displayName} <${sender.address}>` : ""],
 							["Category", category ? `${category.name} (${category.required ? "required, reaches everyone" : "optional"})` : ""],
-							["To", audienceSummary],
+							["To", toLine],
 							["Recipients", `${preview?.willReceive ?? 0}${preview?.optedOut.length ? ` (${preview.optedOut.length} opted out are skipped)` : ""}`],
 							["Subject", subject],
 							["When", whenLabel],

@@ -25,6 +25,7 @@ export default async function NewEmailPage({ searchParams }: { searchParams: Pro
 				blocks: template?.blocks ?? [],
 				audience: EMPTY_AUDIENCE,
 				status: "draft",
+					scheduledAt: null,
 			}}
 		/>
 	);
