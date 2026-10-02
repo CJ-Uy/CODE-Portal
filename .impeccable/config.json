@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "helvetica",
+        "createdAt": "2026-10-02T10:46:59.943Z",
+        "reason": "controller: email HTML needs a mail-client-safe system font stack (Helvetica, Arial, sans-serif); web fonts do not load reliably in Gmail/Outlook"
+      }
+    ]
+  }
+}
