@@ -21,7 +21,8 @@ export type AuditCategory =
 	| "link"
 	| "member"
 	| "announcement"
-	| "library";
+	| "library"
+	| "email";
 export type RetentionRecordSource = "event_attendance" | "manual";
 
 const nowMs = sql`(unixepoch() * 1000)`;

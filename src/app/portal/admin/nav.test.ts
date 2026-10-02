@@ -14,6 +14,7 @@ const allFlags: FeatureFlags = {
 	surveys: true,
 	publicSite: true,
 	leaderboard: true,
+	email: true,
 };
 
 describe("admin nav registry", () => {

@@ -19,6 +19,7 @@ function configWith(flags: Partial<Record<string, boolean>>) {
 		FEATURE_SURVEYS: false,
 		FEATURE_PUBLIC_SITE: false,
 		FEATURE_LEADERBOARD: false,
+		FEATURE_EMAIL: false,
 		...flags,
 	} as Parameters<typeof featureFlagsFromConfig>[0];
 }

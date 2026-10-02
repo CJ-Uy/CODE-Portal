@@ -45,6 +45,7 @@ const rawEnvSchema = z.object({
 	FEATURE_SURVEYS: featureFlagSchema,
 	FEATURE_LEADERBOARD: featureFlagSchema,
 	FEATURE_PUBLIC_SITE: featureFlagSchema,
+	FEATURE_EMAIL: featureFlagSchema,
 });
 
 export type AppConfig = z.infer<typeof rawEnvSchema>;
@@ -95,6 +96,7 @@ export function getAppConfig(): AppConfig {
 		FEATURE_SURVEYS: runtimeEnvValue("FEATURE_SURVEYS"),
 		FEATURE_LEADERBOARD: runtimeEnvValue("FEATURE_LEADERBOARD"),
 		FEATURE_PUBLIC_SITE: runtimeEnvValue("FEATURE_PUBLIC_SITE"),
+		FEATURE_EMAIL: runtimeEnvValue("FEATURE_EMAIL"),
 	});
 
 	const issues: string[] = [];
