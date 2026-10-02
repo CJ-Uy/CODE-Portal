@@ -50,6 +50,26 @@ export const adminGroups: AdminGroup[] = [
 		},
 		{ segment: "links", label: "Short Links", description: "Moderate member short links.", permission: "link:moderate" },
 	]),
+	G("email", "Email", [
+		{
+			segment: "home",
+			label: "Overview",
+			description: "Sends in progress, scheduled emails, and recent sends.",
+			permission: "email:send",
+			feature: "email",
+			href: "/portal/admin/email",
+		},
+		{ segment: "new", label: "New email", description: "Write an email and send it to members.", permission: "email:send", feature: "email" },
+		{ segment: "inbox", label: "Replies", description: "Member replies to CODE emails.", permission: "email:send", feature: "email" },
+		{ segment: "templates", label: "Templates", description: "Reusable CODE email designs.", permission: "email:configure", feature: "email" },
+		{
+			segment: "settings",
+			label: "Senders & categories",
+			description: "From addresses, and which emails members can turn off.",
+			permission: "email:configure",
+			feature: "email",
+		},
+	]),
 	G("data", "Events & Points", [
 		{
 			segment: "dashboard",

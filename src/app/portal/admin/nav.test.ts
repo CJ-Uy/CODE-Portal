@@ -18,8 +18,8 @@ const allFlags: FeatureFlags = {
 };
 
 describe("admin nav registry", () => {
-	it("has 4 groups with the spec's routes", () => {
-		expect(adminGroups.map((g) => g.segment)).toEqual(["members", "content", "data", "system"]);
+	it("has 5 groups with the spec's routes", () => {
+		expect(adminGroups.map((g) => g.segment)).toEqual(["members", "content", "email", "data", "system"]);
 		const members = adminGroups.find((g) => g.segment === "members")!;
 		expect(members.pages.map((p) => p.href)).toEqual([
 			"/portal/admin/members/list",
@@ -48,7 +48,7 @@ describe("admin nav registry", () => {
 	});
 
 	it("super sees every group; link role sees only Short Links + always-visible pages", () => {
-		expect(visibleGroups(superActor, allFlags).length).toBe(4);
+		expect(visibleGroups(superActor, allFlags).length).toBe(5);
 		const visible = visibleGroups(linkOnly, allFlags).flatMap((g) => g.pages.map((p) => p.href));
 		expect(visible).toContain("/portal/admin/content/links");
 		expect(visible).toContain("/portal/admin/system/audit"); // permission null means always visible
