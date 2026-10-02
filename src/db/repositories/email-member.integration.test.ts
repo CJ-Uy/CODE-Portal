@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import * as schema from "@/db/schema";
 import { emailOptouts } from "@/db/schema";
 import type { Actor } from "@/server/auth/permissions";
-import { applyTokenOptOut, createEmailMemberRepository } from "./email-member";
+import { applyTokenOptOut, createEmailMemberRepository, describeTokenCategory } from "./email-member";
 
 const db = drizzle(env.DB, { schema });
 const repo = createEmailMemberRepository(db);
@@ -70,5 +70,11 @@ describe("email member side", () => {
 		expect(await applyTokenOptOut(db, { memberId: "mem_a", categoryId: "ecat_old" }, true)).toBeNull();
 		expect(await applyTokenOptOut(db, { memberId: "mem_gone", categoryId: "ecat_opt" }, true)).toBeNull();
 		expect(await db.select().from(emailOptouts)).toHaveLength(1);
+	});
+
+	it("describes a token without writing", async () => {
+		expect(await describeTokenCategory(db, { memberId: "mem_a", categoryId: "ecat_opt" })).toEqual({ categoryName: "Newsletter", requiredNames: ["Memos"], optedOut: false });
+		expect(await describeTokenCategory(db, { memberId: "mem_a", categoryId: "ecat_req" })).toBeNull();
+		expect(await db.select().from(emailOptouts)).toHaveLength(0);
 	});
 });

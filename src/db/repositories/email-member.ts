@@ -27,6 +27,15 @@ async function writeOptOut(db: EmailDb, memberId: string, categoryId: string, op
 	else await db.delete(emailOptouts).where(and(eq(emailOptouts.memberId, memberId), eq(emailOptouts.categoryId, categoryId)));
 }
 
+async function requiredCategoryNames(db: EmailDb): Promise<string[]> {
+	const rows = await db
+		.select({ name: emailCategories.name })
+		.from(emailCategories)
+		.where(and(eq(emailCategories.required, true), isNull(emailCategories.archivedAt)))
+		.orderBy(asc(emailCategories.sortOrder));
+	return rows.map((r) => r.name);
+}
+
 /** Token opt-out from an email link. Returns null when the token no longer applies. */
 export async function applyTokenOptOut(
 	db: EmailDb,
@@ -38,12 +47,24 @@ export async function applyTokenOptOut(
 	const [member] = await db.select({ id: members.id }).from(members).where(eq(members.id, payload.memberId)).limit(1);
 	if (!member) return null;
 	await writeOptOut(db, payload.memberId, payload.categoryId, optedOut);
-	const required = await db
-		.select({ name: emailCategories.name })
-		.from(emailCategories)
-		.where(and(eq(emailCategories.required, true), isNull(emailCategories.archivedAt)))
-		.orderBy(asc(emailCategories.sortOrder));
-	return { categoryName: category.name, requiredNames: required.map((r) => r.name) };
+	return { categoryName: category.name, requiredNames: await requiredCategoryNames(db) };
+}
+
+/** Read-only lookup for the unsubscribe page. GET requests never write, because link scanners prefetch them. */
+export async function describeTokenCategory(
+	db: EmailDb,
+	payload: { memberId: string; categoryId: string },
+): Promise<{ categoryName: string; requiredNames: string[]; optedOut: boolean } | null> {
+	const category = await activeCategory(db, payload.categoryId);
+	if (!category || category.required) return null;
+	const [member] = await db.select({ id: members.id }).from(members).where(eq(members.id, payload.memberId)).limit(1);
+	if (!member) return null;
+	const [optout] = await db
+		.select({ memberId: emailOptouts.memberId })
+		.from(emailOptouts)
+		.where(and(eq(emailOptouts.memberId, payload.memberId), eq(emailOptouts.categoryId, payload.categoryId)))
+		.limit(1);
+	return { categoryName: category.name, requiredNames: await requiredCategoryNames(db), optedOut: Boolean(optout) };
 }
 
 export function createEmailMemberRepository(db: EmailDb) {
