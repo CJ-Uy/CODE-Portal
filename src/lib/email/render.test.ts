@@ -72,6 +72,28 @@ describe("renderEmail", () => {
 	});
 });
 
+describe("renderEmail hardening", () => {
+	it("replaces unsafe link schemes with #", () => {
+		const unsafe: EmailBlock[] = [
+			{ id: "b", type: "button", props: { label: "Go", href: "javascript:alert(1)" } },
+			{ id: "i", type: "image", props: { src: "http://x", alt: "", href: "http://x" } },
+		];
+		const { html } = render({ blocks: unsafe });
+		expect(html).toContain('href="#"');
+		expect(html).toContain('src="#"');
+		expect(html).not.toContain("javascript:");
+		expect(html).not.toContain("http://x");
+	});
+
+	it("does not turn merge values into marks or links", () => {
+		const evil = { ...values, first_name: "[x](https://evil.com) **a**" };
+		const { html } = render({ resolve: valueResolver(evil), values: evil });
+		expect(html).toContain("[x](https://evil.com) **a**");
+		expect(html).not.toContain('<a href="https://evil.com"');
+		expect(html).not.toContain("<strong>a</strong>");
+	});
+});
+
 describe("renderBlockHtml", () => {
 	it("shows tags as pills in editor mode", () => {
 		const html = renderBlockHtml(blocks[0], pillResolver, "https://beta.ateneocode.org");

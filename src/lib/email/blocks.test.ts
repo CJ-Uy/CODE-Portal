@@ -21,6 +21,11 @@ describe("blocksSchema", () => {
 		expect(JSON.stringify(result.error?.issues)).toContain("points");
 	});
 
+	it("rejects near-miss merge tags", () => {
+		const text = { id: "t1", type: "text", props: { text: "Hi {{First_Name}}" } };
+		expect(blocksSchema.safeParse([text]).success).toBe(false);
+	});
+
 	it("rejects more than 60 blocks", () => {
 		expect(blocksSchema.safeParse(Array.from({ length: 61 }, () => newBlock("divider"))).success).toBe(false);
 	});

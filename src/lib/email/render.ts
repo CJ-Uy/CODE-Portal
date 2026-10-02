@@ -34,13 +34,19 @@ export const valueResolver =
 export const pillResolver: TagResolver = (tag) =>
 	`<span data-merge-tag="${tag}" style="display:inline-block;padding:0 6px;border-radius:999px;background:${EMAIL_COLORS.light};color:${EMAIL_COLORS.blue};font-size:0.85em;font-family:${BODY_FONT};">${tag.replace("_", " ")}</span>`;
 
-/** Escape first, then merge (resolvers return HTML-safe output), then apply inline marks. */
+/** Only https and mailto links survive; anything else becomes an inert "#". */
+function safeUrl(url: string): string {
+	return /^(https:\/\/|mailto:)/i.test(url) ? url : "#";
+}
+const safeAttr = (url: string) => escapeHtml(safeUrl(url));
+
+/** Escape, apply inline marks, then merge last: resolver output is HTML-safe and must not be re-marked. */
 function richText(text: string, resolve: TagResolver): string {
-	const merged = replaceTags(escapeHtml(text), resolve);
-	return merged
+	const marked = escapeHtml(text)
 		.replace(/\[([^\]]+)\]\(((?:https:\/\/|mailto:)[^\s)]+)\)/g, `<a href="$2" style="color:${EMAIL_COLORS.blue};text-decoration:underline;">$1</a>`)
 		.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
 		.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+	return replaceTags(marked, resolve);
 }
 
 function paragraphs(text: string, resolve: TagResolver): string {
@@ -71,11 +77,11 @@ export function renderBlockHtml(block: EmailBlock, resolve: TagResolver, baseUrl
 			return row(paragraphs(block.props.text, resolve));
 		case "button":
 			return row(
-				`<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 24px;"><tr><td style="border-radius:8px;background:${EMAIL_COLORS.navy};"><a href="${escapeHtml(block.props.href)}" style="display:inline-block;padding:12px 22px;font-family:${BODY_FONT};font-size:16px;font-weight:bold;color:#FFFFFF;text-decoration:none;">${richText(block.props.label, resolve)}</a></td></tr></table>`,
+				`<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 24px;"><tr><td style="border-radius:8px;background:${EMAIL_COLORS.navy};"><a href="${safeAttr(block.props.href)}" style="display:inline-block;padding:12px 22px;font-family:${BODY_FONT};font-size:16px;font-weight:bold;color:#FFFFFF;text-decoration:none;">${richText(block.props.label, resolve)}</a></td></tr></table>`,
 			);
 		case "image": {
-			const img = `<img src="${escapeHtml(block.props.src)}" alt="${escapeHtml(block.props.alt)}" width="536" style="display:block;width:100%;max-width:536px;height:auto;border:0;border-radius:8px;">`;
-			const inner = block.props.href ? `<a href="${escapeHtml(block.props.href)}">${img}</a>` : img;
+			const img = `<img src="${safeAttr(block.props.src)}" alt="${escapeHtml(block.props.alt)}" width="536" style="display:block;width:100%;max-width:536px;height:auto;border:0;border-radius:8px;">`;
+			const inner = block.props.href ? `<a href="${safeAttr(block.props.href)}">${img}</a>` : img;
 			return row(`<div style="margin:0 0 16px;">${inner}</div>`);
 		}
 		case "divider":
@@ -83,7 +89,7 @@ export function renderBlockHtml(block: EmailBlock, resolve: TagResolver, baseUrl
 		case "spacer":
 			return row(`<div style="height:${SPACER[block.props.size]}px;line-height:1px;font-size:1px;">&nbsp;</div>`, "0");
 		case "event": {
-			const href = escapeHtml(`${baseUrl}${block.props.path}`);
+			const href = safeAttr(`${baseUrl}${block.props.path}`);
 			return row(
 				`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border:1px solid ${EMAIL_COLORS.light};border-radius:10px;"><tr><td style="padding:16px 18px;font-family:${BODY_FONT};"><div style="font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:${EMAIL_COLORS.muted};">Event</div><div style="margin:4px 0 6px;font-family:${HEADING_FONT};font-size:20px;color:${EMAIL_COLORS.navy};">${escapeHtml(block.props.title)}</div><div style="font-size:15px;color:${EMAIL_COLORS.ink};">${escapeHtml(block.props.when)} &middot; ${escapeHtml(block.props.place)}</div><a href="${href}" style="display:inline-block;margin-top:10px;font-size:15px;font-weight:bold;color:${EMAIL_COLORS.blue};">View event</a></td></tr></table>`,
 			);
@@ -92,7 +98,7 @@ export function renderBlockHtml(block: EmailBlock, resolve: TagResolver, baseUrl
 }
 
 export function renderHeaderHtml(logoUrl: string): string {
-	return `<tr><td style="padding:28px 32px 20px;"><img src="${escapeHtml(logoUrl)}" alt="CODE" width="120" style="display:block;width:120px;height:auto;border:0;"></td></tr>`;
+	return `<tr><td style="padding:28px 32px 20px;"><img src="${safeAttr(logoUrl)}" alt="CODE" width="120" style="display:block;width:120px;height:auto;border:0;"></td></tr>`;
 }
 
 export type FooterInput = {
@@ -104,7 +110,7 @@ export type FooterInput = {
 };
 
 const footerLink = (href: string, label: string) =>
-	`<a href="${escapeHtml(href)}" style="color:${EMAIL_COLORS.muted};text-decoration:underline;">${label}</a>`;
+	`<a href="${safeAttr(href)}" style="color:${EMAIL_COLORS.muted};text-decoration:underline;">${label}</a>`;
 
 export function renderFooterHtml(footer: FooterInput): string {
 	const links = [

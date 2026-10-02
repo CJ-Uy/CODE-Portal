@@ -26,11 +26,13 @@ export const SAMPLE_MERGE_VALUES: MergeValues = {
 };
 
 const TAG_PATTERN = /\{\{\s*([a-z_]+)\s*\}\}/g;
+// Loose on purpose: anything inside braces that is not exactly a known tag (First_Name, first-name, batch2) is reported.
+const ANY_TAG_PATTERN = /\{\{\s*([^{}]*?)\s*\}\}/g;
 const isMergeTag = (value: string): value is MergeTag => (MERGE_TAGS as readonly string[]).includes(value);
 
 export function findUnknownTags(input: string): string[] {
 	const unknown = new Set<string>();
-	for (const match of input.matchAll(TAG_PATTERN)) if (!isMergeTag(match[1])) unknown.add(match[1]);
+	for (const match of input.matchAll(ANY_TAG_PATTERN)) if (!isMergeTag(match[1])) unknown.add(match[1]);
 	return [...unknown];
 }
 
@@ -44,11 +46,14 @@ const firstWord = (value: string | null) => value?.trim().split(/\s+/)[0] || nul
 export function mergeValuesFor(member: MergeMember): MergeValues {
 	const fullName = member.fullName?.trim() || member.name?.trim() || "";
 	const firstName = firstWord(member.fullName) ?? firstWord(member.name) ?? (member.nickname?.trim() || "there");
-	return {
+	const values: MergeValues = {
 		first_name: firstName,
 		full_name: fullName || firstName,
 		nickname: member.nickname?.trim() || firstName,
 		batch: member.batch?.trim() || "",
 		email: member.email,
 	};
+	// Values reach the subject line; a CR/LF there would allow header injection.
+	for (const tag of MERGE_TAGS) values[tag] = values[tag].replace(/[\r\n]+/g, " ");
+	return values;
 }

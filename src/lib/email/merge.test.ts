@@ -8,6 +8,9 @@ describe("findUnknownTags", () => {
 	it("accepts spacing inside braces", () => {
 		expect(findUnknownTags("{{ full_name }}")).toEqual([]);
 	});
+	it("reports near-miss tags", () => {
+		expect(findUnknownTags("{{First_Name}} {{FIRST_NAME}} {{first-name}} {{batch2}}")).toEqual(["First_Name", "FIRST_NAME", "first-name", "batch2"]);
+	});
 });
 
 describe("replaceTags", () => {
@@ -27,5 +30,13 @@ describe("mergeValuesFor", () => {
 	it("fills every tag with a string", () => {
 		const values = mergeValuesFor({ email: "a@x.com", name: "A B", fullName: null, nickname: null, batch: "2027" });
 		expect(values).toEqual({ first_name: "A", full_name: "A B", nickname: "A", batch: "2027", email: "a@x.com" });
+	});
+});
+
+describe("mergeValuesFor line breaks", () => {
+	it("collapses CR/LF in every value", () => {
+		const values = mergeValuesFor({ email: "a@x.com", name: null, fullName: "A\r\nBcc: x", nickname: "N\nM", batch: "1\r2" });
+		for (const value of Object.values(values)) expect(value).not.toMatch(/[\r\n]/);
+		expect(values.full_name).toBe("A Bcc: x");
 	});
 });
