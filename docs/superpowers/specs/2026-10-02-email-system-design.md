@@ -364,3 +364,16 @@ Staging and prod stay untouched; `FEATURE_EMAIL` stays off there until a separat
   - Sanitizing uses the Workers-native `HTMLRewriter`.
   - Drag reorder uses native HTML drag events on desktop; up/down buttons are the keyboard and touch path. No sortable library is installed and none is added.
   - Motion uses CSS transitions and the View Transitions API where supported. No animation library is added.
+
+## 16. Planning amendments (2026-10-02)
+
+Found while writing the implementation plan. These override the sections above.
+
+- **Threading key.** Cloudflare Email Service does not let us set `Message-ID`, because the platform controls it. Replies are threaded by a plus-addressed `Reply-To` instead: `beta-inbox+edl_<deliveryId>@` for sends and `beta-inbox+eth_<threadId>@` for inbox replies. Subaddressing must be on in Email Routing settings. Matching `In-Reply-To` and `References` against stored inbound Message-IDs remains as the fallback.
+- **`skipped_no_email` removed.** `members.email` is `NOT NULL`, so this status can never happen.
+- **Footer unsubscribe link opens a confirm page.** Link scanners prefetch GET URLs, so a GET request never writes an opt-out. The `List-Unsubscribe` header still uses RFC 8058 one-click POST, which Gmail and Yahoo show as a native button.
+- **Cancel split in two.** `unschedule` sends a scheduled campaign back to draft, which also serves as the 2-minute undo. `cancel` stops a campaign that is sending.
+- **Image blocks take an HTTPS URL.** Uploading images is outside v1.
+- **Composer preview.** The block canvas in the Content step is the live preview, with Desktop/Phone and "preview as" controls. The sticky right column holds the summary, the test send, and Review and send.
+- **Inactive members** are left out of audiences unless an explicit `status: inactive` rule includes them or they are picked by hand.
+- **Beta only.** Only `wrangler.beta.jsonc` points at the custom Worker entry. Staging and prod configs are not touched.
