@@ -74,7 +74,7 @@ export default async function SendReportPage({
 					<h1 className="min-w-0 break-all font-heading text-3xl">{campaign.subject || "Untitled email"}</h1>
 					<StatusPill status={campaign.status} />
 				</div>
-				<p className="text-sm text-muted-foreground">
+				<p className="min-w-0 break-all text-sm text-muted-foreground">
 					From {campaign.senderName ?? "no sender"} · {campaign.categoryName ?? "no category"}
 					{campaign.scheduledAt ? ` · ${campaign.status === "scheduled" ? "Sends" : "Started"} ${formatManila(campaign.startedAt ?? campaign.scheduledAt)}` : ""}
 					{campaign.finishedAt ? ` · Finished ${formatManila(campaign.finishedAt)}` : ""}

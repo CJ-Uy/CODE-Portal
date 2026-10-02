@@ -37,7 +37,11 @@ export function ReportActions({ id, status, failed, scheduledAt }: { id: string;
 	const run = (task: () => Promise<{ ok: true; data: unknown } | { ok: false; error: string }>, message: string, then?: (data: unknown) => void) =>
 		startTransition(async () => {
 			const result = await task();
-			if (!result.ok) return toast({ message: result.error });
+			if (!result.ok) {
+				toast({ message: result.error });
+				router.refresh();
+				return;
+			}
 			toast({ message });
 			if (then) then(result.data);
 			else router.refresh();
