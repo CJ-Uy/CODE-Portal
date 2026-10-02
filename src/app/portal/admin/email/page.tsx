@@ -44,7 +44,7 @@ export default async function EmailHomePage() {
 					<Button asChild variant="outline">
 						<Link href="/portal/admin/email/inbox">
 							<Inbox />
-							Replies{unread > 0 ? <span className="rounded-full bg-primary px-1.5 text-xs text-primary-foreground tabular-nums">{unread}</span> : null}
+							Replies{unread > 0 ? <span className="rounded-full bg-primary px-1.5 text-xs text-primary-foreground tabular-nums">{unread}<span className="sr-only"> unread</span></span> : null}
 						</Link>
 					</Button>
 					<Button asChild>
@@ -63,7 +63,7 @@ export default async function EmailHomePage() {
 							<h2 className="text-sm font-semibold">Sending now</h2>
 							{summary.sending.map((c) => (
 								<Link key={c.id} href={`/portal/admin/email/sends/${c.id}`} className="grid gap-2 rounded-lg p-2 transition-colors hover:bg-secondary/60">
-									<span className="min-w-0 truncate font-medium">{c.subject}</span>
+									<span className="min-w-0 truncate font-medium">{c.subject.trim() || "Untitled email"}</span>
 									<SendProgress status={c.status} total={c.recipientCount} sent={c.sentCount} failed={c.failedCount} skipped={c.skippedCount} scheduledAt={c.scheduledAt} />
 								</Link>
 							))}

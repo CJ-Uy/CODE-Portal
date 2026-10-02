@@ -32,7 +32,8 @@ export function SettingsPanels({ senders, categories }: { senders: EmailSenderRo
 	const [pending, startTransition] = useTransition();
 	const activeSenders = senders.filter((s) => !s.archivedAt);
 	const visibleSenders = showArchived ? senders : activeSenders;
-	const visibleCategories = showArchived ? categories : categories.filter((c) => !c.archivedAt);
+	const activeCategories = categories.filter((c) => !c.archivedAt);
+	const visibleCategories = showArchived ? categories : activeCategories;
 
 	const run = (task: () => Promise<{ ok: boolean; error?: string }>, success: string, undo?: () => void) =>
 		startTransition(async () => {
@@ -72,12 +73,13 @@ export function SettingsPanels({ senders, categories }: { senders: EmailSenderRo
 								<span className="min-w-0 break-all font-medium">{s.displayName}</span>
 								<span className="min-w-0 break-all text-sm text-muted-foreground">{s.address}</span>
 							</div>
-							<Button variant="ghost" size="sm" onClick={() => setEditing({ kind: "sender", row: s })}>
+							<Button variant="ghost" size="sm" aria-label={`Edit ${s.displayName}`} onClick={() => setEditing({ kind: "sender", row: s })}>
 								Edit
 							</Button>
 							<Button
 								variant="ghost"
 								size="sm"
+								aria-label={`${s.archivedAt ? "Restore" : "Archive"} ${s.displayName}`}
 								disabled={pending}
 								onClick={() =>
 									run(
@@ -107,7 +109,9 @@ export function SettingsPanels({ senders, categories }: { senders: EmailSenderRo
 				</div>
 				<ul className="grid divide-y divide-border">
 					{visibleCategories.length === 0 ? <li className="py-3 text-sm text-muted-foreground">No categories yet. Every email needs one.</li> : null}
-					{visibleCategories.map((c, index) => (
+					{visibleCategories.map((c) => {
+						const index = activeCategories.findIndex((a) => a.id === c.id);
+						return (
 						<li key={c.id} className={cn("row-enter flex min-w-0 flex-wrap items-center gap-3 py-3", c.archivedAt && "opacity-60")}>
 							<div className="grid min-w-0 flex-1 gap-0.5">
 								<span className="flex min-w-0 items-center gap-2 font-medium">
@@ -124,24 +128,25 @@ export function SettingsPanels({ senders, categories }: { senders: EmailSenderRo
 								{c.description ? <span className="min-w-0 break-all text-sm text-muted-foreground">{c.description}</span> : null}
 							</div>
 							<div className="flex items-center gap-1">
-								<Button variant="ghost" size="icon" aria-label={`Move ${c.name} up`} disabled={pending || index === 0} onClick={() => run(() => moveCategoryAction(c.id, "up"), "Order saved.")}>
+								<Button variant="ghost" size="icon" aria-label={`Move ${c.name} up`} disabled={pending || !!c.archivedAt || index === 0} onClick={() => run(() => moveCategoryAction(c.id, "up"), "Order saved.")}>
 									<ArrowUp />
 								</Button>
 								<Button
 									variant="ghost"
 									size="icon"
 									aria-label={`Move ${c.name} down`}
-									disabled={pending || index === visibleCategories.length - 1}
+									disabled={pending || !!c.archivedAt || index === activeCategories.length - 1}
 									onClick={() => run(() => moveCategoryAction(c.id, "down"), "Order saved.")}
 								>
 									<ArrowDown />
 								</Button>
-								<Button variant="ghost" size="sm" onClick={() => setEditing({ kind: "category", row: c })}>
+								<Button variant="ghost" size="sm" aria-label={`Edit ${c.name}`} onClick={() => setEditing({ kind: "category", row: c })}>
 									Edit
 								</Button>
 								<Button
 									variant="ghost"
 									size="sm"
+									aria-label={`${c.archivedAt ? "Restore" : "Archive"} ${c.name}`}
 									disabled={pending}
 									onClick={() =>
 										run(
@@ -155,7 +160,8 @@ export function SettingsPanels({ senders, categories }: { senders: EmailSenderRo
 								</Button>
 							</div>
 						</li>
-					))}
+						);
+					})}
 				</ul>
 				<Link href="/portal/mail/preferences" className="justify-self-start text-sm text-accent underline-offset-2 hover:underline">
 					Preview the member preferences page
@@ -258,7 +264,7 @@ export function SettingsPanels({ senders, categories }: { senders: EmailSenderRo
 								<select
 									name="defaultSenderId"
 									defaultValue={editing.row.defaultSenderId ?? ""}
-									className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+									className="h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
 								>
 									<option value="">None</option>
 									{activeSenders.map((s) => (
