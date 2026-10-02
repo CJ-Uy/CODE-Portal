@@ -30,11 +30,14 @@ export default async function SendReportPage({
 	searchParams,
 }: {
 	params: Promise<{ id: string }>;
-	searchParams: Promise<{ status?: string; q?: string; tab?: string }>;
+	searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
 	const actor = await requireActor();
 	const { id } = await params;
-	const { status: rawStatus, q = "", tab = "recipients" } = await searchParams;
+	const raw = await searchParams;
+	const rawStatus = typeof raw.status === "string" ? raw.status : undefined;
+	const q = typeof raw.q === "string" ? raw.q : "";
+	const tab = typeof raw.tab === "string" ? raw.tab : "recipients";
 	const status = rawStatus && STATUSES.has(rawStatus) ? (rawStatus as EmailDeliveryStatus) : undefined;
 	const { email } = await getRepositories();
 	const report = await email.campaigns.report(actor, id, { status, q });
@@ -68,7 +71,7 @@ export default async function SendReportPage({
 
 			<header className="grid gap-3">
 				<div className="flex min-w-0 flex-wrap items-center gap-3">
-					<h1 className="min-w-0 break-all font-heading text-3xl sm:break-words">{campaign.subject || "Untitled email"}</h1>
+					<h1 className="min-w-0 break-all font-heading text-3xl">{campaign.subject || "Untitled email"}</h1>
 					<StatusPill status={campaign.status} />
 				</div>
 				<p className="text-sm text-muted-foreground">
@@ -138,7 +141,7 @@ export default async function SendReportPage({
 							{deliveries.map((d) => (
 								<li key={d.id} className="flex min-w-0 flex-wrap items-center gap-3 px-4 py-3">
 									<div className="grid min-w-0 flex-1">
-										<span className="min-w-0 break-all font-medium sm:break-words">{d.name}</span>
+										<span className="min-w-0 break-all font-medium">{d.name}</span>
 										<span className="min-w-0 break-all text-sm text-muted-foreground">{d.email}</span>
 										{d.error ? <span className="min-w-0 break-all text-sm text-[#343B41] dark:text-[#D7DFE9]">{d.error}</span> : null}
 									</div>

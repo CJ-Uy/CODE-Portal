@@ -11,13 +11,19 @@ import { cancelCampaignAction, duplicateCampaignAction, retryFailedAction, unsch
 
 // Counts down only inside the final 5 minutes before a scheduled send (the undo window).
 function useCountdown(target: Date | null) {
-	const [now, setNow] = useState(() => Date.now());
+	// null until mounted so server and first client render agree.
+	const [now, setNow] = useState<number | null>(null);
 	useEffect(() => {
 		if (!target) return;
-		const timer = window.setInterval(() => setNow(Date.now()), 1000);
-		return () => window.clearInterval(timer);
+		const tick = () => setNow(Date.now());
+		const first = window.setTimeout(tick, 0);
+		const timer = window.setInterval(tick, 1000);
+		return () => {
+			window.clearTimeout(first);
+			window.clearInterval(timer);
+		};
 	}, [target]);
-	if (!target || target.getTime() - now >= 5 * 60_000) return null;
+	if (!target || now === null || target.getTime() - now >= 5 * 60_000) return null;
 	const left = Math.max(0, Math.round((target.getTime() - now) / 1000));
 	return `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
 }
