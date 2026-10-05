@@ -70,5 +70,9 @@
 		}
 	],
 	"send_email": [{ "name": "EMAIL" }],
+	"queues": {
+		"producers": [{ "binding": "EMAIL_JOBS", "queue": "code-portal-staged-email" }],
+		"consumers": [{ "queue": "code-portal-staged-email", "max_batch_size": 1, "max_batch_timeout": 0, "max_concurrency": 1, "max_retries": 5, "retry_delay": 60, "dead_letter_queue": "code-portal-staged-email-failed" }]
+	},
 	"triggers": { "crons": ["* * * * *"] }
 }
