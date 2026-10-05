@@ -12,7 +12,8 @@ import { MERGE_TAGS, mergeValuesFor, type MergeOverrides } from "@/lib/email/mer
 import { renderEmail, valueResolver } from "@/lib/email/render";
 import type { Audience, EmailBlock } from "@/lib/email/types";
 import { requireActor } from "@/server/auth/actor";
-import { sendingDepsFromEnv } from "@/server/email/db";
+import { emailQueueFromEnv, sendingDepsFromEnv } from "@/server/email/db";
+import { queueEmailCampaign } from "@/server/email/jobs";
 import { assertFeatureEnabled } from "@/server/features";
 
 const BASE = "/portal/admin/email";
@@ -194,7 +195,15 @@ export async function scheduleCampaignAction(id: string, timing: { mode: "now" }
 			.parse(timing);
 		// "Send now" waits two minutes so the report page can offer Undo.
 		const at = parsed.mode === "now" ? new Date(Date.now() + 2 * 60_000) : fromLocalInput(parsed.local);
+		const queue = emailQueueFromEnv();
 		const row = await email.campaigns.schedule(actor, idSchema.parse(id), at);
+		try {
+			await queueEmailCampaign(queue, row.id, at);
+		} catch (error) {
+			console.error("Email job scheduling failed", error);
+			await email.campaigns.unschedule(actor, row.id);
+			throw new Error("The email could not be queued and was returned to drafts. Please try again.");
+		}
 		revalidatePath(BASE);
 		return { id: row.id };
 	});
@@ -221,7 +230,9 @@ export async function cancelCampaignAction(id: string) {
 export async function retryFailedAction(id: string) {
 	return runAction(async () => {
 		const { actor, email } = await context();
+		const queue = emailQueueFromEnv();
 		const count = await email.campaigns.retryFailed(actor, idSchema.parse(id));
+		if (count > 0) await queueEmailCampaign(queue, id);
 		revalidatePath(BASE);
 		return count;
 	});

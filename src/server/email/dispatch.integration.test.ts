@@ -7,6 +7,7 @@ import { emailCampaigns, emailDeliveries } from "@/db/schema";
 import type { Audience } from "@/lib/email/types";
 import type { EmailConfig } from "./config";
 import { runEmailDispatch } from "./dispatch";
+import { queueEmailCampaign, runEmailJobs, type EmailJob } from "./jobs";
 import { EmailQuotaError, type EmailSender, type OutgoingEmail } from "./sender";
 
 const db = drizzle(env.DB, { schema });
@@ -61,6 +62,61 @@ async function seed(opts: { required?: boolean } = {}) {
 
 const deliveries = () => db.select().from(emailDeliveries);
 const campaign = async () => (await db.select().from(emailCampaigns))[0];
+
+function jobBatch(campaignId = "ecmp_1") {
+	const ack = vi.fn();
+	return { ack, batch: { messages: [{ body: { campaignId }, ack }] } as unknown as MessageBatch<EmailJob> };
+}
+
+function fakeQueue() {
+	const send = vi.fn().mockResolvedValue(undefined);
+	return { send, queue: { send } as unknown as Queue<EmailJob> };
+}
+
+describe("queued email jobs", () => {
+	beforeEach(() => seed());
+
+	it("preserves Undo and longer scheduled dates, then sends without cron or duplicates", async () => {
+		const { queue, send } = fakeQueue();
+		const { sender, sent } = fakeSender();
+		const at = new Date(NOW.getTime() + 120_000);
+		await db.update(emailCampaigns).set({ scheduledAt: at }).where(eq(emailCampaigns.id, "ecmp_1"));
+		await queueEmailCampaign(queue, "ecmp_1", at, NOW.getTime());
+		expect(send).toHaveBeenLastCalledWith({ campaignId: "ecmp_1" }, { delaySeconds: 120 });
+		const early = jobBatch();
+		await runEmailJobs(early.batch, queue, db, sender, config, NOW);
+		expect(sent).toHaveLength(0);
+		expect(early.ack).toHaveBeenCalledOnce();
+		await queueEmailCampaign(queue, "ecmp_1", new Date(NOW.getTime() + 3 * 86_400_000), NOW.getTime());
+		expect(send).toHaveBeenLastCalledWith({ campaignId: "ecmp_1" }, { delaySeconds: 86_400 });
+		await runEmailJobs(jobBatch().batch, queue, db, sender, config, at);
+		expect(await campaign()).toMatchObject({ status: "sent", sentCount: 2 });
+		await runEmailJobs(jobBatch().batch, queue, db, sender, config, at);
+		expect(sent).toHaveLength(2);
+	});
+
+	it("continues batches and stops after Undo", async () => {
+		const { queue, send } = fakeQueue();
+		const { sender, sent } = fakeSender();
+		await runEmailJobs(jobBatch().batch, queue, db, sender, { ...config, batchPerTick: 1 }, NOW);
+		expect(sent).toHaveLength(1);
+		expect(send).toHaveBeenLastCalledWith({ campaignId: "ecmp_1" }, { delaySeconds: 60 });
+		await runEmailJobs(jobBatch().batch, queue, db, sender, config, new Date(NOW.getTime() + 60_000));
+		expect(sent).toHaveLength(2);
+		await db.update(emailCampaigns).set({ status: "draft" }).where(eq(emailCampaigns.id, "ecmp_1"));
+		send.mockClear();
+		await runEmailJobs(jobBatch().batch, queue, db, sender, config, NOW);
+		expect(send).not.toHaveBeenCalled();
+	});
+
+	it("does not acknowledge a job if its next wake-up cannot be saved", async () => {
+		const { queue, send } = fakeQueue();
+		send.mockRejectedValueOnce(new Error("Queue unavailable"));
+		const job = jobBatch();
+		await expect(runEmailJobs(job.batch, queue, db, fakeSender().sender, { ...config, batchPerTick: 1 }, NOW)).rejects.toThrow("Queue unavailable");
+		expect(job.ack).not.toHaveBeenCalled();
+	});
+});
 
 describe("runEmailDispatch", () => {
 	beforeEach(() => seed());
