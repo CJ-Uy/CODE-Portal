@@ -36,6 +36,7 @@ export const seedRoles: InferInsertModel<typeof roles>[] = [
 	{ id: "role_retention", key: "retention", label: "Retention", description: "Logs retention records.", kind: "admin" },
 	{ id: "role_member_admin", key: "member_admin", label: "Member admin", description: "Manages member profiles, roles, roster, and nav pins.", kind: "admin" },
 	{ id: "role_publishing", key: "publishing", label: "Publishing", description: "Manages announcements and the content library.", kind: "admin" },
+	{ id: "role_email", key: "email", label: "Email", description: "Sends member emails and manages templates, categories, and the reply inbox.", kind: "admin" },
 ];
 
 export const seedPointTypes: InferInsertModel<typeof pointTypes>[] = [

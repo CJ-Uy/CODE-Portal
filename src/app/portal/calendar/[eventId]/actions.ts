@@ -27,19 +27,19 @@ const updateSchema = z
 		place: z.string().trim().min(1).max(160),
 		description: z.string().trim().min(1).max(4000),
 		startsAt: z.coerce.date(),
-		endsAt: z.coerce.date(),
+		endsAt: z.coerce.date().nullable(),
 		capacity: z.number().int().min(1).max(100000).nullable().default(null),
 		graceMinutes: z.number().int().min(0).max(240).nullable().default(null),
 		rsvpForm: eventSignupFormInputSchema.default([]),
 		rsvpResponsesPublic: z.boolean().default(false),
 		allDay: z.boolean().default(false),
-		readOnly: z.boolean().default(false),
+		readOnly: z.boolean().optional(),
 	})
 	// Normalized before the ordering check so a same-day all-day event stays valid.
 	.transform((v) =>
-		v.allDay ? { ...v, startsAt: startOfUtc8Day(v.startsAt), endsAt: endOfUtc8Day(v.endsAt) } : v,
+		v.allDay ? { ...v, startsAt: startOfUtc8Day(v.startsAt), endsAt: v.endsAt ? endOfUtc8Day(v.endsAt) : null } : v,
 	)
-	.refine((v) => v.endsAt > v.startsAt, { path: ["endsAt"], message: "End must be after the start." });
+	.refine((v) => v.endsAt === null || v.endsAt > v.startsAt, { path: ["endsAt"], message: "End must be after the start." });
 
 /**
  * Toggling an existing event to informational and back. Separate from updateEventAction so a
@@ -60,7 +60,7 @@ export async function updateEventAction(input: z.input<typeof updateSchema>) {
 	const actor = await requireActor();
 	const { eventId, ...patch } = updateSchema.parse(input);
 	const repositories = await getRepositories();
-	await repositories.events.update(actor, eventId, patch);
+	await repositories.events.update(actor, eventId, { ...patch, endsAt: patch.endsAt ?? undefined });
 	revalidate(eventId);
 }
 

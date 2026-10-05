@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AdminIntro } from "@/components/portal/admin-intro";
 import { notFound, redirect } from "next/navigation";
 import { Inbox } from "lucide-react";
 import { getRepositories } from "@/db";
@@ -45,16 +46,14 @@ export default async function AdminSubmissionsPage({
 
 	return (
 		<div className="grid gap-5">
-			<div>
-				<h2 className="font-heading text-xl">Submissions</h2>
-				<p className="text-sm text-muted-foreground">Inquiries and article feedback from the public site.</p>
-			</div>
+			<AdminIntro title="Submissions" whoFor="Read inquiries and article feedback from the public site" />
 
 			<div className="flex gap-2 border-b border-border">
 				{tabs.map((item) => (
 					<Link
 						key={item.id}
 						href={item.href}
+						aria-current={tab === item.id ? "page" : undefined}
 						className={
 							tab === item.id
 								? "-mb-px border-b-2 border-accent px-3 py-2 text-sm font-semibold text-foreground"

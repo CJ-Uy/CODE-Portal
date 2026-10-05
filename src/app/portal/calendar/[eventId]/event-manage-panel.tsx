@@ -143,7 +143,9 @@ export function EventManagePanel({
 	];
 	const tabs = allTabs.filter((t) => t.show);
 
-	const [section, setSection] = useState<Section>(tabs[0]?.id ?? "checkins");
+	const [section, setSection] = useState<Section>(() =>
+		canManage && (event.endsAt ?? event.startsAt).getTime() < Date.now() ? "details" : tabs[0]?.id ?? "checkins",
+	);
 	if (tabs.length === 0) return null;
 
 	return (
@@ -877,7 +879,7 @@ function DetailsSection({
 				// The action snaps an all-day range to the whole UTC+8 days, so send midnight
 				// and let it widen; sending the previous timed values would narrow the event.
 				startsAt: fromLocalInput(allDay ? `${startDay}T00:00` : startsAt).toISOString(),
-				endsAt: fromLocalInput(allDay ? `${endDay}T00:00` : endsAt).toISOString(),
+				endsAt: allDay || endsAt ? fromLocalInput(allDay ? `${endDay}T00:00` : endsAt).toISOString() : null,
 				allDay,
 				capacity: capacity ? Number(capacity) : null,
 				graceMinutes: graceMinutes === "" ? null : Number(graceMinutes),

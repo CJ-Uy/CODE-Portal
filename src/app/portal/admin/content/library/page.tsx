@@ -1,9 +1,9 @@
 import { notFound, redirect } from "next/navigation";
-import { Plus, Trash2 } from "lucide-react";
+import { ChevronDown, Plus, Save, Trash2 } from "lucide-react";
+import { AdminIntro } from "@/components/portal/admin-intro";
 import { getRepositories } from "@/db";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { getActor } from "@/server/auth/actor";
@@ -36,7 +36,7 @@ function Fields({ item }: { item?: LibraryItem }) {
 					<select name="kind" defaultValue={item?.kind ?? "article"} className="h-9 rounded-md border border-input bg-transparent px-2 text-sm">
 						{KINDS.map((kind) => (
 							<option key={kind} value={kind}>
-								{kind}
+								{kind === "case_study" ? "Case study" : "Article"}
 							</option>
 						))}
 					</select>
@@ -56,12 +56,12 @@ function Fields({ item }: { item?: LibraryItem }) {
 					</select>
 				</label>
 				<label className="grid gap-1 text-sm font-medium">
-					Read minutes
+					Reading time (minutes)
 					<Input name="readMinutes" type="number" min={1} max={180} defaultValue={item?.readMinutes ?? 5} required />
 				</label>
 			</div>
 			<label className="grid gap-1 text-sm font-medium">
-				Dek (one-line summary)
+				Summary (one line)
 				<Input name="dek" defaultValue={item?.dek ?? ""} maxLength={400} />
 			</label>
 			<label className="grid gap-1 text-sm font-medium">
@@ -109,12 +109,10 @@ export default async function AdminLibraryPage() {
 
 	return (
 		<div className="grid gap-6">
-			<Card>
-				<CardHeader>
-					<CardTitle>New library item</CardTitle>
-					<CardDescription>Articles and case studies are visible to members as soon as they are saved.</CardDescription>
-				</CardHeader>
-				<CardContent>
+			<AdminIntro title="Library" whoFor="Publish and edit articles and case studies" effect="Saved items appear immediately for the audience you select" />
+			<details className="rounded-xl border border-border/60 bg-card">
+				<summary className="cursor-pointer rounded-xl px-5 py-4 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">New library item</summary>
+				<div className="border-t border-border/50 p-5">
 					<form action={createLibraryItemAction} className="grid gap-4">
 						<Fields />
 						<div>
@@ -124,8 +122,8 @@ export default async function AdminLibraryPage() {
 							</Button>
 						</div>
 					</form>
-				</CardContent>
-			</Card>
+				</div>
+			</details>
 
 			<div className="grid gap-4">
 				<h2 className="font-heading text-xl">Items ({items.length})</h2>
@@ -133,20 +131,25 @@ export default async function AdminLibraryPage() {
 					<p className="text-sm text-muted-foreground">No library items yet.</p>
 				) : (
 					items.map((item) => (
-						<Card key={item.id}>
-							<CardHeader>
+						<details key={item.id} className="group/item rounded-xl border border-border/60 bg-card">
+							<summary className="flex cursor-pointer list-none items-center gap-4 rounded-xl px-5 py-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+								<div className="min-w-0 flex-1">
 								<div className="flex flex-wrap items-center gap-2">
 									<Badge variant="secondary">{item.category}</Badge>
 									<Badge variant="outline">{item.confidentiality}</Badge>
 								</div>
-								<CardTitle className="text-lg">{item.title}</CardTitle>
-							</CardHeader>
-							<CardContent>
+								<span className="mt-2 block text-lg font-semibold">{item.title}</span>
+								<span className="mt-1 block text-sm text-muted-foreground">Open to edit</span>
+								</div>
+								<ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-open/item:rotate-180 motion-reduce:transition-none" aria-hidden />
+							</summary>
+							<div className="border-t border-border/50 p-5">
 								<form action={updateLibraryItemAction} className="grid gap-4">
 									<input type="hidden" name="id" value={item.id} />
 									<Fields item={item} />
 									<div className="flex gap-2">
 										<Button type="submit" variant="secondary" size="sm">
+											<Save />
 											Save changes
 										</Button>
 									</div>
@@ -158,8 +161,8 @@ export default async function AdminLibraryPage() {
 										Delete
 									</Button>
 								</form>
-							</CardContent>
-						</Card>
+							</div>
+						</details>
 					))
 				)}
 			</div>

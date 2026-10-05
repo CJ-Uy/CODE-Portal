@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+import { Plus, Save, Trash2 } from "lucide-react";
+import { AdminIntro } from "@/components/portal/admin-intro";
 import { getRepositories } from "@/db";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +21,7 @@ export default async function QuickLinksAdminPage() {
 
 	return (
 		<div className="grid gap-6">
+			<AdminIntro title="Dashboard shortcuts" whoFor="Choose the resources shown in the member dashboard" />
 			<Card>
 				<CardHeader>
 					<CardTitle>Add a quick link</CardTitle>
@@ -26,10 +29,11 @@ export default async function QuickLinksAdminPage() {
 				</CardHeader>
 				<CardContent>
 					<form action={createQuickLinkAction} className="grid gap-2 sm:grid-cols-4">
-						<Input name="label" placeholder="Label" required />
-						<Input name="url" type="url" placeholder="https://" required className="sm:col-span-2" />
-						<Input name="position" type="number" defaultValue={0} min={0} required />
-						<Button type="submit" className="sm:col-span-4">
+						<Input name="label" placeholder="Label" aria-label="Link label" required />
+						<Input name="url" type="url" placeholder="https://" aria-label="Link URL" required className="sm:col-span-2" />
+						<Input name="position" type="number" defaultValue={0} min={0} required aria-label="Position" />
+						<Button type="submit" className="w-fit sm:col-span-4">
+							<Plus />
 							Add link
 						</Button>
 					</form>
@@ -58,8 +62,9 @@ export default async function QuickLinksAdminPage() {
 											<input type="hidden" name="id" value={link.id} />
 											<input type="hidden" name="label" value={link.label} />
 											<input type="hidden" name="url" value={link.url} />
-											<Input name="position" type="number" defaultValue={link.position} className="w-20" min={0} />
+											<Input name="position" type="number" defaultValue={link.position} className="w-20" min={0} aria-label={`Position for ${link.label}`} />
 											<Button type="submit" size="sm" variant="outline">
+												<Save />
 												Save
 											</Button>
 										</form>
@@ -70,6 +75,7 @@ export default async function QuickLinksAdminPage() {
 										<form action={deleteQuickLinkAction}>
 											<input type="hidden" name="id" value={link.id} />
 											<Button type="submit" size="sm" variant="outline">
+												<Trash2 />
 												Remove
 											</Button>
 										</form>

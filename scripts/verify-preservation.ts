@@ -61,6 +61,10 @@ if (one("SELECT public_code AS v FROM crs_events WHERE id='evt_fix1'") === null)
 check("member_feed_state gone", one("SELECT COUNT(*) AS v FROM sqlite_master WHERE type='table' AND name='member_feed_state'"), 0);
 check("articles gone", one("SELECT COUNT(*) AS v FROM sqlite_master WHERE type='table' AND name='articles'"), 0);
 
+for (const file of files.filter((f) => f > "0004_unify_schema.sql")) applyOne(file);
+check("email role seeded", one("SELECT COUNT(*) AS v FROM roles WHERE id='role_email'"), 1);
+check("unsubscribe slug reserved", one("SELECT COUNT(*) AS v FROM reserved_slugs WHERE slug='unsubscribe'"), 1);
+check("email_deliveries exists", one("SELECT COUNT(*) AS v FROM sqlite_master WHERE type='table' AND name='email_deliveries'"), 1);
 db.close();
 rmSync(work, { recursive: true, force: true });
 

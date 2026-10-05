@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminIntro } from "@/components/portal/admin-intro";
+import { AdminTools } from "@/components/portal/admin-tools";
 import { requireActor } from "@/server/auth/actor";
 import { getFeatureFlags } from "@/server/features";
 import { visibleGroups } from "./nav";
@@ -17,18 +17,7 @@ export async function AdminGroupIndex({ segment, whoFor }: { segment: string; wh
 	return (
 		<div className="grid gap-4">
 			<AdminIntro title={group.label} whoFor={whoFor} effect="Pick a page below to continue" />
-			<div className="grid gap-3 sm:grid-cols-2">
-				{group.pages.map((page) => (
-					<Link
-						key={page.href}
-						href={page.href}
-						className="group flex flex-col gap-1 rounded-xl border border-border bg-card p-4 transition-[border-color,transform] hover:border-accent active:scale-[0.99]"
-					>
-						<span className="font-medium group-hover:text-accent">{page.label}</span>
-						<span className="text-sm text-muted-foreground">{page.description}</span>
-					</Link>
-				))}
-			</div>
+			<AdminTools groups={[group]} showFilters={false} />
 		</div>
 	);
 }

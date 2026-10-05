@@ -1,6 +1,7 @@
 import { createAnnouncementsRepository, createUnavailableAnnouncementsRepository } from "./announcements";
 import { createAuditRepository, createUnavailableAuditRepository } from "./audit";
 import { createCalendarRepository, type CalendarRepository } from "./calendar";
+import { createEmailRepositories, createUnavailableEmailRepositories } from "./email";
 import { createEventForumRepository } from "./event-forum";
 import { createEventMediaRepository } from "./event-media";
 import { createEventsRepository } from "./events";
@@ -8,6 +9,8 @@ import { createEventTypeRulesRepository } from "./eventTypeRules";
 import { createLibraryRepository, createUnavailableLibraryRepository } from "./library";
 import { createLinksRepository, createUnavailableLinksRepository, type LinkDb } from "./links";
 import { createMembersRepository } from "./members";
+import { createMentsRepository } from "./ments";
+import { createSharedMentsRepository } from "./ments-shared";
 import { createNavPinsRepository } from "./navPins";
 import { createNotificationsRepository, type NotificationsRepository } from "./notifications";
 import { createOverviewRepository, type OverviewRepository } from "./overview";
@@ -40,6 +43,7 @@ export function createDrizzleRepositories(db: DrizzleDb) {
 	const retention = createRetentionRepository(db, audit);
 	return {
 		members: createMembersRepository(db as unknown as MemberDb & AuditDb, audit),
+		ments: createMentsRepository(d1, audit),
 		sessions: createSessionsRepository(),
 		links: createLinksRepository(db as unknown as LinkDb, audit),
 		events: createEventsRepository(db, audit),
@@ -59,6 +63,7 @@ export function createDrizzleRepositories(db: DrizzleDb) {
 		announcements: createAnnouncementsRepository(d1, audit),
 		library: createLibraryRepository(d1, audit),
 		submissions: createSubmissionsRepository(d1),
+		email: createEmailRepositories(d1, audit),
 		audit,
 	};
 }
@@ -99,6 +104,7 @@ export function createSharedRepositories(adapter: DatabaseAdapter): Repositories
 		throw new Error("This operation is only available through the shared /internal API.");
 	};
 	return {
+		ments: createSharedMentsRepository(),
 		members: {
 			list: async (_actor, input) => adapter.listMembers().then((members) => members.slice(0, input?.limit ?? 25)),
 			listPage: async (_actor, input) => {
@@ -135,6 +141,7 @@ export function createSharedRepositories(adapter: DatabaseAdapter): Repositories
 		announcements: createUnavailableAnnouncementsRepository(),
 		library: createUnavailableLibraryRepository(),
 		submissions: createUnavailableSubmissionsRepository(),
+		email: createUnavailableEmailRepositories(),
 		audit,
 	};
 }

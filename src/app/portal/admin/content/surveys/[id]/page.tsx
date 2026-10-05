@@ -3,7 +3,7 @@ import { Shuffle } from "lucide-react";
 import { getRepositories } from "@/db";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { getActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
@@ -40,18 +40,17 @@ export default async function AdminSurveyDetailPage({ params }: { params: Promis
 	);
 
 	return (
-		<main className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-6">
+		<div>
 			<div className="grid gap-6">
-				<Card>
-					<CardHeader>
-						<CardTitle className="text-3xl">{detail.survey.title}</CardTitle>
-						<CardDescription>
+					<header className="grid gap-2 border-b border-border/60 pb-5">
+						<h1 className="text-3xl font-semibold text-primary sm:text-4xl">{detail.survey.title}</h1>
+						<div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
 							<Badge variant="outline">{detail.survey.status}</Badge> {results.completedCount} of {results.assignedCount}{" "}
 							assigned members responded.
-						</CardDescription>
-					</CardHeader>
+						</div>
+					</header>
 					{detail.survey.status === "draft" ? (
-						<CardContent>
+						<section aria-label="Survey sampling" className="rounded-xl border border-border/60 bg-card p-5">
 							<form action={sampleSurveyAction} className="flex flex-wrap items-end gap-3">
 								<input type="hidden" name="surveyId" value={detail.survey.id} />
 								<label className="grid gap-2 text-sm font-medium">
@@ -67,13 +66,12 @@ export default async function AdminSurveyDetailPage({ params }: { params: Promis
 									Draw sample and start
 								</Button>
 							</form>
-						</CardContent>
+						</section>
 					) : null}
-				</Card>
 
 				<Card>
 					<CardHeader>
-						<CardTitle>Results</CardTitle>
+						<h2 className="text-xl font-semibold text-primary">Results</h2>
 						<CardDescription>Aggregated and anonymous. Responses cannot be traced to any member.</CardDescription>
 					</CardHeader>
 					<CardContent className="grid gap-5">
@@ -106,6 +104,6 @@ export default async function AdminSurveyDetailPage({ params }: { params: Promis
 					</CardContent>
 				</Card>
 			</div>
-		</main>
+		</div>
 	);
 }

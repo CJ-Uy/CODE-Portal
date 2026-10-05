@@ -46,6 +46,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
 		providers: [
 			Google(getGoogleProviderOptions(config.AUTH_GOOGLE_ID, config.AUTH_GOOGLE_SECRET)),
 		],
+		pages: { error: "/signin" },
 		session: { strategy: "database" },
 		secret: config.AUTH_SECRET,
 		trustHost: true,
