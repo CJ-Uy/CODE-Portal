@@ -1,6 +1,6 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "code-nest-prod",
+	"name": "code-portal-prod",
 	"account_id": "83376df5e0bae067afa197b07430168d",
 	"main": ".open-next/worker.js",
 	"workers_dev": true,
@@ -27,7 +27,7 @@
 			"binding": "WORKER_SELF_REFERENCE",
 			// Must match this file's own "name". It said code-nest, which no longer exists,
 			// so every production upload failed with code 10143 until it was corrected.
-			"service": "code-nest-prod"
+			"service": "code-portal-prod"
 		}
 	],
 	"observability": {

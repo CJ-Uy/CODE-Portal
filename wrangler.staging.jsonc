@@ -1,6 +1,6 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "code-nest-staged",
+	"name": "code-portal-staged",
 	"account_id": "83376df5e0bae067afa197b07430168d",
 	"main": ".open-next/worker.js",
 	"workers_dev": true,
@@ -25,7 +25,7 @@
 	"services": [
 		{
 			"binding": "WORKER_SELF_REFERENCE",
-			"service": "code-nest-staged"
+			"service": "code-portal-staged"
 		}
 	],
 	"observability": {
