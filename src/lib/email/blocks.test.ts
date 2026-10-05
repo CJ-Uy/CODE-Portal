@@ -49,4 +49,13 @@ describe("audienceSchema", () => {
 	it("rejects unknown rule kinds", () => {
 		expect(audienceSchema.safeParse({ match: "any", include: [{ kind: "everyone" }], exclude: [] }).success).toBe(false);
 	});
+	it("accepts typed addresses, lowercased, and rejects bad or too many", () => {
+		const audience = (emails: string[]) => audienceSchema.safeParse({ match: "any", include: [{ kind: "emails", emails }], exclude: [] });
+		const ok = audience([" Guest@Example.com ", "mem_a@example.com"]);
+		expect(ok.success).toBe(true);
+		expect(ok.data?.include[0]).toEqual({ kind: "emails", emails: ["guest@example.com", "mem_a@example.com"] });
+		expect(audience(["guest@example.com", "not-an-email"]).success).toBe(false);
+		expect(audience([]).success).toBe(false);
+		expect(audience(Array.from({ length: 1001 }, (_, i) => `p${i}@example.com`)).success).toBe(false);
+	});
 });

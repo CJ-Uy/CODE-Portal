@@ -859,9 +859,11 @@ export const emailDeliveries = sqliteTable(
 		error: text("error"),
 		sentAt: integer("sent_at", { mode: "timestamp_ms" }),
 		readAt: integer("read_at", { mode: "timestamp_ms" }),
+		isExternal: integer("is_external", { mode: "boolean" }).notNull().default(false),
 	},
 	(table) => [
 		uniqueIndex("email_deliveries_campaign_member_unique").on(table.campaignId, table.memberId),
+		uniqueIndex("email_deliveries_campaign_email_unique").on(table.campaignId, table.email),
 		index("email_deliveries_status_next_idx").on(table.status, table.nextAttemptAt),
 		index("email_deliveries_member_status_idx").on(table.memberId, table.status),
 		index("email_deliveries_sent_at_idx").on(table.sentAt),

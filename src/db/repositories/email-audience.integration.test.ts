@@ -85,4 +85,63 @@ describe("resolveAudience", () => {
 	it("returns nothing for an empty include", async () => {
 		expect(await ids({ match: "any", include: [], exclude: [] })).toEqual([]);
 	});
+
+	describe("typed addresses", () => {
+		const resolve = async (audience: Audience) =>
+			(await resolveAudience(db, audience, NOW)).map((r) => ({ memberId: r.memberId, email: r.email, external: r.external }));
+
+		it("maps a member address to that member, even an inactive one", async () => {
+			expect(await resolve({ match: "any", include: [{ kind: "emails", emails: ["mem_off@example.com"] }], exclude: [] })).toEqual([
+				{ memberId: "mem_off", email: "mem_off@example.com", external: false },
+			]);
+		});
+
+		it("matches member addresses case-insensitively", async () => {
+			await env.DB.prepare("UPDATE members SET email = 'Mem_A@Example.com' WHERE id = 'mem_a'").run();
+			expect(await ids({ match: "any", include: [{ kind: "emails", emails: ["mem_a@example.com"] }], exclude: [] })).toEqual(["mem_a"]);
+		});
+
+		it("resolves an unknown address to an outside recipient", async () => {
+			const [guest] = await resolveAudience(db, { match: "any", include: [{ kind: "emails", emails: ["guest@outside.org"] }], exclude: [] }, NOW);
+			expect(guest).toEqual({ memberId: null, email: "guest@outside.org", name: null, fullName: null, nickname: null, batch: null, external: true });
+		});
+
+		it("gives one recipient per address across typed rules and member rules", async () => {
+			const audience: Audience = {
+				match: "any",
+				include: [
+					{ kind: "emails", emails: ["mem_c@example.com", "guest@outside.org"] },
+					{ kind: "emails", emails: ["mem_c@example.com", "guest@outside.org"] },
+					{ kind: "member", memberId: "mem_c" },
+				],
+				exclude: [],
+			};
+			expect(await resolve(audience)).toEqual([
+				{ memberId: null, email: "guest@outside.org", external: true },
+				{ memberId: "mem_c", email: "mem_c@example.com", external: false },
+			]);
+		});
+
+		it("excludes typed addresses for both members and outside recipients", async () => {
+			const audience: Audience = {
+				match: "any",
+				include: [{ kind: "batch", batch: "2027" }, { kind: "emails", emails: ["guest@outside.org", "other@outside.org"] }],
+				exclude: [{ kind: "emails", emails: ["mem_b@example.com", "guest@outside.org"] }],
+			};
+			expect((await resolve(audience)).map((r) => r.email)).toEqual(["mem_c@example.com", "other@outside.org"]);
+		});
+
+		it("always includes typed addresses with match all", async () => {
+			const audience: Audience = {
+				match: "all",
+				include: [
+					{ kind: "batch", batch: "2027" },
+					{ kind: "roster", termId: "current" },
+					{ kind: "emails", emails: ["mem_a@example.com", "guest@outside.org"] },
+				],
+				exclude: [],
+			};
+			expect((await resolve(audience)).map((r) => r.email)).toEqual(["guest@outside.org", "mem_a@example.com", "mem_b@example.com"]);
+		});
+	});
 });

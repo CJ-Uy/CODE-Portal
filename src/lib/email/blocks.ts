@@ -63,6 +63,7 @@ const ruleSchema = z.discriminatedUnion("kind", [
 	z.object({ kind: z.literal("status"), status: z.enum(["active", "pending", "inactive"]) }),
 	z.object({ kind: z.literal("event"), eventId: z.string().min(1), relation: z.enum(["rsvp", "attended", "no_show"]) }),
 	z.object({ kind: z.literal("member"), memberId: z.string().min(1) }),
+	z.object({ kind: z.literal("emails"), emails: z.array(z.string().trim().toLowerCase().email()).min(1).max(1000) }),
 ]);
 
 export const audienceSchema = z.object({

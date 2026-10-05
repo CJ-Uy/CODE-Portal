@@ -20,7 +20,8 @@ export type AudienceRule =
 	| { kind: "batch"; batch: string }
 	| { kind: "status"; status: "active" | "pending" | "inactive" }
 	| { kind: "event"; eventId: string; relation: "rsvp" | "attended" | "no_show" }
-	| { kind: "member"; memberId: string };
+	| { kind: "member"; memberId: string }
+	| { kind: "emails"; emails: string[] };
 
 export type Audience = {
 	match: "all" | "any";

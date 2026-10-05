@@ -49,6 +49,24 @@ describe("email campaigns", () => {
 		expect(preview.optedOut.map((m) => m.memberId)).toEqual(["mem_b"]);
 	});
 
+	it("counts outside recipients in the preview and flags them in the report", async () => {
+		const ids = await setup();
+		const audience = { match: "any" as const, include: [{ kind: "emails" as const, emails: ["mem_a@example.com", "guest@outside.org"] }], exclude: [] };
+		const preview = await repos.campaigns.previewAudience(admin, audience, ids.news.id, NOW);
+		expect(preview).toMatchObject({ matched: 2, willReceive: 2, outside: ["guest@outside.org"], outsideCount: 1 });
+		expect(preview.recipients.map((r) => r.email)).toEqual(["mem_a@example.com"]);
+		const draft = await repos.campaigns.saveDraft(admin, { ...draftInput(ids), audience });
+		await db.insert(emailDeliveries).values([
+			{ id: "edl_m", campaignId: draft.id, memberId: "mem_a", email: "mem_a@example.com" },
+			{ id: "edl_g", campaignId: draft.id, memberId: null, email: "guest@outside.org", isExternal: true },
+		]);
+		const report = await repos.campaigns.report(admin, draft.id);
+		expect(report?.deliveries.map((d) => [d.email, d.external])).toEqual([
+			["guest@outside.org", true],
+			["mem_a@example.com", false],
+		]);
+	});
+
 	it("schedules a valid draft once and refuses a second schedule", async () => {
 		const ids = await setup();
 		const draft = await repos.campaigns.saveDraft(admin, draftInput(ids));

@@ -25,7 +25,11 @@ export type AudiencePreview = {
 	matched: number;
 	willReceive: number;
 	optedOut: { memberId: string; name: string }[];
+	/** Members only; outside recipients are listed in `outside`. */
 	recipients: { memberId: string; name: string; email: string }[];
+	/** Typed addresses that match no member, capped at 100. */
+	outside: string[];
+	outsideCount: number;
 };
 export type AudienceOptions = {
 	roles: { key: string; label: string }[];
@@ -51,6 +55,7 @@ export type DeliveryRow = {
 	attempts: number;
 	error: string | null;
 	sentAt: Date | null;
+	external: boolean;
 };
 export type CampaignReport = { campaign: CampaignListItem; counts: Record<EmailDeliveryStatus, number>; deliveries: DeliveryRow[] };
 
@@ -238,12 +243,16 @@ export function createEmailCampaignsRepository(db: EmailDb, audit: AuditReposito
 			assertEmail(actor, "email:send");
 			const recipients = await resolveAudience(db, audienceSchema.parse(audience), now);
 			const optedOut = await optedOutIds(categoryId);
-			const receiving = recipients.filter((r) => !optedOut.has(r.memberId));
+			const memberRows = recipients.flatMap((r) => (r.memberId === null ? [] : [{ ...r, memberId: r.memberId }]));
+			const outside = recipients.filter((r) => r.external).map((r) => r.email);
+			const receiving = memberRows.filter((r) => !optedOut.has(r.memberId));
 			return {
 				matched: recipients.length,
-				willReceive: receiving.length,
-				optedOut: recipients.filter((r) => optedOut.has(r.memberId)).map((r) => ({ memberId: r.memberId, name: memberDisplayName(r) })),
+				willReceive: receiving.length + outside.length,
+				optedOut: memberRows.filter((r) => optedOut.has(r.memberId)).map((r) => ({ memberId: r.memberId, name: memberDisplayName(r) })),
 				recipients: receiving.slice(0, 50).map((r) => ({ memberId: r.memberId, name: memberDisplayName(r), email: r.email })),
+				outside: outside.slice(0, 100),
+				outsideCount: outside.length,
 			};
 		},
 
@@ -365,6 +374,7 @@ export function createEmailCampaignsRepository(db: EmailDb, audit: AuditReposito
 					attempts: r.delivery.attempts,
 					error: r.delivery.error,
 					sentAt: r.delivery.sentAt,
+					external: r.delivery.isExternal,
 				})),
 			};
 		},
