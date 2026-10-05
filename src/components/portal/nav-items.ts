@@ -1,4 +1,4 @@
-import { CalendarDays, CircleUserRound, House, Bell, BookOpen, Link2, Award, Megaphone, ShieldCheck, Mail } from "lucide-react";
+import { CalendarDays, CircleUserRound, House, Bell, BookOpen, Link2, Award, Megaphone, ShieldCheck, Mail, GitBranch } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 // Type-only, so no server module reaches the client bundle.
 import type { FeatureFlags } from "@/server/features";
@@ -27,6 +27,7 @@ export const primaryNav: NavItem[] = [
 // fixed bar. Later phases append their destinations here (Library, Announcements)
 // so the shell component never needs to change to gain a nav entry.
 export const secondaryNav: NavItem[] = [
+	{ id: "ments", label: "Ments Tree", href: "/portal/ments", icon: GitBranch, feature: "ments" },
 	{ id: "library", label: "Library", href: "/portal/library", icon: BookOpen, feature: "library" },
 	{ id: "announcements", label: "Announcements", href: "/portal/announcements", icon: Megaphone, feature: "announcements" },
 	{ id: "mail", label: "Mail", href: "/portal/mail", icon: Mail, feature: "email" },

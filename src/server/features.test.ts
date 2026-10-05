@@ -20,6 +20,7 @@ function configWith(flags: Partial<Record<string, boolean>>) {
 		FEATURE_PUBLIC_SITE: false,
 		FEATURE_LEADERBOARD: false,
 		FEATURE_EMAIL: false,
+		FEATURE_MENTS: false,
 		...flags,
 	} as Parameters<typeof featureFlagsFromConfig>[0];
 }
@@ -46,6 +47,7 @@ describe("release feature flags", () => {
 		expect(featureFlagsFromConfig(configWith({ FEATURE_SURVEYS: true })).surveys).toBe(true);
 		expect(featureFlagsFromConfig(configWith({ FEATURE_LEADERBOARD: true })).leaderboard).toBe(true);
 		// leaderboard is independent of retention in config; the points page is what pairs them.
+		expect(featureFlagsFromConfig(configWith({ FEATURE_MENTS: true })).ments).toBe(true);
 		expect(featureFlagsFromConfig(configWith({ FEATURE_LEADERBOARD: true })).retention).toBe(false);
 	});
 

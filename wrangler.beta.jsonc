@@ -48,6 +48,7 @@
 		"FEATURE_PUBLIC_SITE": "true",
 		"FEATURE_LEADERBOARD": "true",
 		"FEATURE_EMAIL": "true",
+		"FEATURE_MENTS": "true",
 		"EMAIL_INBOX_ADDRESS": "beta-inbox@ateneocode.org",
 		"EMAIL_PUBLIC_BASE_URL": "https://beta.ateneocode.org",
 		"EMAIL_BATCH_PER_TICK": "25",

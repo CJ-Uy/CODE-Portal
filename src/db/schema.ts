@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { check, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import type { EventSignupAnswers, EventSignupField } from "@/lib/event-signup-form";
 import type { PointMilestone } from "@/lib/point-milestones";
 import type { Audience, EmailBlock, EmailCampaignStatus, EmailDeliveryStatus } from "@/lib/email/types";
@@ -51,6 +51,22 @@ export const members = sqliteTable(
 		uniqueIndex("members_email_unique").on(table.email),
 		index("members_email_idx").on(table.email),
 		index("members_status_idx").on(table.status),
+	],
+);
+
+export const mentsPeople = sqliteTable(
+	"ments_people",
+	{
+		id: text("id").primaryKey(),
+		name: text("name").notNull(),
+		cohort: text("cohort"),
+		memberId: text("member_id").references(() => members.id, { onDelete: "set null" }),
+		mentorId: text("mentor_id").references((): AnySQLiteColumn => mentsPeople.id, { onDelete: "restrict" }),
+	},
+	(table) => [
+		uniqueIndex("ments_people_member_unique").on(table.memberId),
+		index("ments_people_mentor_idx").on(table.mentorId),
+		check("ments_people_not_self", sql`${table.mentorId} IS NULL OR ${table.mentorId} <> ${table.id}`),
 	],
 );
 

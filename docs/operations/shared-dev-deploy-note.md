@@ -1,5 +1,33 @@
 # Shared Dev Deploy Note
 
+## Beta Ments Tree
+
+`0009_ments_tree.sql` adds mentor profiles with optional portal account links,
+foreign keys, and triggers that prevent cycles. The member page is `/portal/ments`;
+member admins manage it at `/portal/admin/members/ments`. `FEATURE_MENTS` enables
+the page, actions, navigation, and shared `/internal/ments` API. It defaults to
+off and is enabled only in the beta Wrangler config. Local/shared developers can
+opt in with `FEATURE_MENTS=true`.
+
+After approval, apply the beta migration, load the chart export if wanted, then
+build and redeploy `code-portal-beta`. The beta binding is `code-nest-beta-db`
+(`ffe974a7-4b89-4ac7-b07e-ad62f4530ca2`) in account
+`83376df5e0bae067afa197b07430168d`. No reset is needed.
+
+```powershell
+pnpm exec wrangler d1 migrations apply DB --config wrangler.beta.jsonc --remote
+pnpm exec tsx scripts/export-ments-chart.ts
+pnpm exec wrangler d1 execute DB --config wrangler.beta.jsonc --remote --file .local/ments-chart-seed.sql
+pnpm build
+pnpm exec wrangler deploy --no-x-autoconfig --config wrangler.beta.jsonc
+```
+
+The chart seed is separate from the shared migration history so these names are
+loaded only into beta. It adds missing profiles without replacing existing
+records or linking accounts by guessed names. Admins link accounts by email.
+The source retains published spelling variants. The exporter merges the two
+confirmed aliases and omits blank mentees, producing 393 people and 362 links.
+
 Phase 0 changes the database schema, migrations, environment bindings, internal contracts, repository seams, and shared dev token seed shape.
 
 Shared-mode developers depend on the deployed dev Worker staying current. After this phase is reviewed and the D1 reset commands are approved, the dev backend must be updated in this order:

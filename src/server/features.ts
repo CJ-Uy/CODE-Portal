@@ -16,6 +16,7 @@ export const FEATURE_KEYS = [
 	"publicSite",
 	"leaderboard",
 	"email",
+	"ments",
 ] as const;
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
@@ -32,6 +33,7 @@ export function featureFlagsFromConfig(config: AppConfig): FeatureFlags {
 		publicSite: config.FEATURE_PUBLIC_SITE,
 		leaderboard: config.FEATURE_LEADERBOARD,
 		email: config.FEATURE_EMAIL,
+		ments: config.FEATURE_MENTS,
 	};
 }
 

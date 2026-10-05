@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# D1 trigger migrations require LF on Windows.
+drizzle/migrations/*.sql text eol=lf
