@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { Breadcrumb } from "./breadcrumb";
 import { AdminNavigation } from "./admin-navigation";
 import { MemberAvatar } from "./member-avatar";
-import { adminNav, primaryNav, secondaryNav, visiblePrimaryNav, visibleSecondaryNav, type NavItem } from "./nav-items";
+import { adminNav, primaryNav, secondaryNav, visiblePrimaryNav, visibleSecondaryNav, visibleMobileNav, type NavItem } from "./nav-items";
 import type { FeatureFlags } from "@/server/features";
 import { navPinIconFor } from "./nav-pin-icons";
 import { adminHeading, crumbFor } from "@/app/portal/admin/nav";
@@ -109,9 +109,11 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 	// but a visible link to a 404 reads as a broken portal rather than an unshipped one.
 	const primary = visiblePrimaryNav(flags);
 	const secondary = visibleSecondaryNav(flags);
-	const sheetItems: NavItem[] = [...secondary, ...(showAdmin ? [adminNav] : [])];
-	const leftTabs = primary.slice(0, 2);
-	const rightTabs = primary.slice(2, 4);
+	const mobile = visibleMobileNav(flags);
+	const sheetItems: NavItem[] = [...primary, ...secondary].filter((item) => !mobile.some((tab) => tab.id === item.id));
+	if (showAdmin) sheetItems.push(adminNav);
+	const leftTabs = mobile.slice(0, 2);
+	const rightTabs = mobile.slice(2, 4);
 
 	return (
 		<div className="min-h-screen bg-background text-foreground lg:flex">
@@ -141,14 +143,15 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 						<div className="min-h-0 flex-1 overflow-y-auto pr-1"><AdminNavigation groups={adminGroups} pathname={pathname} /></div>
 					</>
 				) : (
-					<>
+					<div className="min-h-0 flex-1 overflow-y-auto pr-1">
 						<nav className="flex flex-col gap-1" aria-label="Portal modules">
 							{primary.map((item) => (
 								<RailItem key={item.id} item={item} pathname={pathname} />
 							))}
 						</nav>
-						<Separator className="my-3 bg-white/10" />
-						<nav className="flex flex-col gap-1" aria-label="More modules">
+						{secondary.length || navPins.length ? <Separator className="my-3 bg-white/10" /> : null}
+						<nav className="flex flex-col gap-1" aria-label="Resources and updates">
+							{secondary.length ? <p className="px-3 pb-1 text-xs font-semibold text-primary-foreground/70">Resources &amp; updates</p> : null}
 							{secondary.map((item) => (
 								<RailItem key={item.id} item={item} pathname={pathname} />
 							))}
@@ -163,7 +166,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 								</>
 							) : null}
 						</nav>
-					</>
+					</div>
 				)}
 				<div className="mt-auto pt-2">
 					{!inAdmin && showAdmin ? (

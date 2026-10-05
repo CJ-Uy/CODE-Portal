@@ -32,7 +32,7 @@ no real email or live relationship is created by the checks.
 foreign keys, and triggers that prevent cycles. The member page is `/portal/ments`;
 member admins manage it at `/portal/admin/members/ments`. `FEATURE_MENTS` enables
 the page, actions, navigation, and shared `/internal/ments` API. It defaults to
-off and is enabled only in the beta Wrangler config. Local/shared developers can
+off and is enabled in the beta and staged Wrangler configs. Local/shared developers can
 opt in with `FEATURE_MENTS=true`.
 
 After approval, apply the beta migration, load the chart export if wanted, then
@@ -48,11 +48,41 @@ pnpm build
 pnpm exec wrangler deploy --no-x-autoconfig --config wrangler.beta.jsonc
 ```
 
-The chart seed is separate from the shared migration history so these names are
-loaded only into beta. It adds missing profiles without replacing existing
+The chart seed is separate from the shared migration history. It adds missing profiles without replacing existing
 records or linking accounts by guessed names. Admins link accounts by email.
 The source retains published spelling variants. The exporter merges the two
 confirmed aliases and omits blank mentees, producing 393 people and 362 links.
+
+## Staged Ments and email activation
+
+The follow-up release enables Ments and email on `code-portal-staged`, switches
+its entry to `custom-worker.ts`, and adds the EMAIL binding and dispatch cron.
+The staged database is `543701fb-67ba-4f09-a931-85ffb861386f` in the same CODE
+account. Apply pending migrations 0007 through 0011 and the additive chart seed
+before merging the activation into staging. No database reset is required.
+
+```powershell
+pnpm exec wrangler d1 migrations apply DB --config wrangler.staging.jsonc --remote
+pnpm exec tsx scripts/export-ments-chart.ts
+pnpm exec wrangler d1 execute DB --config wrangler.staging.jsonc --remote --file .local/ments-chart-seed.sql
+pnpm exec wrangler secret put EMAIL_UNSUBSCRIBE_SECRET --config wrangler.staging.jsonc
+```
+
+Set a fresh unsubscribe signing secret for staged. Configure a sender and
+category through Email > Senders & categories before sending. The nine
+template starters need no database seed.
+
+Beta and staged share the verified `ateneocode.org` sending domain. Route
+`beta-inbox@ateneocode.org` to `code-portal-beta` and
+`staged-inbox@ateneocode.org` to `code-portal-staged`. Enable routing
+subaddressing so campaign/thread tags survive in the recipient address. Leave
+the catch-all rule disabled. Website subdomains do not need separate email
+domain configuration because the inbox addresses use the root domain.
+
+The `email_image` upload contract reuses the existing public image storage.
+Redeploy beta after this change so shared developers receive the updated
+upload handler. No new beta schema migration is required. Merge the reviewed
+release into beta and staging to trigger their existing Cloudflare builds.
 
 Phase 0 changes the database schema, migrations, environment bindings, internal contracts, repository seams, and shared dev token seed shape.
 

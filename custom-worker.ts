@@ -1,5 +1,5 @@
 // OpenNext generates .open-next/worker.js at build time; this entry wraps it to add the
-// email cron and the inbound email handler. Only wrangler.beta.jsonc points here.
+// email cron and the inbound email handler for beta and staged.
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore generated at build time
 import { default as handler } from "./.open-next/worker.js";

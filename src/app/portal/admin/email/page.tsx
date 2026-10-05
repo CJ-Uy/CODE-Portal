@@ -8,6 +8,8 @@ import { requireActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
 import { emailConfigFromEnv } from "@/server/email/db";
 import { emailStarters } from "@/lib/email/starters";
+import { EmailPricing } from "@/components/email/email-pricing";
+import { getPhpRate } from "@/server/email/pricing";
 import { CampaignRow, formatManila } from "./campaign-row";
 
 export const dynamic = "force-dynamic";
@@ -25,10 +27,11 @@ function Section({ title, empty, children, count }: { title: string; empty: stri
 export default async function EmailHomePage() {
 	const actor = await requireActor();
 	const { email } = await getRepositories();
-	const [summary, unread, templates] = await Promise.all([
+	const [summary, unread, templates, quote] = await Promise.all([
 		email.campaigns.home(actor),
 		email.inbox.openUnreadCount(actor),
 		can(actor, "email:configure") ? email.templates.list(actor) : Promise.resolve([]),
+		getPhpRate(),
 	]);
 	const config = emailConfigFromEnv();
 	const availableTemplates = [...templates.map((t) => ({ ...t, href: `/portal/admin/email/new?template=${t.id}` })), ...emailStarters(config.publicBaseUrl).map((t) => ({ ...t, href: `/portal/admin/email/new?starter=${t.id}` }))];
@@ -93,15 +96,12 @@ export default async function EmailHomePage() {
 
 				<aside className="grid content-start gap-4">
 					<div className="grid gap-2 rounded-xl border border-border bg-card p-4">
-						<p className="text-sm">
-							<span className="font-semibold tabular-nums">{summary.sentThisMonth.toLocaleString()}</span> of {MONTHLY_INCLUDED.toLocaleString()} included emails
-							this month
-						</p>
+						<div className="flex items-start justify-between gap-2"><p className="text-sm"><span className="font-semibold tabular-nums">{summary.sentThisMonth.toLocaleString()}</span> emails sent this month<br /><span className="text-xs text-muted-foreground">{MONTHLY_INCLUDED.toLocaleString()} included per account billing cycle</span></p><EmailPricing quote={quote} /></div>
 						<div className="h-1.5 overflow-hidden rounded-full bg-secondary">
 							<div className="h-full bg-primary transition-[width] duration-300" style={{ width: `${monthPct}%` }} />
 						</div>
 						<p className="text-xs text-muted-foreground">
-							Resets {formatManila(nextMonth).split(",")[0]}. Today: {summary.sentToday} of {config.dailyCap} allowed.
+							Calendar count resets {formatManila(nextMonth).split(",")[0]}. Today: {summary.sentToday} of {config.dailyCap} allowed.
 						</p>
 					</div>
 					{availableTemplates.length > 0 ? (

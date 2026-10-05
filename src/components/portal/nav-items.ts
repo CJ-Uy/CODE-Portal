@@ -13,36 +13,37 @@ export type NavItem = {
 	feature?: keyof FeatureFlags;
 };
 
-// Fixed core slots shown in the mobile bottom bar, split 2 + raised FAB + 2.
-// Keep this at exactly four so the bar stays symmetric around the center FAB.
+// Everyday destinations, ordered for the desktop sidebar.
 export const primaryNav: NavItem[] = [
 	{ id: "overview", label: "Overview", href: "/portal", icon: House },
 	{ id: "calendar", label: "Calendar", href: "/portal/calendar", icon: CalendarDays },
 	// /portal/events currently renders the member retention-history page.
 	{ id: "retention", label: "Retention", href: "/portal/events", icon: Award, feature: "retention" },
+	{ id: "ments", label: "Ments Tree", href: "/portal/ments", icon: GitBranch, feature: "ments" },
+	{ id: "links", label: "Link shortener", href: "/portal/links", icon: Link2 },
+	{ id: "mail", label: "Mail", href: "/portal/mail", icon: Mail, feature: "email" },
+	{ id: "notifications", label: "Notifications", href: "/portal/notifications", icon: Bell, feature: "notifications" },
 	{ id: "profile", label: "Profile", href: "/portal/profile", icon: CircleUserRound },
 ];
 
-// Links that live inside the desktop sidebar and the mobile "More" sheet, not the
-// fixed bar. Later phases append their destinations here (Library, Announcements)
-// so the shell component never needs to change to gain a nav entry.
+// Resources and community updates. This grouping does not indicate release status.
 export const secondaryNav: NavItem[] = [
-	{ id: "ments", label: "Ments Tree", href: "/portal/ments", icon: GitBranch, feature: "ments" },
 	{ id: "library", label: "Library", href: "/portal/library", icon: BookOpen, feature: "library" },
 	{ id: "announcements", label: "Announcements", href: "/portal/announcements", icon: Megaphone, feature: "announcements" },
-	{ id: "mail", label: "Mail", href: "/portal/mail", icon: Mail, feature: "email" },
-	{ id: "links", label: "Link shortener", href: "/portal/links", icon: Link2 },
-	{ id: "notifications", label: "Notifications", href: "/portal/notifications", icon: Bell, feature: "notifications" },
 ];
 
 // Admin entry is rendered only when the actor has at least one admin scope.
 export const adminNav: NavItem = { id: "admin", label: "Admin", href: "/portal/admin", icon: ShieldCheck };
 
-/** Link shortener is never flagged, so it backfills a hidden slot in the mobile bar. */
 export function visiblePrimaryNav(flags: FeatureFlags): NavItem[] {
+	return withoutHidden(primaryNav, new Set(), flags);
+}
+
+/** Four mobile slots. Links backfills Ments when its release flag is off. */
+export function visibleMobileNav(flags: FeatureFlags): NavItem[] {
 	return withFallback(
-		primaryNav,
-		secondaryNav.find((item) => item.id === "links"),
+		primaryNav.filter((item) => ["overview", "calendar", "ments", "profile"].includes(item.id)),
+		primaryNav.find((item) => item.id === "links"),
 		flags,
 	);
 }

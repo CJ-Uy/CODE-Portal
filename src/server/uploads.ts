@@ -77,6 +77,11 @@ export function createUploadHandlers(dependencies: UploadHandlerDependencies) {
 					return Response.json({ error: "Not authorized to upload a preview for this link." }, { status: 403 });
 				}
 				key = `links/${linkId}/${actor.memberId}/${createId("preview")}.${extension}`;
+			} else if (purpose === "email_image") {
+				if (!can(actor, "email:send")) {
+					return Response.json({ error: "Not authorized to upload email images." }, { status: 403 });
+				}
+				key = `email-images/${actor.memberId}/${createId("image")}.${extension}`;
 			} else {
 				return Response.json({ error: "Unknown upload purpose." }, { status: 400 });
 			}
@@ -131,6 +136,9 @@ function parseNamespace(key: string): { ownerMemberId: string; public: boolean; 
 	}
 	if (parts[0] === "links" && parts.length === 4 && parts.every(isSafeSegment)) {
 		return { ownerMemberId: parts[2], public: true, linkId: parts[1] };
+	}
+	if (parts[0] === "email-images" && parts.length === 3 && parts.every(isSafeSegment)) {
+		return { ownerMemberId: parts[1], public: true };
 	}
 	return null;
 }
