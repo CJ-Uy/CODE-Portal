@@ -16,8 +16,8 @@ const BACKOFF_MINUTES = [1, 5, 15];
 const MAX_ATTEMPTS = 3;
 // Matches the 15-minute scheduled-handler limit: a claim older than this belongs to a tick that is gone.
 const LEASE_MS = 15 * 60_000;
-// A delivery insert binds 5 columns; 15 rows stays under D1's 100-parameter limit.
-const INSERT_CHUNK = 15;
+// A delivery insert binds 7 parameters (drizzle binds the attempts default too); 14 rows stays under D1's 100-parameter limit.
+const INSERT_CHUNK = 14;
 const ID_CHUNK = 90;
 // send_email binding codes that a retry cannot fix.
 const PERMANENT_CODES = new Set(["E_RECIPIENT_SUPPRESSED", "E_VALIDATION_ERROR", "E_SENDER_NOT_VERIFIED"]);
@@ -48,8 +48,11 @@ async function enqueue(db: EmailDb, campaign: { id: string; audience: Audience; 
 		campaignId: campaign.id,
 		memberId: r.memberId,
 		email: r.email,
-		status: optedOut.has(r.memberId) ? ("skipped_optout" as const) : ("pending" as const),
+		isExternal: r.external,
+		// Outside recipients have no preferences to opt out of.
+		status: r.memberId !== null && optedOut.has(r.memberId) ? ("skipped_optout" as const) : ("pending" as const),
 	}));
+	// Conflicts on (campaign, member) or (campaign, email) both mean the row is already queued.
 	for (const part of chunk(rows, INSERT_CHUNK)) await db.insert(emailDeliveries).values(part).onConflictDoNothing();
 }
 
@@ -170,13 +173,14 @@ async function drain(db: EmailDb, sender: EmailSender, config: EmailConfig, now:
 			await fail("The sender or category for this email no longer exists.", true);
 			continue;
 		}
+		const guest = delivery.isExternal;
 		const member = delivery.memberId ? memberById.get(delivery.memberId) : undefined;
-		if (!member) {
+		if (!member && !guest) {
 			await fail("Member no longer exists", true);
 			continue;
 		}
-		const values = mergeValuesFor(member);
-		const links = entry.category.required ? null : await unsubscribeLinks(config, member.id, entry.category.id);
+		const values = mergeValuesFor(member ?? { email: delivery.email, name: null, fullName: null, nickname: null, batch: null });
+		const links = !member || entry.category.required ? null : await unsubscribeLinks(config, member.id, entry.category.id);
 		const rendered = renderEmail({
 			subject: entry.campaign.subject,
 			preheader: entry.campaign.preheader,
@@ -187,9 +191,10 @@ async function drain(db: EmailDb, sender: EmailSender, config: EmailConfig, now:
 			footer: {
 				categoryName: entry.category.name,
 				required: entry.category.required,
-				archiveUrl: `${config.publicBaseUrl}/portal/mail/${delivery.id}`,
+				archiveUrl: guest ? null : `${config.publicBaseUrl}/portal/mail/${delivery.id}`,
 				preferencesUrl: `${config.publicBaseUrl}/portal/mail/preferences`,
 				unsubscribeUrl: links?.page ?? null,
+				guest,
 			},
 		});
 		const headers: Record<string, string> = { "X-CODE-Campaign": entry.campaign.id };

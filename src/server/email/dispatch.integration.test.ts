@@ -199,6 +199,38 @@ describe("runEmailDispatch", () => {
 		quiet.mockRestore();
 	});
 
+	it("sends typed addresses to members and outside recipients, with a guest footer for outsiders", async () => {
+		await db
+			.update(emailCampaigns)
+			.set({ audience: { match: "any", include: [{ kind: "emails", emails: ["mem_a@example.com", "guest@outside.org"] }], exclude: [] } })
+			.where(eq(emailCampaigns.id, "ecmp_1"));
+		const { sender, sent } = fakeSender();
+		const result = await runEmailDispatch(db, sender, config, NOW);
+		expect(result).toMatchObject({ sent: 2, failed: 0 });
+		const guest = sent.find((m) => m.to === "guest@outside.org")!;
+		expect(guest.headers?.["List-Unsubscribe"]).toBeUndefined();
+		expect(guest.html).toContain("You received this email from CODE");
+		expect(guest.html).not.toContain("/portal/mail/");
+		expect(guest.replyTo).toMatch(/^beta-inbox\+edl_[a-f0-9]+@ateneocode\.org$/);
+		expect(guest.subject).toBe("Hi there");
+		const member = sent.find((m) => m.to === "mem_a@example.com")!;
+		expect(member.headers?.["List-Unsubscribe"]).toMatch(/^<https:\/\/beta\.ateneocode\.org\/api\/email\/unsubscribe\?t=/);
+		const rows = await deliveries();
+		expect(rows.find((r) => r.email === "guest@outside.org")).toMatchObject({ memberId: null, isExternal: true, status: "sent" });
+		expect(rows.find((r) => r.email === "mem_a@example.com")).toMatchObject({ memberId: "mem_a", isExternal: false });
+	});
+
+	it("never skips an outside recipient as opted out", async () => {
+		await db
+			.update(emailCampaigns)
+			.set({ audience: { match: "any", include: [{ kind: "emails", emails: ["mem_c@example.com", "guest@outside.org"] }], exclude: [] } })
+			.where(eq(emailCampaigns.id, "ecmp_1"));
+		const { sender, sent } = fakeSender();
+		await runEmailDispatch(db, sender, config, NOW);
+		expect(sent.map((m) => m.to)).toEqual(["guest@outside.org"]);
+		expect((await deliveries()).find((r) => r.email === "mem_c@example.com")?.status).toBe("skipped_optout");
+	});
+
 	it("cancels pending rows left under a cancelled campaign", async () => {
 		// A cancel that lands between the cron's claim and its enqueue leaves this state.
 		await db.update(emailCampaigns).set({ status: "cancelled", startedAt: NOW }).where(eq(emailCampaigns.id, "ecmp_1"));

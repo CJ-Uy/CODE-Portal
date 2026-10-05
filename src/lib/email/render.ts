@@ -107,18 +107,24 @@ export type FooterInput = {
 	archiveUrl: string | null;
 	preferencesUrl: string;
 	unsubscribeUrl: string | null;
+	/** An outside recipient: no category line and no portal or unsubscribe links. */
+	guest?: boolean;
 };
+
+const GUEST_FOOTER = "You received this email from CODE.";
 
 const footerLink = (href: string, label: string) =>
 	`<a href="${safeAttr(href)}" style="color:${EMAIL_COLORS.muted};text-decoration:underline;">${label}</a>`;
 
 export function renderFooterHtml(footer: FooterInput): string {
+	const style = `padding:24px 32px 32px;border-top:1px solid ${EMAIL_COLORS.light};font-family:${BODY_FONT};font-size:13px;line-height:1.6;color:${EMAIL_COLORS.muted};`;
+	if (footer.guest) return `<tr><td style="${style}">${GUEST_FOOTER}</td></tr>`;
 	const links = [
 		footer.archiveUrl ? footerLink(footer.archiveUrl, "Read in the portal") : null,
 		footerLink(footer.preferencesUrl, "Email preferences"),
 		!footer.required && footer.unsubscribeUrl ? footerLink(footer.unsubscribeUrl, `Unsubscribe from ${escapeHtml(footer.categoryName)}`) : null,
 	].filter(Boolean);
-	return `<tr><td style="padding:24px 32px 32px;border-top:1px solid ${EMAIL_COLORS.light};font-family:${BODY_FONT};font-size:13px;line-height:1.6;color:${EMAIL_COLORS.muted};">You are getting this because you are a CODE member. Category: ${escapeHtml(footer.categoryName)}.<br>${links.join(" &middot; ")}</td></tr>`;
+	return `<tr><td style="${style}">You are getting this because you are a CODE member. Category: ${escapeHtml(footer.categoryName)}.<br>${links.join(" &middot; ")}</td></tr>`;
 }
 
 export type RenderInput = {
@@ -166,14 +172,16 @@ export function renderEmail(input: RenderInput): RenderedEmail {
 		.map((block) => renderBlockHtml(block, input.resolve, input.baseUrl))
 		.join("")}${renderFooterHtml(input.footer)}</table>`;
 	const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(subject)}</title></head><body style="margin:0;padding:0;background:${EMAIL_COLORS.page};"><span style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(preheader)}</span><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${EMAIL_COLORS.page};"><tr><td style="padding:24px 12px;">${bodyHtml}</td></tr></table></body></html>`;
-	const footerText = [
-		`Category: ${input.footer.categoryName}`,
-		input.footer.archiveUrl ? `Read in the portal: ${input.footer.archiveUrl}` : null,
-		`Email preferences: ${input.footer.preferencesUrl}`,
-		!input.footer.required && input.footer.unsubscribeUrl ? `Unsubscribe: ${input.footer.unsubscribeUrl}` : null,
-	]
-		.filter(Boolean)
-		.join("\n");
+	const footerText = input.footer.guest
+		? GUEST_FOOTER
+		: [
+				`Category: ${input.footer.categoryName}`,
+				input.footer.archiveUrl ? `Read in the portal: ${input.footer.archiveUrl}` : null,
+				`Email preferences: ${input.footer.preferencesUrl}`,
+				!input.footer.required && input.footer.unsubscribeUrl ? `Unsubscribe: ${input.footer.unsubscribeUrl}` : null,
+			]
+				.filter(Boolean)
+				.join("\n");
 	const text = [...input.blocks.map((block) => blockText(block, input.values, input.baseUrl)).filter(Boolean), "--", footerText].join("\n\n");
 	return { subject, html, bodyHtml, text };
 }

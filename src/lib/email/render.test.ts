@@ -63,6 +63,16 @@ describe("renderEmail", () => {
 		expect(required.html).toContain("Email preferences");
 	});
 
+	it("gives outside recipients a guest footer with no category, portal, or unsubscribe links", () => {
+		const { html, text } = render({ footer: { ...footer, guest: true, archiveUrl: null } });
+		expect(html).toContain("You received this email from CODE.");
+		expect(html).not.toContain("CODE member");
+		expect(html).not.toContain("Category:");
+		expect(html).not.toContain("/portal/mail");
+		expect(html).not.toContain("Unsubscribe");
+		expect(text.split("\n--\n").at(-1)?.trim()).toBe("You received this email from CODE.");
+	});
+
 	it("builds a plain-text alternative with link targets", () => {
 		const { text } = render();
 		expect(text).toContain("Hello <b>Eve</b>");
