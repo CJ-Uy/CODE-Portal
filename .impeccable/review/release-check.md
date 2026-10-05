@@ -16,4 +16,4 @@ Scope: the admin workspace, Ments forest and direct Pment reports, and email sta
 
 Browser evidence in this directory uses the final local build. Full-page capture was unreliable; the final Ments overview and focused captures are viewports. Other screenshots intentionally focus on a dialog, personalization form, or statistics section.
 
-Release requires beta D1 migrations `0010_ments_pments.sql` and `0011_email_personalization.sql`, followed by deployment of `code-portal-beta`. The database changes add a Pment table and a draft merge-override field. No reset or seed is needed. Remote migration approval is still pending under `AGENTS.md`.
+The user approved beta D1 migrations `0010_ments_pments.sql` and `0011_email_personalization.sql`. Both were applied successfully to beta database `ffe974a7-4b89-4ac7-b07e-ad62f4530ca2` with `pnpm exec wrangler d1 migrations apply DB --config wrangler.beta.jsonc --remote`. They add a Pment table and a draft merge-override field. No reset or seed was performed. Deployment of `code-portal-beta` follows the push to beta through Cloudflare Builds.
