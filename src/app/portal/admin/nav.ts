@@ -39,7 +39,7 @@ export const adminGroups: AdminGroup[] = [
 		},
 	]),
 	G("content", "Content", [
-		{ segment: "announcements", label: "Announcements", description: "Publish and schedule updates for members.", permission: "announcement:manage", feature: "announcements" },
+		{ segment: "announcements", label: "Announcements", description: "Publish updates for the member feed.", permission: "announcement:manage", feature: "announcements" },
 		{ segment: "library", label: "Library", description: "Manage articles, case studies and resource access.", permission: "library:manage", feature: "library" },
 		{ segment: "surveys", label: "Surveys", description: "Create questions and select survey participants.", permission: "survey:configure", feature: "surveys" },
 		{
@@ -60,7 +60,7 @@ export const adminGroups: AdminGroup[] = [
 			feature: "email",
 			href: "/portal/admin/email",
 		},
-		{ segment: "new", label: "New email", description: "Write an email and send it to members.", permission: "email:send", feature: "email" },
+		{ segment: "new", label: "New email", description: "Write to member groups or specific email addresses.", permission: "email:send", feature: "email" },
 		{ segment: "inbox", label: "Replies", description: "Member replies to CODE emails.", permission: "email:send", feature: "email" },
 		{ segment: "templates", label: "Templates", description: "Reusable CODE email designs.", permission: "email:configure", feature: "email" },
 		{

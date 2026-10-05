@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { ArrowDown, ArrowUp, Lock, Plus } from "lucide-react";
+import { ArrowDown, ArrowUp, Lock, Plus, Save } from "lucide-react";
 import type { EmailCategoryRow, EmailSenderRow } from "@/db/repositories/email-settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,10 +55,10 @@ export function SettingsPanels({ senders, categories }: { senders: EmailSenderRo
 			</label>
 
 			<section className="grid gap-3 rounded-xl border border-border bg-card p-4">
-				<div className="flex items-center justify-between gap-3">
+				<div className="flex flex-wrap items-start justify-between gap-3">
 					<div className="min-w-0">
 						<h2 className="font-heading text-xl">Senders</h2>
-						<p className="text-sm text-muted-foreground">Each address must also be on the Worker&apos;s allowed sender list.</p>
+						<p className="text-sm text-muted-foreground">Use an @ateneocode.org address enabled for sending.</p>
 					</div>
 					<Button variant="outline" onClick={() => setEditing({ kind: "sender", row: {} })}>
 						<Plus />
@@ -68,8 +68,8 @@ export function SettingsPanels({ senders, categories }: { senders: EmailSenderRo
 				<ul className="grid divide-y divide-border">
 					{visibleSenders.length === 0 ? <li className="py-3 text-sm text-muted-foreground">No senders yet. Add one to start sending.</li> : null}
 					{visibleSenders.map((s) => (
-						<li key={s.id} className={cn("row-enter flex min-w-0 items-center gap-3 py-3", s.archivedAt && "opacity-60")}>
-							<div className="grid min-w-0 flex-1">
+						<li key={s.id} className={cn("row-enter flex min-w-0 flex-wrap items-center gap-3 py-3", s.archivedAt && "opacity-60")}>
+							<div className="grid min-w-0 flex-1 basis-full sm:basis-40">
 								<span className="min-w-0 break-all font-medium">{s.displayName}</span>
 								<span className="min-w-0 break-all text-sm text-muted-foreground">{s.address}</span>
 							</div>
@@ -97,7 +97,7 @@ export function SettingsPanels({ senders, categories }: { senders: EmailSenderRo
 			</section>
 
 			<section className="grid gap-3 rounded-xl border border-border bg-card p-4">
-				<div className="flex items-center justify-between gap-3">
+				<div className="flex flex-wrap items-start justify-between gap-3">
 					<div className="min-w-0">
 						<h2 className="font-heading text-xl">Categories</h2>
 						<p className="text-sm text-muted-foreground">Members see these, in this order, on their email preferences page.</p>
@@ -113,7 +113,7 @@ export function SettingsPanels({ senders, categories }: { senders: EmailSenderRo
 						const index = activeCategories.findIndex((a) => a.id === c.id);
 						return (
 						<li key={c.id} className={cn("row-enter flex min-w-0 flex-wrap items-center gap-3 py-3", c.archivedAt && "opacity-60")}>
-							<div className="grid min-w-0 flex-1 gap-0.5">
+							<div className="grid min-w-0 flex-1 basis-full gap-0.5 sm:basis-40">
 								<span className="flex min-w-0 items-center gap-2 font-medium">
 									<span className="min-w-0 break-all">{c.name}</span>
 									{c.required ? (
@@ -200,7 +200,7 @@ export function SettingsPanels({ senders, categories }: { senders: EmailSenderRo
 								<Input name="address" type="email" defaultValue={editing.row.address ?? ""} placeholder="events@ateneocode.org" required />
 							</label>
 							<Button type="submit" disabled={pending}>
-								Save sender
+								<Save />Save sender
 							</Button>
 						</form>
 					) : null}
@@ -275,7 +275,7 @@ export function SettingsPanels({ senders, categories }: { senders: EmailSenderRo
 								</select>
 							</label>
 							<Button type="submit" disabled={pending}>
-								Save category
+								<Save />Save category
 							</Button>
 						</form>
 					) : null}

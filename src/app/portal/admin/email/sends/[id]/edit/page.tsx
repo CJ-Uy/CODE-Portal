@@ -26,6 +26,7 @@ export default async function EditEmailPage({ params }: { params: Promise<{ id: 
 				preheader: campaign.preheader,
 				blocks: campaign.blocks,
 				audience: campaign.audience,
+				mergeOverrides: campaign.mergeOverrides,
 				status: campaign.status,
 					scheduledAt: campaign.scheduledAt,
 			}}

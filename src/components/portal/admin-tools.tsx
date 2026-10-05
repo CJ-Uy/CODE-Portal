@@ -29,8 +29,7 @@ export function AdminTools({ groups, showFilters = true }: { groups: AdminGroup[
 					<label className="relative w-full sm:max-w-md">
 						<span className="sr-only">Find an admin tool</span>
 						<Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-						<Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a tool, e.g. members or points" className="h-11 bg-card pl-10 pr-10" />
-						{query ? <Button type="button" variant="ghost" size="icon" className="absolute right-0.5 top-0.5" aria-label="Clear search" onClick={() => setQuery("")}><X /></Button> : null}
+						<Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a tool, e.g. members or points" className="h-11 bg-card pl-10" />
 					</label>
 					<p className="text-sm text-muted-foreground" role="status">{count} {count === 1 ? "tool" : "tools"}{query.trim() ? " found" : " available"}</p>
 				</div>
@@ -43,7 +42,7 @@ export function AdminTools({ groups, showFilters = true }: { groups: AdminGroup[
 				) : null}
 			</div>
 			{matches.length ? (
-				<div className={cn("grid items-start gap-x-8 gap-y-8", showFilters && "xl:grid-cols-2")}>
+				<div className={cn("grid items-start gap-x-8 gap-y-8", showFilters && "lg:grid-cols-2")}>
 					{matches.map((group) => {
 						const info = adminGroupInfo[group.segment as keyof typeof adminGroupInfo];
 						const Icon = info?.icon;

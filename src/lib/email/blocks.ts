@@ -72,6 +72,16 @@ export const audienceSchema = z.object({
 	exclude: z.array(ruleSchema).max(100),
 });
 
+export const mergeOverridesSchema = z.record(
+	z.string().trim().toLowerCase().email(),
+	z.object({
+		first_name: z.string().trim().max(200).optional(),
+		full_name: z.string().trim().max(200).optional(),
+		nickname: z.string().trim().max(200).optional(),
+		batch: z.string().trim().max(200).optional(),
+	}).strict(),
+).refine((value) => Object.keys(value).length <= 5000, "Use at most 5,000 recipient corrections per email.");
+
 const blockId = () => `blk_${crypto.randomUUID().replaceAll("-", "").slice(0, 10)}`;
 
 /** Default content for a block added from the palette. */

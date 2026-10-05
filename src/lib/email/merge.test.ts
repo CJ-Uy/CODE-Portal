@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { findUnknownTags, mergeValuesFor, replaceTags } from "./merge";
+import { findUnknownTags, mergeValuesFor, missingMergeTags, replaceTags, usedMergeTags } from "./merge";
+import { mergeOverridesSchema } from "./blocks";
 
 describe("findUnknownTags", () => {
 	it("returns tags outside the allowed list, once each", () => {
@@ -14,6 +15,19 @@ describe("findUnknownTags", () => {
 });
 
 describe("replaceTags", () => {
+	it("accepts aliases and separates absent data from rendering fallbacks", () => {
+		const member = { email: "guest@x.com", name: null, fullName: null, nickname: null, batch: null };
+		const tags = usedMergeTags("Hi {{firstname}} {{first_name}} {{fullname}} {{batch}}");
+		expect(tags).toEqual(["first_name", "full_name", "batch"]);
+		expect(findUnknownTags("{{firstname}} {{fullname}}")).toEqual([]);
+		expect(missingMergeTags(member, tags)).toEqual(tags);
+		const overrides = mergeOverridesSchema.parse({ "GUEST@x.com": { first_name: "Ana\r\nBcc: x" } });
+		const values = mergeValuesFor(member, overrides);
+		expect(replaceTags("Hi {{firstname}}", (tag) => values[tag])).toBe("Hi Ana Bcc: x");
+		expect(missingMergeTags(member, tags, overrides)).toEqual(["full_name", "batch"]);
+		expect(mergeOverridesSchema.safeParse({ "guest@x.com": { email: "other@x.com" } }).success).toBe(false);
+		expect(mergeValuesFor({ ...member, fullName: "DELA CRUZ, Juan Miguel" }).first_name).toBe("Juan");
+	});
 	it("replaces known tags and leaves unknown text alone", () => {
 		expect(replaceTags("Hi {{ first_name }} {{nope}}", (tag) => tag.toUpperCase())).toBe("Hi FIRST_NAME {{nope}}");
 	});

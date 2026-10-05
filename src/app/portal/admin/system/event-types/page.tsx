@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { AdminIntro } from "@/components/portal/admin-intro";
 import { getRepositories } from "@/db";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { loadEventTypes } from "@/lib/event-type-load";
@@ -26,5 +27,5 @@ export default async function EventTypesAdminPage() {
 			</Card>
 		);
 	}
-	return <EventTypeRulesManager key={JSON.stringify(typeLoad.rows)} rows={typeLoad.rows} />;
+	return <div className="grid gap-6"><AdminIntro title="Event type rules" whoFor="Set the event categories and their attendance rules" /><EventTypeRulesManager key={JSON.stringify(typeLoad.rows)} rows={typeLoad.rows} /></div>;
 }

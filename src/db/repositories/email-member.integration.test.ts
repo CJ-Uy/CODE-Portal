@@ -51,6 +51,14 @@ describe("email member side", () => {
 		expect(await repo.getForReader(ben, "edl_a", "https://beta.ateneocode.org")).toBeNull();
 	});
 
+	it("shows the same corrected name in the archive and reader", async () => {
+		await env.DB.prepare("UPDATE email_campaigns SET merge_overrides=? WHERE id='ecmp_1'").bind(JSON.stringify({ "mem_a@x.com": { first_name: "Ana" } })).run();
+		expect((await repo.listArchive(ana))[0].subject).toBe("Hi Ana");
+		const view = await repo.getForReader(ana, "edl_a", "https://beta.ateneocode.org");
+		expect(view?.subject).toBe("Hi Ana");
+		expect(view?.bodyHtml).toContain("Hello Ana");
+	});
+
 	it("lists required categories first and blocks opting out of them", async () => {
 		const prefs = await repo.listPreferences(ana);
 		expect(prefs.map((p) => [p.id, p.required, p.optedOut])).toEqual([

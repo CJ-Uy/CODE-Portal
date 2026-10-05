@@ -38,6 +38,25 @@ const draftInput = (ids: { sender: { id: string }; news: { id: string } }) => ({
 });
 
 describe("email campaigns", () => {
+	it("checks the entire receiving audience, including outside addresses, and keeps corrections scoped to drafts", async () => {
+		const ids = await setup();
+		for (let i = 0; i < 55; i++) await env.DB.prepare("INSERT INTO members (id, email, batch, created_at, updated_at) VALUES (?, ?, '2027', ?, ?)").bind(`extra_${i}`, `extra_${String(i).padStart(2, "0")}@example.com`, Date.now(), Date.now()).run();
+		await env.DB.prepare("INSERT INTO email_optouts (member_id, category_id) VALUES ('mem_b', ?)").bind(ids.news.id).run();
+		const audience = { ...draftInput(ids).audience, include: [...draftInput(ids).audience.include, { kind: "emails" as const, emails: ["guest@outside.org"] }] };
+		const input = { audience, categoryId: ids.news.id, tags: ["first_name" as const], overrides: {} };
+		const checked = await repos.campaigns.previewPersonalization(admin, input);
+		expect(checked).toMatchObject({ total: 57, missingCount: 56, filtered: 57, page: 0 });
+		expect(checked.rows).toHaveLength(25);
+		expect((await repos.campaigns.previewPersonalization(admin, { ...input, page: 2 })).rows).toHaveLength(7);
+		const mergeOverrides = { "guest@outside.org": { first_name: "Ana" } };
+		const corrected = await repos.campaigns.previewPersonalization(admin, { ...input, overrides: mergeOverrides, q: "guest" });
+		expect(corrected.missingCount).toBe(55);
+		expect(corrected.rows[0]).toMatchObject({ external: true, values: { first_name: "Ana" }, missing: [] });
+		const draft = await repos.campaigns.saveDraft(admin, { ...draftInput(ids), audience, mergeOverrides });
+		expect((await repos.campaigns.duplicate(admin, draft.id)).mergeOverrides).toEqual(mergeOverrides);
+		await expect(repos.campaigns.previewPersonalization({ memberId: "mem_a", roles: ["member"] }, input)).rejects.toThrow();
+		expect((await env.DB.prepare("SELECT name FROM members WHERE id='extra_0'").first<{ name: string | null }>())?.name).toBeNull();
+	});
 	// Each test calls setup() itself because it needs the returned sender and category ids.
 
 	it("previews the audience with opted-out members split out", async () => {

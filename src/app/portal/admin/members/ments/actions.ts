@@ -7,7 +7,7 @@ import { mentsContract } from "@/db/contract/ments";
 import { requireActor } from "@/server/auth/actor";
 import { assertFeatureEnabled } from "@/server/features";
 
-export async function mutateMentsAction(input: { kind: "save" | "remove" | "import"; value: unknown }): Promise<{ message?: string; error?: string }> {
+export async function mutateMentsAction(input: { kind: "save" | "remove" | "import" | "removePment"; value: unknown }): Promise<{ message?: string; error?: string }> {
 	try {
 		assertFeatureEnabled("ments");
 		const actor = await requireActor();
@@ -19,6 +19,10 @@ export async function mutateMentsAction(input: { kind: "save" | "remove" | "impo
 		} else if (input.kind === "remove") {
 			await ments.remove(actor, mentsContract.remove.input.parse(input.value).id);
 			message = "Person removed.";
+		} else if (input.kind === "removePment") {
+			const report = mentsContract.removePment.input.parse(input.value);
+			await ments.removePment(actor, report.memberId, report.personId);
+			message = "Pment report removed.";
 		} else if (input.kind === "import") {
 			const result = await ments.import(actor, mentsContract.import.input.parse(input.value).raw);
 			message = `${result.added} ${result.added === 1 ? "person" : "people"} added, ${result.linked} ${result.linked === 1 ? "relationship" : "relationships"} linked.`;

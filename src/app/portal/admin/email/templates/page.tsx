@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Plus, Search } from "lucide-react";
+import { ArrowUpRight, Plus, Search } from "lucide-react";
+import { AdminIntro } from "@/components/portal/admin-intro";
+import { Button } from "@/components/ui/button";
 import { getRepositories } from "@/db";
 import { Input } from "@/components/ui/input";
 import { SAMPLE_MERGE_VALUES } from "@/lib/email/merge";
 import { renderEmail, valueResolver } from "@/lib/email/render";
+import { emailStarters } from "@/lib/email/starters";
 import { requireActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
 import { emailConfigFromEnv } from "@/server/email/db";
@@ -19,30 +22,25 @@ export default async function TemplatesPage({ searchParams }: { searchParams: Pr
 	const { email } = await getRepositories();
 	const templates = await email.templates.list(actor, { q });
 	const { publicBaseUrl } = emailConfigFromEnv();
+	const starters = emailStarters(publicBaseUrl).filter((t) => `${t.name} ${t.description}`.toLowerCase().includes(q.toLowerCase()));
+	const items = [
+		...starters.map((t) => ({ ...t, categoryName: "CODE", meta: t.description, href: `/portal/admin/email/templates/new?starter=${t.id}`, useHref: `/portal/admin/email/new?starter=${t.id}`, builtIn: true })),
+		...templates.map((t) => ({ ...t, meta: `Updated ${formatManila(t.updatedAt).split(",")[0]} · used ${t.usedCount} times`, href: `/portal/admin/email/templates/${t.id}`, useHref: `/portal/admin/email/new?template=${t.id}`, builtIn: false })),
+	];
 
 	return (
 		<div className="grid gap-6">
-			<header className="flex flex-wrap items-end justify-between gap-3">
-				<div>
-					<h1 className="font-heading text-3xl">Templates</h1>
-					<p className="text-sm text-muted-foreground">Reusable designs. Editing a template never changes emails already sent.</p>
-				</div>
+			<AdminIntro title="Email templates" whoFor="Start with a CODE design or reuse one of your saved templates" effect="Every starter opens as editable content. Customize the details and audience before sending" />
+			<div className="flex flex-wrap items-center justify-between gap-3">
 				<form className="relative w-full sm:w-64">
 					<Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" aria-hidden />
-					<Input name="q" defaultValue={q} placeholder="Search templates" className="pl-8" aria-label="Search templates" />
+					<Input type="search" name="q" defaultValue={q} placeholder="Search templates" className="pl-8" aria-label="Search templates" />
 				</form>
-			</header>
+				<Button asChild variant="outline"><Link href="/portal/admin/email/templates/new"><Plus />New template</Link></Button>
+			</div>
+			<p role="status" className="text-sm text-muted-foreground">{starters.length} CODE starters · {templates.length} saved templates{q ? ` matching “${q}”` : ""}</p>
 			<ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-				<li className="row-enter">
-					<Link
-						href="/portal/admin/email/templates/new"
-						className="flex h-full min-h-56 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border text-muted-foreground transition-[border-color,color,transform] hover:border-accent hover:text-foreground active:scale-[0.99]"
-					>
-						<Plus className="size-5" aria-hidden />
-						New template
-					</Link>
-				</li>
-				{templates.map((t, i) => {
+				{items.map((t) => {
 					const { bodyHtml } = renderEmail({
 						subject: t.subject,
 						preheader: t.preheader,
@@ -53,26 +51,20 @@ export default async function TemplatesPage({ searchParams }: { searchParams: Pr
 						footer: { categoryName: t.categoryName ?? "CODE", required: true, archiveUrl: null, preferencesUrl: "#", unsubscribeUrl: null },
 					});
 					return (
-						<li key={t.id} className="row-enter" style={{ animationDelay: `${Math.min(i + 1, 8) * 30}ms` }}>
-							<Link
-								href={`/portal/admin/email/templates/${t.id}`}
-								className="group grid overflow-hidden rounded-xl border border-border bg-card transition-[border-color,transform,box-shadow] hover:-translate-y-0.5 hover:border-accent hover:shadow-md motion-reduce:hover:translate-y-0"
-							>
+						<li key={`${t.builtIn ? "starter" : "saved"}:${t.id}`} className="grid min-w-0 content-start overflow-hidden rounded-xl border border-border bg-card">
 								<div className="pointer-events-none relative h-44 overflow-hidden bg-[#F5F5F6]" inert>
 									<div className="absolute left-1/2 top-3 w-[600px] origin-top -translate-x-1/2 scale-[0.5]" dangerouslySetInnerHTML={{ __html: bodyHtml }} />
 								</div>
-								<div className="grid gap-0.5 border-t border-border p-3">
-									<span className="min-w-0 truncate font-medium">{t.name}</span>
-									<span className="text-sm text-muted-foreground">
-										Updated {formatManila(t.updatedAt).split(",")[0]} · used {t.usedCount}×
-									</span>
+								<div className="grid gap-2 border-t border-border p-4">
+									<h2 className="font-heading text-xl">{t.name}</h2>
+									<p className="text-sm text-muted-foreground">{t.meta}</p>
+									<div className="mt-1 flex flex-wrap items-center justify-between gap-2"><Button asChild size="sm"><Link href={t.useHref}>Use template<ArrowUpRight /></Link></Button><Link href={t.href} className="rounded-sm text-sm text-accent underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t.builtIn ? "Customize & save" : "Edit template"}</Link></div>
 								</div>
-							</Link>
 						</li>
 					);
 				})}
 			</ul>
-			{templates.length === 0 && q ? <p className="text-sm text-muted-foreground">No templates match &quot;{q}&quot;.</p> : null}
+			{items.length === 0 ? <p className="text-sm text-muted-foreground">No templates match &quot;{q}&quot;. <Link href="/portal/admin/email/templates" className="text-accent underline">Clear search</Link></p> : null}
 		</div>
 	);
 }

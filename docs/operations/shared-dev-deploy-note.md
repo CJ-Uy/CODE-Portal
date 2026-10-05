@@ -1,5 +1,31 @@
 # Shared Dev Deploy Note
 
+## Admin workspace, Pments and email personalization
+
+`0010_ments_pments.sql` adds self-reported informal mentor relationships, and
+`0011_email_personalization.sql` adds draft-specific recipient merge overrides.
+Both are additive. Existing official Ments and member profiles remain intact;
+no chart import, reset or seed is needed for this release.
+
+The shared `/internal/ments` API now reads Pment reports and accepts updates.
+Members replace only their own reports; member admins can remove reports.
+Shared-mode developers need the updated beta Worker after these migrations.
+
+After migration approval, use the beta database binding and redeploy
+`code-portal-beta` in account `83376df5e0bae067afa197b07430168d`. Its D1 database
+is `code-nest-beta-db` (`ffe974a7-4b89-4ac7-b07e-ad62f4530ca2`).
+
+```powershell
+pnpm exec wrangler d1 migrations apply DB --config wrangler.beta.jsonc --remote
+pnpm build
+pnpm exec wrangler deploy --no-x-autoconfig --config wrangler.beta.jsonc
+```
+
+The template starters ship in code. Recipient corrections save with the draft
+and are applied to dispatch, test rendering and the member archive. They do not
+change profile values. Review uses local fixtures and fake dispatch transport;
+no real email or live relationship is created by the checks.
+
 ## Beta Ments Tree
 
 `0009_ments_tree.sql` adds mentor profiles with optional portal account links,

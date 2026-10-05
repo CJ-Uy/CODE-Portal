@@ -20,9 +20,29 @@ async function setup() {
 
 describe("ments tree on D1", () => {
 	beforeEach(async () => {
+		await env.DB.prepare("DELETE FROM ments_pments").run();
 		await env.DB.prepare("UPDATE ments_people SET mentor_id = NULL").run();
 		await env.DB.prepare("DELETE FROM ments_people").run();
 		await env.DB.prepare("DELETE FROM audit_logs WHERE target_type = 'ments_person'").run();
+	});
+	it("keeps Pment reports scoped to the reporter and leaves official mentors intact", async () => {
+		const { repo } = await setup();
+		await env.DB.prepare("INSERT OR IGNORE INTO members (id, email, name) VALUES (?, 'ments-member@example.com', 'Member')").bind(member.memberId).run();
+		await repo.import(admin, "Child\tRoot");
+		const people = await repo.list(member);
+		await repo.reportPments(member, [people[0].id, people[0].id, people[1].id]);
+		expect(await repo.pments(admin)).toHaveLength(2);
+		await repo.reportPments(admin, [people[0].id]);
+		await repo.reportPments(member, [people[1].id]);
+		expect(await repo.pments(member)).toHaveLength(2);
+		await expect(repo.reportPments(member, ["missing"])).rejects.toThrow("no longer");
+		expect(await repo.pments(member)).toHaveLength(2);
+		await expect(repo.removePment(member, admin.memberId, people[0].id)).rejects.toThrow("Not authorized");
+		await repo.removePment(admin, admin.memberId, people[0].id);
+		expect(await repo.pments(member)).toHaveLength(1);
+		expect(await repo.list(member)).toEqual(people);
+		await repo.reportPments(member, []);
+		expect(await repo.pments(member)).toEqual([]);
 	});
 	it("imports a complete line atomically, is repeatable, and keeps emails out of member reads", async () => {
 		const { repo, db } = await setup();

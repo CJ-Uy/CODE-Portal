@@ -210,7 +210,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 							<Breadcrumb items={[{ label: "Portal", href: "/portal" }, ...crumbFor(pathname)]} />
 						) : (
 							<>
-								<p className="text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">{pageHeading.section}</p>
+								{pathname !== "/portal/ments" ? <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">{pageHeading.section}</p> : null}
 								<p className="truncate font-heading text-xl font-semibold text-foreground">{pageHeading.title}</p>
 							</>
 						)}
@@ -302,9 +302,9 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 					</> : null}
 
 					<nav className="flex flex-col px-2 pt-3" aria-label="More modules">
-						<p className="px-3 pb-1 pt-2 text-[0.6rem] font-semibold uppercase tracking-wider text-muted-foreground">
+						{!inAdmin ? <p className="px-3 pb-1 pt-2 text-[0.6rem] font-semibold uppercase tracking-wider text-muted-foreground">
 							Go to
-						</p>
+						</p> : null}
 						{inAdmin ? (
 							<>
 								<SheetClose asChild>
