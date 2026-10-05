@@ -1,4 +1,4 @@
-export const roleKeys = ["super", "member", "events", "link", "retention", "member_admin", "publishing"] as const;
+export const roleKeys = ["super", "member", "events", "link", "retention", "member_admin", "publishing", "email"] as const;
 
 export type RoleKey = (typeof roleKeys)[number];
 
@@ -38,6 +38,8 @@ export const permissionActions = [
 	"announcement:manage",
 	"library:manage",
 	"library:moderate",
+	"email:send",
+	"email:configure",
 ] as const;
 
 export type PermissionAction = (typeof permissionActions)[number];
@@ -56,6 +58,7 @@ const rolePermissions: Record<Exclude<RoleKey, "super" | "member">, PermissionAc
 	retention: ["points:assign", "retention:record", "retention:configure"],
 	member_admin: ["member:manage", "role:assign", "roster:manage", "nav:configure"],
 	publishing: ["announcement:manage", "library:manage", "library:moderate"],
+	email: ["email:send", "email:configure"],
 };
 
 export function can(actor: Actor | null, action: PermissionAction): boolean {

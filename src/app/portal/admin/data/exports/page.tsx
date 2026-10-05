@@ -1,4 +1,5 @@
 import { asc, desc, inArray } from "drizzle-orm";
+import { AdminIntro } from "@/components/portal/admin-intro";
 import { Download } from "lucide-react";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
@@ -28,7 +29,9 @@ export default async function ReportingAdminPage() {
 	]);
 
 	return (
-		<div className="grid gap-6 lg:grid-cols-3">
+		<div className="grid gap-6">
+			<AdminIntro title="Exports" whoFor="Download retention records, event rosters and member histories" />
+			<div className="grid gap-6 lg:grid-cols-3">
 			<ExportCard title="Whole-year master" description="Every retention record in a school year, one row per record.">
 				<input type="hidden" name="kind" value="term" />
 				<Select name="termId" required>
@@ -68,6 +71,7 @@ export default async function ReportingAdminPage() {
 					))}
 				</Select>
 			</ExportCard>
+			</div>
 		</div>
 	);
 }

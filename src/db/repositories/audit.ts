@@ -27,7 +27,8 @@ export type AuditCategory =
 	| "link"
 	| "member"
 	| "announcement"
-	| "library";
+	| "library"
+	| "email";
 
 export type AuditRecordInput = {
 	action: string;

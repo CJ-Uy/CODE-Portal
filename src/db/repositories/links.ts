@@ -349,7 +349,7 @@ function listQuery(db: LinkDb) {
 	return db.select({ link: shortLinks, owner: { id: members.id, name: members.name, image: members.image } }).from(shortLinks).leftJoin(members, eq(members.id, shortLinks.ownerMemberId));
 }
 
-async function runAtomic(db: LinkDb, queries: unknown[]): Promise<void> {
+export async function runAtomic(db: LinkDb, queries: unknown[]): Promise<void> {
 	const atomicDb = db as unknown as {
 		batch?: (items: unknown[]) => Promise<unknown>;
 		transaction?: (callback: () => void) => unknown;
@@ -358,7 +358,7 @@ async function runAtomic(db: LinkDb, queries: unknown[]): Promise<void> {
 		await atomicDb.batch(queries);
 		return;
 	}
-	if (!atomicDb.transaction) throw new Error("Atomic link analytics updates are unavailable.");
+	if (!atomicDb.transaction) throw new Error("Atomic database updates are unavailable.");
 	atomicDb.transaction(() => {
 		for (const query of queries) (query as { run: () => unknown }).run();
 	});

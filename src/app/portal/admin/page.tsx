@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { ExternalLink } from "lucide-react";
+import { ArrowRight, ExternalLink } from "lucide-react";
+import { AdminTools } from "@/components/portal/admin-tools";
+import { Button } from "@/components/ui/button";
 import { getRepositories } from "@/db";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
 import { getFeatureFlags } from "@/server/features";
@@ -17,53 +18,42 @@ export default async function AdminDashboardPage() {
 	const groups = visibleGroups(actor, getFeatureFlags());
 
 	return (
-		<div className="grid gap-6">
-			{groups.map((group) => (
-				<div key={group.segment} className="grid gap-3">
-					<p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.label}</p>
-					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-						{group.pages.map((page) => (
-							<Link
-								key={page.href}
-								href={page.href}
-								className="group flex flex-col gap-1 rounded-xl border border-border bg-card p-4 transition-colors hover:border-accent"
-							>
-								<span className="font-medium group-hover:text-accent">{page.label}</span>
-								<span className="text-sm text-muted-foreground">{page.description}</span>
-							</Link>
-						))}
-					</div>
-				</div>
-			))}
+		<div className="grid gap-8">
+			<header className="border-b border-border/60 pb-6">
+				<h1 className="text-3xl font-semibold text-primary sm:text-4xl">Admin</h1>
+				<p className="mt-2 max-w-2xl text-base leading-6 text-muted-foreground">Manage CODE members, communications and records. Find a tool below to get started.</p>
+			</header>
+			<AdminTools groups={groups} />
 
 			{can(actor, "nav:configure") ? (
-				<Card>
-					<CardHeader>
-						<CardTitle>Dashboard Shortcuts</CardTitle>
-						<CardDescription>Shared resources surfaced on the member dashboard.</CardDescription>
-					</CardHeader>
-					<CardContent className="flex flex-col gap-2">
+				<section className="grid gap-3 border-t border-border/60 pt-6" aria-labelledby="member-shortcuts">
+					<div className="flex flex-wrap items-center justify-between gap-3">
+						<div>
+							<h2 id="member-shortcuts" className="text-xl font-semibold text-primary">Member dashboard shortcuts</h2>
+							<p className="mt-1 text-sm text-muted-foreground">Shared resources members see on their dashboard.</p>
+						</div>
+						<Button asChild variant="outline"><Link href="/portal/admin/system/quick-links">Manage shortcuts <ArrowRight /></Link></Button>
+					</div>
+					<div className="flex flex-wrap gap-x-6 gap-y-3">
 						{quickLinks.length === 0 ? (
-							<p className="text-sm text-muted-foreground">No shortcuts yet.</p>
+							<p className="text-sm text-muted-foreground">Add a shortcut to give members quick access to a shared resource.</p>
 						) : (
 							quickLinks.map((link) => (
 								<a
 									key={link.id}
 									href={link.url}
-									className="flex items-center gap-2 text-sm hover:text-primary"
+									className="inline-flex items-center gap-2 rounded-sm text-sm font-medium text-accent underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 									target="_blank"
 									rel="noreferrer"
 								>
-									<ExternalLink className="size-4" />
 									{link.label}
+									<ExternalLink className="size-3.5" aria-hidden />
+									<span className="sr-only"> (opens in a new tab)</span>
 								</a>
 							))
 						)}
-						<Link href="/portal/admin/system/quick-links" className="mt-2 text-sm text-primary hover:underline">
-							Manage shortcuts
-						</Link>
-					</CardContent>
-				</Card>
+					</div>
+				</section>
 			) : null}
 		</div>
 	);

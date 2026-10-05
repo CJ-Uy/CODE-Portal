@@ -293,6 +293,7 @@ function toScanResult(eventId: string, memberId: string, row: ScanRow, alreadyPr
 export function createEventsRepository(db: Db, audit: AuditRepository): EventsRepository {
 	async function resolveCapability(actor: Actor, event: { createdBy: string; id: string }): Promise<EventRole | null> {
 		if (event.createdBy === actor.memberId) return "owner";
+		if (can(actor, "event:moderate")) return "admin";
 		return staffRole(db, event.id, actor.memberId);
 	}
 

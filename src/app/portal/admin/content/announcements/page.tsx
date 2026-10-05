@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
-import { Pin, Plus, Trash2 } from "lucide-react";
+import { Pin, Plus, Save, Trash2 } from "lucide-react";
+import { AdminIntro } from "@/components/portal/admin-intro";
 import { getRepositories } from "@/db";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ export default async function AdminAnnouncementsPage() {
 
 	return (
 		<div className="grid gap-6">
+			<AdminIntro title="Announcements" whoFor="Publish updates for the member feed" effect="Pinned announcements stay at the top of the feed" />
 			<Card>
 				<CardHeader>
 					<CardTitle>New announcement</CardTitle>
@@ -86,6 +88,8 @@ export default async function AdminAnnouncementsPage() {
 								<CardTitle className="text-lg">{item.title}</CardTitle>
 							</CardHeader>
 							<CardContent>
+								<details>
+									<summary className="cursor-pointer rounded-sm py-2 text-sm font-semibold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Edit announcement</summary>
 								<form action={updateAnnouncementAction} className="grid gap-3">
 									<input type="hidden" name="id" value={item.id} />
 									<div className="grid gap-3 sm:grid-cols-[160px_1fr]">
@@ -102,6 +106,7 @@ export default async function AdminAnnouncementsPage() {
 									</div>
 									<div className="flex gap-2">
 										<Button type="submit" variant="secondary" size="sm">
+											<Save />
 											Save changes
 										</Button>
 									</div>
@@ -113,6 +118,7 @@ export default async function AdminAnnouncementsPage() {
 										Delete
 									</Button>
 								</form>
+								</details>
 							</CardContent>
 						</Card>
 					))

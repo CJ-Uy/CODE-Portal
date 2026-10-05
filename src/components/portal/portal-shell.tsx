@@ -3,14 +3,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createElement, useState } from "react";
-import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, LogOut, Plus } from "lucide-react";
+import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, LogOut, Menu, Plus } from "lucide-react";
 import { MemberCodeCard } from "@/components/member-code-card";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Breadcrumb } from "./breadcrumb";
+import { AdminNavigation } from "./admin-navigation";
 import { MemberAvatar } from "./member-avatar";
-import { adminNav, primaryNav, secondaryNav, visiblePrimaryNav, visibleSecondaryNav, type NavItem } from "./nav-items";
+import { adminNav, primaryNav, secondaryNav, visiblePrimaryNav, visibleSecondaryNav, visibleMobileNav, type NavItem } from "./nav-items";
 import type { FeatureFlags } from "@/server/features";
 import { navPinIconFor } from "./nav-pin-icons";
 import { adminHeading, crumbFor } from "@/app/portal/admin/nav";
@@ -97,38 +99,25 @@ function RailItem({ item, pathname }: { item: NavItem; pathname: string }) {
 	);
 }
 
-function AdminNavLink({ href, label, pathname }: { href: string; label: string; pathname: string }) {
-	const on = href.split("/").filter(Boolean).length === 3 ? pathname === href : isActive(pathname, href);
-	return (
-		<Link
-			href={href}
-			className={cn(
-				"relative rounded-lg px-3 py-2 text-sm font-medium transition-[color,background-color,transform] active:scale-[0.98]",
-				on ? "bg-white/10 text-primary-foreground" : "text-primary-foreground/60 hover:text-primary-foreground",
-			)}
-		>
-			{on ? <span className="absolute -left-3 top-1/2 h-4 w-1 -translate-y-1/2 rounded-r bg-secondary" aria-hidden /> : null}
-			{label}
-		</Link>
-	);
-}
-
 export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups, flags, bell, signOutAction, children }: PortalShellProps) {
 	const pathname = usePathname();
 	const [menuOpen, setMenuOpen] = useState(false);
-	const inAdmin = pathname.startsWith("/portal/admin");
+	const inAdmin = pathname === "/portal/admin" || pathname.startsWith("/portal/admin/");
 	const pageHeading = getPageHeading(pathname);
 
 	// Flagged-off destinations must not render a link. The pages themselves already 404,
 	// but a visible link to a 404 reads as a broken portal rather than an unshipped one.
 	const primary = visiblePrimaryNav(flags);
 	const secondary = visibleSecondaryNav(flags);
-	const sheetItems: NavItem[] = [...secondary, ...(showAdmin ? [adminNav] : [])];
-	const leftTabs = primary.slice(0, 2);
-	const rightTabs = primary.slice(2, 4);
+	const mobile = visibleMobileNav(flags);
+	const sheetItems: NavItem[] = [...primary, ...secondary].filter((item) => !mobile.some((tab) => tab.id === item.id));
+	if (showAdmin) sheetItems.push(adminNav);
+	const leftTabs = mobile.slice(0, 2);
+	const rightTabs = mobile.slice(2, 4);
 
 	return (
 		<div className="min-h-screen bg-background text-foreground lg:flex">
+			<a href="#portal-content" className="sr-only z-50 rounded-md bg-card px-4 py-3 text-foreground focus:not-sr-only focus:fixed focus:left-4 focus:top-4">Skip to content</a>
 			{/* Desktop sidebar rail */}
 			<aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col gap-1 bg-primary px-4 py-6 text-primary-foreground lg:flex">
 				<Link href="/portal" aria-label="Ateneo CODE home" className="mb-4 flex items-center gap-2.5 px-2">
@@ -151,28 +140,18 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 							Back to portal
 						</Link>
 						<Separator className="my-2 bg-white/10" />
-						<nav className="flex flex-1 flex-col gap-3 overflow-y-auto pr-1" aria-label="Admin sections">
-							{adminGroups.map((group) => (
-								<div key={group.segment} className="flex flex-col gap-0.5">
-									<p className="px-3 pb-0.5 text-[0.6rem] font-semibold uppercase tracking-wider text-primary-foreground/45">
-										{group.label}
-									</p>
-									{group.pages.map((page) => (
-										<AdminNavLink key={page.href} href={page.href} label={page.label} pathname={pathname} />
-									))}
-								</div>
-							))}
-						</nav>
+						<div className="min-h-0 flex-1 overflow-y-auto pr-1"><AdminNavigation groups={adminGroups} pathname={pathname} /></div>
 					</>
 				) : (
-					<>
+					<div className="min-h-0 flex-1 overflow-y-auto pr-1">
 						<nav className="flex flex-col gap-1" aria-label="Portal modules">
 							{primary.map((item) => (
 								<RailItem key={item.id} item={item} pathname={pathname} />
 							))}
 						</nav>
-						<Separator className="my-3 bg-white/10" />
-						<nav className="flex flex-col gap-1" aria-label="More modules">
+						{secondary.length || navPins.length ? <Separator className="my-3 bg-white/10" /> : null}
+						<nav className="flex flex-col gap-1" aria-label="Resources and updates">
+							{secondary.length ? <p className="px-3 pb-1 text-xs font-semibold text-primary-foreground/70">Resources &amp; updates</p> : null}
 							{secondary.map((item) => (
 								<RailItem key={item.id} item={item} pathname={pathname} />
 							))}
@@ -187,7 +166,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 								</>
 							) : null}
 						</nav>
-					</>
+					</div>
 				)}
 				<div className="mt-auto pt-2">
 					{!inAdmin && showAdmin ? (
@@ -231,10 +210,10 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 					</Link>
 					<div className="hidden min-w-0 flex-1 lg:block">
 						{inAdmin ? (
-							<Breadcrumb items={crumbFor(pathname)} />
+							<Breadcrumb items={[{ label: "Portal", href: "/portal" }, ...crumbFor(pathname)]} />
 						) : (
 							<>
-								<p className="text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">{pageHeading.section}</p>
+								{pathname !== "/portal/ments" ? <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">{pageHeading.section}</p> : null}
 								<p className="truncate font-heading text-xl font-semibold text-foreground">{pageHeading.title}</p>
 							</>
 						)}
@@ -243,12 +222,19 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 						{bell}
 					</div>
 				</header>
-
-				<main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:pb-10">{children}</main>
+				{inAdmin ? <div className="border-b border-border/60 bg-card px-4 py-2 sm:px-6 lg:hidden"><Breadcrumb items={[{ label: "Portal", href: "/portal" }, ...crumbFor(pathname)]} /></div> : null}
+				<main id="portal-content" tabIndex={-1} className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 pb-28 outline-none sm:px-6 lg:px-8 lg:py-8 lg:pb-10">{children}</main>
 			</div>
 
 			{/* Mobile bottom nav with a raised center FAB that opens the "More" sheet. */}
 			<Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+				{inAdmin ? (
+					<nav aria-label="Admin navigation" className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-3 border-t border-border bg-card px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:hidden">
+						<Button asChild variant="ghost"><Link href="/portal"><ChevronLeft /> Portal</Link></Button>
+						<Button asChild variant="ghost"><Link href="/portal/admin">Overview</Link></Button>
+						<SheetTrigger asChild><Button type="button" aria-label="Open admin menu"><Menu /> Menu</Button></SheetTrigger>
+					</nav>
+				) : (
 				<nav
 					className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-primary text-primary-foreground lg:hidden"
 					aria-label="Portal modules"
@@ -278,14 +264,16 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 						</SheetTrigger>
 					</div>
 				</nav>
+				)}
 
 				<SheetContent
 					side="bottom"
 					className="max-h-[82vh] gap-0 overflow-y-auto rounded-t-2xl pb-[max(1.5rem,env(safe-area-inset-bottom))]"
 				>
 					<span className="mx-auto mt-3 h-1 w-10 shrink-0 rounded-full bg-border" aria-hidden />
-					<SheetTitle className="px-5 pt-3 font-heading text-xl">Quick actions</SheetTitle>
+					<SheetTitle className="px-5 pt-3 font-heading text-xl">{inAdmin ? "Admin menu" : "Quick actions"}</SheetTitle>
 
+					{!inAdmin ? <>
 					<div className="px-4 pt-4">
 						<MemberCodeCard memberId={memberId} />
 					</div>
@@ -314,11 +302,12 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 							</Link>
 						</SheetClose>
 					</div>
+					</> : null}
 
 					<nav className="flex flex-col px-2 pt-3" aria-label="More modules">
-						<p className="px-3 pb-1 pt-2 text-[0.6rem] font-semibold uppercase tracking-wider text-muted-foreground">
+						{!inAdmin ? <p className="px-3 pb-1 pt-2 text-[0.6rem] font-semibold uppercase tracking-wider text-muted-foreground">
 							Go to
-						</p>
+						</p> : null}
 						{inAdmin ? (
 							<>
 								<SheetClose asChild>
@@ -329,24 +318,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 										<span className="flex-1">Back to portal</span>
 									</Link>
 								</SheetClose>
-								{adminGroups.map((group) => (
-									<div key={group.segment} className="pt-2">
-										<p className="px-3 pb-1 text-[0.6rem] font-semibold uppercase tracking-wider text-muted-foreground">
-											{group.label}
-										</p>
-										{group.pages.map((page) => (
-											<SheetClose asChild key={page.href}>
-												<Link
-													href={page.href}
-													className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium hover:bg-muted"
-												>
-													<span className="flex-1">{page.label}</span>
-													<ChevronRight className="size-4 text-muted-foreground" />
-												</Link>
-											</SheetClose>
-										))}
-									</div>
-								))}
+								<AdminNavigation groups={adminGroups} pathname={pathname} mobile onNavigate={() => setMenuOpen(false)} />
 							</>
 						) : (
 							<>

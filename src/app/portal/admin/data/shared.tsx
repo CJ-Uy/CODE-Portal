@@ -31,7 +31,7 @@ export function displayName(row: { memberName?: string | null; memberEmail: stri
 }
 
 export function sectionTitle(children: ReactNode) {
-	return <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-foreground">{children}</h2>;
+	return <h2 className="font-heading text-xl text-foreground">{children}</h2>;
 }
 
 export function TermSelector({

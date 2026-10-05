@@ -1,8 +1,8 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "code-nest-staged",
+	"name": "code-portal-staged",
 	"account_id": "83376df5e0bae067afa197b07430168d",
-	"main": ".open-next/worker.js",
+	"main": "custom-worker.ts",
 	"workers_dev": true,
 	"routes": [
 		{
@@ -25,7 +25,7 @@
 	"services": [
 		{
 			"binding": "WORKER_SELF_REFERENCE",
-			"service": "code-nest-staged"
+			"service": "code-portal-staged"
 		}
 	],
 	"observability": {
@@ -46,7 +46,13 @@
 		"FEATURE_NOTIFICATIONS": "false",
 		"FEATURE_SURVEYS": "false",
 		"FEATURE_PUBLIC_SITE": "false",
-		"FEATURE_LEADERBOARD": "false"
+		"FEATURE_LEADERBOARD": "false",
+		"FEATURE_EMAIL": "true",
+		"FEATURE_MENTS": "true",
+		"EMAIL_INBOX_ADDRESS": "staged-inbox@ateneocode.org",
+		"EMAIL_PUBLIC_BASE_URL": "https://staged.ateneocode.org",
+		"EMAIL_BATCH_PER_TICK": "25",
+		"EMAIL_DAILY_CAP": "300"
 	},
 	"d1_databases": [
 		{
@@ -62,5 +68,7 @@
 			"binding": "BUCKET",
 			"bucket_name": "code-nest-staged-uploads"
 		}
-	]
+	],
+	"send_email": [{ "name": "EMAIL" }],
+	"triggers": { "crons": ["* * * * *"] }
 }

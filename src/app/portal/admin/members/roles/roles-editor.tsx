@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
+import { Pencil, Save, Search, ShieldPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AdminEntry, AssignableRole, InvitedEntry } from "@/db/repositories/roles";
@@ -163,16 +164,19 @@ export function RolesManager({
 
 	return (
 		<div className="grid gap-4">
-			<div className="grid gap-1.5">
+			<div className="grid gap-2">
+				<div className="relative max-w-md">
+				<Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
 				<Input
 					value={filter}
 					onChange={(e) => setFilter(e.target.value)}
 					placeholder="Search anyone by name, email, or role"
-					className="max-w-sm"
+					className="h-11 bg-card pl-10"
 					aria-label="Search admins and members"
 				/>
+				</div>
 				<p className="text-xs text-muted-foreground">
-					Filters the admins below, then looks through everyone else so you can promote someone without a second search.
+					Search for a member to grant access, or filter the current admins by role.
 				</p>
 			</div>
 
@@ -191,7 +195,7 @@ export function RolesManager({
 							{nonAdminResults.map((m) => (
 								<li
 									key={m.id}
-									className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-3 py-2"
+									className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 px-3 py-3 last:border-0"
 								>
 									<span className="min-w-0 text-sm">
 										<span className="font-medium">{memberName(m)}</span>{" "}
@@ -212,7 +216,7 @@ export function RolesManager({
 										onClick={() => openEditor(m.id, memberName(m))}
 										disabled={pending}
 									>
-										Add as admin
+										<ShieldPlus className="size-4" /> Add as admin
 									</Button>
 								</li>
 							))}
@@ -233,7 +237,7 @@ export function RolesManager({
 						{invited.map((entry) => (
 							<li
 								key={entry.email}
-								className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-3 py-2"
+								className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 px-3 py-3 last:border-0"
 							>
 								<span className="min-w-0 text-sm">
 									<span className="break-all font-medium">{entry.email}</span>
@@ -255,7 +259,7 @@ export function RolesManager({
 									onClick={() => openInvitedEditor(entry.email, entry.roleKeys)}
 									disabled={pending}
 								>
-									{entry.roleKeys.length > 0 ? "Edit waiting roles" : "Grant roles"}
+									<ShieldPlus className="size-4" /> {entry.roleKeys.length > 0 ? "Edit waiting roles" : "Grant roles"}
 								</Button>
 							</li>
 						))}
@@ -277,10 +281,10 @@ export function RolesManager({
 						{assignableRoles.map((role) => {
 							const disabled = !role.assignable || (role.key === "super" && !canGrantSuper);
 							return (
-								<label key={role.key} className="flex items-start gap-2 text-sm">
+								<label key={role.key} className="flex items-start gap-3 border-b border-border/40 py-2 text-sm last:border-0">
 									<input
 										type="checkbox"
-										className="mt-1"
+										className="mt-1 size-4 accent-primary"
 										checked={editor.desired.has(role.key)}
 										disabled={disabled}
 										onChange={(e) => toggle(role.key, e.target.checked)}
@@ -294,12 +298,12 @@ export function RolesManager({
 							);
 						})}
 					</div>
-					<div className="flex items-center gap-3">
+						<div className="flex flex-wrap items-center gap-3">
 						<Button type="button" onClick={save} disabled={pending}>
-							Save changes
+							<Save className="size-4" /> Save changes
 						</Button>
 						<Button type="button" variant="outline" onClick={() => setEditor(null)}>
-							Cancel
+							<X className="size-4" /> Cancel
 						</Button>
 						{message ? <span className="text-sm text-muted-foreground">{message}</span> : null}
 					</div>
@@ -308,12 +312,14 @@ export function RolesManager({
 				<p className="text-sm text-muted-foreground">{message}</p>
 			) : null}
 
-			<div className="overflow-x-auto rounded-xl border border-border">
+			<section aria-labelledby="current-admins" className="grid min-w-0 gap-3">
+				<h2 id="current-admins" className="text-xl font-semibold text-primary">Current admins <span className="ml-1 font-sans text-sm font-normal text-muted-foreground">({shown.length})</span></h2>
+			<div className="overflow-x-auto rounded-xl border border-border/60 bg-card">
 				<table className="w-full text-sm">
-					<thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
+					<thead className="bg-secondary/25 text-left text-sm text-muted-foreground">
 						<tr>
 							<th className="px-4 py-2 font-semibold">Member</th>
-							<th className="px-4 py-2 font-semibold">Email</th>
+							<th className="hidden px-4 py-2 font-semibold md:table-cell">Email</th>
 							<th className="px-4 py-2 font-semibold">Roles</th>
 							<th className="px-4 py-2 text-right font-semibold">Action</th>
 						</tr>
@@ -328,12 +334,13 @@ export function RolesManager({
 						) : (
 							shown.map((a) => (
 								<tr key={a.memberId} className="border-t border-border">
-									<td className="px-4 py-2 font-medium">
+									<td className="max-w-40 px-3 py-3 font-medium sm:px-4">
 										{a.displayName}
 										{a.memberId === actorMemberId ? <span className="ml-1 text-xs text-muted-foreground">(you)</span> : null}
+										<span className="mt-1 block break-all text-xs font-normal text-muted-foreground md:hidden">{a.email}</span>
 									</td>
-									<td className="px-4 py-2 text-muted-foreground">{a.email}</td>
-									<td className="px-4 py-2">
+									<td className="hidden px-4 py-2 text-muted-foreground md:table-cell">{a.email}</td>
+									<td className="px-2 py-2 sm:px-4">
 										<div className="flex flex-wrap gap-1">
 											{a.roleKeys.map((k) => (
 												<span key={k} className="rounded-full bg-secondary px-2 py-0.5 text-xs">
@@ -342,9 +349,9 @@ export function RolesManager({
 											))}
 										</div>
 									</td>
-									<td className="px-4 py-2 text-right">
+									<td className="px-2 py-2 text-right sm:px-4">
 										<Button type="button" size="sm" variant="outline" onClick={() => openEditor(a.memberId, a.displayName)}>
-											Edit
+											<Pencil className="size-4" /> Edit
 										</Button>
 									</td>
 								</tr>
@@ -353,6 +360,7 @@ export function RolesManager({
 					</tbody>
 				</table>
 			</div>
+			</section>
 		</div>
 	);
 }

@@ -47,6 +47,38 @@ Copied brand assets live in `public`:
 - `code-doc-cover.png`
 - `code-form-cover.png`
 
+## Admin workspace
+
+The admin workspace extends the existing CODE interface system. Unna headings establish the task and section hierarchy; Source Sans carries descriptions, controls and records. Keep the official assets, shared tokens and local UI primitives.
+
+### Directory and navigation
+
+The overview is a searchable directory of permitted tools, grouped into Members & Access, Content, Email, Events & Points, and System. Section headings sit above shallow white lists with divided rows. Each row has a tool name, a short task description and a trailing arrow. Search and section filters update the result count in place; an empty result offers a clear reset. The directory uses two columns on desktop and one on mobile, with wrapping filter controls.
+
+The navy desktop rail includes Overview, expandable sections and Back to portal. Native disclosures open the current section and keep its tools visible. Active tools use a tonal selection and stronger text, with visible keyboard focus. Breadcrumbs begin with Portal and Admin, link the ancestors and end with the current page or detail label. Use the registered tool's section ownership for the trail, including tools whose URLs live under a different section. Long trails wrap.
+
+On mobile, the navy app bar remains above a separate breadcrumb strip. A fixed bottom bar provides Portal, Overview and Menu. Menu opens a scrollable bottom sheet with the same grouped tools and closes after navigation. Reserve bottom space for the bar and respect the device's safe area.
+
+The member rail orders Overview, Calendar, Retention, Ments Tree, Link shortener, Mail, Notifications and Profile. Library and Announcements sit under Resources & updates. Release flags hide unavailable destinations. The member mobile bar keeps four core destinations: Overview, Calendar, Ments Tree and Profile, with Link shortener filling the Ments slot when that feature is unavailable. Remaining destinations stay in the menu drawer.
+
+### Ments Tree
+
+The member tree uses one bordered canvas for the complete forest and every generation. Generations descend vertically through person buttons (260 by 144 px), with full names wrapping inside each cell. Solid paths represent official Ments; optional dashed paths represent self-reported Pments. People are HTML buttons with named selection and focus states. Dragging or swiping pans the canvas; scrolling zooms around the pointer. With the canvas focused, arrow keys pan, + and - zoom, and 0 resets to the whole forest. Search, Find me, whole-forest fit, branch fit, fullscreen and copied person links support exploration. Canvas controls wrap in groups on narrow screens.
+
+The first view centers the signed-in member at 50% zoom when an account link or a unique normalized name identifies their person. Name matching locates the view without changing account links. Find me returns to the same centered 50% view. A valid shared person link takes precedence; unmatched members see the whole forest and guidance to search or request an account link. Whole-forest fit shows structure; selecting or searching for a person restores a readable local view.
+
+The selected person's lineage follows the canvas. Statistics use an open definition list, followed by divided rows for the largest trees. The mobile statistics grid has two columns. Members choose and save their own informal Pments directly in a searchable checkbox list below the statistics. Official relationship editing stays in Members & Access, with an Explore tree link back to the member view.
+
+### Email templates and personalization
+
+The template gallery pairs rendered previews with names, use cases and separate Use template and Customize & save actions. Nine built-in starters cover a CODE Portal feature announcement, welcome, invitations, reminders, event thanks, roundups, feedback, resources and Ments. The feature announcement uses CODE Mail as an editable example. Starters open as editable content alongside saved templates without requiring seed data. The searchable gallery uses one column on mobile, two at intermediate widths and three on wide desktops.
+
+Image blocks offer a public upload or an image URL, a description for screen readers and an optional link. Upload controls name the supported formats (PNG, JPG, WebP and GIF), the size limit (5 MB) and the public visibility needed for recipients to view the image. Keep upload progress and errors next to the control.
+
+The email allowance tooltip distinguishes the account's billing-cycle allowance, shared across beta, staged and live, from this workspace's calendar-month counter and daily sending cap. It shows the extra sending rate with an automatically refreshed approximate PHP quote, its date and sources; unavailable conversion leaves the USD rate readable.
+
+Personalization is a dedicated composer step for the actual receiving audience. A searchable, paginated recipient list exposes missing fields and uses light blue selection. Selecting a recipient shows their merge values, rendered subject, preview text and message. The list and preview sit side by side when space allows and stack on narrower screens. Corrections are marked and saved with the email draft; the email address remains read-only, and Use profile values clears that recipient's corrections. Keep draft corrections separate from member profile editing. Confirmation values wrap at word boundaries, with long addresses breaking only when needed. On mobile, Test and Review sit above the admin navigation bar with space reserved for both.
+
 ## Writing rules
 
 Interface copy should be plain and specific. Avoid em dashes, curly quotes, promotional filler, title-heavy prose, needless buzzwords, and stock phrases associated with AI-generated writing. Keep labels short, use real nouns, and prefer active verbs.

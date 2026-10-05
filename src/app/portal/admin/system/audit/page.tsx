@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AdminIntro } from "@/components/portal/admin-intro";
 import { redirect } from "next/navigation";
 import { getRepositories } from "@/db";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +22,7 @@ const CATEGORIES: AuditCategory[] = [
 	"member",
 	"announcement",
 	"library",
+	"email",
 ];
 
 function formatWhen(value: Date): string {
@@ -60,10 +62,7 @@ export default async function AdminAuditPage({
 
 	return (
 		<div className="grid gap-5">
-			<div>
-				<h2 className="font-heading text-xl">Audit log</h2>
-				<p className="text-sm text-muted-foreground">The most recent 100 recorded actions.</p>
-			</div>
+			<AdminIntro title="Activity log" whoFor="Review the most recent 100 recorded actions" />
 
 			<div className="flex flex-wrap gap-2">
 				<FilterChip label="All" href="/portal/admin/system/audit" active={!category} />

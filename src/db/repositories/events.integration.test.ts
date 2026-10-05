@@ -10,6 +10,7 @@ import { createEventsRepository } from "./events";
 
 const eventsAdmin: Actor = { memberId: "mem_events", roles: ["events"] };
 const retentionAdmin: Actor = { memberId: "mem_retention", roles: ["retention"] };
+const superAdmin: Actor = { memberId: "mem_super", roles: ["super"] };
 const owner: Actor = { memberId: "mem_owner", roles: ["member"] };
 const adminStaff: Actor = { memberId: "mem_admin_staff", roles: ["member"] };
 const scanner: Actor = { memberId: "mem_scanner", roles: ["member"] };
@@ -54,6 +55,7 @@ describe("events repository on D1", () => {
 			["mem_outsider", "outsider@example.com", "Outsider"],
 			["mem_events", "events@example.com", "Events Admin"],
 			["mem_retention", "retention@example.com", "Retention Admin"],
+			["mem_super", "super@example.com", "Super Admin"],
 			["mem_a", "a@example.com", "Member A"],
 			["mem_b", "b@example.com", "Member B"],
 		]) {
@@ -281,6 +283,55 @@ describe("events repository on D1", () => {
 		const moved = await repo.getById(outsider, event.id);
 		expect(moved?.myRole).toBe("owner");
 		expect(await repo.resolveCapability(owner, { id: event.id, createdBy: outsider.memberId })).toBe("admin");
+	});
+
+	it.each([superAdmin, eventsAdmin])("gives $roles event admin access without changing ownership or requiring staff membership", async (admin) => {
+		const event = await makeApprovedEvent();
+		const { repo } = makeRepos();
+
+		expect(await repo.getById(admin, event.id)).toMatchObject({ createdBy: owner.memberId, myRole: "admin" });
+		expect(await repo.listPublished(admin, {})).toMatchObject([{ id: event.id, myRole: "admin" }]);
+		expect(await repo.resolveCapability({ ...owner, roles: ["super"] }, event)).toBe("owner");
+		await expect(repo.addStaff(retentionAdmin, event.id, scanner.memberId, "scanner")).rejects.toThrow("Not authorized");
+
+		await repo.addStaff(admin, event.id, scanner.memberId, "scanner");
+		await repo.addStaff(admin, event.id, adminStaff.memberId, "admin");
+		expect(await repo.listStaff(admin, event.id)).toMatchObject([
+			{ memberId: owner.memberId, role: "owner" },
+			{ memberId: adminStaff.memberId, role: "admin" },
+			{ memberId: scanner.memberId, role: "scanner" },
+		]);
+		await expect(repo.addStaff(admin, event.id, owner.memberId, "scanner")).rejects.toThrow("Owner cannot be event staff.");
+		await expect(repo.update(admin, event.id, { title: "Updated by admin" })).resolves.toMatchObject({
+			title: "Updated by admin",
+			createdBy: owner.memberId,
+			myRole: "admin",
+		});
+		await expect(repo.invite(admin, event.id, [outsider.memberId])).resolves.toEqual({ invited: 1 });
+		expect(await repo.listInvites(admin, event.id)).toMatchObject([{ memberId: outsider.memberId }]);
+		await expect(repo.listSignupResponses(admin, event.id)).resolves.toEqual([]);
+		await repo.removeStaff(admin, event.id, scanner.memberId);
+		expect(await repo.resolveCapability(scanner, event)).toBeNull();
+
+		await repo.addStaff(owner, event.id, admin.memberId, "scanner");
+		expect(await repo.resolveCapability(admin, event)).toBe("admin");
+		expect(await repo.getById(owner, event.id)).toMatchObject({ myRole: "owner" });
+	});
+
+	it.each([owner, superAdmin, eventsAdmin])("lets $roles edit a past event's description without changing its schedule", async (actor) => {
+		const event = await makeApprovedEvent();
+		const { repo } = makeRepos();
+		await repo.addStaff(owner, event.id, scanner.memberId, "scanner");
+		vi.setSystemTime(new Date("2026-07-11T12:00:00.000Z"));
+		const description = "Updated details\n\nResources: https://ateneocode.org";
+		await expect(repo.update(actor, event.id, { description })).resolves.toMatchObject({
+			description,
+			startsAt: START,
+			endsAt: END,
+			createdBy: owner.memberId,
+		});
+		await expect(repo.update(scanner, event.id, { description })).rejects.toThrow("Not authorized");
+		await expect(repo.update(outsider, event.id, { description })).rejects.toThrow("Not authorized");
 	});
 
 	it("writes the scan audit row with the scanned member id", async () => {

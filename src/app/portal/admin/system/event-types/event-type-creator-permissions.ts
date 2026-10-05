@@ -26,6 +26,8 @@ const creatorPermissionValues: Record<PermissionAction, (typeof creatorPermissio
 	"announcement:manage": "announcement:manage",
 	"library:manage": "announcement:manage",
 	"library:moderate": "announcement:manage",
+	"email:send": "survey:configure",
+	"email:configure": "survey:configure",
 };
 
 export function creatorPermissionValue(current: string) {

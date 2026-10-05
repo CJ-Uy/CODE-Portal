@@ -26,8 +26,7 @@ const scansQuerySchema = z
 		memberId: z.string().max(60).optional(),
 		from: optionalDate,
 		to: optionalDate,
-	})
-	.refine((v) => !v.from || !v.to || v.from <= v.to, { path: ["to"], message: "End date must not precede the start." });
+	});
 
 function dateValue(value: Date | undefined) {
 	return value ? value.toISOString().slice(0, 10) : undefined;
@@ -37,6 +36,7 @@ export default async function ScansAdminPage({ searchParams }: { searchParams: P
 	const actor = await requireActor();
 	if (!can(actor, "retention:record")) notFound();
 	const params = scansQuerySchema.parse(firstParams(await searchParams));
+	const invalidRange = Boolean(params.from && params.to && params.from > params.to);
 	const pickers = await loadRetentionPickers(actor);
 	const now = new Date();
 	const selectedTerm =
@@ -44,7 +44,7 @@ export default async function ScansAdminPage({ searchParams }: { searchParams: P
 		pickers.terms.find((term) => term.startsAt <= now && term.endsAt >= now) ??
 		pickers.terms[0];
 	const toExclusive = params.to ? new Date(params.to.getTime() + 24 * 60 * 60_000) : undefined;
-	const rows = selectedTerm
+	const rows = selectedTerm && !invalidRange
 		? await createAttendanceReports(getDb()).scanLog(actor, selectedTerm.id, {
 				limit: PAGE_SIZE,
 				offset: (params.page - 1) * PAGE_SIZE,
@@ -105,13 +105,14 @@ export default async function ScansAdminPage({ searchParams }: { searchParams: P
 				</label>
 				<label className="grid gap-1 text-sm font-medium">
 					To
-					<Input type="date" name="to" defaultValue={dateValue(params.to)} />
+					<Input type="date" name="to" min={dateValue(params.from)} defaultValue={dateValue(params.to)} />
 				</label>
 				<div className="flex items-end gap-2">
 					<Button type="submit" variant="secondary"><Filter className="size-4" />Filter</Button>
 					{hasFilters ? <Button asChild variant="ghost"><Link href={`/portal/admin/data/scans?termId=${selectedTerm?.id ?? ""}`}>Clear</Link></Button> : null}
 				</div>
 			</form>
+			{invalidRange ? <p role="alert" className="text-sm text-destructive">End date must be on or after the start date. Change the dates and filter again.</p> : null}
 
 			<section className="grid gap-3">
 				{sectionTitle("Door activity")}

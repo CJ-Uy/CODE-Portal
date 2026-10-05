@@ -1,4 +1,5 @@
 export { membersContract } from "./members";
+export { mentsContract } from "./ments";
 export { authContract } from "./auth";
 export { uploadsContract } from "./uploads";
 export { linksContract } from "./links";

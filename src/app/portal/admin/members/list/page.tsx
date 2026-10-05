@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, Trash2 } from "lucide-react";
 import { redirect } from "next/navigation";
 import { getRepositories } from "@/db";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -40,26 +39,29 @@ export default async function MemberListPage({ searchParams }: { searchParams: P
 				whoFor="Official CODE members"
 				effect="Adding an email lets that person sign in; they link automatically on first login"
 			/>
-			<Card>
-				<CardHeader>
-					<CardTitle>Members ({total})</CardTitle>
-				</CardHeader>
-				<CardContent className="grid gap-4">
+			<section className="grid gap-3 border-b border-border/60 pb-5" aria-labelledby="add-members-title">
+				<h2 id="add-members-title" className="text-xl font-semibold text-primary">Add members</h2>
 					<AddMembers />
+			</section>
+			<section aria-labelledby="member-directory-title" className="grid gap-4">
+				<div className="flex flex-wrap items-center justify-between gap-3">
+					<h2 id="member-directory-title" className="text-xl font-semibold text-primary">Member directory <span className="ml-1 font-sans text-sm font-normal text-muted-foreground">({total})</span></h2>
 					<form method="get" className="flex flex-wrap items-center gap-2">
-						<label className="relative min-w-56 flex-1 sm:max-w-sm">
+						<label className="relative min-w-0 flex-1 sm:w-72">
 							<span className="sr-only">Search members</span>
 							<Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
 							<Input name="q" defaultValue={q} maxLength={100} placeholder="Search name, email, or status" className="pl-9" />
 						</label>
-						<Button type="submit" size="sm">Search</Button>
+						<Button type="submit" size="sm"><Search className="size-4" /> Search</Button>
 						{q ? <Button asChild type="button" size="sm" variant="ghost"><Link href="/portal/admin/members/list">Clear</Link></Button> : null}
 					</form>
+				</div>
+				<div className="min-w-0 rounded-xl border border-border/60 bg-card">
 					<Table>
 						<TableHeader>
 							<TableRow>
 								<TableHead>Name</TableHead>
-								<TableHead>Email</TableHead>
+								<TableHead className="hidden md:table-cell">Email</TableHead>
 								<TableHead>Status</TableHead>
 								<TableHead className="text-right">Action</TableHead>
 							</TableRow>
@@ -70,8 +72,8 @@ export default async function MemberListPage({ searchParams }: { searchParams: P
 							) : null}
 							{members.map((member) => (
 								<TableRow key={member.id}>
-									<TableCell className="font-medium">{member.fullName ?? member.name ?? member.nickname ?? "Invited member"}</TableCell>
-									<TableCell className="break-all">{member.email}</TableCell>
+									<TableCell className="max-w-40 font-medium">{member.fullName ?? member.name ?? member.nickname ?? "Invited member"}<span className="mt-1 block break-all text-xs font-normal text-muted-foreground md:hidden">{member.email}</span></TableCell>
+									<TableCell className="hidden break-all md:table-cell">{member.email}</TableCell>
 									<TableCell>
 										<Badge variant={member.status === "active" ? "success" : member.status === "pending" ? "warn" : "outline"}>
 											{member.status}
@@ -81,6 +83,7 @@ export default async function MemberListPage({ searchParams }: { searchParams: P
 										<form action={deleteMemberAction}>
 											<input type="hidden" name="id" value={member.id} />
 											<Button type="submit" variant="outline" size="sm" className="text-destructive" disabled={member.id === actor.memberId}>
+												<Trash2 className="size-4" />
 												Delete
 											</Button>
 										</form>
@@ -89,6 +92,7 @@ export default async function MemberListPage({ searchParams }: { searchParams: P
 							))}
 						</TableBody>
 					</Table>
+				</div>
 					<nav aria-label="Member pages" className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
 						<p>{total ? `${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, total)} of ${total}` : "0 members"}</p>
 						<div className="flex items-center gap-2">
@@ -97,8 +101,7 @@ export default async function MemberListPage({ searchParams }: { searchParams: P
 							{page < pageCount ? <Button asChild size="sm" variant="outline"><Link href={pageHref(page + 1)}>Next <ChevronRight className="size-4" /></Link></Button> : <Button size="sm" variant="outline" disabled>Next <ChevronRight className="size-4" /></Button>}
 						</div>
 					</nav>
-				</CardContent>
-			</Card>
+			</section>
 		</div>
 	);
 }

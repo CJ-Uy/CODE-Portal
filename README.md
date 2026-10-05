@@ -48,7 +48,7 @@ pnpm preview
 
 ## Shared dev backend
 
-Outside developers can run the app with `APP_ENV=shared`. In that mode, the local app talks to the deployed beta Worker, `code-nest-beta`, through typed `/internal/*` endpoints. They do not need Cloudflare credentials.
+Outside developers can run the app with `APP_ENV=shared`. In that mode, the local app talks to the deployed beta Worker, `code-portal-beta`, through typed `/internal/*` endpoints. They do not need Cloudflare credentials.
 
 When schema, migrations, internal contracts, permissions, auth config, shared token seed data, or Worker runtime dependencies change, the dev backend must be updated too:
 

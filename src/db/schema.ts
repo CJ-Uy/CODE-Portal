@@ -1,7 +1,9 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { check, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import type { EventSignupAnswers, EventSignupField } from "@/lib/event-signup-form";
 import type { PointMilestone } from "@/lib/point-milestones";
+import type { Audience, EmailBlock, EmailCampaignStatus, EmailDeliveryStatus } from "@/lib/email/types";
+import type { MergeOverrides } from "@/lib/email/merge";
 
 export type MemberStatus = "active" | "pending" | "inactive";
 /** The three types seeded by migration 0010; kept for seeding and tests only. Event types are data now - see event_type_rules. */
@@ -21,7 +23,8 @@ export type AuditCategory =
 	| "link"
 	| "member"
 	| "announcement"
-	| "library";
+	| "library"
+	| "email";
 export type RetentionRecordSource = "event_attendance" | "manual";
 
 const nowMs = sql`(unixepoch() * 1000)`;
@@ -50,6 +53,31 @@ export const members = sqliteTable(
 		index("members_email_idx").on(table.email),
 		index("members_status_idx").on(table.status),
 	],
+);
+
+export const mentsPeople = sqliteTable(
+	"ments_people",
+	{
+		id: text("id").primaryKey(),
+		name: text("name").notNull(),
+		cohort: text("cohort"),
+		memberId: text("member_id").references(() => members.id, { onDelete: "set null" }),
+		mentorId: text("mentor_id").references((): AnySQLiteColumn => mentsPeople.id, { onDelete: "restrict" }),
+	},
+	(table) => [
+		uniqueIndex("ments_people_member_unique").on(table.memberId),
+		index("ments_people_mentor_idx").on(table.mentorId),
+		check("ments_people_not_self", sql`${table.mentorId} IS NULL OR ${table.mentorId} <> ${table.id}`),
+	],
+);
+
+export const mentsPments = sqliteTable(
+	"ments_pments",
+	{
+		memberId: text("member_id").notNull().references(() => members.id, { onDelete: "cascade" }),
+		personId: text("person_id").notNull().references(() => mentsPeople.id, { onDelete: "cascade" }),
+	},
+	(table) => [primaryKey({ columns: [table.memberId, table.personId] }), index("ments_pments_person_idx").on(table.personId)],
 );
 
 export const accounts = sqliteTable(
@@ -775,5 +803,158 @@ export const articleFeedback = sqliteTable(
 	(table) => [
 		index("article_feedback_article_slug_idx").on(table.articleSlug),
 		index("article_feedback_created_at_idx").on(table.createdAt),
+	],
+);
+
+export const emailSenders = sqliteTable(
+	"email_senders",
+	{
+		id: text("id").primaryKey(),
+		address: text("address").notNull(),
+		displayName: text("display_name").notNull(),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+		archivedAt: integer("archived_at", { mode: "timestamp_ms" }),
+	},
+	(table) => [uniqueIndex("email_senders_address_unique").on(table.address)],
+);
+
+export const emailCategories = sqliteTable("email_categories", {
+	id: text("id").primaryKey(),
+	name: text("name").notNull(),
+	description: text("description").notNull().default(""),
+	required: integer("required", { mode: "boolean" }).notNull().default(false),
+	defaultSenderId: text("default_sender_id").references(() => emailSenders.id, { onDelete: "set null" }),
+	sortOrder: integer("sort_order").notNull().default(0),
+	createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	archivedAt: integer("archived_at", { mode: "timestamp_ms" }),
+});
+
+export const emailTemplates = sqliteTable("email_templates", {
+	id: text("id").primaryKey(),
+	name: text("name").notNull(),
+	categoryId: text("category_id").references(() => emailCategories.id, { onDelete: "set null" }),
+	subject: text("subject").notNull().default(""),
+	preheader: text("preheader").notNull().default(""),
+	blocks: text("blocks", { mode: "json" }).$type<EmailBlock[]>().notNull().default([]),
+	createdBy: text("created_by").references(() => members.id, { onDelete: "set null" }),
+	updatedBy: text("updated_by").references(() => members.id, { onDelete: "set null" }),
+	createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	archivedAt: integer("archived_at", { mode: "timestamp_ms" }),
+});
+
+export const emailCampaigns = sqliteTable(
+	"email_campaigns",
+	{
+		id: text("id").primaryKey(),
+		templateId: text("template_id").references(() => emailTemplates.id, { onDelete: "set null" }),
+		categoryId: text("category_id").references(() => emailCategories.id, { onDelete: "set null" }),
+		senderId: text("sender_id").references(() => emailSenders.id, { onDelete: "set null" }),
+		subject: text("subject").notNull().default(""),
+		preheader: text("preheader").notNull().default(""),
+		blocks: text("blocks", { mode: "json" }).$type<EmailBlock[]>().notNull().default([]),
+		audience: text("audience", { mode: "json" }).$type<Audience>().notNull(),
+		mergeOverrides: text("merge_overrides", { mode: "json" }).$type<MergeOverrides>().notNull().default({}),
+		status: text("status").$type<EmailCampaignStatus>().notNull().default("draft"),
+		scheduledAt: integer("scheduled_at", { mode: "timestamp_ms" }),
+		startedAt: integer("started_at", { mode: "timestamp_ms" }),
+		finishedAt: integer("finished_at", { mode: "timestamp_ms" }),
+		recipientCount: integer("recipient_count").notNull().default(0),
+		sentCount: integer("sent_count").notNull().default(0),
+		failedCount: integer("failed_count").notNull().default(0),
+		skippedCount: integer("skipped_count").notNull().default(0),
+		createdBy: text("created_by").references(() => members.id, { onDelete: "set null" }),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+		updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	},
+	(table) => [index("email_campaigns_status_scheduled_idx").on(table.status, table.scheduledAt)],
+);
+
+export const emailDeliveries = sqliteTable(
+	"email_deliveries",
+	{
+		id: text("id").primaryKey(),
+		campaignId: text("campaign_id")
+			.notNull()
+			.references(() => emailCampaigns.id, { onDelete: "cascade" }),
+		memberId: text("member_id").references(() => members.id, { onDelete: "set null" }),
+		email: text("email").notNull(),
+		status: text("status").$type<EmailDeliveryStatus>().notNull().default("pending"),
+		attempts: integer("attempts").notNull().default(0),
+		nextAttemptAt: integer("next_attempt_at", { mode: "timestamp_ms" }),
+		messageId: text("message_id"),
+		error: text("error"),
+		sentAt: integer("sent_at", { mode: "timestamp_ms" }),
+		readAt: integer("read_at", { mode: "timestamp_ms" }),
+		isExternal: integer("is_external", { mode: "boolean" }).notNull().default(false),
+	},
+	(table) => [
+		uniqueIndex("email_deliveries_campaign_member_unique").on(table.campaignId, table.memberId),
+		uniqueIndex("email_deliveries_campaign_email_unique").on(table.campaignId, table.email),
+		index("email_deliveries_status_next_idx").on(table.status, table.nextAttemptAt),
+		index("email_deliveries_member_status_idx").on(table.memberId, table.status),
+		index("email_deliveries_sent_at_idx").on(table.sentAt),
+	],
+);
+
+export const emailOptouts = sqliteTable(
+	"email_optouts",
+	{
+		memberId: text("member_id")
+			.notNull()
+			.references(() => members.id, { onDelete: "cascade" }),
+		categoryId: text("category_id")
+			.notNull()
+			.references(() => emailCategories.id, { onDelete: "cascade" }),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	},
+	(table) => [primaryKey({ columns: [table.memberId, table.categoryId] })],
+);
+
+export const emailThreads = sqliteTable(
+	"email_threads",
+	{
+		id: text("id").primaryKey(),
+		campaignId: text("campaign_id").references(() => emailCampaigns.id, { onDelete: "set null" }),
+		memberId: text("member_id").references(() => members.id, { onDelete: "set null" }),
+		fromEmail: text("from_email").notNull(),
+		fromName: text("from_name"),
+		subject: text("subject").notNull(),
+		status: text("status").$type<"open" | "done">().notNull().default("open"),
+		assigneeId: text("assignee_id").references(() => members.id, { onDelete: "set null" }),
+		unread: integer("unread", { mode: "boolean" }).notNull().default(true),
+		isAuto: integer("is_auto", { mode: "boolean" }).notNull().default(false),
+		lastMessageAt: integer("last_message_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	},
+	(table) => [
+		index("email_threads_status_last_idx").on(table.status, table.lastMessageAt),
+		index("email_threads_campaign_from_idx").on(table.campaignId, table.fromEmail),
+	],
+);
+
+export const emailMessages = sqliteTable(
+	"email_messages",
+	{
+		id: text("id").primaryKey(),
+		threadId: text("thread_id")
+			.notNull()
+			.references(() => emailThreads.id, { onDelete: "cascade" }),
+		direction: text("direction").$type<"in" | "out">().notNull(),
+		messageId: text("message_id"),
+		inReplyTo: text("in_reply_to"),
+		referencesHeader: text("references_header"),
+		fromEmail: text("from_email").notNull(),
+		toEmail: text("to_email").notNull(),
+		subject: text("subject").notNull(),
+		text: text("text"),
+		html: text("html"),
+		rawKey: text("raw_key"),
+		sentBy: text("sent_by").references(() => members.id, { onDelete: "set null" }),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	},
+	(table) => [
+		index("email_messages_message_id_idx").on(table.messageId),
+		index("email_messages_thread_created_idx").on(table.threadId, table.createdAt),
 	],
 );

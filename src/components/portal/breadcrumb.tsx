@@ -3,12 +3,13 @@ import { ChevronRight } from "lucide-react";
 
 export function Breadcrumb({ items }: { items: { label: string; href?: string }[] }) {
 	return (
-		<nav aria-label="Breadcrumb" className="flex items-center gap-1 text-sm text-muted-foreground">
+		<nav aria-label="Breadcrumb" className="min-w-0 text-sm text-muted-foreground">
+			<ol className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
 			{items.map((item, i) => (
-				<span key={item.label} className="flex items-center gap-1">
+				<li key={`${item.label}-${i}`} className="flex min-w-0 items-center gap-1.5">
 					{i > 0 ? <ChevronRight className="size-3.5 opacity-60" aria-hidden /> : null}
 					{item.href ? (
-						<Link href={item.href} className="hover:text-foreground">
+						<Link href={item.href} className="rounded-sm py-1 underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
 							{item.label}
 						</Link>
 					) : (
@@ -16,8 +17,9 @@ export function Breadcrumb({ items }: { items: { label: string; href?: string }[
 							{item.label}
 						</span>
 					)}
-				</span>
+				</li>
 			))}
+			</ol>
 		</nav>
 	);
 }

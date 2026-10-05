@@ -132,13 +132,15 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 				) : null}
 				{isPast && !event.readOnly ? (
 					<p className="rounded-lg border border-border bg-secondary/30 p-3 text-sm text-muted-foreground">
-						This event has ended. You can still review its details below.
+						{canManageSignupResponses
+							? "This event has ended. You can still edit its details below."
+							: "This event has ended. You can still review its details below."}
 					</p>
 				) : null}
 				{shareLinks ? (
 					<EventShareBar shareUrl={shareLinks.shareUrl} googleUrl={shareLinks.googleUrl} icsUrl={shareLinks.icsUrl} />
 				) : null}
-				<p className="max-w-3xl text-sm leading-relaxed">{event.description}</p>
+				<p className="max-w-3xl whitespace-pre-wrap break-words text-sm leading-relaxed">{event.description}</p>
 				<div className="flex flex-wrap items-center gap-x-5 gap-y-3">
 					<div className="flex items-center gap-2 text-sm font-medium">
 						<span className="grid size-8 place-items-center rounded-lg bg-secondary text-accent">

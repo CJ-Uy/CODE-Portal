@@ -1,0 +1,2 @@
+ALTER TABLE `email_deliveries` ADD `is_external` integer DEFAULT false NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX `email_deliveries_campaign_email_unique` ON `email_deliveries` (`campaign_id`,`email`);
