@@ -7,6 +7,7 @@ import { requireActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
 import { isFeatureEnabled } from "@/server/features";
 import { MentsEditor } from "./ments-editor";
+import { AdminIntro } from "@/components/portal/admin-intro";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,6 @@ export default async function ManageMentsPage() {
 	const actor = await requireActor();
 	if (!can(actor, "member:manage")) redirect("/portal/ments");
 	const repositories = await getRepositories();
-	const people = await repositories.ments.manage(actor);
-	return <div className="grid min-w-0 gap-6"><header className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="font-serif text-3xl">Manage Ments Tree</h1><p className="mt-1 text-muted-foreground">Keep each person connected to their ments. Past mentors can be added without a portal account.</p></div><Button asChild variant="outline" size="sm"><Link href="/portal/ments"><GitBranch className="size-4" /> Explore tree</Link></Button></header><MentsEditor people={people} /></div>;
+	const [people, reports] = await Promise.all([repositories.ments.manage(actor), repositories.ments.pments(actor)]);
+	return <div className="grid min-w-0 gap-6"><AdminIntro title="Ments Tree" whoFor="Manage official Ments relationships and review member-reported Pments" effect="Past mentors can be added without a portal account" /><Button asChild variant="outline" size="sm" className="justify-self-start"><Link href="/portal/ments"><GitBranch className="size-4" /> Explore tree</Link></Button><MentsEditor people={people} reports={reports} /></div>;
 }

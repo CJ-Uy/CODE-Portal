@@ -43,6 +43,20 @@
       "when": 1791207311190,
       "tag": "0009_ments_tree",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1791208493340,
+      "tag": "0010_ments_pments",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1791210005244,
+      "tag": "0011_email_personalization",
+      "breakpoints": true
     }
   ]
 }

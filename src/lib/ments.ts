@@ -1,5 +1,43 @@
 import type { MentsPerson } from "@/db/contract/ments";
 
+export const MENTS_NODE = { width: 164, height: 80, column: 200, row: 88 };
+
+/** Packs complete branches into columns so the whole forest stays explorable. */
+export function layoutMentsTree(people: MentsPerson[]) {
+	const byId = new Map(people.map((person) => [person.id, person]));
+	const children = new Map<string, MentsPerson[]>();
+	for (const person of people) if (person.mentorId && byId.has(person.mentorId)) children.set(person.mentorId, [...(children.get(person.mentorId) ?? []), person]);
+	const seen = new Set<string>();
+	const branches: { root: MentsPerson; nodes: { person: MentsPerson; x: number; y: number }[]; width: number; height: number; generations: number }[] = [];
+	for (const root of [...people.filter((person) => !person.mentorId || !byId.has(person.mentorId)), ...people]) {
+		if (seen.has(root.id)) continue;
+		let leaf = 0;
+		let maxDepth = 0;
+		const nodes: { person: MentsPerson; x: number; y: number }[] = [];
+		const visit = (person: MentsPerson, depth: number): number => {
+			seen.add(person.id);
+			maxDepth = Math.max(maxDepth, depth);
+			const ys = (children.get(person.id) ?? []).filter((child) => !seen.has(child.id)).map((child) => visit(child, depth + 1));
+			const y = ys.length ? (ys[0] + ys.at(-1)!) / 2 : leaf++ * MENTS_NODE.row;
+			nodes.push({ person, x: depth * MENTS_NODE.column, y });
+			return y;
+		};
+		visit(root, 0);
+		branches.push({ root, nodes, width: maxDepth * MENTS_NODE.column + MENTS_NODE.width, height: Math.max(1, leaf) * MENTS_NODE.row, generations: maxDepth + 1 });
+	}
+	branches.sort((a, b) => b.nodes.length - a.nodes.length || a.root.name.localeCompare(b.root.name));
+	const columns = Math.min(4, Math.max(1, Math.ceil(Math.sqrt(branches.length))));
+	const columnWidth = Math.max(MENTS_NODE.width, ...branches.map((branch) => branch.width)) + 64;
+	const heights = Array<number>(columns).fill(16);
+	const nodes = branches.flatMap((branch) => {
+		const column = heights.indexOf(Math.min(...heights));
+		const offset = { x: column * columnWidth + 16, y: heights[column] };
+		heights[column] += branch.height + 48;
+		return branch.nodes.map((node) => ({ ...node, x: node.x + offset.x, y: node.y + offset.y }));
+	});
+	return { nodes, branches, width: columns * columnWidth, height: Math.max(...heights), generations: Math.max(0, ...branches.map((branch) => branch.generations)) };
+}
+
 export function mentorLine(people: MentsPerson[], id: string): MentsPerson[] {
 	const byId = new Map(people.map((person) => [person.id, person]));
 	const seen = new Set([id]);

@@ -2,19 +2,22 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { ArrowLeft, Check, CircleAlert, FlaskConical, Send } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { Check, CircleAlert, FlaskConical, Send } from "lucide-react";
+import { AdminIntro } from "@/components/portal/admin-intro";
 import { AudiencePicker, ruleLabel } from "@/components/email/audience-picker";
 import { BlockEditor, type EventOption, type PreviewPerson } from "@/components/email/block-editor";
 import { TaggedField } from "@/components/email/tagged-field";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
-import type { AudienceOptions, AudiencePreview } from "@/db/repositories/email-campaigns";
+import type { AudienceOptions, AudiencePreview, PersonalizationPreview } from "@/db/repositories/email-campaigns";
 import { toLocalInput } from "@/lib/date-slots";
 import type { Audience, EmailBlock, EmailCampaignStatus } from "@/lib/email/types";
+import { usedMergeTags, type MergeOverrides } from "@/lib/email/merge";
 import { cn } from "@/lib/utils";
 import { saveCampaignAction, scheduleCampaignAction, testSendAction } from "./actions";
 import { useAutosave } from "./use-autosave";
+import { Personalization } from "./personalization";
 
 export type ComposerProps = {
 	initial: {
@@ -26,6 +29,7 @@ export type ComposerProps = {
 		preheader: string;
 		blocks: EmailBlock[];
 		audience: Audience;
+		mergeOverrides: MergeOverrides;
 		status: EmailCampaignStatus;
 		scheduledAt: Date | null;
 	};
@@ -50,7 +54,7 @@ function parseAt(at: string): { date: Date | null; label: string } {
 function Step({ n, title, done, summary, children, open, onToggle }: { n: number; title: string; done: boolean; summary: string; children: React.ReactNode; open: boolean; onToggle: () => void }) {
 	return (
 		<section className="rounded-xl border border-border bg-card">
-			<button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full min-w-0 items-center gap-3 p-4 text-left">
+			<button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full min-w-0 items-center gap-3 rounded-xl p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
 				<span
 					className={cn(
 						"grid size-7 shrink-0 place-items-center rounded-full border text-sm tabular-nums transition-colors duration-200",
@@ -90,7 +94,13 @@ export function Composer(props: ComposerProps) {
 	const [preheader, setPreheader] = useState(initial.preheader);
 	const [blocks, setBlocks] = useState(initial.blocks);
 	const [audience, setAudience] = useState(initial.audience);
+	const [mergeOverrides, setMergeOverrides] = useState(initial.mergeOverrides);
+	const tags = useMemo(() => usedMergeTags(`${subject} ${preheader} ${JSON.stringify(blocks)}`), [subject, preheader, blocks]);
 	const [preview, setPreview] = useState<AudiencePreview | null>(null);
+	const [personalization, setPersonalization] = useState<{ key: string; preview: PersonalizationPreview } | null>(null);
+	const personalizationKey = JSON.stringify([audience, categoryId, tags, mergeOverrides]);
+	const personalizationPreview = personalization?.key === personalizationKey ? personalization.preview : null;
+	const onPersonalization = useCallback((preview: PersonalizationPreview) => setPersonalization({ key: personalizationKey, preview }), [personalizationKey]);
 	const [labels, setLabels] = useState(memberLabels);
 	const [timing, setTiming] = useState<"now" | "at">(initial.scheduledAt ? "at" : "now");
 	const [at, setAt] = useState(() => (initial.scheduledAt ? toLocalInput(initial.scheduledAt) : toLocalInput(new Date(Date.now() + 24 * 60 * 60_000)).slice(0, 11) + "09:00"));
@@ -101,8 +111,8 @@ export function Composer(props: ComposerProps) {
 	const sender = senders.find((s) => s.id === senderId) ?? null;
 
 	const value = useMemo(
-		() => ({ templateId, categoryId, senderId, subject, preheader, blocks, audience }),
-		[templateId, categoryId, senderId, subject, preheader, blocks, audience],
+		() => ({ templateId, categoryId, senderId, subject, preheader, blocks, audience, mergeOverrides }),
+		[templateId, categoryId, senderId, subject, preheader, blocks, audience, mergeOverrides],
 	);
 	const save = async (v: typeof value) => {
 		if (lockedRef.current) return true;
@@ -162,7 +172,7 @@ export function Composer(props: ComposerProps) {
 	const onLabel = (memberId: string, name: string) => setLabels((l) => ({ ...l, [memberId]: name }));
 
 	const applyTemplate = (t: ComposerProps["templates"][number]) => {
-		setTemplateId(t.id);
+		setTemplateId(t.id.startsWith("starter:") ? null : t.id);
 		setSubject(t.subject);
 		setPreheader(t.preheader);
 		setBlocks(t.blocks);
@@ -172,7 +182,7 @@ export function Composer(props: ComposerProps) {
 
 	const testSend = () =>
 		startTransition(async () => {
-			const result = await testSendAction({ subject, preheader, blocks, categoryId, senderId });
+			const result = await testSendAction({ subject, preheader, blocks, categoryId, senderId, mergeOverrides });
 			toast({ message: result.ok ? `Test sent to ${result.data.to}.` : result.error });
 		});
 
@@ -199,11 +209,8 @@ export function Composer(props: ComposerProps) {
 
 	return (
 		<div className="grid gap-5 pb-24 lg:pb-0">
-			<div className="flex flex-wrap items-center justify-between gap-3">
-				<Link href="/portal/admin/email" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-					<ArrowLeft className="size-4" aria-hidden />
-					Email
-				</Link>
+			<AdminIntro title={initial.id ? "Edit email" : "New email"} whoFor="Choose a sender, recipients and content, then review before sending" effect="Changes save automatically as a draft" />
+			<div className="flex justify-end">
 				<span aria-live="polite" className="text-sm text-muted-foreground">
 					{saveLabel}
 				</span>
@@ -221,7 +228,7 @@ export function Composer(props: ComposerProps) {
 						<div className="row-enter grid gap-2">
 							<span className="text-sm text-muted-foreground">Start from a template</span>
 							<div className="flex flex-wrap gap-2">
-								{templates.slice(0, 6).map((t) => (
+								{templates.map((t) => (
 									<button key={t.id} type="button" onClick={() => applyTemplate(t)} className="rounded-full border border-border px-3 py-1.5 text-sm transition-colors hover:border-accent">
 										{t.name}
 									</button>
@@ -285,7 +292,11 @@ export function Composer(props: ComposerProps) {
 						<BlockEditor blocks={blocks} onChange={setBlocks} baseUrl={baseUrl} footer={footer} people={people} events={events} layout="compact" />
 					</Step>
 
-					<Step n={5} title="When" done open={open === 5} onToggle={() => toggle(5)} summary={whenLabel}>
+					<Step n={5} title="Personalization" done={!tags.length || personalizationPreview?.missingCount === 0} open={open === 5} onToggle={() => toggle(5)} summary={tags.length ? `${tags.length} merge fields${personalizationPreview ? ` · ${personalizationPreview.missingCount} recipients with missing fields` : " · check recipients"}` : "No merge fields used"}>
+						<Personalization key={JSON.stringify([audience, categoryId])} audience={audience} categoryId={categoryId} tags={tags} overrides={mergeOverrides} onChange={setMergeOverrides} onPreview={onPersonalization} subject={subject} preheader={preheader} blocks={blocks} baseUrl={baseUrl} footer={footer} />
+					</Step>
+
+					<Step n={6} title="When" done open={open === 6} onToggle={() => toggle(6)} summary={whenLabel}>
 						<fieldset className="grid gap-2">
 							<legend className="sr-only">When to send</legend>
 							{(["now", "at"] as const).map((mode) => (
@@ -336,7 +347,7 @@ export function Composer(props: ComposerProps) {
 							<Send />
 							Review and send
 						</Button>
-						{!ready ? <p className="text-xs text-muted-foreground">Finish the steps with an empty circle to send.</p> : null}
+						{!ready ? <p className="text-xs text-muted-foreground">Choose a sender and audience, then add a subject and content to send.</p> : null}
 					</div>
 				</aside>
 			</div>
@@ -346,9 +357,11 @@ export function Composer(props: ComposerProps) {
 					<span className="font-semibold tabular-nums">{preview?.willReceive ?? 0}</span> will receive
 				</span>
 				<Button variant="outline" size="sm" onClick={testSend} disabled={pending || !checks.content}>
+					<FlaskConical />
 					Test
 				</Button>
 				<Button size="sm" onClick={() => dialogRef.current?.showModal()} disabled={!ready || pending}>
+					<Send />
 					Review
 				</Button>
 			</div>
@@ -368,10 +381,11 @@ export function Composer(props: ComposerProps) {
 						].map(([term, detail]) => (
 							<div key={term} className="grid grid-cols-[6rem_minmax(0,1fr)] gap-2">
 								<dt className="text-muted-foreground">{term}</dt>
-								<dd className="min-w-0 break-all sm:break-words">{detail}</dd>
+								<dd className="min-w-0 [overflow-wrap:anywhere]">{detail}</dd>
 							</div>
 						))}
 					</dl>
+					{tags.length ? <div className="grid gap-2 border-y border-border py-3 text-sm"><p>{personalizationPreview ? `${personalizationPreview.total} recipients checked. ${personalizationPreview.missingCount} have missing merge fields and will use the values shown in their preview.` : "Recipient merge fields have not been checked yet."}</p><Button variant="outline" size="sm" className="w-fit" onClick={() => { dialogRef.current?.close(); setOpen(5); }}>Review personalization</Button></div> : null}
 					<div className="flex flex-wrap justify-end gap-2">
 						<Button variant="ghost" onClick={() => dialogRef.current?.close()} disabled={pending || sent}>
 							Keep editing

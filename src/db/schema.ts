@@ -3,6 +3,7 @@ import { check, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex
 import type { EventSignupAnswers, EventSignupField } from "@/lib/event-signup-form";
 import type { PointMilestone } from "@/lib/point-milestones";
 import type { Audience, EmailBlock, EmailCampaignStatus, EmailDeliveryStatus } from "@/lib/email/types";
+import type { MergeOverrides } from "@/lib/email/merge";
 
 export type MemberStatus = "active" | "pending" | "inactive";
 /** The three types seeded by migration 0010; kept for seeding and tests only. Event types are data now - see event_type_rules. */
@@ -68,6 +69,15 @@ export const mentsPeople = sqliteTable(
 		index("ments_people_mentor_idx").on(table.mentorId),
 		check("ments_people_not_self", sql`${table.mentorId} IS NULL OR ${table.mentorId} <> ${table.id}`),
 	],
+);
+
+export const mentsPments = sqliteTable(
+	"ments_pments",
+	{
+		memberId: text("member_id").notNull().references(() => members.id, { onDelete: "cascade" }),
+		personId: text("person_id").notNull().references(() => mentsPeople.id, { onDelete: "cascade" }),
+	},
+	(table) => [primaryKey({ columns: [table.memberId, table.personId] }), index("ments_pments_person_idx").on(table.personId)],
 );
 
 export const accounts = sqliteTable(
@@ -844,6 +854,7 @@ export const emailCampaigns = sqliteTable(
 		preheader: text("preheader").notNull().default(""),
 		blocks: text("blocks", { mode: "json" }).$type<EmailBlock[]>().notNull().default([]),
 		audience: text("audience", { mode: "json" }).$type<Audience>().notNull(),
+		mergeOverrides: text("merge_overrides", { mode: "json" }).$type<MergeOverrides>().notNull().default({}),
 		status: text("status").$type<EmailCampaignStatus>().notNull().default("draft"),
 		scheduledAt: integer("scheduled_at", { mode: "timestamp_ms" }),
 		startedAt: integer("started_at", { mode: "timestamp_ms" }),

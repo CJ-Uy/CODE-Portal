@@ -65,6 +65,17 @@ const campaign = async () => (await db.select().from(emailCampaigns))[0];
 describe("runEmailDispatch", () => {
 	beforeEach(() => seed());
 
+	it("uses recipient corrections in the real sending path and leaves profile data untouched", async () => {
+		await db.update(emailCampaigns).set({ subject: "Hi {{firstname}}", mergeOverrides: { "mem_a@example.com": { first_name: "Ana <&>" } } }).where(eq(emailCampaigns.id, "ecmp_1"));
+		const { sender, sent } = fakeSender();
+		await runEmailDispatch(db, sender, config, NOW);
+		const email = sent.find((m) => m.to === "mem_a@example.com")!;
+		expect(email.subject).toBe("Hi Ana <&>");
+		expect(email.html).toContain("Hello Ana &lt;&amp;&gt;");
+		expect(email.text).toContain("Hello Ana <&>");
+		expect((await db.select().from(schema.members).where(eq(schema.members.id, "mem_a")))[0].fullName).toBe("MEM_A Person");
+	});
+
 	it("claims a due campaign, skips opted-out members, sends, and finishes", async () => {
 		const { sender, sent } = fakeSender();
 		const result = await runEmailDispatch(db, sender, config, NOW);

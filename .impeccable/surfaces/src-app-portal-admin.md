@@ -30,4 +30,4 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 - [Jira role editing](https://mobbin.com/flows/4a50b54b-a720-40d8-962e-16d7ed55fc7f): stable hierarchy across list and editing states.
 - Also inspected Square, Zoho CRM, Google Workspace, Salesforce, Mural, Sketch and Copy.ai through Mobbin previews.
 
-Quality bar: clear headings; breadcrumb current item at every route depth; keyboard-operable disclosure navigation; scoped and feature-gated tool lists; no horizontal page overflow at 390, 1265 and 1440 pixels. No backend or database change is needed.
+Quality bar: clear headings; breadcrumb current item at every route depth; keyboard-operable disclosure navigation; scoped and feature-gated tool lists; no horizontal page overflow at 390, 1265 and 1440 pixels. The expanded Ments and email scope is recorded in `src-app-portal-ments.md` and `src-app-portal-admin-email.md`, including the additive storage changes.

@@ -14,15 +14,15 @@ export default async function MentsPage({ searchParams }: { searchParams: Promis
 	if (!isFeatureEnabled("ments")) notFound();
 	const actor = await requireActor();
 	const repositories = await getRepositories();
-	const people = await repositories.ments.list(actor);
+	const [people, reports] = await Promise.all([repositories.ments.list(actor), repositories.ments.pments(actor)]);
 	const params = await searchParams;
 	return (
 		<div className="grid min-w-0 gap-6">
 			<header className="flex flex-wrap items-start justify-between gap-3">
-				<div><h1 className="font-serif text-3xl">Ments Tree</h1><p className="mt-1 max-w-xl text-muted-foreground">Your ments, their ments, and everyone who follows. Pick a person to explore their line.</p></div>
+				<div><h1 className="font-heading text-3xl sm:text-4xl">Ments Tree</h1><p className="mt-1 max-w-2xl leading-6 text-muted-foreground">One community, generations of connections. Explore every Ments tree and the Pments who help it grow.</p></div>
 				{can(actor, "member:manage") ? <Button asChild variant="outline" size="sm"><Link href="/portal/admin/members/ments"><Settings2 className="size-4" /> Manage tree</Link></Button> : null}
 			</header>
-			<MentsTree people={people} memberId={actor.memberId} initialId={typeof params.person === "string" ? params.person : undefined} />
+			<MentsTree people={people} reports={reports} memberId={actor.memberId} initialId={typeof params.person === "string" ? params.person : undefined} />
 		</div>
 	);
 }

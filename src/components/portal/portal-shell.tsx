@@ -210,7 +210,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 							<Breadcrumb items={[{ label: "Portal", href: "/portal" }, ...crumbFor(pathname)]} />
 						) : (
 							<>
-								<p className="text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">{pageHeading.section}</p>
+								{pathname !== "/portal/ments" ? <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">{pageHeading.section}</p> : null}
 								<p className="truncate font-heading text-xl font-semibold text-foreground">{pageHeading.title}</p>
 							</>
 						)}

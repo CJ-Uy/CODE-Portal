@@ -54,11 +54,13 @@ export default async function EventsAdminPage({ searchParams }: { searchParams: 
 						<Search className="size-4" />
 						Find
 					</Button>
+					{params.q ? <Button asChild variant="ghost"><Link href={`/portal/admin/data/events?termId=${selectedTerm?.id ?? ""}`}>Clear</Link></Button> : null}
 				</form>
 			</div>
 
 			<section className="grid gap-3">
-				{sectionTitle("Events")}
+					{sectionTitle("Events")}
+					<p className="text-sm text-muted-foreground sm:hidden">Swipe the table to see attendance and points.</p>
 				<Card>
 					<CardContent className="overflow-x-auto p-0">
 						<table className="w-full min-w-[760px] text-left text-sm">

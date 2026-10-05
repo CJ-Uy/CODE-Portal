@@ -1,0 +1,1 @@
+ALTER TABLE `email_campaigns` ADD `merge_overrides` text DEFAULT '{}' NOT NULL;

@@ -17,5 +17,8 @@ export function createSharedMentsRepository(): MentsRepository {
 		save: async (_actor, input) => mentsContract.save.output.parse(await request("POST", mentsContract.save.input.parse(input))).person,
 		remove: async (_actor, id) => { mentsContract.remove.output.parse(await request("DELETE", mentsContract.remove.input.parse({ id }))); },
 		import: async (_actor, raw) => mentsContract.import.output.parse(await request("PUT", mentsContract.import.input.parse({ raw }))),
+		pments: async () => mentsContract.pments.output.parse(await request("GET", undefined, "?pments=1")).reports,
+		reportPments: async (_actor, personIds) => { mentsContract.reportPments.output.parse(await request("PATCH", { kind: "report", ...mentsContract.reportPments.input.parse({ personIds }) })); },
+		removePment: async (_actor, memberId, personId) => { mentsContract.removePment.output.parse(await request("PATCH", { kind: "remove", ...mentsContract.removePment.input.parse({ memberId, personId }) })); },
 	};
 }

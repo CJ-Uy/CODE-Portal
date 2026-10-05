@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AdminIntro } from "@/components/portal/admin-intro";
 import { Inbox, LayoutTemplate, PenLine } from "lucide-react";
 import { getRepositories } from "@/db";
 import { SendProgress } from "@/components/email/send-progress";
@@ -6,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { requireActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
 import { emailConfigFromEnv } from "@/server/email/db";
+import { emailStarters } from "@/lib/email/starters";
 import { CampaignRow, formatManila } from "./campaign-row";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +16,7 @@ const MONTHLY_INCLUDED = 3000;
 function Section({ title, empty, children, count }: { title: string; empty: string; children: React.ReactNode; count: number }) {
 	return (
 		<section className="grid gap-2">
-			<h2 className="px-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">{title}</h2>
+			<h2 className="px-3 text-xl font-semibold text-primary">{title}</h2>
 			{count === 0 ? <p className="px-3 text-sm text-muted-foreground">{empty}</p> : <ul className="grid">{children}</ul>}
 		</section>
 	);
@@ -29,17 +31,15 @@ export default async function EmailHomePage() {
 		can(actor, "email:configure") ? email.templates.list(actor) : Promise.resolve([]),
 	]);
 	const config = emailConfigFromEnv();
+	const availableTemplates = [...templates.map((t) => ({ ...t, href: `/portal/admin/email/new?template=${t.id}` })), ...emailStarters(config.publicBaseUrl).map((t) => ({ ...t, href: `/portal/admin/email/new?starter=${t.id}` }))];
 	const monthPct = Math.min((summary.sentThisMonth / MONTHLY_INCLUDED) * 100, 100);
 	const now = new Date();
 	const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 
 	return (
 		<div className="grid gap-6">
-			<header className="flex flex-wrap items-center justify-between gap-3">
-				<div className="min-w-0">
-					<h1 className="font-heading text-3xl">Email</h1>
-					<p className="text-sm text-muted-foreground">Send CODE emails to members and read their replies.</p>
-				</div>
+			<AdminIntro title="Email" whoFor="Manage drafts, scheduled sends and replies" effect="Choose member groups, type an address or paste a recipient list when composing" />
+			<div className="flex flex-wrap justify-end gap-3">
 				<div className="flex flex-wrap gap-2">
 					<Button asChild variant="outline">
 						<Link href="/portal/admin/email/inbox">
@@ -54,7 +54,7 @@ export default async function EmailHomePage() {
 						</Link>
 					</Button>
 				</div>
-			</header>
+			</div>
 
 			<div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
 				<div className="grid content-start gap-6">
@@ -104,19 +104,19 @@ export default async function EmailHomePage() {
 							Resets {formatManila(nextMonth).split(",")[0]}. Today: {summary.sentToday} of {config.dailyCap} allowed.
 						</p>
 					</div>
-					{templates.length > 0 ? (
+					{availableTemplates.length > 0 ? (
 						<div className="grid gap-2 rounded-xl border border-border bg-card p-4">
 							<div className="flex items-center justify-between">
 								<h2 className="text-sm font-semibold">Start from a template</h2>
-								<Link href="/portal/admin/email/templates" className="text-sm text-accent underline-offset-2 hover:underline">
+								<Link href={can(actor, "email:configure") ? "/portal/admin/email/templates" : "/portal/admin/email/new"} className="text-sm text-accent underline-offset-2 hover:underline">
 									All
 								</Link>
 							</div>
 							<ul className="grid gap-1">
-								{templates.slice(0, 4).map((t) => (
+								{availableTemplates.slice(0, 4).map((t) => (
 									<li key={t.id}>
 										<Link
-											href={`/portal/admin/email/new?template=${t.id}`}
+											href={t.href}
 											className="flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-secondary/60"
 										>
 											<LayoutTemplate className="size-4 shrink-0 text-muted-foreground" aria-hidden />

@@ -1,7 +1,7 @@
 import { drizzle } from "drizzle-orm/d1";
 import type { EmailDb } from "@/db/repositories/email-audience";
 import * as schema from "@/db/schema";
-import { getCloudflareEnv } from "@/server/cloudflare";
+import { getCloudflareEnv, getOptionalCloudflareEnv } from "@/server/cloudflare";
 import { emailConfigFrom, type EmailConfig } from "./config";
 import { bindingSender, type EmailSender } from "./sender";
 
@@ -10,7 +10,7 @@ export function emailDbFromEnv(): EmailDb {
 }
 
 export function emailConfigFromEnv(): EmailConfig {
-	return emailConfigFrom(getCloudflareEnv() as unknown as Record<string, unknown>);
+	return emailConfigFrom((getOptionalCloudflareEnv() ?? process.env) as Record<string, unknown>);
 }
 
 export function sendingDepsFromEnv(): { sender: EmailSender; config: EmailConfig } {

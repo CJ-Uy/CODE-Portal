@@ -137,7 +137,7 @@ export type RenderInput = {
 	footer: FooterInput;
 };
 
-export type RenderedEmail = { subject: string; html: string; bodyHtml: string; text: string };
+export type RenderedEmail = { subject: string; preheader: string; html: string; bodyHtml: string; text: string };
 
 function blockText(block: EmailBlock, values: MergeValues, baseUrl: string): string {
 	const merge = (text: string) => replaceTags(text, (tag) => values[tag]);
@@ -183,5 +183,5 @@ export function renderEmail(input: RenderInput): RenderedEmail {
 				.filter(Boolean)
 				.join("\n");
 	const text = [...input.blocks.map((block) => blockText(block, input.values, input.baseUrl)).filter(Boolean), "--", footerText].join("\n\n");
-	return { subject, html, bodyHtml, text };
+	return { subject, preheader, html, bodyHtml, text };
 }

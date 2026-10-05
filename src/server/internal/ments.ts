@@ -22,8 +22,8 @@ export function createMentsInternalHandlers({ db, deployEnv, enabled, allowedOri
 			try {
 				let result;
 				if (request.method === "GET") {
-					const manage = new URL(request.url).searchParams.get("manage") === "1";
-					result = manage
+					const params = new URL(request.url).searchParams;
+					result = params.get("pments") === "1" ? mentsContract.pments.output.parse({ reports: await repository.pments(actor) }) : params.get("manage") === "1"
 						? mentsContract.manage.output.parse({ people: await repository.manage(actor) })
 						: mentsContract.list.output.parse({ people: await repository.list(actor) });
 				} else if (request.method === "POST") {
@@ -31,6 +31,14 @@ export function createMentsInternalHandlers({ db, deployEnv, enabled, allowedOri
 				} else if (request.method === "PUT") {
 					const { raw } = mentsContract.import.input.parse(await request.json());
 					result = mentsContract.import.output.parse(await repository.import(actor, raw));
+				} else if (request.method === "PATCH") {
+					const body = await request.json() as { kind?: string };
+					if (body.kind === "report") await repository.reportPments(actor, mentsContract.reportPments.input.parse(body).personIds);
+					else if (body.kind === "remove") {
+						const input = mentsContract.removePment.input.parse(body);
+						await repository.removePment(actor, input.memberId, input.personId);
+					} else throw new Error("Unknown Pments action.");
+					result = { ok: true };
 				} else if (request.method === "DELETE") {
 					const { id } = mentsContract.remove.input.parse(await request.json());
 					await repository.remove(actor, id);

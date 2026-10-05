@@ -1,12 +1,13 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "@/db/schema";
-import { members, mentsPeople } from "@/db/schema";
-import { mentsContract, mentsInputSchema, type MentsInput, type MentsPerson, type MentsAdminPerson } from "@/db/contract/ments";
+import { members, mentsPeople, mentsPments } from "@/db/schema";
+import { mentsContract, mentsInputSchema, type MentsInput, type MentsPerson, type MentsAdminPerson, type PmentReport } from "@/db/contract/ments";
 import { createId } from "@/lib/ids";
 import { mentorLine, parseMentsPaste } from "@/lib/ments";
 import { can, type Actor } from "@/server/auth/permissions";
 import type { AuditRepository } from "./audit";
+import { runAtomic } from "./links";
 
 export type MentsRepository = {
 	list(actor: Actor): Promise<MentsPerson[]>;
@@ -14,6 +15,9 @@ export type MentsRepository = {
 	save(actor: Actor, input: MentsInput): Promise<MentsPerson>;
 	remove(actor: Actor, id: string): Promise<void>;
 	import(actor: Actor, raw: string): Promise<{ added: number; linked: number }>;
+	pments(actor: Actor): Promise<PmentReport[]>;
+	reportPments(actor: Actor, personIds: string[]): Promise<void>;
+	removePment(actor: Actor, memberId: string, personId: string): Promise<void>;
 };
 
 function requireAdmin(actor: Actor) {
@@ -30,6 +34,30 @@ export function createMentsRepository(db: DrizzleD1Database<typeof schema>, audi
 	});
 	return {
 		list,
+		async pments(actor) {
+			if (!actor.memberId) throw new Error("Authentication required.");
+			return db.select({ memberId: mentsPments.memberId, memberName: sql<string>`coalesce(${members.fullName}, ${members.name}, 'Member')`, personId: mentsPments.personId })
+				.from(mentsPments).innerJoin(members, eq(members.id, mentsPments.memberId)).orderBy(asc(members.name), asc(mentsPments.personId));
+		},
+		async reportPments(actor, rawIds) {
+			if (!actor.memberId) throw new Error("Authentication required.");
+			const { personIds } = mentsContract.reportPments.input.parse({ personIds: rawIds });
+			const people = await list(actor);
+			const ids = [...new Set(personIds)];
+			if (ids.some((id) => !people.some((person) => person.id === id))) throw new Error("A selected Pment is no longer in the tree. Refresh and choose again.");
+			if (ids.some((id) => people.some((person) => person.id === id && person.memberId === actor.memberId))) throw new Error("Choose someone other than yourself.");
+			await runAtomic(db, [
+				db.delete(mentsPments).where(eq(mentsPments.memberId, actor.memberId)),
+				...(ids.length ? [db.insert(mentsPments).values(ids.map((personId) => ({ memberId: actor.memberId, personId })))] : []),
+			]);
+			await record(actor, "ments:pments_report", actor.memberId, `${ids.length} Pments reported`);
+		},
+		async removePment(actor, memberId, personId) {
+			requireAdmin(actor);
+			mentsContract.removePment.input.parse({ memberId, personId });
+			await db.delete(mentsPments).where(and(eq(mentsPments.memberId, memberId), eq(mentsPments.personId, personId)));
+			await record(actor, "ments:pment_remove", memberId, personId);
+		},
 		async manage(actor) {
 			requireAdmin(actor);
 			return db.select({ ...mentsPeopleColumns, memberEmail: members.email }).from(mentsPeople)

@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { ArrowLeft, Copy, Send } from "lucide-react";
+import { Archive, Copy, Save, Send } from "lucide-react";
+import { AdminIntro } from "@/components/portal/admin-intro";
 import { BlockEditor, type EventOption, type PreviewPerson } from "@/components/email/block-editor";
 import { TaggedField } from "@/components/email/tagged-field";
 import { Button } from "@/components/ui/button";
@@ -50,7 +50,7 @@ export function TemplateEditor({
 	}, []);
 
 	const value = useMemo(() => ({ name, categoryId, subject, preheader, blocks }), [name, categoryId, subject, preheader, blocks]);
-	const { state, flush } = useAutosave(value, async (v) => {
+	const save = async (v: typeof value) => {
 		if (!v.name.trim()) {
 			setError("Name the template to save it.");
 			return false;
@@ -68,7 +68,8 @@ export function TemplateEditor({
 			if (mounted.current && window.location.pathname.endsWith("/templates/new")) window.history.replaceState(null, "", `/portal/admin/email/templates/${result.data}`);
 		}
 		return true;
-	});
+	};
+	const { state, flush } = useAutosave(value, save);
 
 	const flushed = async () => {
 		if (await flush(value)) return true;
@@ -83,15 +84,13 @@ export function TemplateEditor({
 
 	return (
 		<div className="grid gap-5">
+			<AdminIntro title={initial.id ? "Edit email template" : "New email template"} whoFor="Create reusable CODE emails" effect="Changes save automatically once the template has a name" />
 			<div className="flex flex-wrap items-center justify-between gap-3">
-				<Link href="/portal/admin/email/templates" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-					<ArrowLeft className="size-4" aria-hidden />
-					Templates
-				</Link>
 				<div className="flex flex-wrap items-center gap-2">
 					<span aria-live="polite" className="text-sm text-muted-foreground">
 						{state === "saving" ? "Saving..." : state === "saved" ? "Saved" : state === "error" ? (error ?? "Not saved") : ""}
 					</span>
+					{!id ? <Button disabled={pending || !name.trim()} onClick={() => startTransition(async () => { if (await flushed() && !idRef.current) await save(value); })}><Save />Save template</Button> : null}
 					{id ? (
 						<>
 							<Button
@@ -121,7 +120,7 @@ export function TemplateEditor({
 									})
 								}
 							>
-								Archive
+								<Archive />Archive
 							</Button>
 							<Button
 								disabled={pending}
@@ -139,6 +138,7 @@ export function TemplateEditor({
 					) : null}
 				</div>
 			</div>
+			{error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
 
 			<div className="grid gap-4 rounded-xl border border-border bg-card p-4 md:grid-cols-2">
 				<label className="grid gap-2 text-sm font-medium">

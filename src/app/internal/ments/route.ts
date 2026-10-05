@@ -10,4 +10,4 @@ async function handle(request: Request) {
 		allowedOrigins: splitAllowedOrigins(config.SHARED_API_ALLOWED_ORIGINS) }).fetch(request);
 }
 
-export { handle as GET, handle as POST, handle as PUT, handle as DELETE, handle as OPTIONS };
+export { handle as GET, handle as POST, handle as PUT, handle as PATCH, handle as DELETE, handle as OPTIONS };

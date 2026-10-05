@@ -75,6 +75,8 @@ export function createEmailMemberRepository(db: EmailDb) {
 					deliveryId: emailDeliveries.id,
 					subject: emailCampaigns.subject,
 					preheader: emailCampaigns.preheader,
+					mergeOverrides: emailCampaigns.mergeOverrides,
+					email: emailDeliveries.email,
 					categoryName: emailCategories.name,
 					senderName: emailSenders.displayName,
 					sentAt: emailDeliveries.sentAt,
@@ -88,9 +90,11 @@ export function createEmailMemberRepository(db: EmailDb) {
 				.orderBy(desc(emailDeliveries.sentAt))
 				.limit(200);
 			const [member] = await db.select().from(members).where(eq(members.id, actor.memberId)).limit(1);
-			const values = mergeValuesFor(member ?? { email: "", name: null, fullName: null, nickname: null, batch: null });
-			const merge = (text: string) => replaceTags(text, (tag) => values[tag]);
-			return rows.map((r) => ({ ...r, subject: merge(r.subject), preheader: merge(r.preheader) }));
+			return rows.map(({ mergeOverrides, email, ...r }) => {
+				const values = mergeValuesFor({ ...(member ?? { name: null, fullName: null, nickname: null, batch: null }), email }, mergeOverrides);
+				const merge = (text: string) => replaceTags(text, (tag) => values[tag]);
+				return { ...r, subject: merge(r.subject), preheader: merge(r.preheader) };
+			});
 		},
 
 		async unreadCount(actor: Actor): Promise<number> {
@@ -113,7 +117,7 @@ export function createEmailMemberRepository(db: EmailDb) {
 			if (!row) return null;
 			if (!row.delivery.readAt) await db.update(emailDeliveries).set({ readAt: new Date() }).where(eq(emailDeliveries.id, deliveryId));
 			const [member] = await db.select().from(members).where(eq(members.id, actor.memberId)).limit(1);
-			const values = mergeValuesFor(member ?? { email: row.delivery.email, name: null, fullName: null, nickname: null, batch: null });
+			const values = mergeValuesFor({ ...(member ?? { name: null, fullName: null, nickname: null, batch: null }), email: row.delivery.email }, row.campaign.mergeOverrides);
 			const categoryName = row.category?.name ?? "CODE";
 			const rendered = renderEmail({
 				subject: row.campaign.subject,

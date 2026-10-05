@@ -1,7 +1,8 @@
 import { and, asc, desc, eq, exists, gte, inArray, isNull, like, or, sql } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import { crsEvents, emailCampaigns, emailCategories, emailDeliveries, emailOptouts, emailSenders, members, roles, terms } from "@/db/schema";
-import { audienceSchema, emailContentSchema } from "@/lib/email/blocks";
+import { audienceSchema, emailContentSchema, mergeOverridesSchema } from "@/lib/email/blocks";
+import { mergeValuesFor, missingMergeTags, type MergeOverrides, type MergeTag, type MergeValues } from "@/lib/email/merge";
 import { startOfUtc8Day } from "@/lib/date-slots";
 import { createId } from "@/lib/ids";
 import type { Audience, EmailBlock, EmailDeliveryStatus } from "@/lib/email/types";
@@ -20,6 +21,15 @@ export type CampaignInput = {
 	preheader: string;
 	blocks: EmailBlock[];
 	audience: Audience;
+	mergeOverrides?: MergeOverrides;
+};
+export type PersonalizationInput = { audience: Audience; categoryId: string | null; tags: MergeTag[]; overrides: MergeOverrides; q?: string; missingOnly?: boolean; page?: number };
+export type PersonalizationPreview = {
+	total: number;
+	missingCount: number;
+	filtered: number;
+	page: number;
+	rows: { email: string; name: string; external: boolean; values: MergeValues; sourceValues: MergeValues; missing: MergeTag[] }[];
 };
 export type AudiencePreview = {
 	matched: number;
@@ -114,7 +124,8 @@ export function createEmailCampaignsRepository(db: EmailDb, audit: AuditReposito
 			assertEmail(actor, "email:send");
 			const content = emailContentSchema.parse({ subject: input.subject, preheader: input.preheader, blocks: input.blocks });
 			const audience = audienceSchema.parse(input.audience);
-			const values = { templateId: input.templateId, categoryId: input.categoryId, senderId: input.senderId, ...content, audience, updatedAt: new Date() };
+			const mergeOverrides = mergeOverridesSchema.parse(input.mergeOverrides ?? {});
+			const values = { templateId: input.templateId, categoryId: input.categoryId, senderId: input.senderId, ...content, audience, mergeOverrides, updatedAt: new Date() };
 			const missingRef = (error: unknown): never => {
 				const cause = (error as { cause?: unknown })?.cause;
 				if (/FOREIGN KEY/i.test(`${error} ${cause}`)) throw new Error("That template, category, or sender no longer exists.");
@@ -232,6 +243,7 @@ export function createEmailCampaignsRepository(db: EmailDb, audit: AuditReposito
 					preheader: source.preheader,
 					blocks: source.blocks,
 					audience: source.audience,
+					mergeOverrides: source.mergeOverrides,
 					createdBy: actor.memberId,
 				})
 				.returning();
@@ -254,6 +266,20 @@ export function createEmailCampaignsRepository(db: EmailDb, audit: AuditReposito
 				outside: outside.slice(0, 100),
 				outsideCount: outside.length,
 			};
+		},
+
+		async previewPersonalization(actor: Actor, input: PersonalizationInput): Promise<PersonalizationPreview> {
+			assertEmail(actor, "email:send");
+			const overrides = mergeOverridesSchema.parse(input.overrides);
+			const [recipients, optedOut] = await Promise.all([resolveAudience(db, audienceSchema.parse(input.audience), new Date()), optedOutIds(input.categoryId)]);
+			const rows = recipients.filter((r) => !r.memberId || !optedOut.has(r.memberId)).map((r) => ({
+				email: r.email, name: memberDisplayName(r), external: r.external,
+				values: mergeValuesFor(r, overrides), sourceValues: mergeValuesFor(r), missing: missingMergeTags(r, input.tags, overrides),
+			}));
+			const q = input.q?.trim().toLowerCase() ?? "";
+			const filtered = rows.filter((r) => (!input.missingOnly || r.missing.length > 0) && `${r.name} ${r.email}`.toLowerCase().includes(q));
+			const page = Math.max(0, Math.min(Math.floor(input.page ?? 0), Math.max(0, Math.ceil(filtered.length / 25) - 1)));
+			return { total: rows.length, missingCount: rows.filter((r) => r.missing.length > 0).length, filtered: filtered.length, page, rows: filtered.slice(page * 25, (page + 1) * 25) };
 		},
 
 		async audienceOptions(actor: Actor, now = new Date()): Promise<AudienceOptions> {

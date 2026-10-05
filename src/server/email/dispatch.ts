@@ -179,7 +179,7 @@ async function drain(db: EmailDb, sender: EmailSender, config: EmailConfig, now:
 			await fail("Member no longer exists", true);
 			continue;
 		}
-		const values = mergeValuesFor(member ?? { email: delivery.email, name: null, fullName: null, nickname: null, batch: null });
+		const values = mergeValuesFor({ ...(member ?? { name: null, fullName: null, nickname: null, batch: null }), email: delivery.email }, entry.campaign.mergeOverrides);
 		const links = !member || entry.category.required ? null : await unsubscribeLinks(config, member.id, entry.category.id);
 		const rendered = renderEmail({
 			subject: entry.campaign.subject,

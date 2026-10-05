@@ -60,7 +60,7 @@ export const adminGroups: AdminGroup[] = [
 			feature: "email",
 			href: "/portal/admin/email",
 		},
-		{ segment: "new", label: "New email", description: "Write an email and send it to members.", permission: "email:send", feature: "email" },
+		{ segment: "new", label: "New email", description: "Write to member groups or specific email addresses.", permission: "email:send", feature: "email" },
 		{ segment: "inbox", label: "Replies", description: "Member replies to CODE emails.", permission: "email:send", feature: "email" },
 		{ segment: "templates", label: "Templates", description: "Reusable CODE email designs.", permission: "email:configure", feature: "email" },
 		{

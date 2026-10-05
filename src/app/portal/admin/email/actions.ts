@@ -3,12 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getRepositories } from "@/db";
-import type { CampaignInput } from "@/db/repositories/email-campaigns";
+import type { CampaignInput, PersonalizationInput } from "@/db/repositories/email-campaigns";
 import type { TemplateInput } from "@/db/repositories/email-templates";
 import { fromLocalInput } from "@/lib/date-slots";
 import { runAction } from "@/lib/email/action-result";
-import { emailContentSchema } from "@/lib/email/blocks";
-import { mergeValuesFor } from "@/lib/email/merge";
+import { audienceSchema, emailContentSchema, mergeOverridesSchema } from "@/lib/email/blocks";
+import { MERGE_TAGS, mergeValuesFor, type MergeOverrides } from "@/lib/email/merge";
 import { renderEmail, valueResolver } from "@/lib/email/render";
 import type { Audience, EmailBlock } from "@/lib/email/types";
 import { requireActor } from "@/server/auth/actor";
@@ -134,7 +134,18 @@ export async function searchMembersAction(query: string) {
 	});
 }
 
-export async function testSendAction(input: { subject: string; preheader: string; blocks: EmailBlock[]; categoryId: string | null; senderId: string | null }) {
+export async function previewPersonalizationAction(input: PersonalizationInput) {
+	return runAction(async () => {
+		const { actor, email } = await context();
+		const parsed = z.object({
+			audience: audienceSchema, categoryId: idSchema.nullable(), tags: z.array(z.enum(MERGE_TAGS)).max(5),
+			overrides: mergeOverridesSchema, q: z.string().max(80).optional(), missingOnly: z.boolean().optional(), page: z.number().int().min(0).max(10000).optional(),
+		}).parse(input);
+		return email.campaigns.previewPersonalization(actor, parsed);
+	});
+}
+
+export async function testSendAction(input: { subject: string; preheader: string; blocks: EmailBlock[]; categoryId: string | null; senderId: string | null; mergeOverrides?: MergeOverrides }) {
 	return runAction(async () => {
 		const { actor, repos, email } = await context();
 		const content = emailContentSchema.parse({ subject: input.subject, preheader: input.preheader, blocks: input.blocks });
@@ -148,7 +159,7 @@ export async function testSendAction(input: { subject: string; preheader: string
 		if (!me) throw new Error("Your member profile was not found.");
 		const category = categories.find((c) => c.id === input.categoryId);
 		const { sender, config } = sendingDepsFromEnv();
-		const values = mergeValuesFor(me);
+		const values = mergeValuesFor(me, mergeOverridesSchema.parse(input.mergeOverrides ?? {}));
 		const rendered = renderEmail({
 			...content,
 			resolve: valueResolver(values),
