@@ -238,7 +238,7 @@ export function Composer(props: ComposerProps) {
 					) : null}
 
 					<Step n={1} title="Sender and category" done={checks.sender} open={open === 1} onToggle={() => toggle(1)} summary={sender && category ? `${sender.displayName} · ${category.name}` : "Not set"}>
-						<div className="grid gap-4 sm:grid-cols-2">
+						<div className="grid items-start gap-4 sm:grid-cols-2">
 							<label className="grid gap-2 text-sm font-medium">
 								Category
 								<select value={categoryId ?? ""} onChange={(e) => setCategoryId(e.target.value || null)} className="h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm">
