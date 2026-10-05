@@ -11,7 +11,8 @@ export function AdminNavigation({ groups, pathname, mobile = false, onNavigate }
 	mobile?: boolean;
 	onNavigate?: () => void;
 }) {
-	const currentGroup = crumbFor(pathname)[1]?.label;
+	const trail = crumbFor(pathname);
+	const currentGroup = trail[1]?.label;
 	const linkClass = (active: boolean) => cn(
 		"flex min-h-10 items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
 		mobile ? (active ? "bg-secondary font-semibold text-primary" : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground")
@@ -34,7 +35,8 @@ export function AdminNavigation({ groups, pathname, mobile = false, onNavigate }
 						<div className="ml-5 grid gap-0.5 border-l border-current/15 pl-2 pt-1">
 							{!group.pages.some((page) => page.href === group.href) ? <Link href={group.href} onClick={onNavigate} aria-current={pathname === group.href ? "page" : undefined} className={linkClass(pathname === group.href)}>Section overview</Link> : null}
 							{group.pages.map((page) => {
-								const active = pathname === page.href || (page.href !== group.href && (pathname.startsWith(`${page.href}/`) || crumbFor(pathname).some((crumb) => crumb.href === page.href)));
+								const specificPage = group.pages.some((item) => item.href !== group.href && (pathname === item.href || pathname.startsWith(`${item.href}/`)));
+								const active = pathname === page.href || (trail.some((crumb) => crumb.href === page.href) && (page.href !== group.href || !specificPage));
 								return <Link key={page.href} href={page.href} aria-current={active ? "page" : undefined} onClick={onNavigate} className={linkClass(active)}>{page.label}</Link>;
 							})}
 						</div>

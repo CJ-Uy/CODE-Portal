@@ -1,10 +1,10 @@
 import Link from "next/link";
+import { AdminIntro } from "@/components/portal/admin-intro";
 import { notFound, redirect } from "next/navigation";
 import { Plus } from "lucide-react";
 import { getRepositories } from "@/db";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,14 +30,12 @@ export default async function AdminSurveysPage() {
 	const surveys = await repositories.surveys.list(actor, { limit: 50 }).catch(() => []);
 
 	return (
-		<main className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-6">
+		<div>
 			<div className="grid gap-6">
-				<Card>
-					<CardHeader>
-						<CardTitle className="text-3xl">Surveys</CardTitle>
-						<CardDescription>Create a survey, then draw a random sample to start collecting responses.</CardDescription>
-					</CardHeader>
-					<CardContent>
+				<AdminIntro title="Surveys" whoFor="Create a survey, then draw a random sample to collect responses" />
+				<details className="rounded-xl border border-border/60 bg-card">
+					<summary className="cursor-pointer rounded-xl px-5 py-4 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">New survey</summary>
+					<div className="border-t border-border/50 p-5">
 						<form action={createSurveyAction} className="grid gap-4">
 							<label className="grid gap-2 text-sm font-medium">
 								Title
@@ -62,31 +60,29 @@ export default async function AdminSurveysPage() {
 								</Button>
 							</div>
 						</form>
-					</CardContent>
-				</Card>
+					</div>
+				</details>
 
-				<Card>
-					<CardHeader>
-						<CardTitle>Existing surveys</CardTitle>
-					</CardHeader>
-					<CardContent className="grid gap-3">
+				<section aria-labelledby="existing-surveys" className="grid gap-3">
+					<h2 id="existing-surveys" className="text-xl font-semibold text-primary">Existing surveys</h2>
+					<div className="divide-y divide-border/50 rounded-xl border border-border/60 bg-card">
 						{surveys.length === 0 ? (
-							<p className="text-sm text-muted-foreground">No surveys yet.</p>
+							<p className="px-4 py-5 text-sm text-muted-foreground">No surveys yet.</p>
 						) : (
 							surveys.map((survey) => (
 								<Link
 									key={survey.id}
 									href={`/portal/admin/content/surveys/${survey.id}`}
-									className="flex items-center justify-between rounded-md border border-border px-4 py-3 text-sm hover:bg-accent"
+									className="flex items-center justify-between gap-3 rounded-xl px-4 py-4 text-sm hover:bg-secondary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
 								>
 									<span className="font-medium">{survey.title}</span>
 									<Badge variant="outline">{survey.status}</Badge>
 								</Link>
 							))
 						)}
-					</CardContent>
-				</Card>
+					</div>
+				</section>
 			</div>
-		</main>
+		</div>
 	);
 }

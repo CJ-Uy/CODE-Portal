@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { AdminIntro } from "@/components/portal/admin-intro";
 import { getRepositories } from "@/db";
 import { requireActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
@@ -13,5 +14,5 @@ export default async function NavPinsAdminPage() {
 	// nav pins has no shared-dev internal proxy yet; degrade to an empty list instead of crashing.
 	const pins = await repositories.navPins.list(actor).catch(() => []);
 
-	return <NavPinsManager key={pins.map((pin) => `${pin.id}:${pin.position}`).join("|")} pins={pins} />;
+	return <div className="grid gap-6"><AdminIntro title="Sidebar pins" whoFor="Choose the links members see in their sidebar" /><NavPinsManager key={pins.map((pin) => `${pin.id}:${pin.position}`).join("|")} pins={pins} /></div>;
 }

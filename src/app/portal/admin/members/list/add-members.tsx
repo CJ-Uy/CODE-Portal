@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, LoaderCircle } from "lucide-react";
+import { Check, LoaderCircle, UserPlus, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useState, useTransition } from "react";
@@ -53,16 +53,18 @@ export function AddMembers() {
 	return (
 		<div className="grid gap-3">
 			<div className="flex flex-wrap items-center gap-2">
-				<Button type="button" size="sm" variant={!bulk ? "default" : "outline"} onClick={() => setBulk(false)}>
+				<Button type="button" variant={!bulk ? "default" : "outline"} aria-pressed={!bulk} onClick={() => setBulk(false)}>
+					<UserPlus className="size-4" />
 					Add one
 				</Button>
-				<Button type="button" size="sm" variant={bulk ? "default" : "outline"} onClick={() => setBulk(true)}>
+				<Button type="button" variant={bulk ? "default" : "outline"} aria-pressed={bulk} onClick={() => setBulk(true)}>
+					<Users className="size-4" />
 					Add bulk
 				</Button>
 			</div>
 
 			{bulk ? (
-				<div className="grid gap-2 rounded-lg border border-dashed border-border p-3">
+				<div className="grid max-w-2xl gap-3">
 					<label className="text-sm font-medium" htmlFor="bulk-emails">
 						Paste a column of emails
 					</label>
@@ -78,6 +80,7 @@ export function AddMembers() {
 							{preview.valid.length} valid, {preview.dedupedInput} duplicate, {preview.invalid.length} invalid
 						</span>
 						<Button type="button" size="sm" onClick={submitBulk} disabled={pending || preview.valid.length === 0 || overCap}>
+							<Users className="size-4" />
 							Add {preview.valid.length}
 						</Button>
 						{overCap ? <span className="text-destructive">Max 500 emails per batch.</span> : null}
@@ -94,6 +97,7 @@ export function AddMembers() {
 				<form onSubmit={submitOne} className="flex flex-wrap items-center gap-2">
 					<Input
 						name="email"
+						aria-label="New member email"
 						type="email"
 						value={email}
 						onChange={(event) => {

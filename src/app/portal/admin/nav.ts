@@ -39,7 +39,7 @@ export const adminGroups: AdminGroup[] = [
 		},
 	]),
 	G("content", "Content", [
-		{ segment: "announcements", label: "Announcements", description: "Publish and schedule updates for members.", permission: "announcement:manage", feature: "announcements" },
+		{ segment: "announcements", label: "Announcements", description: "Publish updates for the member feed.", permission: "announcement:manage", feature: "announcements" },
 		{ segment: "library", label: "Library", description: "Manage articles, case studies and resource access.", permission: "library:manage", feature: "library" },
 		{ segment: "surveys", label: "Surveys", description: "Create questions and select survey participants.", permission: "survey:configure", feature: "surveys" },
 		{
