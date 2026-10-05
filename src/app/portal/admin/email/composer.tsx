@@ -142,10 +142,11 @@ export function Composer(props: ComposerProps) {
 	const ready = checks.sender && checks.audience && checks.subject && checks.content && whenOk;
 	const labelOf = (r: Audience["include"][number]) => ruleLabel(r, options, labels);
 	const audienceSummary = audience.include.length ? audience.include.map(labelOf).join(", ") : "No one yet";
-	const everyGroup = audience.match === "all" && audience.include.filter((r) => r.kind !== "member").length > 1;
+	const everyGroup = audience.match === "all" && audience.include.filter((r) => r.kind !== "member" && r.kind !== "emails").length > 1;
+	const outsideCount = preview?.outsideCount ?? 0;
 	const toLine = `${audienceSummary}${everyGroup ? " (matching every group)" : ""}${audience.exclude.length ? `. Except: ${audience.exclude.map(labelOf).join(", ")}` : ""}`;
 	const whenLabel = timing === "now" ? "Now (you have 2 minutes to undo)" : when.date ? `${when.label} Manila time` : when.label;
-	const primaryLabel = timing === "now" ? `Send to ${preview?.willReceive ?? 0} members` : when.date ? `Schedule for ${when.label}` : when.label;
+	const primaryLabel = timing === "now" ? `Send to ${preview?.willReceive ?? 0} ${outsideCount > 0 ? "people" : "members"}` : when.date ? `Schedule for ${when.label}` : when.label;
 
 	const footer = useMemo(
 		() => ({
@@ -317,7 +318,7 @@ export function Composer(props: ComposerProps) {
 						<dl className="grid gap-2 text-sm">
 							{[
 								["From", sender ? sender.displayName : "Not set"],
-								["To", preview ? `${preview.willReceive} members` : "No one yet"],
+								["To", preview ? `${preview.willReceive} ${outsideCount > 0 ? "people" : "members"}` : "No one yet"],
 								["Category", category ? `${category.name}${category.required ? " (required)" : ""}` : "Not set"],
 								["When", timing === "now" ? "Now" : when.label],
 							].map(([term, detail]) => (
@@ -361,6 +362,7 @@ export function Composer(props: ComposerProps) {
 							["Category", category ? `${category.name} (${category.required ? "required, reaches everyone" : "optional"})` : ""],
 							["To", toLine],
 							["Recipients", `${preview?.willReceive ?? 0}${preview?.optedOut.length ? ` (${preview.optedOut.length} opted out are skipped)` : ""}`],
+							...(outsideCount > 0 ? [["Outside CODE", `${outsideCount} ${outsideCount === 1 ? "address gets" : "addresses get"} no archive or unsubscribe link`]] : []),
 							["Subject", subject],
 							["When", whenLabel],
 						].map(([term, detail]) => (

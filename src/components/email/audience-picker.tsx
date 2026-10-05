@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { ChevronDown, Users, X } from "lucide-react";
+import { ChevronDown, ClipboardList, Users, X } from "lucide-react";
+import { z } from "zod";
 import type { AudienceOptions, AudiencePreview } from "@/db/repositories/email-campaigns";
 import type { Audience, AudienceRule } from "@/lib/email/types";
+import { parseEmailColumn } from "@/lib/roster-emails";
 import { cn } from "@/lib/utils";
 import { previewAudienceAction, searchMembersAction } from "@/app/portal/admin/email/actions";
 
@@ -11,6 +13,9 @@ type Suggestion = { rule: AudienceRule; label: string; hint: string };
 const keyOf = (rule: AudienceRule) => JSON.stringify(rule);
 const DATE = new Intl.DateTimeFormat("en", { timeZone: "Asia/Manila", month: "short", day: "numeric" });
 const RELATION = { rsvp: "RSVP'd to", attended: "Attended", no_show: "RSVP'd but missed" } as const;
+const emailSchema = z.string().email();
+// Matches the server's per-rule cap in audienceSchema.
+const MAX_PASTED = 1000;
 
 export function ruleLabel(rule: AudienceRule, options: AudienceOptions, memberLabels: Record<string, string>): string {
 	switch (rule.kind) {
@@ -26,7 +31,56 @@ export function ruleLabel(rule: AudienceRule, options: AudienceOptions, memberLa
 			return `${RELATION[rule.relation]} ${options.events.find((e) => e.id === rule.eventId)?.title ?? "an event"}`;
 		case "member":
 			return memberLabels[rule.memberId] ?? "A member";
+		case "emails":
+			return rule.emails.length === 1 ? rule.emails[0] : `${rule.emails.length} pasted addresses`;
 	}
+}
+
+function PasteList({ onAdd, onClose }: { onAdd: (emails: string[]) => void; onClose: () => void }) {
+	const [raw, setRaw] = useState("");
+	const parsed = useMemo(() => parseEmailColumn(raw), [raw]);
+	const n = parsed.valid.length;
+	const tooMany = n > MAX_PASTED;
+	return (
+		<div className="row-enter grid gap-2 rounded-lg border border-border p-3">
+			<textarea
+				value={raw}
+				onChange={(e) => setRaw(e.target.value)}
+				rows={4}
+				autoFocus
+				aria-label="Email addresses, one per line or separated by commas"
+				placeholder="One address per line, or separated by commas"
+				className="w-full min-w-0 resize-y rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+			/>
+			<p className="text-sm text-muted-foreground" aria-live="polite">
+				{n} {n === 1 ? "address" : "addresses"} found · {parsed.invalid.length} invalid
+				{tooMany ? `. Paste at most ${MAX_PASTED} at a time.` : ""}
+			</p>
+			{parsed.invalid.length > 0 ? (
+				<ul className="grid gap-0.5 text-sm text-destructive">
+					{parsed.invalid.slice(0, 10).map((token, i) => (
+						<li key={`${token}-${i}`} className="min-w-0 break-all">
+							{token}
+						</li>
+					))}
+					{parsed.invalid.length > 10 ? <li className="text-muted-foreground">and {parsed.invalid.length - 10} more</li> : null}
+				</ul>
+			) : null}
+			<div className="flex flex-wrap justify-end gap-2">
+				<button type="button" onClick={onClose} className="rounded-md px-3 py-1.5 text-sm hover:bg-secondary">
+					Cancel
+				</button>
+				<button
+					type="button"
+					disabled={n === 0 || tooMany}
+					onClick={() => onAdd(parsed.valid)}
+					className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50"
+				>
+					Add {n} {n === 1 ? "address" : "addresses"}
+				</button>
+			</div>
+		</div>
+	);
 }
 
 function baseSuggestions(options: AudienceOptions): Suggestion[] {
@@ -66,6 +120,8 @@ function TokenField({
 	const [open, setOpen] = useState(false);
 	const [active, setActive] = useState(0);
 	const [found, setFound] = useState<{ q: string; list: Suggestion[] }>({ q: "", list: [] });
+	const [pasting, setPasting] = useState(false);
+	const [openList, setOpenList] = useState<string | null>(null);
 	const base = useMemo(() => baseSuggestions(options), [options]);
 	const chosen = new Set(rules.map(keyOf));
 
@@ -86,26 +142,49 @@ function TokenField({
 	}, [query]);
 
 	const q = query.trim().toLowerCase();
-	const matches = (q ? [...base.filter((s) => s.label.toLowerCase().includes(q)), ...(found.q === query.trim() ? found.list : [])] : base.slice(0, 12)).filter((s) => !chosen.has(keyOf(s.rule))).slice(0, 10);
+	const typed: Suggestion | null = emailSchema.safeParse(q).success ? { rule: { kind: "emails", emails: [q] }, label: `Add ${q}`, hint: "Email address" } : null;
+	const matches = (
+		q ? [...(typed ? [typed] : []), ...base.filter((s) => s.label.toLowerCase().includes(q)), ...(found.q === query.trim() ? found.list : [])] : base.slice(0, 12)
+	)
+		.filter((s) => !chosen.has(keyOf(s.rule)))
+		.slice(0, 10);
 
 	const add = (s: Suggestion) => {
 		if (s.rule.kind === "member") onLabel(s.rule.memberId, s.label);
-		onChange([...rules, s.rule]);
+		if (!chosen.has(keyOf(s.rule))) onChange([...rules, s.rule]);
 		setQuery("");
 		setActive(0);
 		inputRef.current?.focus();
 	};
+	// A valid typed address still adds on Enter when nothing is highlighted.
+	const enterPick = matches[active] ?? typed;
+	const listed = rules.find((rule) => rule.kind === "emails" && keyOf(rule) === openList);
 
 	return (
-		<div className="relative grid gap-2">
+		<div className="grid gap-2">
 			<span className="text-sm font-medium">{label}</span>
 			<div
-				className="flex min-h-10 flex-wrap items-center gap-1.5 rounded-lg border border-input bg-background p-1.5 focus-within:ring-2 focus-within:ring-ring"
+				className="relative flex min-h-10 flex-wrap items-center gap-1.5 rounded-lg border border-input bg-background p-1.5 focus-within:ring-2 focus-within:ring-ring"
 				onClick={() => inputRef.current?.focus()}
 			>
 				{rules.map((rule) => (
 					<span key={keyOf(rule)} className="row-enter inline-flex min-w-0 max-w-full items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-sm text-secondary-foreground">
-						<span className="min-w-0 break-all">{ruleLabel(rule, options, memberLabels)}</span>
+						{rule.kind === "emails" && rule.emails.length > 1 ? (
+							<button
+								type="button"
+								aria-expanded={openList === keyOf(rule)}
+								onClick={(e) => {
+									e.stopPropagation();
+									setOpenList(openList === keyOf(rule) ? null : keyOf(rule));
+								}}
+								className="inline-flex min-w-0 items-center gap-1 break-all text-left underline-offset-2 hover:underline"
+							>
+								{ruleLabel(rule, options, memberLabels)}
+								<ChevronDown className={cn("size-3.5 shrink-0 transition-transform", openList === keyOf(rule) && "rotate-180")} aria-hidden />
+							</button>
+						) : (
+							<span className="min-w-0 break-all">{ruleLabel(rule, options, memberLabels)}</span>
+						)}
 						<button
 							type="button"
 							aria-label={`Remove ${ruleLabel(rule, options, memberLabels)}`}
@@ -137,37 +216,65 @@ function TokenField({
 						} else if (e.key === "ArrowUp") {
 							e.preventDefault();
 							setActive((i) => Math.max(i - 1, 0));
-						} else if (e.key === "Enter" && matches[active]) {
+						} else if (e.key === "Enter" && enterPick) {
 							e.preventDefault();
-							add(matches[active]);
+							add(enterPick);
 						} else if (e.key === "Backspace" && !query && rules.length > 0) {
 							onChange(rules.slice(0, -1));
 						} else if (e.key === "Escape") {
 							setOpen(false);
 						}
 					}}
-					placeholder={rules.length ? "Add more" : "Search groups, events, or members"}
+					placeholder={rules.length ? "Add more" : "Search groups, events, members, or type an email"}
 					className="min-w-40 flex-1 bg-transparent px-1 py-1 text-sm outline-none"
 				/>
+				{open && matches.length > 0 ? (
+					<ul
+						id={listId}
+						role="listbox"
+						className="toast-enter absolute inset-x-0 top-full z-20 mt-1 grid max-h-72 w-full overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg"
+					>
+						{matches.map((s, i) => (
+							<li key={keyOf(s.rule)} role="option" aria-selected={i === active}>
+								<button
+									type="button"
+									onMouseDown={(e) => e.preventDefault()}
+									onClick={() => add(s)}
+									onMouseEnter={() => setActive(i)}
+									className={cn("flex w-full min-w-0 items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left text-sm", i === active && "bg-secondary")}
+								>
+									<span className="min-w-0 truncate">{s.label}</span>
+									<span className="min-w-0 truncate text-xs text-muted-foreground">{s.hint}</span>
+								</button>
+							</li>
+						))}
+					</ul>
+				) : null}
 			</div>
-			{open && matches.length > 0 ? (
-				<ul id={listId} role="listbox" className="toast-enter absolute top-full z-20 mt-1 grid max-h-72 w-full overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg">
-					{matches.map((s, i) => (
-						<li key={keyOf(s.rule)} role="option" aria-selected={i === active}>
-							<button
-								type="button"
-								onMouseDown={(e) => e.preventDefault()}
-								onClick={() => add(s)}
-								onMouseEnter={() => setActive(i)}
-								className={cn("flex w-full min-w-0 items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left text-sm", i === active && "bg-secondary")}
-							>
-								<span className="min-w-0 truncate">{s.label}</span>
-								<span className="min-w-0 truncate text-xs text-muted-foreground">{s.hint}</span>
-							</button>
+			{listed?.kind === "emails" ? (
+				<ul aria-label="Pasted addresses" className="row-enter grid max-h-40 gap-0.5 overflow-y-auto rounded-lg border border-border p-2 text-sm">
+					{listed.emails.map((email) => (
+						<li key={email} className="min-w-0 break-all">
+							{email}
 						</li>
 					))}
 				</ul>
 			) : null}
+			{pasting ? (
+				<PasteList
+					onClose={() => setPasting(false)}
+					onAdd={(emails) => {
+						const rule: AudienceRule = { kind: "emails", emails };
+						if (!chosen.has(keyOf(rule))) onChange([...rules, rule]);
+						setPasting(false);
+					}}
+				/>
+			) : (
+				<button type="button" onClick={() => setPasting(true)} className="inline-flex items-center gap-1.5 justify-self-start text-sm text-accent underline-offset-2 hover:underline">
+					<ClipboardList className="size-3.5" aria-hidden />
+					Paste a list
+				</button>
+			)}
 		</div>
 	);
 }
@@ -194,13 +301,14 @@ export function AudiencePicker({
 	const [result, setResult] = useState<{ audience: Audience; categoryId: string | null; preview: AudiencePreview | null } | null>(null);
 	const [attempt, setAttempt] = useState(0);
 	const [showExclude, setShowExclude] = useState(value.exclude.length > 0);
-	const [expanded, setExpanded] = useState<"recipients" | "optedOut" | null>(null);
+	const [expanded, setExpanded] = useState<"recipients" | "optedOut" | "outside" | null>(null);
 	const empty = value.include.length === 0;
 	// Only a result for the current inputs counts; anything older is stale. Derived so the effect needs no setState before its timer.
 	const current = !empty && result?.audience === value && result.categoryId === categoryId ? result : null;
 	const loading = !empty && !current;
 	const failed = current !== null && current.preview === null;
 	const shownPreview = current?.preview ?? null;
+	const membersReceiving = shownPreview ? shownPreview.willReceive - shownPreview.outsideCount : 0;
 
 	useEffect(() => {
 		onPreview(null); // the old count no longer describes this audience
@@ -225,7 +333,7 @@ export function AudiencePicker({
 		<div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
 			<div className="grid content-start gap-3">
 				<TokenField label="Send to" rules={value.include} onChange={(include) => onChange({ ...value, include })} options={options} memberLabels={labels} onLabel={onLabel} />
-				{value.include.filter((r) => r.kind !== "member").length > 1 ? (
+				{value.include.filter((r) => r.kind !== "member" && r.kind !== "emails").length > 1 ? (
 					<div className="flex flex-wrap items-center gap-2 text-sm">
 						<span className="text-muted-foreground">Members who match</span>
 						{(["any", "all"] as const).map((match) => (
@@ -239,7 +347,7 @@ export function AudiencePicker({
 								{match === "any" ? "any group" : "every group"}
 							</button>
 						))}
-						<span className="text-muted-foreground">Hand-picked members are always included.</span>
+						<span className="text-muted-foreground">Hand-picked members and typed addresses are always included.</span>
 					</div>
 				) : null}
 				{showExclude ? (
@@ -276,21 +384,38 @@ export function AudiencePicker({
 								<ChevronDown className={cn("size-3.5 transition-transform", expanded === "optedOut" && "rotate-180")} aria-hidden />
 							</button>
 						) : null}
-						{shownPreview.willReceive > 0 ? (
+						{shownPreview.outsideCount > 0 ? (
+							<button type="button" className="flex items-center gap-1 text-left underline-offset-2 hover:underline" onClick={() => setExpanded(expanded === "outside" ? null : "outside")}>
+								{shownPreview.outsideCount} outside CODE (no archive or unsubscribe)
+								<ChevronDown className={cn("size-3.5 shrink-0 transition-transform", expanded === "outside" && "rotate-180")} aria-hidden />
+							</button>
+						) : null}
+						{shownPreview.recipients.length > 0 ? (
 							<button type="button" className="flex items-center gap-1 text-left underline-offset-2 hover:underline" onClick={() => setExpanded(expanded === "recipients" ? null : "recipients")}>
 								See who
 								<ChevronDown className={cn("size-3.5 transition-transform", expanded === "recipients" && "rotate-180")} aria-hidden />
 							</button>
 						) : null}
-						{expanded ? (
+						{expanded === "outside" ? (
+							<ul className="row-enter mt-1 grid max-h-48 gap-0.5 overflow-y-auto text-foreground">
+								{shownPreview.outside.map((email) => (
+									<li key={email} className="min-w-0 break-all">
+										{email}
+									</li>
+								))}
+								{shownPreview.outsideCount > shownPreview.outside.length ? (
+									<li className="text-muted-foreground">and {shownPreview.outsideCount - shownPreview.outside.length} more</li>
+								) : null}
+							</ul>
+						) : expanded ? (
 							<ul className="row-enter mt-1 grid max-h-48 gap-0.5 overflow-y-auto text-foreground">
 								{(expanded === "optedOut" ? shownPreview.optedOut : shownPreview.recipients).map((m) => (
 									<li key={m.memberId} className="min-w-0 truncate">
 										{m.name}
 									</li>
 								))}
-								{expanded === "recipients" && shownPreview.willReceive > shownPreview.recipients.length ? (
-									<li className="text-muted-foreground">and {shownPreview.willReceive - shownPreview.recipients.length} more</li>
+								{expanded === "recipients" && membersReceiving > shownPreview.recipients.length ? (
+									<li className="text-muted-foreground">and {membersReceiving - shownPreview.recipients.length} more</li>
 								) : null}
 							</ul>
 						) : null}

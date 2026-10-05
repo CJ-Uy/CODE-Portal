@@ -141,7 +141,10 @@ export default async function SendReportPage({
 							{deliveries.map((d) => (
 								<li key={d.id} className="flex min-w-0 flex-wrap items-center gap-3 px-4 py-3">
 									<div className="grid min-w-0 flex-1">
-										<span className="min-w-0 break-all font-medium">{d.name}</span>
+										<span className="flex min-w-0 items-center gap-2">
+											<span className="min-w-0 break-all font-medium">{d.name}</span>
+											{d.external ? <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">Outside</span> : null}
+										</span>
 										<span className="min-w-0 break-all text-sm text-muted-foreground">{d.email}</span>
 										{d.error ? <span className="min-w-0 break-all text-sm text-[#343B41] dark:text-[#D7DFE9]">{d.error}</span> : null}
 									</div>
