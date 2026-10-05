@@ -377,3 +377,15 @@ Found while writing the implementation plan. These override the sections above.
 - **Composer preview.** The block canvas in the Content step is the live preview, with Desktop/Phone and "preview as" controls. The sticky right column holds the summary, the test send, and Review and send.
 - **Inactive members** are left out of audiences unless an explicit `status: inactive` rule includes them or they are picked by hand.
 - **Beta only.** Only `wrangler.beta.jsonc` points at the custom Worker entry. Staging and prod configs are not touched.
+
+## 17. Typed and outside recipients (2026-10-05)
+
+Admins can type an address into the "Send to" or "Don't send to" field, or paste a list of addresses. Each paste becomes one `emails` audience rule of up to 1,000 lowercased addresses.
+
+An address that belongs to a member resolves to that member. It behaves like a hand-picked member: it is always included, even with "every group" matching, and inactive members are allowed.
+
+An address that matches no member is sent as an outside recipient. Its delivery row has no member and `is_external` set. It gets a guest footer ("You received this email from CODE."), no archive link, no unsubscribe link, and no `List-Unsubscribe` header. Each campaign sends at most once per address.
+
+This supersedes the §12 rule that recipients come only from member and roster resolution, for the `emails` rule kind only. Every other rule kind still resolves through members.
+
+Outside sends still count against the daily cap, and only admins with `email:send` can build or send an audience.
