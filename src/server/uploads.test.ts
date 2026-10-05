@@ -6,6 +6,18 @@ import { createUploadHandlers, MAX_UPLOAD_BYTES } from "./uploads";
 const memberActor: Actor = { memberId: "mem_upload", roles: ["member"] };
 
 describe("upload handlers", () => {
+	it("restricts email images to email admins and serves their images to signed-out recipients", async () => {
+		const form = imageForm(); form.set("purpose", "email_image");
+		const request = () => new Request("https://example.com/api/uploads", { method: "POST", body: form });
+		expect((await createHandlers(memberActor).collection(request())).status).toBe(403);
+		const storage = new MemoryStorage();
+		const response = await createHandlers({ memberId: "mem_email", roles: ["email"] }, storage).collection(request());
+		expect(response.status).toBe(201);
+		const { key } = await response.json() as { key: string };
+		expect(key).toMatch(/^email-images\/mem_email\/[a-z0-9_-]+\.png$/);
+		expect((await createHandlers(null, storage).object(new Request("https://example.com/api/uploads/key"), key)).status).toBe(200);
+		expect((await createHandlers(memberActor, storage).object(new Request("https://example.com/api/uploads/key", { method: "DELETE" }), key)).status).toBe(403);
+	});
 	it("requires authentication for uploads", async () => {
 		const handlers = createHandlers(null);
 		const response = await handlers.collection(new Request("https://example.com/api/uploads", { method: "POST" }));

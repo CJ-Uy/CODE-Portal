@@ -64,6 +64,10 @@ export function BlockEditor({ blocks, onChange, baseUrl, footer, people, events,
 	const [dragId, setDragId] = useState<string | null>(null);
 	const [drop, setDrop] = useState<{ index: number } | null>(null);
 	const [eventPicker, setEventPicker] = useState(false);
+	const [uploading, setUploading] = useState(false);
+	const [uploadError, setUploadError] = useState("");
+	const currentBlocks = useRef(blocks);
+	useEffect(() => { currentBlocks.current = blocks; }, [blocks]);
 	const lastCommit = useRef(0);
 	const canvasRef = useRef<HTMLDivElement>(null);
 
@@ -75,12 +79,12 @@ export function BlockEditor({ blocks, onChange, baseUrl, footer, people, events,
 	const commit = useCallback(
 		(next: EmailBlock[], coalesce = false) => {
 			const now = Date.now();
-			if (!coalesce || now - lastCommit.current > 800) setPast((p) => [...p.slice(-49), blocks]);
+			if (!coalesce || now - lastCommit.current > 800) setPast((p) => [...p.slice(-49), currentBlocks.current]);
 			lastCommit.current = now;
 			setFuture([]);
 			onChange(next);
 		},
-		[blocks, onChange],
+		[onChange],
 	);
 	const undo = () => {
 		const previous = past.at(-1);
@@ -106,6 +110,19 @@ export function BlockEditor({ blocks, onChange, baseUrl, footer, people, events,
 		requestAnimationFrame(() => canvasRef.current?.querySelector(`[data-block-id="${block.id}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
 	};
 	const update = (id: string, props: object) => commit(blocks.map((b) => (b.id === id ? ({ ...b, props: { ...b.props, ...props } } as EmailBlock) : b)), true);
+	async function uploadImage(file: File, id: string) {
+		setUploading(true); setUploadError("");
+		try {
+			const body = new FormData();
+			body.set("purpose", "email_image"); body.set("file", file);
+			const response = await fetch("/api/uploads", { method: "POST", credentials: "same-origin", body });
+			const result = await response.json() as { key?: string; error?: string };
+			if (!response.ok || !result.key) throw new Error(result.error || "Could not upload image. Try again.");
+			const src = `${baseUrl}/api/uploads/${encodeURIComponent(result.key)}`;
+			commit(currentBlocks.current.map((block) => block.id === id && block.type === "image" ? { ...block, props: { ...block.props, src } } : block));
+		} catch (error) { setUploadError(error instanceof Error ? error.message : "Could not upload image. Try again."); }
+		finally { setUploading(false); }
+	}
 	const move = (id: string, delta: -1 | 1) => {
 		const i = blocks.findIndex((b) => b.id === id);
 		const j = i + delta;
@@ -348,6 +365,12 @@ export function BlockEditor({ blocks, onChange, baseUrl, footer, people, events,
 			) : null}
 			{selected?.type === "image" ? (
 				<>
+					<label className="grid gap-2 text-sm font-medium">
+						{uploading ? "Uploading image..." : "Upload image"}
+						<Input type="file" accept="image/png,image/jpeg,image/webp,image/gif" disabled={uploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadImage(file, selected.id); event.target.value = ""; }} />
+						<span className="text-xs font-normal text-muted-foreground">PNG, JPG, WebP or GIF, up to 5 MB. Email images are public so recipients can see them.</span>
+					</label>
+					{uploadError ? <p role="alert" className="text-sm text-destructive">{uploadError}</p> : null}
 					<label className="grid gap-2 text-sm font-medium">
 						Image URL
 						<Input value={selected.props.src} onChange={(e) => update(selected.id, { src: e.target.value })} placeholder="https://" />
