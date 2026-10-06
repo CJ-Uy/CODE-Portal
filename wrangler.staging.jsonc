@@ -46,7 +46,7 @@
 		"FEATURE_NOTIFICATIONS": "false",
 		"FEATURE_SURVEYS": "false",
 		"FEATURE_PUBLIC_SITE": "false",
-		"FEATURE_LEADERBOARD": "false",
+		"FEATURE_LEADERBOARD": "true",
 		"FEATURE_EMAIL": "true",
 		"FEATURE_MENTS": "true",
 		"EMAIL_INBOX_ADDRESS": "staged-inbox@ateneocode.org",
