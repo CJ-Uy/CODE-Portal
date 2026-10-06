@@ -1,24 +1,18 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Filter, Trophy } from "lucide-react";
+import { Filter } from "lucide-react";
 import { getRepositories } from "@/db";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
-import { EmptyState } from "@/components/portal/empty-state";
-import { MemberAvatar } from "@/components/portal/member-avatar";
+import { PointsLeaderboard } from "@/components/points-leaderboard";
 import { RetentionHistory } from "@/components/retention-history";
-import { formatPoints } from "@/lib/points";
+import { RETENTION_POINT_TYPE_ID } from "@/lib/point-types";
+import { competitionRanks } from "@/lib/retention-stats";
 import { requireActor } from "@/server/auth/actor";
 import { isFeatureEnabled } from "@/server/features";
 import { selectLeaderboardPointTypeId } from "./point-type-selection";
 
 export const dynamic = "force-dynamic";
-
-function initialsFrom(name: string): string {
-	const parts = name.trim().split(/\s+/).slice(0, 2);
-	return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || "M";
-}
 
 export default async function RetentionHistoryPage({
 	searchParams,
@@ -49,12 +43,22 @@ export default async function RetentionHistoryPage({
 		.then((rows) => ({ ok: true as const, rows }))
 		.catch(() => ({ ok: false as const, rows: [] }));
 	const selectedPointTypeId = selectLeaderboardPointTypeId(params.pointTypeId, pointTypeLoad.rows);
+	// Fetched on both tabs when the board is on: the history tab shows the viewer's rank.
 	const leaderboard =
-		view === "leaderboard" && pointTypeLoad.ok && selectedTermId && selectedPointTypeId
+		showLeaderboard && pointTypeLoad.ok && selectedTermId && selectedPointTypeId
 			? await repositories.retention
-					.publicLeaderboard(actor, { termId: selectedTermId, pointTypeId: selectedPointTypeId, limit: 25 })
+					.publicLeaderboard(actor, { termId: selectedTermId, pointTypeId: selectedPointTypeId, limit: 100 })
 					.catch(() => [])
 			: [];
+	const myLeaderboardIndex = leaderboard.findIndex((row) => row.memberId === actor.memberId);
+	const myRank =
+		myLeaderboardIndex === -1
+			? null
+			: {
+					rank: competitionRanks(leaderboard.map((row) => row.totalPoints))[myLeaderboardIndex],
+					of: leaderboard.length,
+				};
+	const selectedPointType = pointTypeLoad.rows.find((type) => type.id === selectedPointTypeId);
 
 	const tabs = [
 		{ id: "history", label: "My points", href: "/portal/events" },
@@ -118,40 +122,18 @@ export default async function RetentionHistoryPage({
 					selectedTermId={selectedTermId}
 					selectedPointTypeId={selectedPointTypeId}
 					pointTypes={pointTypeLoad.rows}
+					now={new Date()}
+					rank={myRank}
 				/>
 			) : !pointTypeLoad.ok ? (
 				<p className="text-sm text-muted-foreground">Point types are unavailable right now.</p>
-			) : leaderboard.length === 0 ? (
-				<EmptyState
-					icon={Trophy}
-					title="No points yet this term"
-					description="Attend events to climb the leaderboard."
-				/>
 			) : (
-				<Card>
-					<CardContent className="divide-y divide-border p-0">
-						{leaderboard.map((row, rank) => {
-							const name = row.fullName ?? row.name ?? "Member";
-							const isMe = row.memberId === actor.memberId;
-							return (
-								<div
-									key={row.memberId}
-									className={`flex items-center gap-3 px-4 py-3 ${isMe ? "bg-secondary/40" : ""}`}
-								>
-									<span className="w-6 text-center font-heading text-lg text-muted-foreground">
-										{rank + 1}
-									</span>
-									<MemberAvatar initials={initialsFrom(name)} className="size-8 text-xs" />
-									<span className="flex-1 truncate text-sm font-medium">
-										{name}
-										{isMe ? <span className="ml-2 text-xs text-accent">You</span> : null}
-									</span>
-									<span className="tabular-nums font-heading text-lg">{formatPoints(row.totalPoints)}</span>
-								</div>
-							);
-						})}
-					</CardContent>
-				</Card>
+				<PointsLeaderboard
+					rows={leaderboard}
+					meId={actor.memberId}
+					pointTypeLabel={selectedPointType?.label ?? "retention"}
+					retainedAt={selectedPointTypeId === RETENTION_POINT_TYPE_ID && summary ? summary.retainedAt : null}
+				/>
 			)}
 		</div>
 	);

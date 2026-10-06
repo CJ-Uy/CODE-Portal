@@ -39,6 +39,8 @@ export const myHistorySummaryOutputSchema = z.object({
 	probationBelow: z.number().int(),
 	status: z.enum(["retained", "on_track", "probation"]),
 	recordCount: z.number().int(),
+	startsAt: z.coerce.date(),
+	endsAt: z.coerce.date(),
 });
 
 export const termOptionOutputSchema = z.object({

@@ -63,6 +63,8 @@ export type MyHistorySummary = {
 	probationBelow: number;
 	status: RetentionStatus;
 	recordCount: number;
+	startsAt: Date;
+	endsAt: Date;
 };
 
 /** One calendar day of the viewer's own points, keyed the way the month grid labels cells. */
@@ -411,7 +413,14 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 			if (!termId) return { summary: null, records: [] };
 
 			const [term] = await db
-				.select({ id: terms.id, name: terms.name, retainedAt: terms.retainedAt, probationBelow: terms.probationBelow })
+				.select({
+					id: terms.id,
+					name: terms.name,
+					retainedAt: terms.retainedAt,
+					probationBelow: terms.probationBelow,
+					startsAt: terms.startsAt,
+					endsAt: terms.endsAt,
+				})
 				.from(terms)
 				.where(eq(terms.id, termId))
 				.limit(1);
@@ -438,6 +447,8 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 				probationBelow: term.probationBelow,
 				status: statusFor(totalPoints, term.retainedAt, term.probationBelow),
 				recordCount: rows.length,
+				startsAt: term.startsAt,
+				endsAt: term.endsAt,
 			};
 			const records: TypedRetentionRecord[] = rows.map((row) => ({
 				id: row.id,
