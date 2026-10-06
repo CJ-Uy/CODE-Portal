@@ -36,7 +36,7 @@ function RankZero() {
 				</span>
 				<div className="min-w-0 flex-1">
 					<p className="truncate font-semibold">Charles Joshua T. Uy</p>
-					<p className="text-xs opacity-80">Built the portal. The points overflowed.</p>
+					<p className="text-xs opacity-80">Built the Portal. Currently running for S7.5</p>
 				</div>
 				<span className="font-heading text-3xl leading-none" aria-label="infinite points">
 					∞
