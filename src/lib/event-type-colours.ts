@@ -19,3 +19,12 @@ const CLASSES: Record<EventTypeColour, { chip: string; dot: string }> = {
 export function colourClasses(token: string): { chip: string; dot: string } {
 	return CLASSES[token as EventTypeColour] ?? CLASSES.slate;
 }
+
+/** SVG charts use the same theme colors as event chips. */
+export function colourValue(token: string): string {
+	const values: Record<EventTypeColour, string> = {
+		primary: "var(--primary)", accent: "var(--accent)", emerald: "var(--color-emerald-500)",
+		amber: "var(--color-amber-500)", rose: "var(--color-rose-500)", slate: "var(--color-slate-500)",
+	};
+	return values[token as EventTypeColour] ?? values.slate;
+}

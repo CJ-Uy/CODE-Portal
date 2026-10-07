@@ -1,5 +1,18 @@
 # Shared Dev Deploy Note
 
+## Retention category views and activity history
+
+Member history now returns the event title, category key, label, and colour from
+the existing event and category tables. These nullable contract fields default
+to null for older shared API responses. No schema migration or seed is needed.
+
+Push the reviewed release to beta to trigger its existing Cloudflare build for
+`code-portal-beta` in account `83376df5e0bae067afa197b07430168d`. This updates
+`/internal/retention` for shared-mode developers. Promote the same release and
+its points-summary prerequisite to staging for the `code-portal-staged` build.
+The beta and staged D1 bindings remain `ffe974a7-4b89-4ac7-b07e-ad62f4530ca2`
+and `543701fb-67ba-4f09-a931-85ffb861386f`, respectively.
+
 ## Admin workspace, Pments and email personalization
 
 `0010_ments_pments.sql` adds self-reported informal mentor relationships, and

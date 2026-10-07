@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, like, lte, or, sql } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import { createId } from "@/lib/ids";
-import { crsAttendance, crsEvents, eventRsvps, members, pointTypes, retentionRecords, terms } from "@/db/schema";
+import { crsAttendance, crsEvents, eventRsvps, eventTypeRules, members, pointTypes, retentionRecords, terms } from "@/db/schema";
 import type { RetentionRecordSource } from "@/db/schema";
 import { fromLocalInput } from "@/lib/date-slots";
 import { quantizePoints } from "@/lib/points";
@@ -13,6 +13,12 @@ import type { AuditRepository } from "./audit";
 
 export type RetentionRecord = InferSelectModel<typeof retentionRecords>;
 export type TypedRetentionRecord = RetentionRecord & { pointTypeId: string; pointTypeLabel: string };
+export type MyHistoryRecord = TypedRetentionRecord & {
+	eventTitle: string | null;
+	eventType: string | null;
+	eventTypeLabel: string | null;
+	eventColour: string | null;
+};
 
 export type TermMasterRow = {
 	recordId: string;
@@ -104,7 +110,7 @@ export type RetentionRepository = {
 		actor: Actor,
 		input: { termId?: string },
 		now?: Date,
-	): Promise<{ summary: MyHistorySummary | null; records: TypedRetentionRecord[] }>;
+	): Promise<{ summary: MyHistorySummary | null; records: MyHistoryRecord[] }>;
 	myPointsByDay(actor: Actor, input: { year: number; month: number }): Promise<PointsDay[]>;
 	listTerms(actor: Actor, now?: Date): Promise<TermOption[]>;
 	listTermsAdmin(actor: Actor, now?: Date): Promise<TermAdminRow[]>;
@@ -426,10 +432,18 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 				.limit(1);
 			if (!term) return { summary: null, records: [] };
 
-			const rows: TypedRetentionRecord[] = await db
-				.select(typedRecordColumns)
+			const rows: MyHistoryRecord[] = await db
+				.select({
+					...typedRecordColumns,
+					eventTitle: crsEvents.title,
+					eventType: crsEvents.type,
+					eventTypeLabel: eventTypeRules.label,
+					eventColour: eventTypeRules.colour,
+				})
 				.from(retentionRecords)
 				.innerJoin(pointTypes, eq(pointTypes.id, retentionRecords.pointTypeId))
+				.leftJoin(crsEvents, eq(crsEvents.id, retentionRecords.eventId))
+				.leftJoin(eventTypeRules, eq(eventTypeRules.type, crsEvents.type))
 				.where(and(eq(retentionRecords.memberId, actor.memberId), eq(retentionRecords.termId, termId)))
 				.orderBy(desc(retentionRecords.recordedAt));
 
@@ -450,13 +464,17 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 				startsAt: term.startsAt,
 				endsAt: term.endsAt,
 			};
-			const records: TypedRetentionRecord[] = rows.map((row) => ({
+			const records: MyHistoryRecord[] = rows.map((row) => ({
 				id: row.id,
 				memberId: row.memberId,
 				termId: row.termId,
 				eventId: row.eventId,
 				pointTypeId: row.pointTypeId,
 				pointTypeLabel: row.pointTypeLabel,
+				eventTitle: row.eventTitle,
+				eventType: row.eventType,
+				eventTypeLabel: row.eventTypeLabel || row.eventType,
+				eventColour: row.eventColour,
 				points: row.points,
 				reason: row.reason,
 				source: row.source,

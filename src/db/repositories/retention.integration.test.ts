@@ -241,6 +241,12 @@ describe("retention repository on D1", () => {
 			expect.objectContaining({ memberEmail: "a@example.com", rsvped: true, attended: false }),
 			expect.objectContaining({ memberEmail: "b@example.com", rsvped: false, attended: true }),
 		]);
+
+		const history = await repo.myHistory(plainMember, { termId: "term_1" });
+		expect(history.records).toEqual(expect.arrayContaining([
+			expect.objectContaining({ id: "ret_report_1", eventTitle: "Practice Night", eventType: "official" }),
+			expect.objectContaining({ id: "ret_report_2", eventTitle: null, eventType: null, eventColour: null, points: null }),
+		]));
 	});
 
 	it("returns point-type metadata without filtering row projections", async () => {
