@@ -2,6 +2,9 @@ import { expect, test } from "@playwright/test";
 import { signInAs } from "./fixtures/auth";
 
 test("members switch retention charts, scrub the race and filter color-coded history", async ({ page }) => {
+	const errors: string[] = [];
+	page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
+	page.on("pageerror", (error) => errors.push(error.message));
 	await signInAs(page, "member");
 	await page.goto("/portal/events");
 	await page.getByRole("button", { name: "Pie", exact: true }).click();
@@ -22,4 +25,5 @@ test("members switch retention charts, scrub the race and filter color-coded his
 		await expect(page.getByRole("columnheader")).toHaveCount(4);
 		expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 	}
+	expect(errors).toEqual([]);
 });

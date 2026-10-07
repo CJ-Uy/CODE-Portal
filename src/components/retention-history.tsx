@@ -183,7 +183,7 @@ export function RetentionHistory({
 						</CardContent>
 					</Card>
 
-					<RetentionCategoryProgress key={`${summary.termId}:${typeId}`} records={visibleRecords} total={stats.total} goal={goal} />
+					<RetentionCategoryProgress key={`progress:${summary.termId}:${typeId}`} records={visibleRecords} total={stats.total} goal={goal} />
 
 					<div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
 						<StatTile icon={Sparkles} label="Points" value={formatPoints(stats.total)} hint={typeLabel} />
@@ -198,7 +198,7 @@ export function RetentionHistory({
 						)}
 					</div>
 
-					<RetentionActivityHistory key={`${selectedTermId}:${typeId}`} records={visibleRecords} typeLabel={typeLabel} />
+					<RetentionActivityHistory key={`history:${selectedTermId}:${typeId}`} records={visibleRecords} typeLabel={typeLabel} />
 
 					<Card>
 						<CardHeader>
@@ -326,7 +326,7 @@ export function RetentionHistory({
 				</Card>
 			) : null}
 
-			{!summary || !stats ? <RetentionActivityHistory key={`${selectedTermId}:${typeId}`} records={visibleRecords} typeLabel={typeLabel} /> : null}
+			{!summary || !stats ? <RetentionActivityHistory key={`history:${selectedTermId}:${typeId}`} records={visibleRecords} typeLabel={typeLabel} /> : null}
 		</div>
 	);
 }
