@@ -1,9 +1,12 @@
-import { CalendarClock, Flame, Medal, Sparkles, Ticket, TrendingUp, Trophy } from "lucide-react";
+import { CalendarClock, Filter, Flame, Medal, Sparkles, Ticket, TrendingUp, Trophy } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
+import { RetentionActivityHistory, RetentionCategoryProgress } from "@/components/retention-category-progress";
 import { CumulativeChart, ProgressRing, WeeklyBars, type ChartLine } from "@/components/retention-charts";
 import type { PointTypeRow } from "@/db/repositories/pointTypes";
-import type { MyHistorySummary, TermOption, TypedRetentionRecord } from "@/db/repositories/retention";
+import type { MyHistoryRecord, MyHistorySummary, TermOption } from "@/db/repositories/retention";
 import { RETENTION_POINT_TYPE_ID } from "@/lib/point-types";
 import { formatPoints } from "@/lib/points";
 import { buildRetentionStats, neededPerWeek, projectedDateFor, type RetentionStats } from "@/lib/retention-stats";
@@ -57,7 +60,7 @@ export function RetentionHistory({
 	rank,
 }: {
 	summary: MyHistorySummary | null;
-	records: TypedRetentionRecord[];
+	records: MyHistoryRecord[];
 	terms: TermOption[];
 	selectedTermId: string;
 	selectedPointTypeId: string | null;
@@ -101,16 +104,16 @@ export function RetentionHistory({
 
 	return (
 		<div className="flex flex-col gap-4">
-			<form method="get" className="flex items-center gap-2">
+			<form method="get" className="flex flex-wrap items-center gap-2">
 				{selectedPointTypeId ? <input type="hidden" name="pointTypeId" value={selectedPointTypeId} /> : null}
 				<label className="text-sm text-muted-foreground" htmlFor="termId">
 					Term
 				</label>
-				<select
+				<Select
 					id="termId"
 					name="termId"
 					defaultValue={selectedTermId}
-					className="min-w-0 rounded-md border border-border bg-background px-2 py-1 text-sm"
+					className="min-w-0 w-auto max-w-full"
 				>
 					{terms.map((term) => (
 						<option key={term.id} value={term.id}>
@@ -118,10 +121,11 @@ export function RetentionHistory({
 							{term.isCurrent ? " (current)" : ""}
 						</option>
 					))}
-				</select>
-				<button type="submit" className="rounded-md border border-border px-3 py-1 text-sm">
+				</Select>
+				<Button type="submit" variant="secondary">
+					<Filter aria-hidden />
 					View
-				</button>
+				</Button>
 			</form>
 
 			{summary && stats ? (
@@ -179,6 +183,8 @@ export function RetentionHistory({
 						</CardContent>
 					</Card>
 
+					<RetentionCategoryProgress key={`${summary.termId}:${typeId}`} records={visibleRecords} total={stats.total} goal={goal} />
+
 					<div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
 						<StatTile icon={Sparkles} label="Points" value={formatPoints(stats.total)} hint={typeLabel} />
 						<StatTile icon={Ticket} label="Events" value={String(stats.events)} hint={`${visibleRecords.length} records`} />
@@ -191,6 +197,8 @@ export function RetentionHistory({
 							<StatTile icon={CalendarClock} label="Days left" value={String(stats.daysLeft)} hint="in this term" />
 						)}
 					</div>
+
+					<RetentionActivityHistory key={`${selectedTermId}:${typeId}`} records={visibleRecords} typeLabel={typeLabel} />
 
 					<Card>
 						<CardHeader>
@@ -318,39 +326,7 @@ export function RetentionHistory({
 				</Card>
 			) : null}
 
-			<Card>
-				<CardHeader>
-					<CardTitle>Records</CardTitle>
-					<CardDescription>{typeLabel} points this term, newest first.</CardDescription>
-				</CardHeader>
-				<CardContent className="flex flex-col gap-2">
-					{visibleRecords.length === 0 ? (
-						<p className="text-sm text-muted-foreground">No records in this term.</p>
-					) : (
-						visibleRecords.map((record) => (
-							<div
-								key={record.id}
-								className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
-							>
-								<div className="flex min-w-0 flex-col">
-									<span className="break-all text-sm font-medium">{record.reason}</span>
-									<span className="text-xs text-muted-foreground">
-										{shortDate(record.recordedAt)} · {record.source === "event_attendance" ? "Event" : "Manual"}
-									</span>
-								</div>
-								<span
-									className={cn(
-										"min-w-0 shrink-0 break-all font-heading text-lg tabular-nums",
-										(record.points ?? 0) < 0 && "text-muted-foreground",
-									)}
-								>
-									{record.points === null ? "n/a" : `${record.points > 0 ? "+" : ""}${formatPoints(record.points)}`}
-								</span>
-							</div>
-						))
-					)}
-				</CardContent>
-			</Card>
+			{!summary || !stats ? <RetentionActivityHistory key={`${selectedTermId}:${typeId}`} records={visibleRecords} typeLabel={typeLabel} /> : null}
 		</div>
 	);
 }

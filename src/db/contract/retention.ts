@@ -114,7 +114,12 @@ export const retentionContract = {
 		input: z.object({ termId: z.string().min(1).optional() }),
 		output: z.object({
 			summary: myHistorySummaryOutputSchema.nullable(),
-			records: z.array(retentionRecordOutputSchema),
+			records: z.array(retentionRecordOutputSchema.extend({
+				eventTitle: z.string().nullable().default(null),
+				eventType: z.string().nullable().default(null),
+				eventTypeLabel: z.string().nullable().default(null),
+				eventColour: z.string().nullable().default(null),
+			})),
 		}),
 		auth: "member",
 		sharedDev: "allow",

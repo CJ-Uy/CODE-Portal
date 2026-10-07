@@ -44,6 +44,10 @@ describe("retentionContract reporting operations", () => {
 					termId: "term_1",
 					eventId: null,
 					pointTypeId: "pt_frontliner",
+					eventTitle: "Project night",
+					eventType: "project",
+					eventTypeLabel: "Project Team",
+					eventColour: "rose",
 					pointTypeLabel: "Frontliner",
 					points: 3,
 					reason: "Led a project",
@@ -56,6 +60,10 @@ describe("retentionContract reporting operations", () => {
 		expect(output.records[0]).toMatchObject({
 			pointTypeId: "pt_frontliner",
 			pointTypeLabel: "Frontliner",
+			eventTitle: "Project night",
+			eventType: "project",
+			eventTypeLabel: "Project Team",
+			eventColour: "rose",
 		});
 	});
 });
