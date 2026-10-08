@@ -59,7 +59,7 @@ The navy desktop rail includes Overview, expandable sections and Back to portal.
 
 On mobile, the navy app bar remains above a separate breadcrumb strip. A fixed bottom bar provides Portal, Overview and Menu. Menu opens a scrollable bottom sheet with the same grouped tools and closes after navigation. Reserve bottom space for the bar and respect the device's safe area.
 
-The member rail orders Overview, Calendar, Retention, Ments Tree, Link shortener, Mail, Notifications and Profile. Library and Announcements sit under Resources & updates. Release flags hide unavailable destinations. The member mobile bar keeps four core destinations: Overview, Calendar, Ments Tree and Profile, with Link shortener filling the Ments slot when that feature is unavailable. Remaining destinations stay in the menu drawer.
+The member rail orders Overview, Calendar, Retention, Ments Tree, Link shortener, Mail, Notifications and Profile. Library and Announcements sit under Resources & updates. Release flags hide unavailable destinations. The member mobile bar keeps four core destinations: Home, Calendar, Retention and Profile, with Link shortener filling the Retention slot when that feature is unavailable. The center plus opens a bottom sheet with Create event and New short link above the remaining destinations. Its fixed handle supports drag-to-close; event check-in sits in a compact disclosure below navigation.
 
 ### Ments Tree
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, type KeyboardEvent, type MouseEvent, type RefObject, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { ArrowDown, ArrowUp, CalendarDays, ChevronsUpDown, Copy, ExternalLink, ImageUp, Info, Plus, QrCode, RefreshCw, Save, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
 import type { LinkListItem, LinkSearchResult, LinkStats, QrStyle } from "@/db/repositories/links";
@@ -45,6 +46,9 @@ function getServerOrigin() {
 }
 
 export function LinksWorkspace({ initialPage, actorMemberId, canModerate }: LinksWorkspaceProps) {
+	const router = useRouter();
+	const searchParams = useSearchParams();
+	const createFromUrl = searchParams.get("create") === "1";
 	const [links, setLinks] = useState(initialPage.links);
 	const [total, setTotal] = useState(initialPage.total);
 	const [tagOptions, setTagOptions] = useState(initialPage.tags);
@@ -116,6 +120,15 @@ export function LinksWorkspace({ initialPage, actorMemberId, canModerate }: Link
 
 	function refresh() { setReloadKey((current) => current + 1); }
 
+	function changeCreateOpen(next: boolean) {
+		setCreateOpen(next);
+		if (!next && createFromUrl) {
+			const params = new URLSearchParams(searchParams.toString());
+			params.delete("create");
+			router.replace(`/portal/links${params.size ? `?${params}` : ""}`, { scroll: false });
+		}
+	}
+
 	async function createLink(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
 		const response = await fetch("/api/links", {
@@ -138,7 +151,7 @@ export function LinksWorkspace({ initialPage, actorMemberId, canModerate }: Link
 		setSelectedTags([]);
 		setSort({ key: "created", dir: "desc" });
 		setForm({ slug: "", destinationUrl: "", title: "", tags: [] });
-		setCreateOpen(false);
+		changeCreateOpen(false);
 		setStatus("Link created.");
 		openDialog(body.link.id, body.link);
 	}
@@ -249,8 +262,8 @@ export function LinksWorkspace({ initialPage, actorMemberId, canModerate }: Link
 					</Button>
 					<CreateLinkDialog
 						triggerRef={createTriggerRef}
-						open={createOpen}
-						onOpenChange={setCreateOpen}
+						open={createOpen || createFromUrl}
+						onOpenChange={changeCreateOpen}
 						form={form}
 						setForm={setForm}
 						onSubmit={createLink}

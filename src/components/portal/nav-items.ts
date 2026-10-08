@@ -39,13 +39,13 @@ export function visiblePrimaryNav(flags: FeatureFlags): NavItem[] {
 	return withoutHidden(primaryNav, new Set(), flags);
 }
 
-/** Four mobile slots. Links backfills Ments when its release flag is off. */
+/** Four mobile slots. Links backfills Retention when its release flag is off. */
 export function visibleMobileNav(flags: FeatureFlags): NavItem[] {
 	return withFallback(
-		primaryNav.filter((item) => ["overview", "calendar", "ments", "profile"].includes(item.id)),
+		primaryNav.filter((item) => ["overview", "calendar", "retention", "profile"].includes(item.id)),
 		primaryNav.find((item) => item.id === "links"),
 		flags,
-	);
+	).map((item) => item.id === "overview" ? { ...item, label: "Home" } : item);
 }
 
 export function visibleSecondaryNav(flags: FeatureFlags): NavItem[] {
