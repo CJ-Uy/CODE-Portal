@@ -92,7 +92,8 @@ test("quick actions open creation from another page and repeatedly on the same p
 	await expect(page).toHaveURL("/portal/links?source=menu");
 });
 
-test("the handle follows touch, cancels short drags, and dismisses long drags", async ({ page, context }) => {
+test("the handle follows touch, cancels short drags, and dismisses long drags", async ({ page, context, browserName }) => {
+	test.skip(browserName !== "chromium", "Native touch injection uses Chromium CDP.");
 	await signInAs(page, "member");
 	const menu = await openMenu(page);
 	const handle = menu.getByRole("button", { name: "Close menu or drag down" });

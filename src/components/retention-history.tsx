@@ -103,7 +103,7 @@ export function RetentionHistory({
 	}
 
 	return (
-		<div className="flex flex-col gap-4">
+		<div className="flex min-w-0 flex-col gap-4">
 			<form method="get" className="flex flex-wrap items-center gap-2">
 				{selectedPointTypeId ? <input type="hidden" name="pointTypeId" value={selectedPointTypeId} /> : null}
 				<label className="text-sm text-muted-foreground" htmlFor="termId">
