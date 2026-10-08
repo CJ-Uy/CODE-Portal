@@ -2,7 +2,7 @@
 
 Mode: Operate. Extend the existing CODE palette, Unna headings and Source Sans controls.
 
-Members move between Home, Calendar, Retention and Profile using four bottom tabs around the existing plus button. The menu starts with Create event and New short link, then lists released destinations absent from those tabs. Event check-in stays available through a compact disclosure below navigation.
+Members move between Home, Calendar, Retention and Profile using four bottom tabs around the existing plus button. Event check-in is the most frequent reason members open the site, so its QR card stays expanded at the top of the menu. Create event and New short link follow it, then the released destinations absent from those tabs.
 
 The sheet's handle and title stay fixed while its contents scroll. Dragging the handle moves the sheet with the pointer. A downward release of at least 80 pixels dismisses it; shorter or cancelled gestures return it to its starting position. The close button, handle activation, Escape and backdrop remain available. Reduced motion removes the snap-back transition and sheet animation.
 

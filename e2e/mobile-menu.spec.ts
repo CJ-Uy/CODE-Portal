@@ -28,6 +28,13 @@ test("mobile tabs and grouped actions keep every released page reachable", async
 	await expectNoOverflow(page);
 	await page.screenshot({ path: testInfo.outputPath("mobile-retention-tabs.png") });
 	const menu = await openMenu(page);
+	const qr = menu.getByLabel("Member attendance QR code");
+	await expect(menu.getByRole("heading", { name: "Event check-in", exact: true })).toBeVisible();
+	await expect(qr).toHaveCSS("width", "220px");
+	await expect(qr).toBeInViewport({ ratio: 1 });
+	const qrBox = (await qr.boundingBox())!;
+	const actionBox = (await menu.getByRole("link", { name: "Create event", exact: true }).boundingBox())!;
+	expect(qrBox.y + qrBox.height).toBeLessThan(actionBox.y);
 	await expect(menu.getByRole("link", { name: "Create event", exact: true })).toHaveAttribute("href", "/portal/calendar?create=1");
 	await expect(menu.getByRole("link", { name: "New short link", exact: true })).toHaveAttribute("href", "/portal/links?create=1");
 	const more = menu.getByRole("navigation", { name: "More modules" });
@@ -35,10 +42,8 @@ test("mobile tabs and grouped actions keep every released page reachable", async
 	await expect(more.getByRole("link", { name: "Retention", exact: true })).toHaveCount(0);
 	await expectNoOverflow(page);
 	await page.screenshot({ path: testInfo.outputPath("mobile-quick-actions.png") });
-	await menu.locator("summary").click();
-	await expect(menu.getByRole("heading", { name: "Event check-in", exact: true })).toBeVisible();
 	const handleTop = await menu.getByRole("button", { name: "Close menu or drag down" }).evaluate((element) => element.getBoundingClientRect().top);
-	await menu.locator("summary").evaluate((element) => element.scrollIntoView());
+	await more.evaluate((element) => element.scrollIntoView());
 	expect(await menu.getByRole("button", { name: "Close menu or drag down" }).evaluate((element) => element.getBoundingClientRect().top)).toBe(handleTop);
 	await page.keyboard.press("Escape");
 	await expect(menu).toHaveCount(0);
