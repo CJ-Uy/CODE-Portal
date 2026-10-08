@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createElement, useRef, useState, type PointerEvent } from "react";
-import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, Link2, LogOut, Menu, Plus, QrCode, X } from "lucide-react";
+import { CalendarPlus, ChevronLeft, ChevronRight, Link2, LogOut, Menu, Plus, X } from "lucide-react";
 import { MemberCodeCard } from "@/components/member-code-card";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -325,6 +325,9 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 					<div className="min-h-0 overflow-y-auto overscroll-contain pb-[max(1.5rem,env(safe-area-inset-bottom))]">
 
 					{!inAdmin ? <>
+					<div className="px-4 pb-3">
+						<MemberCodeCard memberId={memberId} />
+					</div>
 					<div className="grid grid-cols-2 gap-2 px-4 pb-4">
 						<SheetClose asChild>
 							<Button asChild variant="secondary" className="h-14 gap-2 rounded-xl px-2"><Link href="/portal/calendar?create=1"><CalendarPlus className="size-5" />Create event</Link></Button>
@@ -395,12 +398,6 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 							</>
 						)}
 					</nav>
-					{!inAdmin ? <details className="group mx-4 mt-3 border-t border-border pt-2">
-						<summary className="flex min-h-12 cursor-pointer list-none items-center gap-3 rounded-lg px-1 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
-							<QrCode className="size-5" /><span className="flex-1">Event check-in</span><ChevronDown className="size-4 transition-transform group-open:rotate-180 motion-reduce:transition-none" />
-						</summary>
-						<div className="pt-2"><MemberCodeCard memberId={memberId} /></div>
-					</details> : null}
 
 					<div className="mt-2 border-t border-border px-2 pt-2">
 						<form action={signOutAction}>
