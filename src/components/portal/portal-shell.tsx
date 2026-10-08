@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { createElement, useState } from "react";
-import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, LogOut, Menu, Plus } from "lucide-react";
+import { createElement, useRef, useState, type PointerEvent } from "react";
+import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, Link2, LogOut, Menu, Plus, QrCode, X } from "lucide-react";
 import { MemberCodeCard } from "@/components/member-code-card";
 import { Separator } from "@/components/ui/separator";
-import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Breadcrumb } from "./breadcrumb";
@@ -102,6 +102,37 @@ function RailItem({ item, pathname }: { item: NavItem; pathname: string }) {
 export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups, flags, bell, signOutAction, children }: PortalShellProps) {
 	const pathname = usePathname();
 	const [menuOpen, setMenuOpen] = useState(false);
+	const [drag, setDrag] = useState({ y: 0, active: false, touched: false });
+	const dragStart = useRef<{ id: number; y: number } | null>(null);
+	const dragged = useRef(false);
+
+	function changeMenuOpen(next: boolean) {
+		setMenuOpen(next);
+		if (next) setDrag({ y: 0, active: false, touched: false });
+	}
+
+	function startDrag(event: PointerEvent<HTMLButtonElement>) {
+		if (!event.isPrimary || event.button !== 0) return;
+		dragStart.current = { id: event.pointerId, y: event.clientY };
+		dragged.current = false;
+		event.currentTarget.setPointerCapture(event.pointerId);
+		setDrag({ y: 0, active: true, touched: true });
+	}
+
+	function moveDrag(event: PointerEvent<HTMLButtonElement>) {
+		if (dragStart.current?.id !== event.pointerId) return;
+		const distance = event.clientY - dragStart.current.y;
+		if (Math.abs(distance) > 5) dragged.current = true;
+		setDrag({ y: Math.max(0, distance), active: true, touched: true });
+	}
+
+	function finishDrag(event: PointerEvent<HTMLButtonElement>) {
+		if (dragStart.current?.id !== event.pointerId) return;
+		const dismiss = event.type === "pointerup" && event.clientY - dragStart.current.y >= 80;
+		dragStart.current = null;
+		setDrag((current) => ({ ...current, y: dismiss ? current.y : 0, active: false }));
+		if (dismiss) changeMenuOpen(false);
+	}
 	const inAdmin = pathname === "/portal/admin" || pathname.startsWith("/portal/admin/");
 	const pageHeading = getPageHeading(pathname);
 
@@ -227,7 +258,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 			</div>
 
 			{/* Mobile bottom nav with a raised center FAB that opens the "More" sheet. */}
-			<Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+			<Sheet open={menuOpen} onOpenChange={changeMenuOpen}>
 				{inAdmin ? (
 					<nav aria-label="Admin navigation" className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-3 border-t border-border bg-card px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:hidden">
 						<Button asChild variant="ghost"><Link href="/portal"><ChevronLeft /> Portal</Link></Button>
@@ -268,46 +299,46 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 
 				<SheetContent
 					side="bottom"
-					className="max-h-[82vh] gap-0 overflow-y-auto rounded-t-2xl pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+					showCloseButton={false}
+					className={cn("max-h-[82dvh] gap-0 overflow-hidden rounded-t-2xl", !drag.active && "motion-safe:transition-transform motion-safe:duration-180 motion-safe:ease-out")}
+					style={{ transform: `translateY(${drag.y}px)`, animation: menuOpen && drag.touched ? "none" : undefined }}
 				>
-					<span className="mx-auto mt-3 h-1 w-10 shrink-0 rounded-full bg-border" aria-hidden />
-					<SheetTitle className="px-5 pt-3 font-heading text-xl">{inAdmin ? "Admin menu" : "Quick actions"}</SheetTitle>
+					<div className="relative shrink-0">
+						<Button
+							type="button"
+							variant="ghost"
+							aria-label="Close menu or drag down"
+							className="h-11 w-full touch-none rounded-none hover:bg-transparent"
+							onPointerDown={startDrag}
+							onPointerMove={moveDrag}
+							onPointerUp={finishDrag}
+							onPointerCancel={finishDrag}
+							onLostPointerCapture={finishDrag}
+							onClick={(event) => { if (!event.detail || !dragged.current) changeMenuOpen(false); }}
+						>
+							<span className="h-1 w-10 rounded-full bg-muted-foreground/50" aria-hidden />
+						</Button>
+						<SheetTitle className="px-5 pb-4 pr-16 font-heading text-2xl">{inAdmin ? "Admin menu" : "Quick actions"}</SheetTitle>
+						<SheetDescription className="sr-only">Drag the handle down to close. Choose an action or go to another page.</SheetDescription>
+						<SheetClose asChild><Button type="button" variant="ghost" size="icon" className="absolute right-3 top-11 size-11" aria-label="Close menu"><X className="size-5" /></Button></SheetClose>
+					</div>
+					<div className="min-h-0 overflow-y-auto overscroll-contain pb-[max(1.5rem,env(safe-area-inset-bottom))]">
 
 					{!inAdmin ? <>
-					<div className="px-4 pt-4">
-						<MemberCodeCard memberId={memberId} />
-					</div>
-
-					<div className="grid grid-cols-2 gap-2 px-4 pt-3">
+					<div className="grid grid-cols-2 gap-2 px-4 pb-4">
 						<SheetClose asChild>
-							<Link
-								href="/portal/calendar?create=1"
-								className="flex flex-col items-center gap-1.5 rounded-xl border border-border py-4 text-sm font-semibold transition-colors hover:bg-muted"
-							>
-								<span className="grid size-9 place-items-center rounded-lg bg-secondary text-accent">
-									<CalendarPlus className="size-5" />
-								</span>
-								Create event
-							</Link>
+							<Button asChild variant="secondary" className="h-14 gap-2 rounded-xl px-2"><Link href="/portal/calendar?create=1"><CalendarPlus className="size-5" />Create event</Link></Button>
 						</SheetClose>
 						<SheetClose asChild>
-							<Link
-								href="/portal/calendar"
-								className="flex flex-col items-center gap-1.5 rounded-xl border border-border py-4 text-sm font-semibold transition-colors hover:bg-muted"
-							>
-								<span className="grid size-9 place-items-center rounded-lg bg-secondary text-accent">
-									<CalendarDays className="size-5" />
-								</span>
-								Calendar
-							</Link>
+							<Button asChild variant="secondary" className="h-14 gap-2 rounded-xl px-2"><Link href="/portal/links?create=1"><Link2 className="size-5" />New short link</Link></Button>
 						</SheetClose>
 					</div>
 					</> : null}
 
-					<nav className="flex flex-col px-2 pt-3" aria-label="More modules">
-						{!inAdmin ? <p className="px-3 pb-1 pt-2 text-[0.6rem] font-semibold uppercase tracking-wider text-muted-foreground">
+					<nav className="flex flex-col border-t border-border px-2 pt-3" aria-label="More modules">
+						{!inAdmin ? <h3 className="px-3 pb-1 text-sm font-semibold text-muted-foreground">
 							Go to
-						</p> : null}
+						</h3> : null}
 						{inAdmin ? (
 							<>
 								<SheetClose asChild>
@@ -318,7 +349,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 										<span className="flex-1">Back to portal</span>
 									</Link>
 								</SheetClose>
-								<AdminNavigation groups={adminGroups} pathname={pathname} mobile onNavigate={() => setMenuOpen(false)} />
+								<AdminNavigation groups={adminGroups} pathname={pathname} mobile onNavigate={() => changeMenuOpen(false)} />
 							</>
 						) : (
 							<>
@@ -364,6 +395,12 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 							</>
 						)}
 					</nav>
+					{!inAdmin ? <details className="group mx-4 mt-3 border-t border-border pt-2">
+						<summary className="flex min-h-12 cursor-pointer list-none items-center gap-3 rounded-lg px-1 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
+							<QrCode className="size-5" /><span className="flex-1">Event check-in</span><ChevronDown className="size-4 transition-transform group-open:rotate-180 motion-reduce:transition-none" />
+						</summary>
+						<div className="pt-2"><MemberCodeCard memberId={memberId} /></div>
+					</details> : null}
 
 					<div className="mt-2 border-t border-border px-2 pt-2">
 						<form action={signOutAction}>
@@ -377,6 +414,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 								Sign out
 							</button>
 						</form>
+					</div>
 					</div>
 				</SheetContent>
 			</Sheet>
@@ -408,6 +446,7 @@ function BarTab({ item, pathname }: { item: NavItem; pathname: string }) {
 	return (
 		<Link
 			href={item.href}
+			aria-current={on ? "page" : undefined}
 			className={cn(
 				"flex flex-1 flex-col items-center gap-1 py-2 text-[0.65rem] font-medium transition-colors",
 				on ? "text-secondary" : "text-primary-foreground/55",

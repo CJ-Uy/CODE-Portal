@@ -44,8 +44,9 @@ export function CreateEventSheet({
 }) {
 	const router = useRouter();
 	// The mobile "+" quick action links to /portal/calendar?create=1 to open this directly.
-	const openFromUrl = useSearchParams().get("create") === "1";
-	const [open, setOpen] = useState(openFromUrl);
+	const searchParams = useSearchParams();
+	const openFromUrl = searchParams.get("create") === "1";
+	const [open, setOpen] = useState(false);
 	const [pending, startTransition] = useTransition();
 	const [error, setError] = useState<string | null>(null);
 
@@ -80,6 +81,18 @@ export function CreateEventSheet({
 		setEndDay(defaultStart().slice(0, 10));
 		setReadOnly(false);
 		setError(null);
+	}
+
+	function changeOpen(next: boolean) {
+		setOpen(next);
+		if (!next) {
+			reset();
+			if (openFromUrl) {
+				const params = new URLSearchParams(searchParams.toString());
+				params.delete("create");
+				router.replace(`/portal/calendar${params.size ? `?${params}` : ""}`, { scroll: false });
+			}
+		}
 	}
 
 	function submit() {
@@ -127,14 +140,8 @@ export function CreateEventSheet({
 
 	return (
 		<Sheet
-			open={open}
-			onOpenChange={(next) => {
-				setOpen(next);
-				if (!next) {
-					reset();
-					if (openFromUrl) router.replace("/portal/calendar");
-				}
-			}}
+			open={open || openFromUrl}
+			onOpenChange={changeOpen}
 		>
 			<SheetTrigger asChild>
 				<Button size="sm" className="desktop-slide-in-from-right">
@@ -348,7 +355,7 @@ export function CreateEventSheet({
 				</div>
 
 				<SheetFooter className="sticky bottom-0 z-10 mt-0 flex-row gap-2 border-t bg-background pb-[max(1rem,env(safe-area-inset-bottom))]">
-					<Button type="button" variant="outline" className="flex-1 sm:flex-none" onClick={() => setOpen(false)} disabled={pending}>
+					<Button type="button" variant="outline" className="flex-1 sm:flex-none" onClick={() => changeOpen(false)} disabled={pending}>
 						Cancel
 					</Button>
 					<Button type="button" className="flex-1 sm:flex-none" onClick={submit} disabled={pending || !canSubmit}>

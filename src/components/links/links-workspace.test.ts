@@ -1,9 +1,14 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import type { LinkListItem } from "@/db/repositories/links";
 import { ORG_QR_STYLE } from "./qr-style";
 import { LinksWorkspace } from "./links-workspace";
+
+vi.mock("next/navigation", () => ({
+	useRouter: () => ({ replace: vi.fn() }),
+	useSearchParams: () => new URLSearchParams(),
+}));
 
 it("keeps link actions visible in the mobile list", () => {
 	const link: LinkListItem = {
