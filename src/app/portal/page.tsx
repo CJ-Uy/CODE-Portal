@@ -3,7 +3,6 @@ import Link from "next/link";
 import { ArrowRight, BookOpen, CalendarDays, ClipboardCheck, Link2, Megaphone, MessageSquare } from "lucide-react";
 import { getRepositories } from "@/db";
 import { EventScanPanel } from "@/components/event-scan-panel";
-import { MemberCodeCard } from "@/components/member-code-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -68,8 +67,7 @@ export default async function PortalOverviewPage() {
 				<p className="mt-1 text-sm text-muted-foreground">{today}</p>
 			</div>
 
-			<div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[22rem_minmax(0,1fr)]">
-				<MemberCodeCard memberId={actor.memberId} />
+			<div className={flags.retention ? "grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]" : "grid min-w-0 grid-cols-1 gap-6"}>
 				<Card>
 					<CardHeader className="flex-row flex-wrap items-center justify-between gap-3">
 						<CardTitle>Upcoming events</CardTitle>
@@ -89,6 +87,17 @@ export default async function PortalOverviewPage() {
 						</ul> : <p className="text-sm text-muted-foreground">No upcoming events scheduled. Check Calendar for updates.</p>}
 					</CardContent>
 				</Card>
+				{flags.retention ? (
+					<Card>
+						<CardHeader>
+							<CardTitle>Retention path</CardTitle>
+							<CardDescription>{summary.retention.termName ?? "Current term"}</CardDescription>
+						</CardHeader>
+						<CardContent>
+							<RetentionProgress points={summary.retention.points} retainedAt={summary.retention.retainedAt} />
+						</CardContent>
+					</Card>
+				) : null}
 			</div>
 
 			{currentTerm
@@ -123,20 +132,7 @@ export default async function PortalOverviewPage() {
 				<MetricCard label="Links" value={String(summary.linkClicks)} description="Clicks on your short links" icon={Link2} />
 			</div>
 
-			<div className={flags.library && (flags.retention || flags.announcements) ? "grid gap-6 lg:grid-cols-[1.4fr_1fr]" : "grid gap-6"}>
-				<div className="grid gap-6">
-					{flags.retention ? (
-					<Card>
-						<CardHeader>
-							<CardTitle>Retention path</CardTitle>
-							<CardDescription>{summary.retention.termName ?? "Current term"}</CardDescription>
-						</CardHeader>
-						<CardContent>
-							<RetentionProgress points={summary.retention.points} retainedAt={summary.retention.retainedAt} />
-						</CardContent>
-					</Card>
-					) : null}
-
+			<div className={flags.library && flags.announcements ? "grid gap-6 lg:grid-cols-[1.4fr_1fr]" : "grid gap-6"}>
 					{flags.announcements ? (
 					<Card>
 						<CardHeader className="flex-row items-center justify-between space-y-0">
@@ -169,8 +165,6 @@ export default async function PortalOverviewPage() {
 						</CardContent>
 					</Card>
 					) : null}
-				</div>
-
 				{flags.library ? (
 				<Card>
 					<CardHeader className="flex-row items-center justify-between space-y-0">
