@@ -33,13 +33,18 @@ test.beforeAll(async ({ request }, info) => {
 
 test.afterAll(() => restore?.());
 
-test("Home opens with check-in and approved upcoming events after a long archive", async ({ page }) => {
+test("Home leads with approved upcoming events and retention after a long archive", async ({ page }) => {
 	await page.setViewportSize({ width: 390, height: 844 });
 	await signInAs(page, "member");
 	await expect(page.getByRole("heading", { name: "Home", exact: true })).toBeVisible();
 	await expect(page.locator("main")).not.toContainText("Kumusta");
-	await expect(page.locator("main canvas[aria-label='Member attendance QR code']")).toBeVisible();
+	await expect(page.locator("main canvas[aria-label='Member attendance QR code']")).toHaveCount(0);
 	await expect(page.getByRole("link", { name: /Upcoming workspace event/ })).toBeVisible();
+	const upcoming = page.getByRole("heading", { name: "Upcoming events", exact: true });
+	const retention = page.getByRole("heading", { name: "Retention path", exact: true });
+	await expect(retention).toBeVisible();
+	expect((await upcoming.boundingBox())!.y).toBeLessThan((await retention.boundingBox())!.y);
+	expect((await retention.boundingBox())!.y).toBeLessThan((await page.locator("main").getByText("Retention", { exact: true }).boundingBox())!.y);
 	await expect(page.locator("main")).not.toContainText("Pending workspace event");
 	for (const width of [320, 390, 430, 1440]) {
 		await page.setViewportSize({ width, height: 900 });
@@ -47,15 +52,29 @@ test("Home opens with check-in and approved upcoming events after a long archive
 	}
 });
 
-test("the check-in QR keeps its display size on a high-DPI phone", async ({ browser }, info) => {
-	const context = await browser.newContext({ baseURL: info.project.use.baseURL, viewport: { width: 320, height: 844 }, deviceScaleFactor: 3 });
+test("Profile reveals the check-in QR by touch and keyboard at its high-DPI display size", async ({ browser }, info) => {
+	const context = await browser.newContext({ baseURL: info.project.use.baseURL, viewport: { width: 320, height: 844 }, deviceScaleFactor: 3, hasTouch: true });
 	try {
 		const page = await context.newPage();
 		await signInAs(page, "member");
+		await page.goto("/portal/profile");
 		const code = page.locator("main canvas[aria-label='Member attendance QR code']");
+		await expect(code).toBeHidden();
+		await page.getByText("Show check-in code", { exact: true }).tap();
+		await expect(code).toBeVisible();
 		await expect(code).toHaveAttribute("width", "660");
 		expect((await code.boundingBox())!.width).toBe(220);
-		expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+		for (const width of [320, 390, 1440]) {
+			await page.setViewportSize({ width, height: 900 });
+			expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+		}
+		await page.getByText("Hide check-in code", { exact: true }).tap();
+		await expect(code).toBeHidden();
+		await page.locator("main summary").focus();
+		await page.keyboard.press("Enter");
+		await expect(code).toBeVisible();
+		await page.keyboard.press("Space");
+		await expect(code).toBeHidden();
 	} finally { await context.close(); }
 });
 

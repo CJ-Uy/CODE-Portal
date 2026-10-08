@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
-import { CalendarDays, Link2 } from "lucide-react";
+import { CalendarDays, ChevronDown, Link2, QrCode } from "lucide-react";
 import { getRepositories } from "@/db";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MemberAvatar } from "@/components/portal/member-avatar";
 import { MemberCodeCard } from "@/components/member-code-card";
@@ -54,7 +55,7 @@ export default async function ProfilePage() {
 	];
 
 	return (
-		<div className="grid gap-6">
+		<div className="grid min-w-0 grid-cols-1 gap-6">
 			<Card className="overflow-hidden">
 				<div className="h-20 bg-primary" aria-hidden />
 				<CardContent className="pt-0">
@@ -113,8 +114,16 @@ export default async function ProfilePage() {
 				</CardContent>
 			</Card>
 
-			<div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-				<MemberCodeCard memberId={actor.memberId} className="lg:order-last" />
+			<div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+				<details className="group min-w-0 lg:order-last">
+					<summary className={buttonVariants({ variant: "outline", className: "min-h-11 w-fit cursor-pointer list-none [&::-webkit-details-marker]:hidden" })}>
+						<QrCode aria-hidden />
+						<span className="group-open:hidden">Show check-in code</span>
+						<span className="hidden group-open:inline">Hide check-in code</span>
+						<ChevronDown className="group-open:rotate-180" aria-hidden />
+					</summary>
+					<div className="mt-3"><MemberCodeCard memberId={actor.memberId} /></div>
+				</details>
 				<Card className="lg:order-first">
 					<CardHeader>
 						<CardTitle>Edit profile</CardTitle>
