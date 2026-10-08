@@ -71,7 +71,7 @@ export function QrCanvas({
 	return (
 		<div className={cn("flex w-fit flex-col items-center gap-3", className)}>
 			<div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-border">
-				<canvas ref={canvasRef} aria-label={label} className="block" />
+				<canvas ref={canvasRef} aria-label={label} width={size} height={size} style={{ width: size, height: size }} className="block" />
 			</div>
 			{error ? <p className="text-sm text-destructive">{error}</p> : null}
 		</div>

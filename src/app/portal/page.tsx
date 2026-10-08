@@ -3,6 +3,8 @@ import Link from "next/link";
 import { ArrowRight, BookOpen, CalendarDays, ClipboardCheck, Link2, Megaphone, MessageSquare } from "lucide-react";
 import { getRepositories } from "@/db";
 import { EventScanPanel } from "@/components/event-scan-panel";
+import { MemberCodeCard } from "@/components/member-code-card";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MetricCard, RetentionProgress } from "@/components/portal/overview-metrics";
@@ -30,8 +32,7 @@ export default async function PortalOverviewPage() {
 	// Each read degrades to an empty/zeroed value so the dashboard never crashes
 	// when a repository is unavailable through the shared-dev adapter. Flagged-off
 	// surfaces skip the read entirely rather than fetching rows nothing will render.
-	const [member, summary, announcements, libraryItems, scanEvents, terms] = await Promise.all([
-		repositories.members.getById(actor, actor.memberId).catch(() => null),
+	const [summary, announcements, libraryItems, scanEvents, terms] = await Promise.all([
 		repositories.overview.getSummary(actor).catch(() => EMPTY_SUMMARY),
 		flags.announcements ? repositories.announcements.listForMember(actor, { limit: 3 }).catch(() => []) : Promise.resolve([]),
 		flags.library ? repositories.library.listItems(actor, { limit: 3 }).catch(() => []) : Promise.resolve([]),
@@ -49,14 +50,45 @@ export default async function PortalOverviewPage() {
 	const currentTerm = terms.find((term) => term.isCurrent);
 	const canUndoScans = getAppConfig().APP_ENV !== "shared";
 
-	const firstName = (member?.nickname ?? member?.fullName ?? member?.name ?? "there").split(/\s+/)[0];
-	const today = new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric" }).format(new Date());
+	const upcomingEvents = scanEvents.filter((event) => event.status === "approved" && (event.endsAt ?? event.startsAt) >= now).slice(0, 3);
+	if (scanEvents.length === 100) {
+		for (let offset = 100; upcomingEvents.length < 3; offset += 100) {
+			const page = await repositories.events.listPublished(actor, { limit: 100, offset }).catch(() => []);
+			upcomingEvents.push(...page.filter((event) => event.status === "approved" && (event.endsAt ?? event.startsAt) >= now).slice(0, 3 - upcomingEvents.length));
+			if (page.length < 100) break;
+		}
+	}
+	const today = new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric", timeZone: "Asia/Manila" }).format(now);
+	const eventDate = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" });
 
 	return (
-		<div className="grid gap-6">
+		<div className="grid min-w-0 grid-cols-1 gap-6">
 			<div>
-				<p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{today}</p>
-				<h1 className="font-heading text-3xl">Kumusta, {firstName}</h1>
+				<h1 className="font-heading text-3xl">Home</h1>
+				<p className="mt-1 text-sm text-muted-foreground">{today}</p>
+			</div>
+
+			<div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[22rem_minmax(0,1fr)]">
+				<MemberCodeCard memberId={actor.memberId} />
+				<Card>
+					<CardHeader className="flex-row flex-wrap items-center justify-between gap-3">
+						<CardTitle>Upcoming events</CardTitle>
+						<Button asChild variant="outline" size="sm"><Link href="/portal/calendar"><CalendarDays />Calendar</Link></Button>
+					</CardHeader>
+					<CardContent>
+						{upcomingEvents.length ? <ul className="divide-y divide-border">
+							{upcomingEvents.map((event) => <li key={event.id}>
+								<Link href={`/portal/calendar/${event.id}`} className="group flex min-w-0 items-center gap-4 rounded-md py-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+									<div className="min-w-0 flex-1">
+										<p className="break-words font-medium group-hover:underline">{event.title}</p>
+										<p className="mt-1 text-sm text-muted-foreground">{eventDate.format(event.startsAt)}{event.place ? ` · ${event.place}` : ""}</p>
+									</div>
+									<ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+								</Link>
+							</li>)}
+						</ul> : <p className="text-sm text-muted-foreground">No upcoming events scheduled. Check Calendar for updates.</p>}
+					</CardContent>
+				</Card>
 			</div>
 
 			{currentTerm

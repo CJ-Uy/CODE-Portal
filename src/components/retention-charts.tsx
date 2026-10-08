@@ -192,10 +192,10 @@ export function CumulativeChart({
 /** Plain flex bars: no geometry to scale, so HTML beats SVG here. */
 export function WeeklyBars({ stats }: { stats: RetentionStats }) {
 	const max = Math.max(1, stats.bestWeek, stats.weeklyAverage);
-	const labelEvery = stats.weeks.length > 10 ? 2 : 1;
+	const labelEvery = Math.max(1, Math.ceil(stats.weeks.length / 6));
 	return (
-		<div className="grid gap-2">
-			<div className="relative flex h-36 items-end gap-1 sm:gap-1.5">
+		<div className="grid min-w-0 grid-cols-1 gap-2">
+			<div className="relative grid h-36 items-end gap-0.5 sm:gap-1" style={{ gridTemplateColumns: `repeat(${stats.weeks.length}, minmax(0, 1fr))` }}>
 				{stats.weeklyAverage > 0 ? (
 					<div
 						className="pointer-events-none absolute inset-x-0 border-t border-dashed border-muted-foreground/60"
@@ -230,7 +230,7 @@ export function WeeklyBars({ stats }: { stats: RetentionStats }) {
 					);
 				})}
 			</div>
-			<div className="flex gap-1 text-[10px] text-muted-foreground sm:gap-1.5">
+			<div className="grid gap-0.5 text-[10px] text-muted-foreground sm:gap-1" style={{ gridTemplateColumns: `repeat(${stats.weeks.length}, minmax(0, 1fr))` }}>
 				{stats.weeks.map((week) => (
 					<span key={week.index} className="min-w-0 flex-1 text-center tabular-nums">
 						{week.index % labelEvery === 0 ? `W${week.index + 1}` : ""}

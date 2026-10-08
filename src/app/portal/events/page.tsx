@@ -68,7 +68,7 @@ export default async function RetentionHistoryPage({
 	];
 
 	return (
-		<div className="grid gap-5">
+		<div className="grid min-w-0 grid-cols-1 gap-5">
 			<div>
 				<h1 className="font-heading text-3xl">Points</h1>
 				<p className="mt-1 max-w-2xl text-sm text-muted-foreground">

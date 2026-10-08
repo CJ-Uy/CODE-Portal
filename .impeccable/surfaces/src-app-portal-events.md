@@ -30,3 +30,5 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 - [Fibery activity log](https://mobbin.com/screens/96626867-28de-4fa1-b7ec-4fb2d2e4510c): compact divided records and contextual filters.
 
 Keep negative and null-point records visible. Count distinct attended events, including attendance worth zero points. Never infer category requirements from a sample image.
+
+Mobile correction: full school-year terms keep all weekly bars inside the viewport. Use zero-minimum grid tracks and at most six week labels, with each bar's detailed date and points preserved in its title. Verify the entire page at 320, 390, 430, 844 and 1440 pixels with a June-to-May term and all three category views.

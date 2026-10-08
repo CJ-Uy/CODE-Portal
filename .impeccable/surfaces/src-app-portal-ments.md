@@ -16,3 +16,5 @@ Follow-up requirements: trees grow down from mentors to mentees. Drag or swipe p
 Research inspected: [Workable](https://mobbin.com/screens/46d531ba-fda0-4138-a43b-821e1b5c20fb), [Deel](https://mobbin.com/screens/c4ca67a1-4971-4188-8c6b-52bf79cc5e12), [Aboard](https://mobbin.com/screens/d63f0f3e-ed6e-4229-adbf-2e9b980f0d88), [Qatalog](https://mobbin.com/screens/6a5b572a-0888-48fd-89ed-6910ea6c5eeb). Connected person nodes, canvas controls and a stable search are the relevant patterns. No replacement brand or raster comp.
 
 Finish requires desktop and mobile exploration, current screenshots, a fresh reviewer verdict and scoped design documentation. Beta database changes require the repository's migration approval.
+
+Mobile correction: two fingers zoom the canvas around their midpoint and one remaining finger continues panning. Only the canvas captures touch gestures. Fullscreen uses the browser's modal top layer to fill the available viewport on mobile and desktop, keeping selection and zoom. Exit returns focus to the fullscreen control; Escape also exits. Background content stays inert while expanded.
