@@ -80,10 +80,10 @@ export function createSurveysInternalHandlers({ db, deployEnv, allowedOrigins = 
 					return Response.json(surveysContract.create.output.parse({ survey }), { status: 201, headers: responseHeaders });
 				}
 
-				if (request.method === "POST" && op === "sample") {
-					const input = surveysContract.sample.input.parse(await readBody(request));
-					const result = await repository.sample(actor, input);
-					return Response.json(surveysContract.sample.output.parse(result), { headers: responseHeaders });
+				if (request.method === "POST" && op === "send") {
+					const input = surveysContract.send.input.parse(await readBody(request));
+					const result = await repository.send(actor, input);
+					return Response.json(surveysContract.send.output.parse(result), { headers: responseHeaders });
 				}
 
 				return new Response("Method not allowed", { status: 405, headers: responseHeaders });

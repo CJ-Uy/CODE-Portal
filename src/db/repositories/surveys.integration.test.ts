@@ -7,7 +7,7 @@ import { surveyAssignments, surveys } from "@/db/schema";
 import { startOfUtc8Day } from "@/lib/date-slots";
 import type { Actor } from "@/server/auth/permissions";
 import { createAuditRepository } from "./audit";
-import { createSurveysRepository } from "./surveys";
+import { createSurveysRepository, type SurveysRepository } from "./surveys";
 
 const admin: Actor = { memberId: "mem_admin", roles: ["super"] };
 const member: Actor = { memberId: "mem_member", roles: ["member"] };
@@ -40,6 +40,41 @@ async function seedEvent(id = "evt_1", title = "Study Jam") {
 		.bind(id, title, "official", "approved", "Room", 0, "Test event", "mem_admin", "secret")
 		.run();
 }
+
+async function seedAttendance(eventId: string, memberIds: string[]) {
+	await env.DB.batch(
+		memberIds.map((memberId) =>
+			env.DB.prepare("INSERT INTO crs_attendance (event_id, member_id, scanned_at, scanned_by) VALUES (?, ?, ?, ?)").bind(
+				eventId,
+				memberId,
+				0,
+				"mem_admin",
+			),
+		),
+	);
+}
+
+const NOW = new Date("2026-10-16T00:00:00.000Z");
+const HOUR = 3_600_000;
+const in72h = new Date(NOW.getTime() + 72 * HOUR);
+
+// A fixed-seed send of an exact head count, for tests that only need a running form with invitees.
+const sendCount = (repo: SurveysRepository, surveyId: string, count: number, extra: Partial<Parameters<SurveysRepository["send"]>[1]> = {}) =>
+	repo.send(
+		admin,
+		{
+			surveyId,
+			invite: { mode: "count", count },
+			allowWalkIn: true,
+			shareWithOrganizers: true,
+			emailInvitees: false,
+			remind: true,
+			closesAt: in72h,
+			seed: "fixed",
+			...extra,
+		},
+		NOW,
+	);
 
 const textQuestions = (count: number) =>
 	Array.from({ length: count }, (_, i) => ({ type: "text" as const, prompt: `Q${i + 1}`, required: false }));
@@ -94,25 +129,23 @@ describe("surveys repository on D1", () => {
 		const { db, repo } = setup();
 		const survey = await repo.create(admin, { title: "S", questions: [{ type: "text", prompt: "Q", required: false }] });
 
-		const first = await repo.sample(admin, { surveyId: survey.id, sampleSize: 4, seed: "fixed" });
+		const first = await sendCount(repo, survey.id, 4);
 		const assignments = await db.select().from(surveyAssignments).where(eq(surveyAssignments.surveyId, survey.id));
 		const [running] = await db.select().from(surveys).where(eq(surveys.id, survey.id));
 
-		expect(first).toEqual({ assigned: 4 });
+		expect(first).toEqual({ invited: 4, eligible: 11 });
 		expect(assignments).toHaveLength(4);
 		expect(assignments.every((a) => a.source === "invited")).toBe(true);
 		expect(running.status).toBe("running");
 		expect(running.sampleSize).toBe(4);
 	});
 
-	it("rejects sampling a survey that is not draft", async () => {
+	it("rejects sending a survey that is not draft", async () => {
 		await seedMembers(5);
 		const { repo } = setup();
 		const survey = await repo.create(admin, { title: "S", questions: [{ type: "text", prompt: "Q", required: false }] });
-		await repo.sample(admin, { surveyId: survey.id, sampleSize: 2, seed: "a" });
-		await expect(repo.sample(admin, { surveyId: survey.id, sampleSize: 2, seed: "a" })).rejects.toThrow(
-			"already been sampled",
-		);
+		await sendCount(repo, survey.id, 2);
+		await expect(sendCount(repo, survey.id, 2)).rejects.toThrow("already been sent");
 	});
 
 	it("rejects list/get for a non-admin actor", async () => {
@@ -125,7 +158,7 @@ describe("surveys repository on D1", () => {
 		await seedMembers(3);
 		const { db, repo } = setup();
 		const survey = await repo.create(admin, { title: "S", questions: [{ type: "text", prompt: "Q", required: false }] });
-		await repo.sample(admin, { surveyId: survey.id, sampleSize: 3, seed: "fixed" });
+		await sendCount(repo, survey.id, 3);
 		const [question] = (await repo.getById(admin, survey.id))!.questions;
 		const invited = asMember((await assignedIds(db, survey.id))[0]);
 
@@ -146,7 +179,7 @@ describe("surveys repository on D1", () => {
 		await seedMembers(3);
 		const { db, repo } = setup();
 		const survey = await repo.create(admin, { title: "S", questions: [{ type: "text", prompt: "Q", required: false }] });
-		await repo.sample(admin, { surveyId: survey.id, sampleSize: 1, seed: "fixed" });
+		await sendCount(repo, survey.id, 1);
 		const [question] = (await repo.getById(admin, survey.id))!.questions;
 		const invited = await assignedIds(db, survey.id);
 		const outsider = ["mem_admin", "mem_0", "mem_1", "mem_2"].find((id) => !invited.includes(id))!;
@@ -161,7 +194,7 @@ describe("surveys repository on D1", () => {
 		await seedMembers(1);
 		const { db, repo } = setup();
 		const survey = await repo.create(admin, { title: "S", questions: [{ type: "text", prompt: "Q", required: false }] });
-		await repo.sample(admin, { surveyId: survey.id, sampleSize: 2, seed: "fixed" });
+		await sendCount(repo, survey.id, 2);
 		const [question] = (await repo.getById(admin, survey.id))!.questions;
 		const now = new Date("2026-10-10T15:30:00Z");
 
@@ -188,7 +221,7 @@ describe("surveys repository on D1", () => {
 		expect(questions).toHaveLength(30);
 		expect(questions.map((q) => q.position)).toEqual(Array.from({ length: 30 }, (_, i) => i + 1));
 
-		await repo.sample(admin, { surveyId: survey.id, sampleSize: 2, seed: "fixed" });
+		await sendCount(repo, survey.id, 2);
 		await expect(
 			repo.submitResponse(asMember("mem_0"), {
 				surveyId: survey.id,
@@ -211,7 +244,7 @@ describe("surveys repository on D1", () => {
 		});
 		const detail = await repo.getById(admin, survey.id);
 		const [scaleQ, textQ] = detail!.questions;
-		await repo.sample(admin, { surveyId: survey.id, sampleSize: 2, seed: "x" });
+		await sendCount(repo, survey.id, 2, { seed: "x" });
 		await repo.submitResponse(asMember((await assignedIds(db, survey.id))[0]), {
 			surveyId: survey.id,
 			answers: [
@@ -298,6 +331,7 @@ describe("surveys repository on D1", () => {
 	it("edits a draft but not a sent form", async () => {
 		await seedMembers(3);
 		await seedEvent();
+		await seedAttendance("evt_1", ["mem_0", "mem_1", "mem_2"]);
 		const { db, repo } = setup();
 		const survey = await repo.createFromTemplate(admin, { templateId: "stpl_standard", eventId: "evt_1" });
 		const [oldFirst] = (await repo.getById(admin, survey.id))!.questions;
@@ -320,7 +354,7 @@ describe("surveys repository on D1", () => {
 		expect(detail!.questions.some((q) => q.id === oldFirst.id)).toBe(false);
 		expect(await db.select().from(schema.surveyQuestions)).toHaveLength(2);
 
-		await repo.sample(admin, { surveyId: survey.id, sampleSize: 2, seed: "fixed" });
+		await sendCount(repo, survey.id, 2);
 		await expect(repo.updateDraft(admin, { surveyId: survey.id, title: "Late", questions: textQuestions(1) })).rejects.toThrow(
 			"Questions can't change after sending.",
 		);
@@ -391,5 +425,247 @@ describe("surveys repository on D1", () => {
 			"Not authorized",
 		);
 		await expect(repo.getForEvent(member, "evt_1")).rejects.toThrow("Not authorized");
+	});
+
+	describe("send", () => {
+		const sendInput = (surveyId: string, extra: Partial<Parameters<SurveysRepository["send"]>[1]> = {}) => ({
+			surveyId,
+			invite: { mode: "suggested" as const },
+			allowWalkIn: true,
+			shareWithOrganizers: true,
+			emailInvitees: false,
+			remind: true,
+			closesAt: in72h,
+			...extra,
+		});
+
+		async function eventForm(attendees: number) {
+			await seedMembers(attendees);
+			await seedEvent();
+			// mem_admin owns evt_1, so attending it must not make them eligible.
+			await seedAttendance("evt_1", ["mem_admin", ...Array.from({ length: attendees }, (_, i) => `mem_${i}`)]);
+			const { db, repo } = setup();
+			const survey = await repo.createFromTemplate(admin, { templateId: "stpl_standard", eventId: "evt_1" });
+			return { db, repo, survey };
+		}
+
+		it("sends to the suggested sample of eligible attendees and notifies them", async () => {
+			const { db, repo, survey } = await eventForm(80);
+
+			const result = await repo.send(admin, sendInput(survey.id), NOW);
+
+			expect(result).toEqual({ invited: 47, eligible: 80 });
+			const invited = await assignedIds(db, survey.id);
+			expect(invited).toHaveLength(47);
+			expect(invited).not.toContain("mem_admin");
+			const notes = await db.select().from(schema.notifications);
+			expect(notes).toHaveLength(47);
+			expect(notes.map((n) => n.memberId).sort()).toEqual([...invited].sort());
+			expect(notes[0]).toMatchObject({
+				kind: "survey_assigned",
+				title: "How was Study Jam?",
+				body: "Share quick feedback. Your name isn't attached to your answers.",
+				href: `/portal/surveys/${survey.id}`,
+			});
+			const [row] = await db.select().from(surveys).where(eq(surveys.id, survey.id));
+			expect(row).toMatchObject({ status: "running", sampleSize: 47, allowWalkIn: true, shareWithOrganizers: true, emailInvitees: false });
+			expect(row.sentAt?.getTime()).toBe(NOW.getTime());
+			expect(row.closesAt?.getTime()).toBe(in72h.getTime());
+			expect(row.reminderAt?.getTime()).toBe(in72h.getTime() - 24 * HOUR);
+			const audits = await db.select().from(schema.auditLogs);
+			expect(audits.find((a) => a.action === "survey:send")).toMatchObject({
+				category: "survey",
+				targetId: survey.id,
+				detail: "Invited 47 of 80 eligible.",
+			});
+		});
+
+		it("invites every eligible attendee in all mode and reports the eligible count", async () => {
+			const { repo, survey } = await eventForm(25);
+
+			await expect(repo.eligibleCount(admin, survey.id)).resolves.toBe(25);
+			await expect(repo.send(admin, sendInput(survey.id, { invite: { mode: "all" } }), NOW)).resolves.toEqual({
+				invited: 25,
+				eligible: 25,
+			});
+		});
+
+		it("skips the reminder when it would land within an hour of sending, or when turned off", async () => {
+			const soon = await eventForm(3);
+			await soon.repo.send(admin, sendInput(soon.survey.id, { closesAt: new Date(NOW.getTime() + 12 * HOUR) }), NOW);
+			const [soonRow] = await soon.db.select().from(surveys).where(eq(surveys.id, soon.survey.id));
+			expect(soonRow.reminderAt).toBeNull();
+
+			await env.DB.prepare("DELETE FROM survey_assignments").run();
+			await env.DB.prepare("UPDATE surveys SET status = 'draft', reminder_at = NULL").run();
+			await soon.repo.send(admin, sendInput(soon.survey.id, { remind: false }), NOW);
+			const [offRow] = await soon.db.select().from(surveys).where(eq(surveys.id, soon.survey.id));
+			expect(offRow.reminderAt).toBeNull();
+		});
+
+		it("refuses to send when nobody is eligible", async () => {
+			await seedMembers(2);
+			await seedEvent();
+			await env.DB.prepare("INSERT INTO event_staff (event_id, member_id, role) VALUES (?, ?, ?)").bind("evt_1", "mem_0", "scanner").run();
+			await seedAttendance("evt_1", ["mem_admin", "mem_0"]);
+			const { db, repo } = setup();
+			const survey = await repo.createFromTemplate(admin, { templateId: "stpl_standard", eventId: "evt_1" });
+
+			await expect(repo.eligibleCount(admin, survey.id)).resolves.toBe(0);
+			await expect(repo.send(admin, sendInput(survey.id), NOW)).rejects.toThrow("No one is eligible for this form yet.");
+			const [row] = await db.select().from(surveys).where(eq(surveys.id, survey.id));
+			expect(row.status).toBe("draft");
+			expect(await assignedIds(db, survey.id)).toEqual([]);
+		});
+
+		it("refuses a closing time in the past", async () => {
+			const { db, repo, survey } = await eventForm(3);
+
+			await expect(repo.send(admin, sendInput(survey.id, { closesAt: NOW }), NOW)).rejects.toThrow("Pick a closing time in the future.");
+			await expect(
+				repo.send(admin, sendInput(survey.id, { closesAt: new Date(NOW.getTime() - HOUR) }), NOW),
+			).rejects.toThrow("Pick a closing time in the future.");
+			const [row] = await db.select().from(surveys).where(eq(surveys.id, survey.id));
+			expect(row.status).toBe("draft");
+		});
+
+		it("caps a custom count at the eligible total and never sends twice", async () => {
+			const { db, repo, survey } = await eventForm(10);
+
+			await expect(repo.send(admin, sendInput(survey.id, { invite: { mode: "count", count: 500 } }), NOW)).resolves.toEqual({
+				invited: 10,
+				eligible: 10,
+			});
+			await expect(repo.send(admin, sendInput(survey.id, { invite: { mode: "count", count: 5 } }), NOW)).rejects.toThrow(
+				"already been sent",
+			);
+			expect(await assignedIds(db, survey.id)).toHaveLength(10);
+		});
+
+		it("inserts invitees in chunks under the D1 parameter limit", async () => {
+			const { db, repo, survey } = await eventForm(120);
+
+			await expect(repo.send(admin, sendInput(survey.id, { invite: { mode: "all" } }), NOW)).resolves.toEqual({
+				invited: 120,
+				eligible: 120,
+			});
+			expect(await assignedIds(db, survey.id)).toHaveLength(120);
+		});
+
+		it("forces walk-ins off on a general form", async () => {
+			await seedMembers(3);
+			const { db, repo } = setup();
+			const survey = await repo.createFromTemplate(admin, { templateId: "stpl_pulse", eventId: null });
+
+			await expect(repo.eligibleCount(admin, survey.id)).resolves.toBe(4);
+			await expect(repo.send(admin, sendInput(survey.id, { allowWalkIn: true }), NOW)).resolves.toMatchObject({ eligible: 4 });
+			const [row] = await db.select().from(surveys).where(eq(surveys.id, survey.id));
+			expect(row.allowWalkIn).toBe(false);
+			const notes = await db.select().from(schema.notifications);
+			expect(notes.every((n) => n.title === "Quick pulse")).toBe(true);
+		});
+
+		it("blocks a plain member and a missing survey", async () => {
+			const { repo, survey } = await eventForm(3);
+
+			await expect(repo.send(member, sendInput(survey.id), NOW)).rejects.toThrow("Not authorized");
+			await expect(repo.eligibleCount(member, survey.id)).rejects.toThrow("Not authorized");
+			await expect(repo.send(admin, sendInput("srv_missing"), NOW)).rejects.toThrow("Survey not found.");
+			await expect(repo.eligibleCount(admin, "srv_missing")).rejects.toThrow("Survey not found.");
+		});
+	});
+
+	describe("updateRunning", () => {
+		async function runningForm(extra: Partial<Parameters<SurveysRepository["send"]>[1]> = {}) {
+			await seedMembers(5);
+			await seedEvent();
+			await seedAttendance("evt_1", ["mem_0", "mem_1", "mem_2", "mem_3", "mem_4"]);
+			const { db, repo } = setup();
+			const survey = await repo.createFromTemplate(admin, { templateId: "stpl_standard", eventId: "evt_1" });
+			await sendCount(repo, survey.id, 3, extra);
+			const row = async () => (await db.select().from(surveys).where(eq(surveys.id, survey.id)))[0];
+			return { db, repo, survey, row };
+		}
+
+		it("extends a running form and recomputes the reminder", async () => {
+			const { db, repo, survey, row } = await runningForm();
+			const later = new Date(in72h.getTime() + 48 * HOUR);
+			const hourAfterSend = new Date(NOW.getTime() + HOUR);
+
+			await repo.updateRunning(admin, { surveyId: survey.id, closesAt: later, shareWithOrganizers: false }, hourAfterSend);
+
+			const updated = await row();
+			expect(updated.closesAt?.getTime()).toBe(later.getTime());
+			expect(updated.reminderAt?.getTime()).toBe(later.getTime() - 24 * HOUR);
+			expect(updated.shareWithOrganizers).toBe(false);
+			expect(updated.status).toBe("running");
+			const audits = await db.select().from(schema.auditLogs);
+			expect(audits.map((a) => a.action)).toContain("survey:update");
+		});
+
+		it("rejects a new closing time that is not in the future", async () => {
+			const { repo, survey, row } = await runningForm();
+
+			await expect(repo.updateRunning(admin, { surveyId: survey.id, closesAt: NOW }, NOW)).rejects.toThrow(
+				"Pick a closing time in the future.",
+			);
+			expect((await row()).closesAt?.getTime()).toBe(in72h.getTime());
+		});
+
+		it("keeps a reminder that was turned off, off, when the form is extended", async () => {
+			const { repo, survey, row } = await runningForm({ remind: false });
+
+			await repo.updateRunning(admin, { surveyId: survey.id, closesAt: new Date(in72h.getTime() + 24 * HOUR) }, NOW);
+
+			expect((await row()).reminderAt).toBeNull();
+		});
+
+		it("sends the reminder early only once", async () => {
+			const { repo, survey, row } = await runningForm();
+			const later = new Date(NOW.getTime() + HOUR);
+
+			await repo.updateRunning(admin, { surveyId: survey.id, remindNow: true }, later);
+			expect((await row()).reminderAt?.getTime()).toBe(later.getTime());
+
+			await env.DB.prepare("UPDATE surveys SET reminder_sent_at = ?").bind(later.getTime()).run();
+			await expect(repo.updateRunning(admin, { surveyId: survey.id, remindNow: true }, later)).rejects.toThrow(
+				"The reminder was already sent.",
+			);
+
+			// Once sent, moving the close never schedules a second reminder.
+			await repo.updateRunning(admin, { surveyId: survey.id, closesAt: new Date(in72h.getTime() + 48 * HOUR) }, later);
+			expect((await row()).reminderAt?.getTime()).toBe(later.getTime());
+		});
+
+		it("refuses a reminder once the form has closed", async () => {
+			const { repo, survey } = await runningForm();
+
+			await expect(
+				repo.updateRunning(admin, { surveyId: survey.id, remindNow: true }, new Date(in72h.getTime() + HOUR)),
+			).rejects.toThrow("This form has already closed.");
+		});
+
+		it("closes a running form and edits nothing else once closed", async () => {
+			const { repo, survey, row } = await runningForm();
+
+			await repo.updateRunning(admin, { surveyId: survey.id, close: true }, NOW);
+
+			expect((await row()).status).toBe("closed");
+			await expect(repo.updateRunning(admin, { surveyId: survey.id, shareWithOrganizers: false }, NOW)).rejects.toThrow(
+				"Only a running form can be edited.",
+			);
+		});
+
+		it("refuses a draft, a missing survey and a plain member", async () => {
+			await seedEvent();
+			const { repo } = setup();
+			const draft = await repo.createFromTemplate(admin, { templateId: "stpl_standard", eventId: "evt_1" });
+
+			await expect(repo.updateRunning(admin, { surveyId: draft.id, close: true }, NOW)).rejects.toThrow(
+				"Only a running form can be edited.",
+			);
+			await expect(repo.updateRunning(admin, { surveyId: "srv_missing", close: true }, NOW)).rejects.toThrow("Survey not found.");
+			await expect(repo.updateRunning(member, { surveyId: draft.id, close: true }, NOW)).rejects.toThrow("Not authorized");
+		});
 	});
 });

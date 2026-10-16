@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createSurveyInputSchema, sampleSurveyInputSchema } from "@/db/types";
+import { createSurveyInputSchema, sendSurveyInputSchema } from "@/db/types";
 import { operation } from "./common";
 
 const surveyOutputSchema = z.object({
@@ -10,6 +10,17 @@ const surveyOutputSchema = z.object({
 	sampleSize: z.number().int().nullable(),
 	createdBy: z.string(),
 	createdAt: z.coerce.date(),
+	templateId: z.string().nullable(),
+	closesAt: z.coerce.date().nullable(),
+	sentAt: z.coerce.date().nullable(),
+	reminderAt: z.coerce.date().nullable(),
+	reminderSentAt: z.coerce.date().nullable(),
+	allowWalkIn: z.boolean(),
+	shareWithOrganizers: z.boolean(),
+	emailInvitees: z.boolean(),
+	aiSummaryJson: z.string().nullable(),
+	aiSummaryAt: z.coerce.date().nullable(),
+	aiSummaryResponseCount: z.number().int().nullable(),
 });
 
 const surveyQuestionOutputSchema = z.object({
@@ -64,9 +75,9 @@ export const surveysContract = {
 		permission: "survey:configure",
 		sharedDev: "deny",
 	}),
-	sample: operation({
-		input: sampleSurveyInputSchema,
-		output: z.object({ assigned: z.number().int() }),
+	send: operation({
+		input: sendSurveyInputSchema,
+		output: z.object({ invited: z.number().int(), eligible: z.number().int() }),
 		auth: "admin",
 		permission: "survey:configure",
 		sharedDev: "deny",

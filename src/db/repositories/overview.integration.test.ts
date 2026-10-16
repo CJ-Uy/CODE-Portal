@@ -96,6 +96,26 @@ describe("overview repository on D1", () => {
 		expect(summary.linkClicks).toBe(12);
 	});
 
+	it("does not count a form past its closing time, or a walk-in row, as pending", async () => {
+		for (const [id, closesAt, source] of [
+			["srv_open", NOW.getTime() + 3_600_000, "invited"],
+			["srv_late", NOW.getTime() - 1, "invited"],
+			["srv_walk", null, "walk_in"],
+		] as const) {
+			await env.DB.prepare("INSERT INTO surveys (id, title, status, created_by, closes_at) VALUES (?, ?, ?, ?, ?)")
+				.bind(id, id, "running", "mem_admin", closesAt)
+				.run();
+			await env.DB.prepare("INSERT INTO survey_assignments (survey_id, member_id, completed_at, source) VALUES (?, ?, ?, ?)")
+				.bind(id, "mem_ov", null, source)
+				.run();
+		}
+
+		const repository = createOverviewRepository(drizzle(env.DB, { schema }));
+		const summary = await repository.getSummary(memberActor, NOW);
+
+		expect(summary.pendingSurveys).toBe(1);
+	});
+
 	it("returns zeroed counts and a null term when the member has no activity and no active term", async () => {
 		await env.DB.prepare("DELETE FROM terms").run();
 		const db = drizzle(env.DB, { schema });

@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getRepositories } from "@/db";
-import { createSurveyInputSchema, sampleSurveyInputSchema } from "@/db/types";
+import { createSurveyInputSchema, sendSurveyInputSchema } from "@/db/types";
+import { defaultClosesAt } from "@/lib/feedback/stats";
 import { requireActor } from "@/server/auth/actor";
 import { assertFeatureEnabled } from "@/server/features";
 
@@ -30,16 +31,35 @@ export async function createSurveyAction(formData: FormData) {
 	redirect(`/portal/admin/content/surveys/${survey.id}`);
 }
 
-export async function sampleSurveyAction(formData: FormData) {
+// Thin shim for the old draw-a-sample page until the real send panel replaces it: the form's
+// sampleSize becomes an exact head count, and everything else takes its usual default.
+export async function sendSurveyAction(formData: FormData) {
 	assertFeatureEnabled("surveys");
 	const actor = await requireActor();
-	const input = sampleSurveyInputSchema.parse({
-		surveyId: formData.get("surveyId"),
-		sampleSize: Number(formData.get("sampleSize")),
+	const surveyId = String(formData.get("surveyId") ?? "");
+	const repositories = await getRepositories();
+	const detail = await repositories.surveys.getById(actor, surveyId);
+	if (!detail) throw new Error("Survey not found.");
+
+	const now = new Date();
+	const event = detail.survey.eventId
+		? await repositories.events.getById(actor, detail.survey.eventId).catch(() => null)
+		: null;
+	// An event that ended long ago has a default close already in the past, so fall back to a fresh 72h window.
+	const eventClosesAt = event ? defaultClosesAt(event.startsAt, event.endsAt) : null;
+	const closesAt = eventClosesAt && eventClosesAt > now ? eventClosesAt : new Date(now.getTime() + 72 * 3_600_000);
+
+	const input = sendSurveyInputSchema.parse({
+		surveyId,
+		invite: { mode: "count", count: Number(formData.get("sampleSize")) },
+		allowWalkIn: true,
+		shareWithOrganizers: true,
+		emailInvitees: false,
+		remind: true,
+		closesAt,
 		seed: nullableText(formData.get("seed")) ?? undefined,
 	});
-	const repositories = await getRepositories();
-	await repositories.surveys.sample(actor, input);
+	await repositories.surveys.send(actor, input);
 	revalidatePath(`/portal/admin/content/surveys/${input.surveyId}`);
 }
 

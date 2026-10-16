@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, gte, isNull, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, isNull, lte, or, sql } from "drizzle-orm";
 import {
 	crsEvents,
 	linkDailyStats,
@@ -69,8 +69,10 @@ export function createOverviewRepository(db: Db): OverviewRepository {
 				.where(
 					and(
 						eq(surveyAssignments.memberId, actor.memberId),
+						eq(surveyAssignments.source, "invited"),
 						isNull(surveyAssignments.completedAt),
 						eq(surveys.status, "running"),
+						or(isNull(surveys.closesAt), gt(surveys.closesAt, now)),
 					),
 				);
 

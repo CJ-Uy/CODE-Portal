@@ -149,15 +149,35 @@ export const updateDraftInputSchema = z.object({
 
 export type UpdateDraftInput = z.infer<typeof updateDraftInputSchema>;
 
-// Drawing the sample also flips the survey to running. sampleSize is the number
-// of members to draw; seed makes the draw deterministic and testable.
-export const sampleSurveyInputSchema = z.object({
+// Sending flips a draft to running and invites a seeded sample of the eligible members. `suggested`
+// uses the statistical head count, `all` invites everyone, `count` caps at the eligible total.
+export const sendSurveyInputSchema = z.object({
 	surveyId: z.string().trim().min(1),
-	sampleSize: z.number().int().min(1).max(1000),
+	invite: z.discriminatedUnion("mode", [
+		z.object({ mode: z.literal("suggested") }),
+		z.object({ mode: z.literal("all") }),
+		z.object({ mode: z.literal("count"), count: z.number().int().min(1).max(1000) }),
+	]),
+	allowWalkIn: z.boolean(),
+	shareWithOrganizers: z.boolean(),
+	emailInvitees: z.boolean(),
+	remind: z.boolean(),
+	closesAt: z.coerce.date(),
 	seed: z.string().trim().min(1).max(120).optional(),
 });
 
-export type SampleSurveyInput = z.infer<typeof sampleSurveyInputSchema>;
+export type SendSurveyInput = z.infer<typeof sendSurveyInputSchema>;
+
+// What can change on a running form. Questions and invitees are fixed once sent.
+export const updateRunningInputSchema = z.object({
+	surveyId: z.string().trim().min(1),
+	closesAt: z.coerce.date().optional(),
+	shareWithOrganizers: z.boolean().optional(),
+	close: z.literal(true).optional(),
+	remindNow: z.literal(true).optional(),
+});
+
+export type UpdateRunningInput = z.infer<typeof updateRunningInputSchema>;
 
 export const surveyAnswerInputSchema = z.object({
 	questionId: z.string().trim().min(1),

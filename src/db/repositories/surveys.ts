@@ -3,7 +3,6 @@ import type { DrizzleD1Database } from "drizzle-orm/d1";
 import * as schema from "@/db/schema";
 import {
 	crsEvents,
-	members,
 	surveyAnswers,
 	surveyAssignments,
 	surveyQuestions,
@@ -14,8 +13,8 @@ import {
 import type {
 	CreateFromTemplateInput,
 	CreateSurveyInput,
-	SampleSurveyInput,
 	SaveTemplateInput,
+	SendSurveyInput,
 	SubmitSurveyResponseInput,
 	Survey,
 	SurveyQuestion,
@@ -24,8 +23,10 @@ import type {
 	SurveyResultsQuestion,
 	SurveyTemplate,
 	UpdateDraftInput,
+	UpdateRunningInput,
 } from "@/db/types";
 import { startOfUtc8Day } from "@/lib/date-slots";
+import { effectiveStatus, reminderAtFor, suggestInviteCount } from "@/lib/feedback/stats";
 import { createId } from "@/lib/ids";
 import { seededSample } from "@/lib/sample";
 import type { Actor } from "@/server/auth/permissions";
@@ -33,16 +34,18 @@ import { can } from "@/server/auth/permissions";
 import type { AuditRepository } from "./audit";
 import { chunk } from "./email-audience";
 import { notify } from "./notifications";
+import { eligibleMemberIds } from "./survey-access";
 import { pageLimit } from "./types";
 
 type SurveyDb = DrizzleD1Database<typeof schema>;
 
 // D1 binds at most 100 parameters per statement, and drizzle can bind one per column per row.
 const D1_MAX_PARAMS = 100;
-const rowsPerInsert = (table: typeof surveyQuestions | typeof surveyAnswers) =>
+const rowsPerInsert = (table: typeof surveyQuestions | typeof surveyAnswers | typeof surveyAssignments) =>
 	Math.floor(D1_MAX_PARAMS / Object.keys(getTableColumns(table)).length);
 const QUESTION_ROWS_PER_INSERT = rowsPerInsert(surveyQuestions);
 const ANSWER_ROWS_PER_INSERT = rowsPerInsert(surveyAnswers);
+const ASSIGNMENT_ROWS_PER_INSERT = rowsPerInsert(surveyAssignments);
 
 // One insert per chunk; callers put them in a db.batch so a form's questions land together or not at all.
 function questionInserts(db: SurveyDb, surveyId: string, questions: SurveyQuestionInput[]) {
@@ -60,7 +63,7 @@ function questionInserts(db: SurveyDb, surveyId: string, questions: SurveyQuesti
 	return chunk(rows, QUESTION_ROWS_PER_INSERT).map((part) => db.insert(surveyQuestions).values(part));
 }
 
-export type SampleResult = { assigned: number };
+export type SendResult = { invited: number; eligible: number };
 
 export type SurveysRepository = {
 	create(actor: Actor, input: CreateSurveyInput): Promise<Survey>;
@@ -71,7 +74,9 @@ export type SurveysRepository = {
 	createFromTemplate(actor: Actor, input: CreateFromTemplateInput): Promise<Survey>;
 	updateDraft(actor: Actor, input: UpdateDraftInput): Promise<void>;
 	getForEvent(actor: Actor, eventId: string): Promise<Survey | null>;
-	sample(actor: Actor, input: SampleSurveyInput): Promise<SampleResult>;
+	eligibleCount(actor: Actor, surveyId: string): Promise<number>;
+	send(actor: Actor, input: SendSurveyInput, now?: Date): Promise<SendResult>;
+	updateRunning(actor: Actor, input: UpdateRunningInput, now?: Date): Promise<void>;
 	list(actor: Actor, input?: { limit?: number }): Promise<Survey[]>;
 	getById(actor: Actor, id: string): Promise<{ survey: Survey; questions: SurveyQuestion[] } | null>;
 	getForRespondent(
@@ -255,50 +260,130 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 			return survey ?? null;
 		},
 
-		async sample(actor, input) {
-			if (!can(actor, "survey:configure")) throw new Error("Not authorized to sample surveys.");
+		async eligibleCount(actor, surveyId) {
+			if (!can(actor, "survey:configure")) throw new Error("Not authorized to read this survey.");
+			const [survey] = await db.select({ eventId: surveys.eventId }).from(surveys).where(eq(surveys.id, surveyId)).limit(1);
+			if (!survey) throw new Error("Survey not found.");
+			return (await eligibleMemberIds(db, survey)).length;
+		},
+
+		async send(actor, input, now = new Date()) {
+			if (!can(actor, "survey:configure")) throw new Error("Not authorized to send surveys.");
 
 			const [survey] = await db.select().from(surveys).where(eq(surveys.id, input.surveyId)).limit(1);
 			if (!survey) throw new Error("Survey not found.");
-			if (survey.status !== "draft") throw new Error("Survey has already been sampled.");
+			if (survey.status !== "draft") throw new Error("This form has already been sent.");
+			if (input.closesAt <= now) throw new Error("Pick a closing time in the future.");
 
-			const eligible = await db
-				.select({ id: members.id })
-				.from(members)
-				.where(eq(members.status, "active"))
-				.orderBy(asc(members.id));
-			const drawn = seededSample(
-				eligible.map((row) => row.id),
-				input.sampleSize,
-				input.seed ?? input.surveyId,
-			);
+			const eligibleIds = await eligibleMemberIds(db, survey);
+			if (eligibleIds.length === 0) throw new Error("No one is eligible for this form yet.");
+
+			const wanted =
+				input.invite.mode === "all"
+					? eligibleIds.length
+					: input.invite.mode === "count"
+						? input.invite.count
+						: suggestInviteCount(eligibleIds.length);
+			const drawn = seededSample(eligibleIds, wanted, input.seed ?? input.surveyId);
+
+			let eventTitle: string | null = null;
+			if (survey.eventId) {
+				const [event] = await db.select({ title: crsEvents.title }).from(crsEvents).where(eq(crsEvents.id, survey.eventId)).limit(1);
+				eventTitle = event?.title ?? null;
+			}
 
 			const assignmentRows = drawn.map((memberId) => ({ surveyId: input.surveyId, memberId, source: "invited" as const }));
-			for (let i = 0; i < assignmentRows.length; i += 33) {
-				await db.insert(surveyAssignments).values(assignmentRows.slice(i, i + 33));
-			}
-			await db
-				.update(surveys)
-				.set({ status: "running", sampleSize: assignmentRows.length })
-				.where(eq(surveys.id, input.surveyId));
+			// One batch is atomic, so the form never runs without its invitees or the reverse.
+			// ponytail: a concurrent send that passed the draft check above can still add a second sample; guard in SQL if sends become concurrent.
+			await db.batch([
+				db
+					.update(surveys)
+					.set({
+						status: "running",
+						sentAt: now,
+						closesAt: input.closesAt,
+						reminderAt: input.remind ? reminderAtFor(input.closesAt, now) : null,
+						// Only an event has a door to walk in through.
+						allowWalkIn: survey.eventId ? input.allowWalkIn : false,
+						shareWithOrganizers: input.shareWithOrganizers,
+						emailInvitees: input.emailInvitees,
+						sampleSize: drawn.length,
+					})
+					.where(and(eq(surveys.id, input.surveyId), eq(surveys.status, "draft"))),
+				...chunk(assignmentRows, ASSIGNMENT_ROWS_PER_INSERT).map((part) => db.insert(surveyAssignments).values(part)),
+			]);
 
 			await audit.record(actor, {
-				action: "survey:sample",
+				action: "survey:send",
 				targetType: "survey",
 				targetId: input.surveyId,
 				category: "survey",
-				detail: `Assigned ${assignmentRows.length} members.`,
+				detail: `Invited ${drawn.length} of ${eligibleIds.length} eligible.`,
 			});
+			// ponytail: one notify() call per invitee; batch them if "all" on a very large event nears the subrequest cap.
 			for (const memberId of drawn) {
 				await notify(db, {
 					memberId,
 					kind: "survey_assigned",
-					title: "Survey assigned",
-					body: "You were selected for a survey.",
+					title: eventTitle ? `How was ${eventTitle}?` : survey.title,
+					body: "Share quick feedback. Your name isn't attached to your answers.",
 					href: `/portal/surveys/${input.surveyId}`,
 				});
 			}
-			return { assigned: assignmentRows.length };
+			return { invited: drawn.length, eligible: eligibleIds.length };
+		},
+
+		async updateRunning(actor, input, now = new Date()) {
+			if (!can(actor, "survey:configure")) throw new Error("Not authorized to edit surveys.");
+
+			const [survey] = await db.select().from(surveys).where(eq(surveys.id, input.surveyId)).limit(1);
+			if (!survey) throw new Error("Survey not found.");
+			if (survey.status !== "running") throw new Error("Only a running form can be edited.");
+			if (input.closesAt && input.closesAt <= now) throw new Error("Pick a closing time in the future.");
+			// Closing wins over a reminder asked for in the same call.
+			const remindNow = input.remindNow && !input.close;
+			if (remindNow) {
+				if (survey.reminderSentAt) throw new Error("The reminder was already sent.");
+				if (effectiveStatus(survey, now) !== "running") throw new Error("This form has already closed.");
+			}
+
+			const patch: Partial<typeof surveys.$inferInsert> = {};
+			const changes: string[] = [];
+			if (input.close) {
+				patch.status = "closed";
+				changes.push("closed");
+			}
+			if (input.closesAt) {
+				patch.closesAt = input.closesAt;
+				// A reminder that was turned off or already sent stays that way; a pending one follows the new close.
+				if (survey.reminderAt && !survey.reminderSentAt) patch.reminderAt = reminderAtFor(input.closesAt, now);
+				changes.push(`closes ${input.closesAt.toISOString()}`);
+			}
+			if (input.shareWithOrganizers !== undefined) {
+				patch.shareWithOrganizers = input.shareWithOrganizers;
+				changes.push(`organizer sharing ${input.shareWithOrganizers ? "on" : "off"}`);
+			}
+			if (remindNow) {
+				patch.reminderAt = now;
+				changes.push("reminder sent early");
+			}
+			if (changes.length === 0) return;
+
+			// The status guard keeps a double submit or a racing close from editing a form that just closed.
+			const [updated] = await db
+				.update(surveys)
+				.set(patch)
+				.where(and(eq(surveys.id, input.surveyId), eq(surveys.status, "running")))
+				.returning({ id: surveys.id });
+			if (!updated) throw new Error("Only a running form can be edited.");
+
+			await audit.record(actor, {
+				action: "survey:update",
+				targetType: "survey",
+				targetId: input.surveyId,
+				category: "survey",
+				detail: changes.join(", "),
+			});
 		},
 
 		async list(actor, input) {
@@ -439,7 +524,9 @@ export function createUnavailableSurveysRepository(): SurveysRepository {
 		createFromTemplate: unavailable,
 		updateDraft: unavailable,
 		getForEvent: unavailable,
-		sample: unavailable,
+		eligibleCount: unavailable,
+		send: unavailable,
+		updateRunning: unavailable,
 		list: unavailable,
 		getById: unavailable,
 		getForRespondent: unavailable,

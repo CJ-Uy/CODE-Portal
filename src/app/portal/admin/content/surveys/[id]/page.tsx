@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { getActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
 import { isFeatureEnabled } from "@/server/features";
-import { sampleSurveyAction } from "../actions";
+import { sendSurveyAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +51,7 @@ export default async function AdminSurveyDetailPage({ params }: { params: Promis
 					</header>
 					{detail.survey.status === "draft" ? (
 						<section aria-label="Survey sampling" className="rounded-xl border border-border/60 bg-card p-5">
-							<form action={sampleSurveyAction} className="flex flex-wrap items-end gap-3">
+							<form action={sendSurveyAction} className="flex flex-wrap items-end gap-3">
 								<input type="hidden" name="surveyId" value={detail.survey.id} />
 								<label className="grid gap-2 text-sm font-medium">
 									Sample size
