@@ -61,9 +61,9 @@ export default async function RetentionHistoryPage({
 	const selectedPointType = pointTypeLoad.rows.find((type) => type.id === selectedPointTypeId);
 
 	const tabs = [
-		{ id: "history", label: "My points", href: "/portal/events" },
+		{ id: "history", label: "My points", href: "/portal/retention" },
 		...(showLeaderboard
-			? [{ id: "leaderboard", label: "Leaderboard", href: "/portal/events?view=leaderboard" }]
+			? [{ id: "leaderboard", label: "Leaderboard", href: "/portal/retention?view=leaderboard" }]
 			: []),
 	];
 

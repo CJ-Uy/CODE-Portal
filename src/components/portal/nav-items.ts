@@ -17,8 +17,7 @@ export type NavItem = {
 export const primaryNav: NavItem[] = [
 	{ id: "overview", label: "Overview", href: "/portal", icon: House },
 	{ id: "calendar", label: "Calendar", href: "/portal/calendar", icon: CalendarDays },
-	// /portal/events currently renders the member retention-history page.
-	{ id: "retention", label: "Retention", href: "/portal/events", icon: Award, feature: "retention" },
+	{ id: "retention", label: "Retention", href: "/portal/retention", icon: Award, feature: "retention" },
 	{ id: "ments", label: "Ments Tree", href: "/portal/ments", icon: GitBranch, feature: "ments" },
 	{ id: "links", label: "Link shortener", href: "/portal/links", icon: Link2 },
 	{ id: "mail", label: "Mail", href: "/portal/mail", icon: Mail, feature: "email" },

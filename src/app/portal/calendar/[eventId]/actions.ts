@@ -16,7 +16,7 @@ import { endOfUtc8Day, startOfUtc8Day } from "@/lib/date-slots";
 function revalidate(eventId: string) {
 	revalidatePath(`/portal/calendar/${eventId}`);
 	revalidatePath("/portal/calendar");
-	revalidatePath("/portal/events");
+	revalidatePath("/portal/retention");
 }
 
 const updateSchema = z
