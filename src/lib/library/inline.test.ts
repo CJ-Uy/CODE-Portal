@@ -37,6 +37,19 @@ describe("parseInline", () => {
 		]);
 	});
 
+	it("nests italic inside bold and bold inside italic", () => {
+		const text = (value: string) => ({ type: "text", text: value });
+		expect(parseInline("**a *b* c**")).toEqual([{ type: "bold", children: [text("a "), { type: "italic", children: [text("b")] }, text(" c")] }]);
+		expect(parseInline("*a **b** c*")).toEqual([{ type: "italic", children: [text("a "), { type: "bold", children: [text("b")] }, text(" c")] }]);
+	});
+
+	it("reads a *** run as bold wrapped around italic, with no stray asterisks", () => {
+		const text = (value: string) => ({ type: "text", text: value });
+		expect(parseInline("***x***")).toEqual([{ type: "bold", children: [{ type: "italic", children: [text("x")] }] }]);
+		// The toolbar wrapping bold around "a *b*" ends the text with a *** run too.
+		expect(parseInline("**a *b***")).toEqual([{ type: "bold", children: [text("a "), { type: "italic", children: [text("b")] }] }]);
+	});
+
 	it("returns an empty list for empty input", () => {
 		expect(parseInline("")).toEqual([]);
 	});
@@ -45,6 +58,11 @@ describe("parseInline", () => {
 describe("inlineToPlainText", () => {
 	it("strips markup for plain text", () => {
 		expect(inlineToPlainText("**Hi** [there](mailto:a@b.c)")).toBe("Hi there");
+	});
+
+	it("strips combined emphasis down to the words", () => {
+		expect(inlineToPlainText("***x***")).toBe("x");
+		expect(inlineToPlainText("*a **b** c*")).toBe("a b c");
 	});
 
 	it("leaves malformed markup untouched", () => {

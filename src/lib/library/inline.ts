@@ -16,6 +16,28 @@ const LINK = /\[([^\]]+)\]\(([^)\s]+)\)/y;
 /** A marker pair only counts when it hugs its content, so "2 * 3 * 4" stays literal. */
 const hugs = (inner: string) => inner.length > 0 && inner.trim() === inner;
 
+/**
+ * Index of the `**` that closes a bold opened before `from`. In a `***` run the
+ * last two stars close the bold, so "**a *b***" closes the italic first.
+ */
+function findBoldEnd(text: string, from: number): number {
+	const end = text.indexOf("**", from);
+	return end !== -1 && text[end + 2] === "*" && text[end + 3] !== "*" ? end + 1 : end;
+}
+
+/**
+ * Index of the lone `*` that closes an italic opened before `from`. `**` pairs
+ * are stepped over, so "*a **b** c*" keeps its bold inside the italic.
+ */
+function findItalicEnd(text: string, from: number): number {
+	for (let j = from; j < text.length; j++) {
+		if (text[j] !== "*") continue;
+		if (text[j + 1] !== "*") return j;
+		j += 1;
+	}
+	return -1;
+}
+
 export function parseInline(text: string): InlineNode[] {
 	const nodes: InlineNode[] = [];
 	let literal = "";
@@ -31,7 +53,7 @@ export function parseInline(text: string): InlineNode[] {
 		if (char === "*") {
 			const bold = text.startsWith("**", i);
 			const marker = bold ? "**" : "*";
-			const end = text.indexOf(marker, i + marker.length);
+			const end = bold ? findBoldEnd(text, i + 2) : findItalicEnd(text, i + 1);
 			const inner = end === -1 ? "" : text.slice(i + marker.length, end);
 			if (hugs(inner)) {
 				flush();
