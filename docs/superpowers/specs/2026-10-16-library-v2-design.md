@@ -236,7 +236,7 @@ Search and filtering run **in SQL**. This fixes the 100-row bug. Plain keyword s
 ### 7.3 Tags
 
 - Stored in `library_tags` (with a group) plus the join table `library_item_tags`, replacing `topics_json`.
-- **Starting set:** 36 tags in 6 groups. The import maps all 218 raw sheet topics onto them.
+- **Starting set:** 37 tags in 7 groups (6 organization-development groups plus Member Writing). The import maps all 218 raw sheet topics onto them.
   - **Direction & Strategy:** Vision & Mission (VMOS) · Strategic Planning · Goal Setting · Alignment · Advocacy
   - **Structure & Systems:** Org Design · Processes, Systems & Structures (PSS) · Constitution & Internal Rules · Roles & Responsibilities · Systems Thinking
   - **Diagnosis & Change:** Diagnosis · Change Management · Root Cause Analysis · Monitoring & Evaluation · Stakeholder Analysis
