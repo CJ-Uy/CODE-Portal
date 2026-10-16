@@ -4,6 +4,7 @@ import type { EventSignupAnswers, EventSignupField } from "@/lib/event-signup-fo
 import type { PointMilestone } from "@/lib/point-milestones";
 import type { Audience, EmailBlock, EmailCampaignStatus, EmailDeliveryStatus } from "@/lib/email/types";
 import type { MergeOverrides } from "@/lib/email/merge";
+import type { SurveyQuestionInput } from "./types";
 
 export type MemberStatus = "active" | "pending" | "inactive";
 /** The three types seeded by migration 0010; kept for seeding and tests only. Event types are data now - see event_type_rules. */
@@ -14,6 +15,9 @@ export type EventStatus = "pending" | "approved" | "rejected";
 export type RsvpState = "going" | "none";
 export type SurveyStatus = "draft" | "running" | "closed";
 export type SurveyQuestionType = "scale" | "text" | "choice";
+export type SurveySource = "invited" | "walk_in";
+/** Stable keys that let a rating question be compared across events. Values live in METRIC_KEYS (types.ts). */
+export type MetricKey = "overall" | "flow" | "content" | "venue" | "return_intent" | "learning";
 export type AuditActorContext = "session" | "shared_dev_token";
 export type AuditCategory =
 	| "role"
@@ -502,8 +506,21 @@ export const surveys = sqliteTable(
 			.notNull()
 			.references(() => members.id, { onDelete: "cascade" }),
 		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+		// Provenance only; editing or archiving the template never touches the survey.
+		templateId: text("template_id").references(() => surveyTemplates.id, { onDelete: "set null" }),
+		closesAt: integer("closes_at", { mode: "timestamp_ms" }),
+		sentAt: integer("sent_at", { mode: "timestamp_ms" }),
+		reminderAt: integer("reminder_at", { mode: "timestamp_ms" }),
+		reminderSentAt: integer("reminder_sent_at", { mode: "timestamp_ms" }),
+		allowWalkIn: integer("allow_walk_in", { mode: "boolean" }).notNull().default(true),
+		shareWithOrganizers: integer("share_with_organizers", { mode: "boolean" }).notNull().default(true),
+		emailInvitees: integer("email_invitees", { mode: "boolean" }).notNull().default(false),
+		aiSummaryJson: text("ai_summary_json"),
+		aiSummaryAt: integer("ai_summary_at", { mode: "timestamp_ms" }),
+		aiSummaryResponseCount: integer("ai_summary_response_count"),
 	},
-	(table) => [index("surveys_status_idx").on(table.status), index("surveys_event_id_idx").on(table.eventId)],
+	// One feedback form per event. SQLite allows many NULLs, so general surveys are unaffected.
+	(table) => [index("surveys_status_idx").on(table.status), uniqueIndex("surveys_event_id_unique").on(table.eventId)],
 );
 
 export const surveyQuestions = sqliteTable(
@@ -516,7 +533,11 @@ export const surveyQuestions = sqliteTable(
 		position: integer("position").notNull(),
 		type: text("type").$type<SurveyQuestionType>().notNull(),
 		prompt: text("prompt").notNull(),
+		// choice: the list of choices. scale: [lowLabel, highLabel]; the scale is always 1-5.
 		optionsJson: text("options_json"),
+		required: integer("required", { mode: "boolean" }).notNull().default(false),
+		help: text("help"),
+		metricKey: text("metric_key").$type<MetricKey>(),
 	},
 	(table) => [index("survey_questions_survey_id_idx").on(table.surveyId)],
 );
@@ -530,14 +551,13 @@ export const surveyAssignments = sqliteTable(
 		memberId: text("member_id")
 			.notNull()
 			.references(() => members.id, { onDelete: "cascade" }),
-		responseTokenHash: text("response_token_hash").notNull().unique(),
 		assignedAt: integer("assigned_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
 		completedAt: integer("completed_at", { mode: "timestamp_ms" }),
+		source: text("source").$type<SurveySource>().notNull().default("invited"),
 	},
 	(table) => [
 		primaryKey({ columns: [table.surveyId, table.memberId] }),
 		index("survey_assignments_member_id_idx").on(table.memberId),
-		index("survey_assignments_response_token_hash_idx").on(table.responseTokenHash),
 	],
 );
 
@@ -546,7 +566,9 @@ export const surveyResponses = sqliteTable("survey_responses", {
 	surveyId: text("survey_id")
 		.notNull()
 		.references(() => surveys.id, { onDelete: "cascade" }),
+	// Truncated to the Manila day so it cannot be matched against survey_assignments.completed_at.
 	submittedAt: integer("submitted_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	source: text("source").$type<SurveySource>().notNull().default("invited"),
 });
 
 export const surveyAnswers = sqliteTable("survey_answers", {
@@ -558,6 +580,32 @@ export const surveyAnswers = sqliteTable("survey_answers", {
 		.notNull()
 		.references(() => surveyQuestions.id, { onDelete: "cascade" }),
 	value: text("value").notNull(),
+	hiddenFromOrganizers: integer("hidden_from_organizers", { mode: "boolean" }).notNull().default(false),
+});
+
+export const surveyTemplates = sqliteTable("survey_templates", {
+	id: text("id").primaryKey(),
+	name: text("name").notNull(),
+	description: text("description").notNull().default(""),
+	questionsJson: text("questions_json", { mode: "json" }).$type<SurveyQuestionInput[]>().notNull().default([]),
+	position: integer("position").notNull().default(0),
+	archivedAt: integer("archived_at", { mode: "timestamp_ms" }),
+	createdBy: text("created_by").references(() => members.id, { onDelete: "set null" }),
+	createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+});
+
+// The organizer's After Action Review, kept next to the event's feedback.
+export const eventDebriefs = sqliteTable("event_debriefs", {
+	eventId: text("event_id")
+		.primaryKey()
+		.references(() => crsEvents.id, { onDelete: "cascade" }),
+	intended: text("intended"),
+	happened: text("happened"),
+	why: text("why"),
+	change: text("change"),
+	updatedBy: text("updated_by").references(() => members.id, { onDelete: "set null" }),
+	updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
 });
 
 export const notifications = sqliteTable(

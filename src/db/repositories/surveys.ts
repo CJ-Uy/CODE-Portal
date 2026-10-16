@@ -11,9 +11,9 @@ import type {
 	SurveyResults,
 	SurveyResultsQuestion,
 } from "@/db/types";
+import { startOfUtc8Day } from "@/lib/date-slots";
 import { createId } from "@/lib/ids";
 import { seededSample } from "@/lib/sample";
-import { generateResponseToken, hashResponseToken } from "@/lib/survey-token";
 import type { Actor } from "@/server/auth/permissions";
 import { can } from "@/server/auth/permissions";
 import type { AuditRepository } from "./audit";
@@ -22,18 +22,19 @@ import { pageLimit } from "./types";
 
 type SurveyDb = DrizzleD1Database<typeof schema>;
 
-export type SampleResult = {
-	assigned: number;
-	tokens: Array<{ memberId: string; token: string }>;
-};
+export type SampleResult = { assigned: number };
 
 export type SurveysRepository = {
 	create(actor: Actor, input: CreateSurveyInput): Promise<Survey>;
 	sample(actor: Actor, input: SampleSurveyInput): Promise<SampleResult>;
 	list(actor: Actor, input?: { limit?: number }): Promise<Survey[]>;
 	getById(actor: Actor, id: string): Promise<{ survey: Survey; questions: SurveyQuestion[] } | null>;
-	getForRespondent(surveyId: string): Promise<{ survey: Survey; questions: SurveyQuestion[] } | null>;
-	submitResponse(input: SubmitSurveyResponseInput): Promise<{ ok: true }>;
+	getForRespondent(
+		actor: Actor,
+		surveyId: string,
+		now?: Date,
+	): Promise<{ survey: Survey; questions: SurveyQuestion[] } | null>;
+	submitResponse(actor: Actor, input: SubmitSurveyResponseInput, now?: Date): Promise<{ ok: true }>;
 	getResults(actor: Actor, surveyId: string): Promise<SurveyResults>;
 };
 
@@ -62,6 +63,9 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 					type: question.type,
 					prompt: question.prompt,
 					optionsJson: question.options ? JSON.stringify(question.options) : null,
+					required: question.required,
+					help: question.help ?? null,
+					metricKey: question.metricKey ?? null,
 				})),
 			);
 
@@ -92,18 +96,7 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 				input.seed ?? input.surveyId,
 			);
 
-			const tokens: Array<{ memberId: string; token: string }> = [];
-			const assignmentRows: Array<{ surveyId: string; memberId: string; responseTokenHash: string }> = [];
-			for (const memberId of drawn) {
-				const token = generateResponseToken();
-				tokens.push({ memberId, token });
-				assignmentRows.push({
-					surveyId: input.surveyId,
-					memberId,
-					responseTokenHash: await hashResponseToken(token),
-				});
-			}
-
+			const assignmentRows = drawn.map((memberId) => ({ surveyId: input.surveyId, memberId, source: "invited" as const }));
 			for (let i = 0; i < assignmentRows.length; i += 33) {
 				await db.insert(surveyAssignments).values(assignmentRows.slice(i, i + 33));
 			}
@@ -128,7 +121,7 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 					href: `/portal/surveys/${input.surveyId}`,
 				});
 			}
-			return { assigned: assignmentRows.length, tokens };
+			return { assigned: assignmentRows.length };
 		},
 
 		async list(actor, input) {
@@ -148,7 +141,8 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 			return { survey, questions };
 		},
 
-		async getForRespondent(surveyId) {
+		// Task 7 adds eligibility from actor and now; for now it returns the form to any signed-in member.
+		async getForRespondent(_actor, surveyId) {
 			const [survey] = await db.select().from(surveys).where(eq(surveys.id, surveyId)).limit(1);
 			if (!survey) return null;
 			const questions = await db
@@ -159,23 +153,8 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 			return { survey, questions };
 		},
 
-		async submitResponse(input) {
-			const tokenHash = await hashResponseToken(input.token);
-			const claimed = await db
-				.update(surveyAssignments)
-				.set({ completedAt: new Date() })
-				.where(
-					and(
-						eq(surveyAssignments.surveyId, input.surveyId),
-						eq(surveyAssignments.responseTokenHash, tokenHash),
-						isNull(surveyAssignments.completedAt),
-					),
-				)
-				.returning({ memberId: surveyAssignments.memberId });
-			if (claimed.length !== 1) {
-				throw new Error("This survey link is invalid or has already been used.");
-			}
-
+		// Invited members only for now; Task 7 adds walk-ins and full eligibility.
+		async submitResponse(actor, input, now = new Date()) {
 			const questions = await db
 				.select({ id: surveyQuestions.id })
 				.from(surveyQuestions)
@@ -185,10 +164,27 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 				if (!questionIds.has(answer.questionId)) throw new Error("Answer references an unknown question.");
 			}
 
-			// ponytail: rare crash after token claim can lose one response slot; use a transactional DB if that matters.
+			const mine = and(eq(surveyAssignments.surveyId, input.surveyId), eq(surveyAssignments.memberId, actor.memberId));
+			const [claimed] = await db
+				.update(surveyAssignments)
+				.set({ completedAt: now })
+				.where(and(mine, isNull(surveyAssignments.completedAt)))
+				.returning({ source: surveyAssignments.source });
+			if (!claimed) {
+				const [existing] = await db.select({ surveyId: surveyAssignments.surveyId }).from(surveyAssignments).where(mine).limit(1);
+				throw new Error(existing ? "You've already answered this form." : "This form is not open to you.");
+			}
+
+			// ponytail: rare crash after the claim can lose one response slot; use a transactional DB if that matters.
 			const responseId = createId("srvr");
 			await db.batch([
-				db.insert(surveyResponses).values({ id: responseId, surveyId: input.surveyId }),
+				db.insert(surveyResponses).values({
+					id: responseId,
+					surveyId: input.surveyId,
+					source: claimed.source,
+					// Day only, so the response cannot be matched to the assignment's exact completedAt.
+					submittedAt: startOfUtc8Day(now),
+				}),
 				db.insert(surveyAnswers).values(
 					input.answers.map((answer) => ({
 						id: createId("srva"),

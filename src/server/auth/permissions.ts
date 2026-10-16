@@ -55,7 +55,7 @@ export type Actor = {
 const rolePermissions: Record<Exclude<RoleKey, "super" | "member">, PermissionAction[]> = {
 	events: ["event:moderate", "event:points", "event:create_restricted"],
 	link: ["link:moderate"],
-	retention: ["points:assign", "retention:record", "retention:configure"],
+	retention: ["points:assign", "retention:record", "retention:configure", "survey:configure"],
 	member_admin: ["member:manage", "role:assign", "roster:manage", "nav:configure"],
 	publishing: ["announcement:manage", "library:manage", "library:moderate"],
 	email: ["email:send", "email:configure"],

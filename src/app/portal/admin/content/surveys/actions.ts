@@ -21,7 +21,7 @@ export async function createSurveyAction(formData: FormData) {
 		questions: prompts.map((prompt) => ({
 			type,
 			prompt,
-			options: type === "scale" ? ["1", "2", "3", "4", "5"] : undefined,
+			options: type === "scale" ? ["Strongly disagree", "Strongly agree"] : undefined,
 		})),
 	});
 	const repositories = await getRepositories();
