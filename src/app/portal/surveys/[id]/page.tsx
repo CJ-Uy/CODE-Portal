@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { CheckCircle2, Lock, Send } from "lucide-react";
 import { getRepositories } from "@/db";
+import { RESPONDENT_STATE_MESSAGES } from "@/db/repositories/surveys";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -35,6 +36,15 @@ export default async function MemberSurveyPage({
 				<CheckCircle2 className="mx-auto size-12 text-accent" />
 				<h1 className="font-heading text-3xl">Thank you</h1>
 				<p className="text-sm text-muted-foreground">Your response was recorded. Your name isn&apos;t attached to your answers.</p>
+			</div>
+		);
+	}
+
+	if (detail.state !== "open") {
+		return (
+			<div className="mx-auto grid max-w-2xl gap-2 py-8 text-center">
+				<h1 className="min-w-0 break-all font-heading text-3xl">{detail.survey.title}</h1>
+				<p className="text-sm text-muted-foreground">{RESPONDENT_STATE_MESSAGES[detail.state]}</p>
 			</div>
 		);
 	}

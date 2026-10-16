@@ -2,6 +2,7 @@ import { and, asc, eq, getTableColumns, isNull, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import * as schema from "@/db/schema";
 import {
+	crsAttendance,
 	crsEvents,
 	surveyAnswers,
 	surveyAssignments,
@@ -21,6 +22,7 @@ import type {
 	SurveyQuestionInput,
 	SurveyResults,
 	SurveyResultsQuestion,
+	SurveySource,
 	SurveyTemplate,
 	UpdateDraftInput,
 	UpdateRunningInput,
@@ -34,7 +36,7 @@ import { can } from "@/server/auth/permissions";
 import type { AuditRepository } from "./audit";
 import { chunk } from "./email-audience";
 import { notify } from "./notifications";
-import { eligibleMemberIds } from "./survey-access";
+import { eligibleMemberIds, eventRole } from "./survey-access";
 import { pageLimit } from "./types";
 
 type SurveyDb = DrizzleD1Database<typeof schema>;
@@ -65,6 +67,106 @@ function questionInserts(db: SurveyDb, surveyId: string, questions: SurveyQuesti
 
 export type SendResult = { invited: number; eligible: number };
 
+export type RespondentState = "open" | "answered" | "closed" | "ineligible" | "staff";
+export type RespondentView = { survey: Survey; questions: SurveyQuestion[]; eventTitle: string | null; state: RespondentState };
+
+// What a member is told, on the form page and from submitResponse, when the form is not open to them.
+export const RESPONDENT_STATE_MESSAGES: Record<Exclude<RespondentState, "open">, string> = {
+	closed: "This form has closed.",
+	staff: "Organizers give feedback through the debrief.",
+	answered: "You've already answered this form.",
+	ineligible: "This form is not open to you.",
+};
+
+const orderedQuestions = (db: SurveyDb, surveyId: string) =>
+	db.select().from(surveyQuestions).where(eq(surveyQuestions.surveyId, surveyId)).orderBy(asc(surveyQuestions.position));
+
+/**
+ * Decides, from the session and the clock alone, what this member can do with a running form.
+ * `invited` is true when an uncompleted assignment exists to claim; an open state without it is a walk-in.
+ */
+async function respondentState(
+	db: SurveyDb,
+	actor: Actor,
+	survey: Survey,
+	now: Date,
+): Promise<{ state: RespondentState; eventTitle: string | null; invited: boolean }> {
+	let event: { title: string; deletedAt: Date | null } | undefined;
+	if (survey.eventId) {
+		[event] = await db
+			.select({ title: crsEvents.title, deletedAt: crsEvents.deletedAt })
+			.from(crsEvents)
+			.where(eq(crsEvents.id, survey.eventId))
+			.limit(1);
+	}
+	const eventTitle = event?.title ?? null;
+	const result = (state: RespondentState, invited = false) => ({ state, eventTitle, invited });
+
+	if (survey.status === "draft") return result("ineligible");
+	if (effectiveStatus(survey, now) === "closed" || event?.deletedAt) return result("closed");
+	if (survey.eventId && (await eventRole(db, survey.eventId, actor.memberId))) return result("staff");
+
+	const [assignment] = await db
+		.select({ completedAt: surveyAssignments.completedAt })
+		.from(surveyAssignments)
+		.where(and(eq(surveyAssignments.surveyId, survey.id), eq(surveyAssignments.memberId, actor.memberId)))
+		.limit(1);
+	if (assignment) return assignment.completedAt ? result("answered") : result("open", true);
+
+	if (event && survey.allowWalkIn) {
+		const [attended] = await db
+			.select({ memberId: crsAttendance.memberId })
+			.from(crsAttendance)
+			.where(and(eq(crsAttendance.eventId, survey.eventId!), eq(crsAttendance.memberId, actor.memberId)))
+			.limit(1);
+		if (attended) return result("open");
+	}
+	return result("ineligible");
+}
+
+function validateAnswers(questions: SurveyQuestion[], answers: SubmitSurveyResponseInput["answers"]) {
+	const byId = new Map(questions.map((question) => [question.id, question]));
+	const answered = new Set<string>();
+	for (const { questionId, value } of answers) {
+		const question = byId.get(questionId);
+		if (!question) throw new Error("Answer references an unknown question.");
+		if (answered.has(questionId)) throw new Error("Answer each question once.");
+		answered.add(questionId);
+		if (question.type === "scale" && !/^[1-5]$/.test(value)) throw new Error("Pick a value from 1 to 5.");
+		if (question.type === "choice" && !(JSON.parse(question.optionsJson ?? "[]") as string[]).includes(value)) {
+			throw new Error("Pick one of the listed choices.");
+		}
+	}
+	if (questions.some((question) => question.required && !answered.has(question.id))) {
+		throw new Error("Answer every required question.");
+	}
+}
+
+// The only writer of survey_responses. submittedAt is always the Manila day, so a response cannot be matched
+// to its assignment's exact completedAt. Callers put these in a db.batch with the assignment write.
+function responseInserts(
+	db: SurveyDb,
+	surveyId: string,
+	source: SurveySource,
+	answers: SubmitSurveyResponseInput["answers"],
+	now: Date,
+) {
+	const responseId = createId("srvr");
+	const answerRows = answers.map((answer) => ({
+		id: createId("srva"),
+		responseId,
+		questionId: answer.questionId,
+		value: answer.value,
+	}));
+	return [
+		db.insert(surveyResponses).values({ id: responseId, surveyId, source, submittedAt: startOfUtc8Day(now) }),
+		...chunk(answerRows, ANSWER_ROWS_PER_INSERT).map((part) => db.insert(surveyAnswers).values(part)),
+	] as const;
+}
+
+const isPrimaryKeyConflict = (error: unknown) =>
+	/UNIQUE constraint failed: survey_assignments/.test(`${(error as Error)?.message} ${(error as { cause?: Error })?.cause?.message}`);
+
 export type SurveysRepository = {
 	create(actor: Actor, input: CreateSurveyInput): Promise<Survey>;
 	listTemplates(actor: Actor): Promise<SurveyTemplate[]>;
@@ -79,12 +181,9 @@ export type SurveysRepository = {
 	updateRunning(actor: Actor, input: UpdateRunningInput, now?: Date): Promise<void>;
 	list(actor: Actor, input?: { limit?: number }): Promise<Survey[]>;
 	getById(actor: Actor, id: string): Promise<{ survey: Survey; questions: SurveyQuestion[] } | null>;
-	getForRespondent(
-		actor: Actor,
-		surveyId: string,
-		now?: Date,
-	): Promise<{ survey: Survey; questions: SurveyQuestion[] } | null>;
+	getForRespondent(actor: Actor, surveyId: string, now?: Date): Promise<RespondentView | null>;
 	submitResponse(actor: Actor, input: SubmitSurveyResponseInput, now?: Date): Promise<{ ok: true }>;
+	openFeedbackForEvent(actor: Actor, eventId: string, now?: Date): Promise<{ surveyId: string; state: RespondentState } | null>;
 	getResults(actor: Actor, surveyId: string): Promise<SurveyResults>;
 };
 
@@ -403,60 +502,63 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 			return { survey, questions };
 		},
 
-		// Task 7 adds eligibility from actor and now; for now it returns the form to any signed-in member.
-		async getForRespondent(_actor, surveyId) {
+		async getForRespondent(actor, surveyId, now = new Date()) {
 			const [survey] = await db.select().from(surveys).where(eq(surveys.id, surveyId)).limit(1);
-			if (!survey) return null;
-			const questions = await db
-				.select()
-				.from(surveyQuestions)
-				.where(eq(surveyQuestions.surveyId, surveyId))
-				.orderBy(asc(surveyQuestions.position));
-			return { survey, questions };
+			if (!survey || survey.status === "draft") return null;
+			const { state, eventTitle } = await respondentState(db, actor, survey, now);
+			// Only someone who can answer gets the questions.
+			const questions = state === "open" ? await orderedQuestions(db, surveyId) : [];
+			return { survey, questions, eventTitle, state };
 		},
 
-		// Invited members only for now; Task 7 adds walk-ins and full eligibility.
 		async submitResponse(actor, input, now = new Date()) {
-			const questions = await db
-				.select({ id: surveyQuestions.id })
-				.from(surveyQuestions)
-				.where(eq(surveyQuestions.surveyId, input.surveyId));
-			const questionIds = new Set(questions.map((question) => question.id));
-			for (const answer of input.answers) {
-				if (!questionIds.has(answer.questionId)) throw new Error("Answer references an unknown question.");
+			const [survey] = await db.select().from(surveys).where(eq(surveys.id, input.surveyId)).limit(1);
+			if (!survey) throw new Error(RESPONDENT_STATE_MESSAGES.ineligible);
+			const { state, invited } = await respondentState(db, actor, survey, now);
+			if (state !== "open") throw new Error(RESPONDENT_STATE_MESSAGES[state]);
+
+			validateAnswers(await orderedQuestions(db, survey.id), input.answers);
+
+			if (!invited) {
+				// A walk-in's assignment, response and answers land in one atomic batch. A second submit hits the
+				// (survey, member) primary key, which rolls the whole batch back.
+				try {
+					await db.batch([
+						db.insert(surveyAssignments).values({ surveyId: survey.id, memberId: actor.memberId, source: "walk_in", completedAt: now }),
+						...responseInserts(db, survey.id, "walk_in", input.answers, now),
+					]);
+				} catch (error) {
+					if (isPrimaryKeyConflict(error)) throw new Error(RESPONDENT_STATE_MESSAGES.answered);
+					throw error;
+				}
+				return { ok: true };
 			}
 
-			const mine = and(eq(surveyAssignments.surveyId, input.surveyId), eq(surveyAssignments.memberId, actor.memberId));
 			const [claimed] = await db
 				.update(surveyAssignments)
 				.set({ completedAt: now })
-				.where(and(mine, isNull(surveyAssignments.completedAt)))
+				.where(
+					and(
+						eq(surveyAssignments.surveyId, survey.id),
+						eq(surveyAssignments.memberId, actor.memberId),
+						isNull(surveyAssignments.completedAt),
+					),
+				)
 				.returning({ source: surveyAssignments.source });
-			if (!claimed) {
-				const [existing] = await db.select({ surveyId: surveyAssignments.surveyId }).from(surveyAssignments).where(mine).limit(1);
-				throw new Error(existing ? "You've already answered this form." : "This form is not open to you.");
-			}
+			if (!claimed) throw new Error(RESPONDENT_STATE_MESSAGES.answered);
 
 			// ponytail: rare crash after the claim can lose one response slot; use a transactional DB if that matters.
-			const responseId = createId("srvr");
-			const answerRows = input.answers.map((answer) => ({
-				id: createId("srva"),
-				responseId,
-				questionId: answer.questionId,
-				value: answer.value,
-			}));
 			// One batch is atomic, so the response and every answer chunk land together or not at all.
-			await db.batch([
-				db.insert(surveyResponses).values({
-					id: responseId,
-					surveyId: input.surveyId,
-					source: claimed.source,
-					// Day only, so the response cannot be matched to the assignment's exact completedAt.
-					submittedAt: startOfUtc8Day(now),
-				}),
-				...chunk(answerRows, ANSWER_ROWS_PER_INSERT).map((part) => db.insert(surveyAnswers).values(part)),
-			]);
+			await db.batch([...responseInserts(db, survey.id, claimed.source, input.answers, now)]);
 			return { ok: true };
+		},
+
+		async openFeedbackForEvent(actor, eventId, now = new Date()) {
+			const [survey] = await db.select().from(surveys).where(eq(surveys.eventId, eventId)).limit(1);
+			if (!survey || effectiveStatus(survey, now) !== "running") return null;
+			const { state } = await respondentState(db, actor, survey, now);
+			// Only a member who can answer, or already did, is shown the card.
+			return state === "open" || state === "answered" ? { surveyId: survey.id, state } : null;
 		},
 
 		async getResults(actor, surveyId) {
@@ -531,6 +633,7 @@ export function createUnavailableSurveysRepository(): SurveysRepository {
 		getById: unavailable,
 		getForRespondent: unavailable,
 		submitResponse: unavailable,
+		openFeedbackForEvent: unavailable,
 		getResults: unavailable,
 	} as unknown as SurveysRepository;
 }

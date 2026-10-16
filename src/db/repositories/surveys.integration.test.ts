@@ -163,11 +163,11 @@ describe("surveys repository on D1", () => {
 		const invited = asMember((await assignedIds(db, survey.id))[0]);
 
 		await expect(
-			repo.submitResponse(invited, { surveyId: survey.id, answers: [{ questionId: question.id, value: "ok" }] }),
+			repo.submitResponse(invited, { surveyId: survey.id, answers: [{ questionId: question.id, value: "ok" }] }, NOW),
 		).resolves.toEqual({ ok: true });
 		await expect(
-			repo.submitResponse(invited, { surveyId: survey.id, answers: [{ questionId: question.id, value: "again" }] }),
-		).rejects.toThrow("already");
+			repo.submitResponse(invited, { surveyId: survey.id, answers: [{ questionId: question.id, value: "again" }] }, NOW),
+		).rejects.toThrow("You've already answered this form.");
 
 		const responses = await db.select().from(schema.surveyResponses);
 		expect(responses).toHaveLength(1);
@@ -185,8 +185,8 @@ describe("surveys repository on D1", () => {
 		const outsider = ["mem_admin", "mem_0", "mem_1", "mem_2"].find((id) => !invited.includes(id))!;
 
 		await expect(
-			repo.submitResponse(asMember(outsider), { surveyId: survey.id, answers: [{ questionId: question.id, value: "hi" }] }),
-		).rejects.toThrow("not open to you");
+			repo.submitResponse(asMember(outsider), { surveyId: survey.id, answers: [{ questionId: question.id, value: "hi" }] }, NOW),
+		).rejects.toThrow("This form is not open to you.");
 		expect(await db.select().from(schema.surveyResponses)).toHaveLength(0);
 	});
 
@@ -223,10 +223,11 @@ describe("surveys repository on D1", () => {
 
 		await sendCount(repo, survey.id, 2);
 		await expect(
-			repo.submitResponse(asMember("mem_0"), {
-				surveyId: survey.id,
-				answers: questions.map((q) => ({ questionId: q.id, value: `A ${q.prompt}` })),
-			}),
+			repo.submitResponse(
+				asMember("mem_0"),
+				{ surveyId: survey.id, answers: questions.map((q) => ({ questionId: q.id, value: `A ${q.prompt}` })) },
+				NOW,
+			),
 		).resolves.toEqual({ ok: true });
 		expect(await db.select().from(schema.surveyAnswers)).toHaveLength(30);
 		expect(await db.select().from(schema.surveyResponses)).toHaveLength(1);
@@ -245,13 +246,17 @@ describe("surveys repository on D1", () => {
 		const detail = await repo.getById(admin, survey.id);
 		const [scaleQ, textQ] = detail!.questions;
 		await sendCount(repo, survey.id, 2, { seed: "x" });
-		await repo.submitResponse(asMember((await assignedIds(db, survey.id))[0]), {
-			surveyId: survey.id,
-			answers: [
-				{ questionId: scaleQ.id, value: "3" },
-				{ questionId: textQ.id, value: "Great session" },
-			],
-		});
+		await repo.submitResponse(
+			asMember((await assignedIds(db, survey.id))[0]),
+			{
+				surveyId: survey.id,
+				answers: [
+					{ questionId: scaleQ.id, value: "3" },
+					{ questionId: textQ.id, value: "Great session" },
+				],
+			},
+			NOW,
+		);
 
 		const results = await repo.getResults(admin, survey.id);
 		expect(results.assignedCount).toBe(2);
@@ -666,6 +671,267 @@ describe("surveys repository on D1", () => {
 			);
 			await expect(repo.updateRunning(admin, { surveyId: "srv_missing", close: true }, NOW)).rejects.toThrow("Survey not found.");
 			await expect(repo.updateRunning(member, { surveyId: draft.id, close: true }, NOW)).rejects.toThrow("Not authorized");
+		});
+	});
+
+	describe("answering", () => {
+		const LATE = new Date("2026-10-16T17:30:00.000Z"); // 01:30 on the 17th in Manila, before the form closes
+
+		// mem_0..mem_3 attended evt_1 (owned by mem_admin); exactly one of them is invited, another walks in.
+		async function eventForm(extra: Partial<Parameters<SurveysRepository["send"]>[1]> = {}) {
+			await seedMembers(4);
+			await seedEvent();
+			await seedAttendance("evt_1", ["mem_0", "mem_1", "mem_2", "mem_3"]);
+			const { db, repo } = setup();
+			const survey = await repo.create(admin, {
+				title: "Study Jam feedback",
+				eventId: "evt_1",
+				questions: [
+					{ type: "scale", prompt: "Overall", options: ["Bad", "Good"], required: true },
+					{ type: "choice", prompt: "Pick one", options: ["Red", "Blue"], required: false },
+					{ type: "text", prompt: "Why?", required: false },
+				],
+			});
+			await sendCount(repo, survey.id, 1, extra);
+			const invitedId = (await assignedIds(db, survey.id))[0];
+			const walkInId = ["mem_0", "mem_1", "mem_2", "mem_3"].find((id) => id !== invitedId)!;
+			const [overall, pick, why] = (await repo.getById(admin, survey.id))!.questions;
+			const answer = (value = "4") => ({ surveyId: survey.id, answers: [{ questionId: overall.id, value }] });
+			return { db, repo, survey, overall, pick, why, answer, invited: asMember(invitedId), walkIn: asMember(walkInId) };
+		}
+
+		it("lets a non-invited attendee answer as a walk-in once", async () => {
+			const { db, repo, survey, answer, walkIn } = await eventForm();
+
+			const before = await repo.getForRespondent(walkIn, survey.id, LATE);
+			expect(before).toMatchObject({ state: "open", eventTitle: "Study Jam" });
+			expect(before!.questions).toHaveLength(3);
+
+			await expect(repo.submitResponse(walkIn, answer("5"), LATE)).resolves.toEqual({ ok: true });
+
+			const [response] = await db.select().from(schema.surveyResponses);
+			const [assignment] = await db.select().from(surveyAssignments).where(eq(surveyAssignments.memberId, walkIn.memberId));
+			expect(response.source).toBe("walk_in");
+			expect(Object.keys(response)).not.toContain("memberId");
+			expect(assignment).toMatchObject({ surveyId: survey.id, source: "walk_in" });
+			expect(assignment.completedAt?.getTime()).toBe(LATE.getTime());
+			expect(await db.select().from(schema.surveyAnswers)).toHaveLength(1);
+			expect((await repo.getForRespondent(walkIn, survey.id, LATE))!.state).toBe("answered");
+
+			await expect(repo.submitResponse(walkIn, answer("5"), LATE)).rejects.toThrow("You've already answered this form.");
+			expect(await db.select().from(schema.surveyResponses)).toHaveLength(1);
+			expect(await db.select().from(schema.surveyAnswers)).toHaveLength(1);
+		});
+
+		it("maps a lost walk-in race to already answered and leaves no response behind", async () => {
+			const { db, survey, answer, walkIn } = await eventForm();
+			// A second tab's submit lands between this one's eligibility check and its write.
+			const racing = Object.assign(Object.create(db), {
+				batch: async (queries: Parameters<typeof db.batch>[0]) => {
+					await env.DB.prepare(
+						"INSERT INTO survey_assignments (survey_id, member_id, assigned_at, completed_at, source) VALUES (?, ?, ?, ?, ?)",
+					)
+						.bind(survey.id, walkIn.memberId, 0, 0, "walk_in")
+						.run();
+					return db.batch(queries);
+				},
+			}) as typeof db;
+			const repo = createSurveysRepository(racing, createAuditRepository(racing));
+
+			await expect(repo.submitResponse(walkIn, answer(), LATE)).rejects.toThrow("You've already answered this form.");
+			expect(await db.select().from(schema.surveyResponses)).toHaveLength(0);
+			expect(await db.select().from(schema.surveyAnswers)).toHaveLength(0);
+		});
+
+		it("stores a walk-in response's submittedAt as the Manila day start", async () => {
+			const { db, repo, answer, walkIn } = await eventForm();
+
+			await repo.submitResponse(walkIn, answer(), LATE);
+
+			const [response] = await db.select().from(schema.surveyResponses);
+			expect(response.submittedAt.getTime()).toBe(startOfUtc8Day(LATE).getTime());
+			expect(response.submittedAt.toISOString()).toBe("2026-10-16T16:00:00.000Z");
+		});
+
+		it("lets an invited member of an event form answer and then reads answered", async () => {
+			const { db, repo, survey, answer, invited } = await eventForm();
+
+			expect((await repo.getForRespondent(invited, survey.id, LATE))!.state).toBe("open");
+			await repo.submitResponse(invited, answer(), LATE);
+
+			const [response] = await db.select().from(schema.surveyResponses);
+			expect(response.source).toBe("invited");
+			expect((await repo.getForRespondent(invited, survey.id, LATE))!.state).toBe("answered");
+			await expect(repo.submitResponse(invited, answer(), LATE)).rejects.toThrow("You've already answered this form.");
+		});
+
+		it("blocks walk-ins when the admin turned them off", async () => {
+			const { repo, survey, answer, walkIn, invited } = await eventForm({ allowWalkIn: false });
+
+			expect((await repo.getForRespondent(walkIn, survey.id, LATE))!.state).toBe("ineligible");
+			await expect(repo.submitResponse(walkIn, answer(), LATE)).rejects.toThrow("This form is not open to you.");
+			await expect(repo.openFeedbackForEvent(walkIn, "evt_1", LATE)).resolves.toBeNull();
+			// Invitees are unaffected.
+			expect((await repo.getForRespondent(invited, survey.id, LATE))!.state).toBe("open");
+		});
+
+		it("keeps a non-attendee out and shows them none of the questions", async () => {
+			const { repo, survey, answer } = await eventForm();
+			await env.DB.prepare("INSERT INTO members (id, email, name, status) VALUES (?, ?, ?, ?)")
+				.bind("mem_out", "out@example.com", "Out", "active")
+				.run();
+			const outsider = asMember("mem_out");
+
+			const view = await repo.getForRespondent(outsider, survey.id, LATE);
+			expect(view).toMatchObject({ state: "ineligible", questions: [] });
+			await expect(repo.submitResponse(outsider, answer(), LATE)).rejects.toThrow("This form is not open to you.");
+		});
+
+		it("rejects a member who became staff after sending", async () => {
+			const { db, repo, survey, answer, invited } = await eventForm();
+			await env.DB.prepare("INSERT INTO event_staff (event_id, member_id, role) VALUES (?, ?, ?)")
+				.bind("evt_1", invited.memberId, "scanner")
+				.run();
+
+			expect((await repo.getForRespondent(invited, survey.id, LATE))!.state).toBe("staff");
+			await expect(repo.submitResponse(invited, answer(), LATE)).rejects.toThrow("Organizers give feedback through the debrief.");
+			// The event owner is staff too.
+			expect((await repo.getForRespondent(admin, survey.id, LATE))!.state).toBe("staff");
+			expect(await db.select().from(schema.surveyResponses)).toHaveLength(0);
+		});
+
+		it("treats a soft-deleted event's form as closed", async () => {
+			const { repo, survey, answer, invited, walkIn } = await eventForm();
+			await env.DB.prepare("UPDATE crs_events SET deleted_at = 1 WHERE id = ?").bind("evt_1").run();
+
+			expect((await repo.getForRespondent(invited, survey.id, LATE))!.state).toBe("closed");
+			expect((await repo.getForRespondent(walkIn, survey.id, LATE))!.state).toBe("closed");
+			await expect(repo.submitResponse(walkIn, answer(), LATE)).rejects.toThrow("This form has closed.");
+			await expect(repo.openFeedbackForEvent(walkIn, "evt_1", LATE)).resolves.toBeNull();
+		});
+
+		it("rejects after closesAt or once an admin closes the form", async () => {
+			const { repo, survey, answer, invited, walkIn } = await eventForm();
+			const afterClose = new Date(in72h.getTime() + HOUR);
+
+			expect((await repo.getForRespondent(invited, survey.id, afterClose))!.state).toBe("closed");
+			await expect(repo.submitResponse(invited, answer(), afterClose)).rejects.toThrow("This form has closed.");
+			await expect(repo.submitResponse(walkIn, answer(), afterClose)).rejects.toThrow("This form has closed.");
+
+			await repo.updateRunning(admin, { surveyId: survey.id, close: true }, LATE);
+			expect((await repo.getForRespondent(invited, survey.id, LATE))!.state).toBe("closed");
+			await expect(repo.submitResponse(invited, answer(), LATE)).rejects.toThrow("This form has closed.");
+		});
+
+		it("hides a draft or missing form and refuses to answer it", async () => {
+			await seedMembers(2);
+			await seedEvent();
+			await seedAttendance("evt_1", ["mem_0", "mem_1"]);
+			const { db, repo } = setup();
+			const draft = await repo.create(admin, {
+				title: "Draft",
+				eventId: "evt_1",
+				questions: [{ type: "text", prompt: "Q", required: false }],
+			});
+			const [question] = (await repo.getById(admin, draft.id))!.questions;
+			const input = { surveyId: draft.id, answers: [{ questionId: question.id, value: "hi" }] };
+
+			expect(await repo.getForRespondent(asMember("mem_0"), draft.id, LATE)).toBeNull();
+			expect(await repo.getForRespondent(asMember("mem_0"), "srv_missing", LATE)).toBeNull();
+			await expect(repo.submitResponse(asMember("mem_0"), input, LATE)).rejects.toThrow("This form is not open to you.");
+			await expect(repo.submitResponse(asMember("mem_0"), { ...input, surveyId: "srv_missing" }, LATE)).rejects.toThrow(
+				"This form is not open to you.",
+			);
+			await expect(repo.openFeedbackForEvent(asMember("mem_0"), "evt_1", LATE)).resolves.toBeNull();
+			expect(await db.select().from(schema.surveyResponses)).toHaveLength(0);
+		});
+
+		it("requires required answers and valid values", async () => {
+			const { db, repo, survey, pick, why, answer, walkIn } = await eventForm();
+			const submit = (answers: Array<{ questionId: string; value: string }>) =>
+				repo.submitResponse(walkIn, { surveyId: survey.id, answers }, LATE);
+
+			await expect(submit([{ questionId: why.id, value: "only text" }])).rejects.toThrow("Answer every required question.");
+			await expect(submit(answer("6").answers)).rejects.toThrow("Pick a value from 1 to 5.");
+			await expect(submit(answer("0").answers)).rejects.toThrow("Pick a value from 1 to 5.");
+			await expect(submit(answer("3.5").answers)).rejects.toThrow("Pick a value from 1 to 5.");
+			await expect(submit([...answer("4").answers, { questionId: pick.id, value: "Green" }])).rejects.toThrow(
+				"Pick one of the listed choices.",
+			);
+			await expect(submit([...answer("4").answers, { questionId: "srvq_other", value: "x" }])).rejects.toThrow(
+				"Answer references an unknown question.",
+			);
+			await expect(submit([...answer("4").answers, ...answer("5").answers])).rejects.toThrow("Answer each question once.");
+
+			// Nothing was written, so the walk-in can still answer properly.
+			expect(await db.select().from(schema.surveyResponses)).toHaveLength(0);
+			expect(await db.select().from(surveyAssignments).where(eq(surveyAssignments.memberId, walkIn.memberId))).toHaveLength(0);
+			await expect(
+				submit([...answer("1").answers, { questionId: pick.id, value: "Blue" }, { questionId: why.id, value: "ok" }]),
+			).resolves.toEqual({ ok: true });
+			expect(await db.select().from(schema.surveyAnswers)).toHaveLength(3);
+		});
+
+		it("does not claim an invitee's slot when their answers are invalid", async () => {
+			const { db, repo, survey, answer, invited } = await eventForm();
+
+			await expect(repo.submitResponse(invited, answer("9"), LATE)).rejects.toThrow("Pick a value from 1 to 5.");
+			const [pending] = await db.select().from(surveyAssignments).where(eq(surveyAssignments.memberId, invited.memberId));
+			expect(pending.completedAt).toBeNull();
+
+			await expect(repo.submitResponse(invited, answer("2"), LATE)).resolves.toEqual({ ok: true });
+			const [done] = await db.select().from(surveyAssignments).where(eq(surveyAssignments.memberId, invited.memberId));
+			expect(done).toMatchObject({ surveyId: survey.id, source: "invited" });
+			expect(done.completedAt).not.toBeNull();
+		});
+
+		it("shows the event card only to eligible attendees", async () => {
+			const { repo, survey, answer, walkIn, invited } = await eventForm();
+			await env.DB.prepare("INSERT INTO members (id, email, name, status) VALUES (?, ?, ?, ?)")
+				.bind("mem_out", "out@example.com", "Out", "active")
+				.run();
+
+			await expect(repo.openFeedbackForEvent(walkIn, "evt_1", LATE)).resolves.toEqual({ surveyId: survey.id, state: "open" });
+			await expect(repo.openFeedbackForEvent(invited, "evt_1", LATE)).resolves.toEqual({ surveyId: survey.id, state: "open" });
+			await repo.submitResponse(walkIn, answer(), LATE);
+			await expect(repo.openFeedbackForEvent(walkIn, "evt_1", LATE)).resolves.toEqual({ surveyId: survey.id, state: "answered" });
+
+			await expect(repo.openFeedbackForEvent(asMember("mem_out"), "evt_1", LATE)).resolves.toBeNull();
+			await expect(repo.openFeedbackForEvent(admin, "evt_1", LATE)).resolves.toBeNull();
+			await expect(repo.openFeedbackForEvent(walkIn, "evt_none", LATE)).resolves.toBeNull();
+			await expect(repo.openFeedbackForEvent(walkIn, "evt_1", new Date(in72h.getTime() + HOUR))).resolves.toBeNull();
+		});
+
+		it("answers a general form by invitation only", async () => {
+			await seedMembers(3);
+			const { db, repo } = setup();
+			const survey = await repo.create(admin, { title: "General", questions: [{ type: "text", prompt: "Q", required: true }] });
+			await sendCount(repo, survey.id, 1);
+			const [question] = (await repo.getById(admin, survey.id))!.questions;
+			const input = { surveyId: survey.id, answers: [{ questionId: question.id, value: "hi" }] };
+			const invitedId = (await assignedIds(db, survey.id))[0];
+			const outsider = asMember(["mem_0", "mem_1", "mem_2"].find((id) => id !== invitedId)!);
+
+			expect(await repo.getForRespondent(outsider, survey.id, LATE)).toMatchObject({ state: "ineligible", eventTitle: null });
+			await expect(repo.submitResponse(outsider, input, LATE)).rejects.toThrow("This form is not open to you.");
+			await expect(repo.submitResponse(asMember(invitedId), input, LATE)).resolves.toEqual({ ok: true });
+		});
+
+		it("saves a 30-answer walk-in response under the D1 parameter limit", async () => {
+			await seedMembers(2);
+			await seedEvent();
+			await seedAttendance("evt_1", ["mem_0", "mem_1"]);
+			const { db, repo } = setup();
+			const survey = await repo.create(admin, { title: "Long", eventId: "evt_1", questions: textQuestions(30) });
+			await sendCount(repo, survey.id, 1);
+			const invitedId = (await assignedIds(db, survey.id))[0];
+			const walkIn = asMember(["mem_0", "mem_1"].find((id) => id !== invitedId)!);
+			const { questions } = (await repo.getById(admin, survey.id))!;
+
+			await expect(
+				repo.submitResponse(walkIn, { surveyId: survey.id, answers: questions.map((q) => ({ questionId: q.id, value: q.prompt })) }, LATE),
+			).resolves.toEqual({ ok: true });
+			expect(await db.select().from(schema.surveyAnswers)).toHaveLength(30);
 		});
 	});
 });
