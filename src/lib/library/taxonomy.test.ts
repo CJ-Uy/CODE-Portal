@@ -24,7 +24,7 @@ describe("normalizeDocType", () => {
 			formatDetail: "Lecture",
 			extraFormats: ["SLE"],
 		});
-		expect(normalizeDocType("IDF: Leadership Training Seminar")).toEqual({
+		expect(normalizeDocType("IDF: Sample Training Seminar")).toEqual({
 			subtype: "IDF",
 			formatDetail: null,
 			extraFormats: [],
@@ -125,11 +125,8 @@ describe("splitTopics", () => {
 
 describe("splitAuthors", () => {
 	it("splits CODEr authors on commas but readings only on newlines", () => {
-		expect(splitAuthors("Sofia Daez, Bianca Barin", "code_document")).toEqual(["Sofia Daez", "Bianca Barin"]);
-		expect(splitAuthors("Pohlmann, Tom\nThomas, Neethi Mary", "reading")).toEqual([
-			"Pohlmann, Tom",
-			"Thomas, Neethi Mary",
-		]);
+		expect(splitAuthors("Ana Reyes, Ben Cruz", "code_document")).toEqual(["Ana Reyes", "Ben Cruz"]);
+		expect(splitAuthors("Doe, Jane\nRoe, Richard", "reading")).toEqual(["Doe, Jane", "Roe, Richard"]);
 	});
 
 	it("also splits CODEr authors on newlines and drops empties", () => {
@@ -146,18 +143,68 @@ describe("taxonomy constants", () => {
 		expect(new Set(all.map((t) => t.toLowerCase())).size).toBe(37);
 	});
 
-	it("lists the tag groups in order with the expected sizes", () => {
-		expect(TAG_GROUPS.map((g) => [g.group, g.tags.length])).toEqual([
-			["Direction & Strategy", 5],
-			["Structure & Systems", 5],
-			["Diagnosis & Change", 5],
-			["People & Culture", 8],
-			["Leadership", 3],
-			["Methods", 9],
-			["Member Writing", 2],
+	it("lists the tag groups and tags verbatim, in order", () => {
+		expect(TAG_GROUPS).toEqual([
+			{
+				group: "Direction & Strategy",
+				tags: ["Vision & Mission (VMOS)", "Strategic Planning", "Goal Setting", "Alignment", "Advocacy"],
+			},
+			{
+				group: "Structure & Systems",
+				tags: [
+					"Org Design",
+					"Processes, Systems & Structures (PSS)",
+					"Constitution & Internal Rules",
+					"Roles & Responsibilities",
+					"Systems Thinking",
+				],
+			},
+			{
+				group: "Diagnosis & Change",
+				tags: [
+					"Diagnosis",
+					"Change Management",
+					"Root Cause Analysis",
+					"Monitoring & Evaluation",
+					"Stakeholder Analysis",
+				],
+			},
+			{
+				group: "People & Culture",
+				tags: [
+					"Org Culture",
+					"Member Engagement",
+					"Motivation",
+					"Teamwork & Collaboration",
+					"Accountability",
+					"Communication & Feedback",
+					"Well-being & Burnout",
+					"Diversity & Inclusion",
+				],
+			},
+			{
+				group: "Leadership",
+				tags: ["Leadership", "Self-Awareness & Growth", "Transitions & Turnover"],
+			},
+			{
+				group: "Methods",
+				tags: [
+					"Design Thinking / HCD",
+					"Design Sprint",
+					"Behavioral Design",
+					"Facilitation",
+					"Appreciative Inquiry",
+					"Ideation",
+					"Project Management",
+					"Module Design",
+					"Problem Solving",
+				],
+			},
+			{
+				group: "Member Writing",
+				tags: ["Tech & Digital Tools", "Career & Skills"],
+			},
 		]);
-		expect(TAG_GROUPS[0]?.tags[0]).toBe("Vision & Mission (VMOS)");
-		expect(TAG_GROUPS[6]?.tags).toEqual(["Tech & Digital Tools", "Career & Skills"]);
 	});
 
 	it("labels every kind and source", () => {
