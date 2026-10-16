@@ -123,6 +123,32 @@ export const createSurveyInputSchema = z.object({
 
 export type CreateSurveyInput = z.infer<typeof createSurveyInputSchema>;
 
+// A template is a reusable question list; a survey copies it at creation and never follows later edits.
+export const saveTemplateInputSchema = z.object({
+	id: z.string().trim().min(1).optional(),
+	name: z.string().trim().min(1).max(120),
+	description: z.string().trim().max(300).default(""),
+	questions: z.array(surveyQuestionInputSchema).min(1).max(30),
+});
+
+export type SaveTemplateInput = z.infer<typeof saveTemplateInputSchema>;
+
+export const createFromTemplateInputSchema = z.object({
+	templateId: z.string().trim().min(1),
+	eventId: z.string().trim().min(1).nullable(),
+	title: z.string().trim().min(1).max(200).optional(),
+});
+
+export type CreateFromTemplateInput = z.infer<typeof createFromTemplateInputSchema>;
+
+export const updateDraftInputSchema = z.object({
+	surveyId: z.string().trim().min(1),
+	title: z.string().trim().min(1).max(200),
+	questions: z.array(surveyQuestionInputSchema).min(1).max(30),
+});
+
+export type UpdateDraftInput = z.infer<typeof updateDraftInputSchema>;
+
 // Drawing the sample also flips the survey to running. sampleSize is the number
 // of members to draw; seed makes the draw deterministic and testable.
 export const sampleSurveyInputSchema = z.object({

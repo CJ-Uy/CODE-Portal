@@ -1,15 +1,29 @@
-import { and, asc, eq, getTableColumns, isNull } from "drizzle-orm";
+import { and, asc, eq, getTableColumns, isNull, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import * as schema from "@/db/schema";
-import { members, surveyAnswers, surveyAssignments, surveyQuestions, surveyResponses, surveys } from "@/db/schema";
+import {
+	crsEvents,
+	members,
+	surveyAnswers,
+	surveyAssignments,
+	surveyQuestions,
+	surveyResponses,
+	surveys,
+	surveyTemplates,
+} from "@/db/schema";
 import type {
+	CreateFromTemplateInput,
 	CreateSurveyInput,
 	SampleSurveyInput,
+	SaveTemplateInput,
 	SubmitSurveyResponseInput,
 	Survey,
 	SurveyQuestion,
+	SurveyQuestionInput,
 	SurveyResults,
 	SurveyResultsQuestion,
+	SurveyTemplate,
+	UpdateDraftInput,
 } from "@/db/types";
 import { startOfUtc8Day } from "@/lib/date-slots";
 import { createId } from "@/lib/ids";
@@ -30,10 +44,33 @@ const rowsPerInsert = (table: typeof surveyQuestions | typeof surveyAnswers) =>
 const QUESTION_ROWS_PER_INSERT = rowsPerInsert(surveyQuestions);
 const ANSWER_ROWS_PER_INSERT = rowsPerInsert(surveyAnswers);
 
+// One insert per chunk; callers put them in a db.batch so a form's questions land together or not at all.
+function questionInserts(db: SurveyDb, surveyId: string, questions: SurveyQuestionInput[]) {
+	const rows = questions.map((question, index) => ({
+		id: createId("srvq"),
+		surveyId,
+		position: index + 1,
+		type: question.type,
+		prompt: question.prompt,
+		optionsJson: question.options ? JSON.stringify(question.options) : null,
+		required: question.required,
+		help: question.help ?? null,
+		metricKey: question.metricKey ?? null,
+	}));
+	return chunk(rows, QUESTION_ROWS_PER_INSERT).map((part) => db.insert(surveyQuestions).values(part));
+}
+
 export type SampleResult = { assigned: number };
 
 export type SurveysRepository = {
 	create(actor: Actor, input: CreateSurveyInput): Promise<Survey>;
+	listTemplates(actor: Actor): Promise<SurveyTemplate[]>;
+	getTemplate(actor: Actor, id: string): Promise<SurveyTemplate | null>;
+	saveTemplate(actor: Actor, input: SaveTemplateInput): Promise<SurveyTemplate>;
+	archiveTemplate(actor: Actor, id: string): Promise<void>;
+	createFromTemplate(actor: Actor, input: CreateFromTemplateInput): Promise<Survey>;
+	updateDraft(actor: Actor, input: UpdateDraftInput): Promise<void>;
+	getForEvent(actor: Actor, eventId: string): Promise<Survey | null>;
 	sample(actor: Actor, input: SampleSurveyInput): Promise<SampleResult>;
 	list(actor: Actor, input?: { limit?: number }): Promise<Survey[]>;
 	getById(actor: Actor, id: string): Promise<{ survey: Survey; questions: SurveyQuestion[] } | null>;
@@ -63,20 +100,7 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 				})
 				.returning();
 
-			const questionRows = input.questions.map((question, index) => ({
-				id: createId("srvq"),
-				surveyId,
-				position: index + 1,
-				type: question.type,
-				prompt: question.prompt,
-				optionsJson: question.options ? JSON.stringify(question.options) : null,
-				required: question.required,
-				help: question.help ?? null,
-				metricKey: question.metricKey ?? null,
-			}));
-			const [firstQuestions, ...moreQuestions] = chunk(questionRows, QUESTION_ROWS_PER_INSERT).map((part) =>
-				db.insert(surveyQuestions).values(part),
-			);
+			const [firstQuestions, ...moreQuestions] = questionInserts(db, surveyId, input.questions);
 			await db.batch([firstQuestions, ...moreQuestions]);
 
 			await audit.record(actor, {
@@ -86,6 +110,149 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 				category: "survey",
 			});
 			return survey;
+		},
+
+		async listTemplates(actor) {
+			if (!can(actor, "survey:configure")) throw new Error("Not authorized to manage survey templates.");
+			return db
+				.select()
+				.from(surveyTemplates)
+				.where(isNull(surveyTemplates.archivedAt))
+				.orderBy(asc(surveyTemplates.position), asc(surveyTemplates.name));
+		},
+
+		// Archived templates still read back, so a survey's provenance can be shown.
+		async getTemplate(actor, id) {
+			if (!can(actor, "survey:configure")) throw new Error("Not authorized to manage survey templates.");
+			const [template] = await db.select().from(surveyTemplates).where(eq(surveyTemplates.id, id)).limit(1);
+			return template ?? null;
+		},
+
+		async saveTemplate(actor, input) {
+			if (!can(actor, "survey:configure")) throw new Error("Not authorized to manage survey templates.");
+
+			const fields = { name: input.name, description: input.description, questionsJson: input.questions };
+			let template: SurveyTemplate | undefined;
+			if (input.id) {
+				[template] = await db
+					.update(surveyTemplates)
+					.set({ ...fields, updatedAt: new Date() })
+					.where(and(eq(surveyTemplates.id, input.id), isNull(surveyTemplates.archivedAt)))
+					.returning();
+			} else {
+				// A new template goes last, so the seeded default stays first.
+				[template] = await db
+					.insert(surveyTemplates)
+					.values({
+						...fields,
+						id: createId("stpl"),
+						position: sql`(SELECT COALESCE(MAX(position), -1) + 1 FROM survey_templates)`,
+						createdBy: actor.memberId,
+					})
+					.returning();
+			}
+			if (!template) throw new Error("Template not found.");
+
+			await audit.record(actor, {
+				action: "survey:template_save",
+				targetType: "survey_template",
+				targetId: template.id,
+				category: "survey",
+				detail: template.name,
+			});
+			return template;
+		},
+
+		async archiveTemplate(actor, id) {
+			if (!can(actor, "survey:configure")) throw new Error("Not authorized to manage survey templates.");
+
+			const now = new Date();
+			const [archived] = await db
+				.update(surveyTemplates)
+				.set({ archivedAt: now, updatedAt: now })
+				.where(and(eq(surveyTemplates.id, id), isNull(surveyTemplates.archivedAt)))
+				.returning({ name: surveyTemplates.name });
+			if (!archived) throw new Error("Template not found.");
+
+			await audit.record(actor, {
+				action: "survey:template_archive",
+				targetType: "survey_template",
+				targetId: id,
+				category: "survey",
+				detail: archived.name,
+			});
+		},
+
+		async createFromTemplate(actor, input) {
+			if (!can(actor, "survey:configure")) throw new Error("Not authorized to create surveys.");
+
+			const [template] = await db
+				.select()
+				.from(surveyTemplates)
+				.where(and(eq(surveyTemplates.id, input.templateId), isNull(surveyTemplates.archivedAt)))
+				.limit(1);
+			if (!template) throw new Error("Template not found.");
+
+			let eventTitle: string | null = null;
+			if (input.eventId) {
+				const [event] = await db
+					.select({ title: crsEvents.title })
+					.from(crsEvents)
+					.where(and(eq(crsEvents.id, input.eventId), isNull(crsEvents.deletedAt)))
+					.limit(1);
+				if (!event) throw new Error("Event not found.");
+				// If two admins race past this check, the unique index on surveys.event_id fails the loser's whole batch (raw D1 error, no orphan).
+				const [existing] = await db.select({ id: surveys.id }).from(surveys).where(eq(surveys.eventId, input.eventId)).limit(1);
+				if (existing) throw new Error("This event already has a feedback form.");
+				eventTitle = event.title;
+			}
+
+			const surveyId = createId("srv");
+			// One batch, so a failed question insert cannot leave an empty draft behind.
+			const [[survey]] = await db.batch([
+				db
+					.insert(surveys)
+					.values({
+						id: surveyId,
+						title: input.title ?? (eventTitle ? `Feedback: ${eventTitle}` : template.name),
+						eventId: input.eventId,
+						templateId: template.id,
+						status: "draft",
+						createdBy: actor.memberId,
+					})
+					.returning(),
+				...questionInserts(db, surveyId, template.questionsJson),
+			]);
+
+			await audit.record(actor, {
+				action: "survey:create",
+				targetType: "survey",
+				targetId: surveyId,
+				category: "survey",
+				detail: `From template ${template.name}.`,
+			});
+			return survey;
+		},
+
+		async updateDraft(actor, input) {
+			if (!can(actor, "survey:configure")) throw new Error("Not authorized to edit surveys.");
+
+			const [survey] = await db.select({ status: surveys.status }).from(surveys).where(eq(surveys.id, input.surveyId)).limit(1);
+			if (!survey) throw new Error("Survey not found.");
+			if (survey.status !== "draft") throw new Error("Questions can't change after sending.");
+
+			// ponytail: a send landing between the check above and this batch would still be overwritten; guard in SQL if sends become concurrent.
+			await db.batch([
+				db.update(surveys).set({ title: input.title }).where(eq(surveys.id, input.surveyId)),
+				db.delete(surveyQuestions).where(eq(surveyQuestions.surveyId, input.surveyId)),
+				...questionInserts(db, input.surveyId, input.questions),
+			]);
+		},
+
+		async getForEvent(actor, eventId) {
+			if (!can(actor, "survey:configure")) throw new Error("Not authorized to read this survey.");
+			const [survey] = await db.select().from(surveys).where(eq(surveys.eventId, eventId)).limit(1);
+			return survey ?? null;
 		},
 
 		async sample(actor, input) {
@@ -265,6 +432,13 @@ export function createUnavailableSurveysRepository(): SurveysRepository {
 	const unavailable = () => Promise.reject(new Error("Surveys are not available through this repository adapter."));
 	return {
 		create: unavailable,
+		listTemplates: unavailable,
+		getTemplate: unavailable,
+		saveTemplate: unavailable,
+		archiveTemplate: unavailable,
+		createFromTemplate: unavailable,
+		updateDraft: unavailable,
+		getForEvent: unavailable,
 		sample: unavailable,
 		list: unavailable,
 		getById: unavailable,
