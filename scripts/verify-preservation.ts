@@ -72,6 +72,8 @@ db.exec(
 	`INSERT INTO survey_assignments (survey_id, member_id, response_token_hash, completed_at)
 	 VALUES ('srv_fix1', 'mem_fix1', 'hash_fix1', 2000)`,
 );
+// A rule saved as "Super admins only" before 0012 stored survey:configure, which CRS now holds.
+db.exec(`INSERT INTO event_type_rules (type, required_permission, label) VALUES ('fix_super', 'survey:configure', 'Fixture')`);
 for (const file of files.filter((f) => f >= "0012")) applyOne(file);
 check("fixture assignment survived", one("SELECT completed_at AS v FROM survey_assignments WHERE survey_id='srv_fix1'"), 2000);
 check("fixture assignment is invited", one("SELECT source AS v FROM survey_assignments WHERE survey_id='srv_fix1'"), "invited");
@@ -88,6 +90,11 @@ check(
 	"stpl_standard metric keys",
 	standard.flatMap((q) => (q.metricKey ? [q.metricKey] : [])).join(","),
 	"overall,flow,content,venue,return_intent",
+);
+check(
+	"super-only rule rewritten",
+	one("SELECT required_permission AS v FROM event_type_rules WHERE type='fix_super'"),
+	"system:super_only",
 );
 check("feedback email category seeded", one("SELECT COUNT(*) AS v FROM email_categories WHERE id='ecat_feedback'"), 1);
 db.close();

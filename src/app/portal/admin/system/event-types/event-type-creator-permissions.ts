@@ -7,7 +7,7 @@ export const creatorPermissionOptions = [
 	{ value: "link:moderate", label: "Link admins only" },
 	{ value: "member:manage", label: "Member admins only" },
 	{ value: "announcement:manage", label: "Publishing admins only" },
-	{ value: "survey:configure", label: "Super admins only" },
+	{ value: "system:super_only", label: "Super admins only" },
 ] as const satisfies ReadonlyArray<{ value: PermissionAction | ""; label: string }>;
 
 const creatorPermissionValues: Record<PermissionAction, (typeof creatorPermissionOptions)[number]["value"]> = {
@@ -19,18 +19,19 @@ const creatorPermissionValues: Record<PermissionAction, (typeof creatorPermissio
 	"retention:configure": "retention:record",
 	"link:moderate": "link:moderate",
 	"role:assign": "member:manage",
-	"survey:configure": "survey:configure",
+	"survey:configure": "retention:record",
 	"member:manage": "member:manage",
 	"roster:manage": "member:manage",
 	"nav:configure": "member:manage",
 	"announcement:manage": "announcement:manage",
 	"library:manage": "announcement:manage",
 	"library:moderate": "announcement:manage",
-	"email:send": "survey:configure",
-	"email:configure": "survey:configure",
+	"email:send": "system:super_only",
+	"email:configure": "system:super_only",
+	"system:super_only": "system:super_only",
 };
 
 export function creatorPermissionValue(current: string) {
 	if (current === "") return "";
-	return creatorPermissionValues[current as PermissionAction] ?? "survey:configure";
+	return creatorPermissionValues[current as PermissionAction] ?? "system:super_only";
 }
