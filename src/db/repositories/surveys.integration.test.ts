@@ -161,6 +161,29 @@ describe("surveys repository on D1", () => {
 		expect(response.submittedAt.toISOString()).toBe("2026-10-09T16:00:00.000Z");
 	});
 
+	// D1 binds at most 100 parameters per statement; 30 is the schema maximum for both.
+	it("creates a 30-question survey and accepts 30 answers to it", async () => {
+		await seedMembers(1);
+		const { db, repo } = setup();
+		const survey = await repo.create(admin, {
+			title: "Long",
+			questions: Array.from({ length: 30 }, (_, i) => ({ type: "text" as const, prompt: `Q${i + 1}`, required: false })),
+		});
+		const { questions } = (await repo.getById(admin, survey.id))!;
+		expect(questions).toHaveLength(30);
+		expect(questions.map((q) => q.position)).toEqual(Array.from({ length: 30 }, (_, i) => i + 1));
+
+		await repo.sample(admin, { surveyId: survey.id, sampleSize: 2, seed: "fixed" });
+		await expect(
+			repo.submitResponse(asMember("mem_0"), {
+				surveyId: survey.id,
+				answers: questions.map((q) => ({ questionId: q.id, value: `A ${q.prompt}` })),
+			}),
+		).resolves.toEqual({ ok: true });
+		expect(await db.select().from(schema.surveyAnswers)).toHaveLength(30);
+		expect(await db.select().from(schema.surveyResponses)).toHaveLength(1);
+	});
+
 	it("aggregates identity-free results with assigned and completed counts", async () => {
 		await seedMembers(3);
 		const { db, repo } = setup();
