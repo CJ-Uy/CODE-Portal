@@ -1,5 +1,7 @@
 import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
 import { z } from "zod";
+import type { ScaleSummary } from "@/lib/feedback/stats";
+import type { FeedbackSummary } from "@/lib/feedback/summary";
 import { quantizePoints } from "@/lib/points";
 import type {
 	eventDebriefs,
@@ -11,7 +13,6 @@ import type {
 	surveyResponses,
 	surveys,
 	surveyTemplates,
-	SurveyQuestionType,
 	SurveyStatus,
 } from "./schema";
 
@@ -192,23 +193,49 @@ export const submitSurveyResponseInputSchema = z.object({
 
 export type SubmitSurveyResponseInput = z.infer<typeof submitSurveyResponseInputSchema>;
 
-// Aggregated, identity-free results. Per question we expose only counts.
-export type SurveyResultsQuestion = {
-	questionId: string;
-	prompt: string;
-	type: SurveyQuestionType;
-	answerCount: number;
-	// For scale/choice: value -> count. For text: omitted.
-	valueCounts?: Record<string, number>;
-	// For text: the raw answer strings, with no ordering tie to any member.
-	textAnswers?: string[];
-};
+// Interpreted, identity-free results for the admin and organizer views.
+export type ResultsQuestion =
+	| {
+			kind: "scale";
+			questionId: string;
+			prompt: string;
+			help: string | null;
+			metricKey: MetricKey | null;
+			labels: [string, string];
+			summary: ScaleSummary;
+			baseline: { mean: number; events: number } | null;
+	  }
+	| { kind: "choice"; questionId: string; prompt: string; options: string[]; counts: Record<string, number>; n: number }
+	| {
+			kind: "text";
+			questionId: string;
+			prompt: string;
+			answers: Array<{ id: string; value: string; hidden: boolean }>;
+			terms: Array<{ term: string; count: number }>;
+	  };
 
 export type SurveyResults = {
 	surveyId: string;
 	title: string;
+	eventId: string | null;
+	eventType: string | null;
 	status: SurveyStatus;
-	assignedCount: number;
-	completedCount: number;
-	questions: SurveyResultsQuestion[];
+	closesAt: Date | null;
+	invitedCount: number;
+	invitedResponded: number;
+	walkInCount: number;
+	responseCount: number;
+	belowThreshold: boolean;
+	shareWithOrganizers: boolean;
+	questions: ResultsQuestion[];
+	summary: (FeedbackSummary & { generatedAt: Date; responseCountAtGeneration: number }) | null;
+};
+
+// One row of the admin event archive.
+export type EventFeedbackRow = {
+	surveyId: string;
+	overall: ScaleSummary | null;
+	responses: number;
+	invitedRate: number | null;
+	hasDebrief: boolean;
 };

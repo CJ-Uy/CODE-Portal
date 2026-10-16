@@ -2,6 +2,7 @@ import type { DrizzleD1Database } from "drizzle-orm/d1";
 import * as schema from "@/db/schema";
 import { surveysContract } from "@/db/contract/surveys";
 import { createAuditRepository } from "@/db/repositories/audit";
+import { createSurveyResultsRepository } from "@/db/repositories/survey-results";
 import { createSurveysRepository } from "@/db/repositories/surveys";
 import type { DeployEnv } from "@/server/env";
 import { getInternalCorsHeaders } from "./cors";
@@ -19,7 +20,9 @@ async function readBody(request: Request) {
 }
 
 export function createSurveysInternalHandlers({ db, deployEnv, allowedOrigins = [] }: SurveysInternalDependencies) {
-	const repository = createSurveysRepository(db, createAuditRepository(db));
+	const audit = createAuditRepository(db);
+	const repository = createSurveysRepository(db, audit);
+	const resultsRepository = createSurveyResultsRepository(db, audit);
 
 	return {
 		async fetch(request: Request, surveyId?: string): Promise<Response> {
@@ -70,7 +73,7 @@ export function createSurveysInternalHandlers({ db, deployEnv, allowedOrigins = 
 
 				if (request.method === "GET" && op === "results") {
 					const input = surveysContract.results.input.parse({ id: surveyId ?? url.searchParams.get("id") });
-					const results = await repository.getResults(actor, input.id);
+					const results = await resultsRepository.getResults(actor, input.id, { filter: "all" });
 					return Response.json(surveysContract.results.output.parse({ results }), { headers: responseHeaders });
 				}
 

@@ -20,8 +20,6 @@ import type {
 	Survey,
 	SurveyQuestion,
 	SurveyQuestionInput,
-	SurveyResults,
-	SurveyResultsQuestion,
 	SurveySource,
 	SurveyTemplate,
 	UpdateDraftInput,
@@ -184,7 +182,6 @@ export type SurveysRepository = {
 	getForRespondent(actor: Actor, surveyId: string, now?: Date): Promise<RespondentView | null>;
 	submitResponse(actor: Actor, input: SubmitSurveyResponseInput, now?: Date): Promise<{ ok: true }>;
 	openFeedbackForEvent(actor: Actor, eventId: string, now?: Date): Promise<{ surveyId: string; state: RespondentState } | null>;
-	getResults(actor: Actor, surveyId: string): Promise<SurveyResults>;
 };
 
 export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): SurveysRepository {
@@ -560,58 +557,6 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 			// Only a member who can answer, or already did, is shown the card.
 			return state === "open" || state === "answered" ? { surveyId: survey.id, state } : null;
 		},
-
-		async getResults(actor, surveyId) {
-			if (!can(actor, "survey:configure")) throw new Error("Not authorized to read survey results.");
-
-			const [survey] = await db.select().from(surveys).where(eq(surveys.id, surveyId)).limit(1);
-			if (!survey) throw new Error("Survey not found.");
-			const questions = await db
-				.select()
-				.from(surveyQuestions)
-				.where(eq(surveyQuestions.surveyId, surveyId))
-				.orderBy(asc(surveyQuestions.position));
-			const assignments = await db
-				.select({ completedAt: surveyAssignments.completedAt })
-				.from(surveyAssignments)
-				.where(eq(surveyAssignments.surveyId, surveyId));
-			const answers = await db
-				.select({ questionId: surveyAnswers.questionId, value: surveyAnswers.value })
-				.from(surveyAnswers)
-				.innerJoin(surveyResponses, eq(surveyResponses.id, surveyAnswers.responseId))
-				.where(eq(surveyResponses.surveyId, surveyId));
-
-			const resultQuestions: SurveyResultsQuestion[] = questions.map((question) => {
-				const forQuestion = answers.filter((answer) => answer.questionId === question.id);
-				if (question.type === "text") {
-					return {
-						questionId: question.id,
-						prompt: question.prompt,
-						type: question.type,
-						answerCount: forQuestion.length,
-						textAnswers: forQuestion.map((answer) => answer.value),
-					};
-				}
-				const valueCounts: Record<string, number> = {};
-				for (const answer of forQuestion) valueCounts[answer.value] = (valueCounts[answer.value] ?? 0) + 1;
-				return {
-					questionId: question.id,
-					prompt: question.prompt,
-					type: question.type,
-					answerCount: forQuestion.length,
-					valueCounts,
-				};
-			});
-
-			return {
-				surveyId,
-				title: survey.title,
-				status: survey.status,
-				assignedCount: assignments.length,
-				completedCount: assignments.filter((assignment) => assignment.completedAt !== null).length,
-				questions: resultQuestions,
-			};
-		},
 	};
 }
 
@@ -634,6 +579,5 @@ export function createUnavailableSurveysRepository(): SurveysRepository {
 		getForRespondent: unavailable,
 		submitResponse: unavailable,
 		openFeedbackForEvent: unavailable,
-		getResults: unavailable,
 	} as unknown as SurveysRepository;
 }

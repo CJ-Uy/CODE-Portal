@@ -233,46 +233,6 @@ describe("surveys repository on D1", () => {
 		expect(await db.select().from(schema.surveyResponses)).toHaveLength(1);
 	});
 
-	it("aggregates identity-free results with assigned and completed counts", async () => {
-		await seedMembers(3);
-		const { db, repo } = setup();
-		const survey = await repo.create(admin, {
-			title: "S",
-			questions: [
-				{ type: "scale", prompt: "Rate", options: ["Low", "High"], required: true },
-				{ type: "text", prompt: "Why?", required: false },
-			],
-		});
-		const detail = await repo.getById(admin, survey.id);
-		const [scaleQ, textQ] = detail!.questions;
-		await sendCount(repo, survey.id, 2, { seed: "x" });
-		await repo.submitResponse(
-			asMember((await assignedIds(db, survey.id))[0]),
-			{
-				surveyId: survey.id,
-				answers: [
-					{ questionId: scaleQ.id, value: "3" },
-					{ questionId: textQ.id, value: "Great session" },
-				],
-			},
-			NOW,
-		);
-
-		const results = await repo.getResults(admin, survey.id);
-		expect(results.assignedCount).toBe(2);
-		expect(results.completedCount).toBe(1);
-		const scaleResult = results.questions.find((q) => q.questionId === scaleQ.id);
-		expect(scaleResult?.valueCounts).toEqual({ "3": 1 });
-		const textResult = results.questions.find((q) => q.questionId === textQ.id);
-		expect(textResult?.textAnswers).toEqual(["Great session"]);
-	});
-
-	it("rejects getResults for a non-admin actor", async () => {
-		const { repo } = setup();
-		const survey = await repo.create(admin, { title: "S", questions: [{ type: "text", prompt: "Q", required: false }] });
-		await expect(repo.getResults(member, survey.id)).rejects.toThrow("Not authorized");
-	});
-
 	it("lists the three seeded templates in order", async () => {
 		const { repo } = setup();
 		expect((await repo.listTemplates(admin)).map((t) => t.id)).toEqual(["stpl_standard", "stpl_pulse", "stpl_workshop"]);

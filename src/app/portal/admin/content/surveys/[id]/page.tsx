@@ -27,17 +27,7 @@ export default async function AdminSurveyDetailPage({ params }: { params: Promis
 	// surveys has no shared-dev internal proxy yet; degrade to not-found instead of crashing.
 	const detail = await repositories.surveys.getById(actor, id).catch(() => null);
 	if (!detail) notFound();
-	const results = await repositories.surveys.getResults(actor, id).catch(
-		() =>
-			({
-				surveyId: id,
-				title: detail.survey.title,
-				status: detail.survey.status,
-				assignedCount: 0,
-				completedCount: 0,
-				questions: [],
-			}) satisfies Awaited<ReturnType<typeof repositories.surveys.getResults>>,
-	);
+	const results = await repositories.surveyResults.getResults(actor, id, { filter: "all" }).catch(() => null);
 
 	return (
 		<div>
@@ -45,8 +35,13 @@ export default async function AdminSurveyDetailPage({ params }: { params: Promis
 					<header className="grid gap-2 border-b border-border/60 pb-5">
 						<h1 className="text-3xl font-semibold text-primary sm:text-4xl">{detail.survey.title}</h1>
 						<div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-							<Badge variant="outline">{detail.survey.status}</Badge> {results.completedCount} of {results.assignedCount}{" "}
-							assigned members responded.
+							<Badge variant="outline">{results?.status ?? detail.survey.status}</Badge>
+							{results ? (
+								<span>
+									{results.responseCount} responses. {results.invitedResponded} of {results.invitedCount} invited, {results.walkInCount}{" "}
+									walk-ins.
+								</span>
+							) : null}
 						</div>
 					</header>
 					{detail.survey.status === "draft" ? (
@@ -72,33 +67,46 @@ export default async function AdminSurveyDetailPage({ params }: { params: Promis
 				<Card>
 					<CardHeader>
 						<h2 className="text-xl font-semibold text-primary">Results</h2>
-						<CardDescription>Aggregated and anonymous. Responses cannot be traced to any member.</CardDescription>
+						<CardDescription>Aggregated. Names aren&apos;t attached to answers.</CardDescription>
 					</CardHeader>
 					<CardContent className="grid gap-5">
-						{results.questions.map((question) => (
+						{!results ? (
+							<p className="text-sm text-muted-foreground">Results are unavailable here.</p>
+						) : results.belowThreshold ? (
+							<p className="text-sm text-muted-foreground">Results appear at 3 responses to protect anonymity.</p>
+						) : null}
+						{results?.questions.map((question) => (
 							<div key={question.questionId} className="grid gap-2">
-								<p className="font-medium">{question.prompt}</p>
-								{question.textAnswers ? (
-									<ul className="grid gap-1 text-sm text-muted-foreground">
-										{question.textAnswers.length === 0 ? (
-											<li>No answers yet.</li>
-										) : (
-											question.textAnswers.map((answer, index) => <li key={index}>{answer}</li>)
-										)}
-									</ul>
-								) : (
-									<ul className="grid gap-1 text-sm text-muted-foreground">
-										{Object.entries(question.valueCounts ?? {}).length === 0 ? (
-											<li>No answers yet.</li>
-										) : (
-											Object.entries(question.valueCounts ?? {}).map(([value, count]) => (
-												<li key={value}>
-													{value}: {count}
+								<p className="min-w-0 break-all font-medium">{question.prompt}</p>
+								<ul className="grid gap-1 text-sm text-muted-foreground">
+									{question.kind === "scale" ? (
+										<>
+											<li>
+												{question.summary.topTwoPct ?? 0}% top two, mean {question.summary.mean ?? "-"}, n {question.summary.n}
+											</li>
+											{question.summary.counts.map((count, index) => (
+												<li key={index}>
+													{index + 1}: {count}
 												</li>
-											))
-										)}
-									</ul>
-								)}
+											))}
+										</>
+									) : question.kind === "choice" ? (
+										Object.entries(question.counts).map(([option, count]) => (
+											<li key={option} className="min-w-0 break-all">
+												{option}: {count}
+											</li>
+										))
+									) : question.answers.length === 0 ? (
+										<li>No answers yet.</li>
+									) : (
+										question.answers.map((answer) => (
+											<li key={answer.id} className="min-w-0 break-all">
+												{answer.value}
+												{answer.hidden ? " (hidden from organizers)" : ""}
+											</li>
+										))
+									)}
+								</ul>
 							</div>
 						))}
 					</CardContent>
