@@ -39,6 +39,7 @@ describe("STOPWORDS", () => {
 			"mas", "may", "kung", "sana", "namin", "natin", "nila", "nito", "dapat", "wala", "parang", "tapos", "kaso",
 			"medyo", "masyadong", "mag", "yun", "lahat", "sila", "ito", "iyan", "dito", "doon", "para", "pag", "kapag",
 			"sobrang", "ganun", "ganito",
+			"nag", "masyado", "nung", "kahit", "dun", "meron", "nasa",
 		];
 		for (const w of required) expect(STOPWORDS.has(w)).toBe(true);
 	});

@@ -29,6 +29,7 @@ export const SUMMARY_SYSTEM_PROMPT = [
 ].join("\n");
 
 const squash = (s: string) => s.replace(/\s+/g, " ").trim();
+const trimTail = (s: string) => s.replace(/[\s.,;:!?]+$/, "");
 
 /**
  * Builds the model input. Over the cap, it keeps an evenly spaced subset of answers
@@ -98,6 +99,7 @@ export function parseSummary(raw: string, answers: string[]): SummaryTheme[] {
 	if (!Array.isArray(themes)) return [];
 
 	const haystack = answers.map((a) => squash(a).toLowerCase());
+	const wholeAnswers = new Set(haystack.map(trimTail));
 	const out: SummaryTheme[] = [];
 	for (const t of themes) {
 		if (typeof t !== "object" || t === null) continue;
@@ -107,8 +109,13 @@ export function parseSummary(raw: string, answers: string[]): SummaryTheme[] {
 		if (!label.trim() || !SHARES.has(shareKey)) continue;
 		if (!Array.isArray(quotes) || quotes.length < 1 || quotes.length > 2) continue;
 		const cleaned = quotes.map((q) => (typeof q === "string" ? squash(q) : ""));
-		const grounded = (q: string) =>
-			q.split(" ").length >= MIN_QUOTE_WORDS && haystack.some((a) => a.includes(q.toLowerCase()));
+		// Under three words only counts when it is a whole answer, so a short fragment cannot pass as a quote.
+		const grounded = (q: string) => {
+			const lower = q.toLowerCase();
+			if (q.split(" ").length >= MIN_QUOTE_WORDS) return haystack.some((a) => a.includes(lower));
+			const whole = trimTail(lower);
+			return whole !== "" && wholeAnswers.has(whole);
+		};
 		if (!cleaned.every(grounded)) continue;
 		out.push({
 			label: label.trim().slice(0, 60),

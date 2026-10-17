@@ -61,6 +61,14 @@ describe("parseSummary", () => {
 		expect(parseSummary(raw(["the  venue   was"]), ["The venue was fine"])).toHaveLength(1);
 	});
 
+	it("accepts a short quote only when it is a whole answer", () => {
+		const raw = (quotes: string[]) => JSON.stringify({ themes: [theme({ quotes })] });
+		expect(parseSummary(raw(["the snacks"]), ["The snacks."])).toHaveLength(1);
+		expect(parseSummary(raw(["The  Snacks."]), ["the snacks"])).toHaveLength(1);
+		expect(parseSummary(raw(["too hot"]), answers)).toEqual([]);
+		expect(parseSummary(raw(["."]), ["."])).toEqual([]);
+	});
+
 	it("reads JSON after a line of prose", () => {
 		const raw = `Here is the summary you asked for:\n${JSON.stringify({ themes: [theme()] })}\nHope it helps.`;
 		expect(parseSummary(raw, answers)).toHaveLength(1);

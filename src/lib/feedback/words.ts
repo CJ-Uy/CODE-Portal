@@ -12,7 +12,8 @@ export const STOPWORDS: ReadonlySet<string> = new Set(
 		"akin akong ako amin ang at ay baka bakit dahil din dito doon gaya hindi iba ito kami kanila kapag kasi " +
 		"kaya ko lang lahat mga mo na naman nang nga niya niyo ng pa pala para pati pero po rin sa sila siya " +
 		"sobra sobrang tayo yan yang yun yung talaga " +
-		"dapat ganito ganun iyan kaso kung mag mas masyadong may medyo namin natin nila nito pag parang sana tapos wala"
+		"dapat ganito ganun iyan kaso kung mag mas masyadong may medyo namin natin nila nito pag parang sana tapos wala " +
+		"nag masyado nung kahit dun meron nasa"
 	).split(/\s+/),
 );
 

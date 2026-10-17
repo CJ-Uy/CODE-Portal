@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { unstable_rethrow } from "next/navigation";
 import { useState, useTransition, type FormEvent } from "react";
 import { FilePlus2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,8 +21,14 @@ export function NewForm({ templates, events }: { templates: TemplateChoice[]; ev
 		const data = new FormData(event.currentTarget);
 		setError(null);
 		startTransition(async () => {
-			const result = await createFromTemplateAction(data);
-			if (result) setError(result.error);
+			try {
+				const result = await createFromTemplateAction(data);
+				if (result) setError(result.error);
+			} catch (error) {
+				// A thrown action (network, expired session) would otherwise reach the error boundary and drop the choices.
+				unstable_rethrow(error);
+				setError("Couldn't reach the server. Your changes are still here. Try again.");
+			}
 		});
 	}
 
