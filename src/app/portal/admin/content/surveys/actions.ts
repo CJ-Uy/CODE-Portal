@@ -3,68 +3,128 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getRepositories } from "@/db";
-import { createSurveyInputSchema, saveTemplateInputSchema, sendSurveyInputSchema } from "@/db/types";
+import { createFromTemplateInputSchema, saveTemplateInputSchema, updateDraftInputSchema } from "@/db/types";
 import { parseQuestionsField, QUESTIONS_ERROR } from "@/lib/feedback/editor-input";
-import { defaultClosesAt } from "@/lib/feedback/stats";
+import { parseSendForm } from "@/lib/feedback/send-input";
 import { requireActor } from "@/server/auth/actor";
-import { assertFeatureEnabled } from "@/server/features";
+import { emailConfigFromEnv, emailDbFromEnv, emailQueueFromEnv } from "@/server/email/db";
+import { assertFeatureEnabled, isFeatureEnabled } from "@/server/features";
+import { queueFeedbackEmail } from "@/server/feedback/email";
 
-export async function createSurveyAction(formData: FormData) {
+const SURVEYS_PATH = "/portal/admin/content/surveys";
+
+export type ActionError = { error: string };
+
+// Shows a repository message only when it is one we wrote for admins; anything else is logged and replaced, so a raw
+// database or runtime error never reaches the page.
+function safeMessage(error: unknown, known: readonly string[], fallback: string): string {
+	if (error instanceof Error && known.includes(error.message)) return error.message;
+	console.error(fallback, error);
+	return fallback;
+}
+
+const CREATE_ERRORS = ["This event already has a feedback form.", "Event not found.", "Template not found."] as const;
+
+// Returns only on failure: success redirects to the new draft. Errors come back as text so the form keeps its choices.
+export async function createFromTemplateAction(formData: FormData): Promise<ActionError | undefined> {
 	assertFeatureEnabled("surveys");
 	const actor = await requireActor();
-	const prompts = String(formData.get("prompts") ?? "")
-		.split("\n")
-		.map((line) => line.trim())
-		.filter(Boolean);
-	const type = String(formData.get("type") ?? "text") as "scale" | "text" | "choice";
-	const input = createSurveyInputSchema.parse({
-		title: formData.get("title"),
+	const parsed = createFromTemplateInputSchema.safeParse({
+		templateId: formData.get("templateId"),
 		eventId: nullableText(formData.get("eventId")),
-		questions: prompts.map((prompt) => ({
-			type,
-			prompt,
-			options: type === "scale" ? ["Strongly disagree", "Strongly agree"] : undefined,
-		})),
 	});
+	if (!parsed.success) return { error: "Pick a template." };
+
 	const repositories = await getRepositories();
-	const survey = await repositories.surveys.create(actor, input);
-	revalidatePath("/portal/admin/content/surveys");
-	redirect(`/portal/admin/content/surveys/${survey.id}`);
+	let surveyId: string;
+	try {
+		surveyId = (await repositories.surveys.createFromTemplate(actor, parsed.data)).id;
+	} catch (error) {
+		return { error: safeMessage(error, CREATE_ERRORS, "Couldn't create the form. Try again.") };
+	}
+	revalidatePath(SURVEYS_PATH);
+	redirect(`${SURVEYS_PATH}/${surveyId}`);
 }
 
-// Thin shim for the old draw-a-sample page until the real send panel replaces it: the form's
-// sampleSize becomes an exact head count, and everything else takes its usual default.
-export async function sendSurveyAction(formData: FormData) {
+export type SaveDraftResult = ActionError | { saved: true };
+
+// Takes the title and the editor's questions; the draft's status is checked again by the repository.
+export async function saveDraftAction(formData: FormData): Promise<SaveDraftResult> {
 	assertFeatureEnabled("surveys");
 	const actor = await requireActor();
-	const surveyId = String(formData.get("surveyId") ?? "");
+
+	let questions;
+	try {
+		questions = parseQuestionsField(formData.get("questions"));
+	} catch {
+		return { error: QUESTIONS_ERROR };
+	}
+	const parsed = updateDraftInputSchema.safeParse({ surveyId: formData.get("surveyId"), title: formData.get("title"), questions });
+	if (!parsed.success) return { error: "Give the form a title of up to 200 characters." };
+
 	const repositories = await getRepositories();
-	const detail = await repositories.surveys.getById(actor, surveyId);
-	if (!detail) throw new Error("Survey not found.");
-
-	const now = new Date();
-	const event = detail.survey.eventId
-		? await repositories.events.getById(actor, detail.survey.eventId).catch(() => null)
-		: null;
-	// An event that ended long ago has a default close already in the past, so fall back to a fresh 72h window.
-	const eventClosesAt = event ? defaultClosesAt(event.startsAt, event.endsAt) : null;
-	const closesAt = eventClosesAt && eventClosesAt > now ? eventClosesAt : new Date(now.getTime() + 72 * 3_600_000);
-
-	const input = sendSurveyInputSchema.parse({
-		surveyId,
-		invite: { mode: "count", count: Number(formData.get("sampleSize")) },
-		allowWalkIn: true,
-		shareWithOrganizers: true,
-		emailInvitees: false,
-		remind: true,
-		closesAt,
-		seed: nullableText(formData.get("seed")) ?? undefined,
-	});
-	await repositories.surveys.send(actor, input);
-	revalidatePath(`/portal/admin/content/surveys/${input.surveyId}`);
+	try {
+		await repositories.surveys.updateDraft(actor, parsed.data);
+	} catch (error) {
+		return { error: safeMessage(error, ["Questions can't change after sending.", "Survey not found."], "Couldn't save the draft. Try again.") };
+	}
+	revalidatePath(`${SURVEYS_PATH}/${parsed.data.surveyId}`);
+	return { saved: true };
 }
 
-const TEMPLATES_PATH = "/portal/admin/content/surveys/templates";
+const SEND_ERRORS = [
+	"Pick a closing time in the future.",
+	"No one is eligible for this form yet.",
+	"This form has already been sent.",
+	"Survey not found.",
+] as const;
+
+// Returns only on failure: success redirects to the survey page. Sending notifies members, so a failure to email
+// them afterwards never undoes it; the redirect carries a notice instead.
+export async function sendSurveyAction(formData: FormData): Promise<ActionError | undefined> {
+	assertFeatureEnabled("surveys");
+	const actor = await requireActor();
+
+	let input;
+	try {
+		input = parseSendForm(formData);
+	} catch {
+		return { error: "Check the number of people to invite and the closing time, then try again." };
+	}
+
+	const repositories = await getRepositories();
+	try {
+		await repositories.surveys.send(actor, input);
+	} catch (error) {
+		return { error: safeMessage(error, SEND_ERRORS, "Couldn't send the form. Check the survey page before trying again.") };
+	}
+
+	// send() has already checked survey:configure, which is what authorizes the narrow feedback email path below.
+	let notice: "no_sender" | "email_failed" | null = null;
+	if (input.emailInvitees && isFeatureEnabled("email")) {
+		try {
+			const detail = await repositories.surveys.getById(actor, input.surveyId);
+			const event = detail?.survey.eventId ? await repositories.events.getById(actor, detail.survey.eventId) : null;
+			const result = await queueFeedbackEmail(emailDbFromEnv(), emailQueueFromEnv(), {
+				surveyId: input.surveyId,
+				createdBy: actor.memberId,
+				title: event?.title ?? detail?.survey.title ?? "this form",
+				closesAt: input.closesAt,
+				kind: "invite",
+				baseUrl: emailConfigFromEnv().publicBaseUrl,
+			});
+			if (result === "no_sender") notice = "no_sender";
+		} catch (error) {
+			console.error("Feedback invite email failed after the form was sent.", error);
+			notice = "email_failed";
+		}
+	}
+	revalidatePath(SURVEYS_PATH);
+	revalidatePath(`${SURVEYS_PATH}/${input.surveyId}`);
+	redirect(`${SURVEYS_PATH}/${input.surveyId}${notice ? `?notice=${notice}` : ""}`);
+}
+
+const TEMPLATES_PATH = `${SURVEYS_PATH}/templates`;
 
 export type SaveTemplateResult = { error: string };
 

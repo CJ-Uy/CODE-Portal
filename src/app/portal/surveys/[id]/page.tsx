@@ -2,13 +2,14 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { CheckCircle2, Send } from "lucide-react";
 import { getRepositories } from "@/db";
-import { RESPONDENT_STATE_MESSAGES } from "@/db/repositories/surveys";
+import { RESPONDENT_STATE_MESSAGES, type RespondentView } from "@/db/repositories/surveys";
 import type { SurveyQuestion } from "@/db/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { parseOptions, safeFeedbackError, scaleLabels } from "@/lib/feedback/form";
 import { getActor } from "@/server/auth/actor";
+import { can, type Actor } from "@/server/auth/permissions";
 import { isFeatureEnabled } from "@/server/features";
 import { submitResponseAction } from "./actions";
 
@@ -24,19 +25,21 @@ export default async function MemberSurveyPage({
 	searchParams,
 }: {
 	params: Promise<{ id: string }>;
-	searchParams: Promise<{ done?: string; error?: string }>;
+	searchParams: Promise<{ done?: string; error?: string; preview?: string }>;
 }) {
 	if (!isFeatureEnabled("surveys")) notFound();
 	const actor = await getActor();
 	if (!actor) redirect("/signin");
 
-	const [{ id }, { done, error }, repositories] = await Promise.all([params, searchParams, getRepositories()]);
+	const [{ id }, { done, error, preview }, repositories] = await Promise.all([params, searchParams, getRepositories()]);
+	// Only someone who can configure surveys gets a preview; for anyone else the parameter does nothing.
+	const isPreview = preview === "1" && can(actor, "survey:configure");
 	// surveys has no shared-dev internal proxy yet; degrade to not-found instead of crashing.
-	const detail = await repositories.surveys.getForRespondent(actor, id).catch(() => null);
+	const detail = isPreview ? await previewView(repositories, actor, id) : await repositories.surveys.getForRespondent(actor, id).catch(() => null);
 	if (!detail) notFound();
 
 	const { survey, questions, eventTitle, state } = detail;
-	const backHref = survey.eventId ? `/portal/calendar/${survey.eventId}` : "/portal";
+	const backHref = isPreview ? `/portal/admin/content/surveys/${survey.id}` : survey.eventId ? `/portal/calendar/${survey.eventId}` : "/portal";
 
 	return (
 		<div className="mx-auto grid w-full min-w-0 max-w-2xl gap-6">
@@ -48,7 +51,20 @@ export default async function MemberSurveyPage({
 				</p>
 			</header>
 
-			{state === "open" ? (
+			{isPreview ? (
+				<p role="status" className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border bg-secondary p-3 text-sm text-secondary-foreground">
+					<span className="min-w-0 font-medium">Preview. This is how members see the form. Nothing here is saved or sent.</span>
+					<Link href={backHref} className="font-medium text-accent underline-offset-4 hover:underline">
+						Back to the form
+					</Link>
+				</p>
+			) : null}
+
+			{isPreview ? (
+				<fieldset disabled className="grid min-w-0 gap-4 border-0 p-0 [&_input]:cursor-default [&_label]:cursor-default">
+					<QuestionCards questions={questions} />
+				</fieldset>
+			) : state === "open" ? (
 				<form action={submitResponseAction} className="grid gap-4">
 					<input type="hidden" name="surveyId" value={survey.id} />
 					{error ? (
@@ -56,26 +72,7 @@ export default async function MemberSurveyPage({
 							{safeFeedbackError(error)}
 						</p>
 					) : null}
-					{questions.some((question) => question.required) ? (
-						<p className="text-xs text-muted-foreground">
-							<span aria-hidden="true">* </span>Required
-						</p>
-					) : null}
-					{questions.map((question, index) => (
-						<Card key={question.id} className="p-4 sm:p-5">
-							{question.type === "text" ? (
-								<TextQuestion question={question} index={index} />
-							) : (
-								<fieldset className="grid min-w-0 gap-3 border-0 p-0" aria-describedby={question.help ? `help-${question.id}` : undefined}>
-									<legend className="w-full min-w-0 break-all text-base font-medium leading-snug">
-										<Prompt question={question} index={index} />
-									</legend>
-									<Help question={question} />
-									{question.type === "scale" ? <ScaleOptions question={question} /> : <ChoiceOptions question={question} />}
-								</fieldset>
-							)}
-						</Card>
-					))}
+					<QuestionCards questions={questions} />
 					<Button type="submit" className="h-12 w-full sm:ml-auto sm:w-auto">
 						<Send />
 						Send feedback
@@ -89,6 +86,41 @@ export default async function MemberSurveyPage({
 				/>
 			)}
 		</div>
+	);
+}
+
+// A signed-in configurer sees the saved questions of any form, drafts included, as if it were open to them.
+async function previewView(repositories: Awaited<ReturnType<typeof getRepositories>>, actor: Actor, id: string): Promise<RespondentView | null> {
+	const detail = await repositories.surveys.getById(actor, id).catch(() => null);
+	if (!detail) return null;
+	const event = detail.survey.eventId ? await repositories.events.getById(actor, detail.survey.eventId).catch(() => null) : null;
+	return { survey: detail.survey, questions: detail.questions, eventTitle: event?.title ?? null, state: "open" };
+}
+
+function QuestionCards({ questions }: { questions: SurveyQuestion[] }) {
+	return (
+		<>
+			{questions.some((question) => question.required) ? (
+				<p className="text-xs text-muted-foreground">
+					<span aria-hidden="true">* </span>Required
+				</p>
+			) : null}
+			{questions.map((question, index) => (
+				<Card key={question.id} className="p-4 sm:p-5">
+					{question.type === "text" ? (
+						<TextQuestion question={question} index={index} />
+					) : (
+						<fieldset className="grid min-w-0 gap-3 border-0 p-0" aria-describedby={question.help ? `help-${question.id}` : undefined}>
+							<legend className="w-full min-w-0 break-all text-base font-medium leading-snug">
+								<Prompt question={question} index={index} />
+							</legend>
+							<Help question={question} />
+							{question.type === "scale" ? <ScaleOptions question={question} /> : <ChoiceOptions question={question} />}
+						</fieldset>
+					)}
+				</Card>
+			))}
+		</>
 	);
 }
 
