@@ -29,7 +29,7 @@ export function metricLabel(key: MetricKey): string {
 	return METRIC_LABELS[key];
 }
 
-/** "About 2 min". Rounds up so a form is never promised shorter than it runs, and never says 0. */
+/** "About 2 min". Rounds to the nearest minute (never below 1), so the 125s seeded Standard form reads "About 2 min". */
 export function formatEstimate(seconds: number): string {
-	return `About ${Math.max(1, Math.ceil(seconds / 60))} min`;
+	return `About ${Math.max(1, Math.round(seconds / 60))} min`;
 }

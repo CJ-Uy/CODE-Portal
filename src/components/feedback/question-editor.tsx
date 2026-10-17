@@ -8,69 +8,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { MetricKey, SurveyQuestionInput } from "@/db/types";
+import type { SurveyQuestionInput } from "@/db/types";
+import { newDraft, toDraft, toInput, trackedKey, withType, type Draft, type QuestionType } from "@/lib/feedback/editor-draft";
 import { formatEstimate, metricLabel } from "@/lib/feedback/editor-input";
 import { estimateSeconds } from "@/lib/feedback/stats";
 
 const MAX_QUESTIONS = 30;
 const LONG_FORM_SECONDS = 180;
-const DEFAULT_LOW = "Strongly disagree";
-const DEFAULT_HIGH = "Strongly agree";
-
-type QuestionType = SurveyQuestionInput["type"];
-
-// What the inputs edit. Scale labels and choices live in their own fields so switching type back and
-// forth does not throw away what was typed; `toInput` folds them into the stored `options` shape.
-type Draft = {
-	key: number;
-	type: QuestionType;
-	prompt: string;
-	help: string;
-	required: boolean;
-	metricKey?: MetricKey;
-	low: string;
-	high: string;
-	choices: string;
-};
-
-function toDraft(question: SurveyQuestionInput, key: number): Draft {
-	const options = question.options ?? [];
-	return {
-		key,
-		type: question.type,
-		prompt: question.prompt,
-		help: question.help ?? "",
-		required: question.required === true,
-		metricKey: question.metricKey,
-		low: question.type === "scale" ? (options[0] ?? "") : "",
-		high: question.type === "scale" ? (options[1] ?? "") : "",
-		choices: question.type === "choice" ? options.join("\n") : "",
-	};
-}
-
-function toInput(draft: Draft): SurveyQuestionInput {
-	const help = draft.help.trim();
-	return {
-		type: draft.type,
-		prompt: draft.prompt.trim(),
-		...(help ? { help } : {}),
-		required: draft.required,
-		...(draft.type === "scale" && draft.metricKey ? { metricKey: draft.metricKey } : {}),
-		...(draft.type === "scale" ? { options: [draft.low.trim(), draft.high.trim()] } : {}),
-		...(draft.type === "choice"
-			? {
-					options: draft.choices
-						.split("\n")
-						.map((line) => line.trim())
-						.filter(Boolean),
-				}
-			: {}),
-	};
-}
-
-function newDraft(key: number): Draft {
-	return { key, type: "scale", prompt: "", help: "", required: false, low: DEFAULT_LOW, high: DEFAULT_HIGH, choices: "" };
-}
 
 /**
  * Edits an ordered question list. State lives here and is mirrored into one hidden JSON field, which the
@@ -99,12 +43,7 @@ export function QuestionEditor({ name, initial }: { name: string; initial: Surve
 	}
 
 	function changeType(draft: Draft, type: QuestionType) {
-		update(draft.key, {
-			type,
-			// Only a scale can be tracked across events, so the tag goes when the type does.
-			metricKey: type === "scale" ? draft.metricKey : undefined,
-			...(type === "scale" && !draft.low && !draft.high ? { low: DEFAULT_LOW, high: DEFAULT_HIGH } : {}),
-		});
+		setDrafts((all) => all.map((item) => (item.key === draft.key ? withType(item, type) : item)));
 	}
 
 	function move(index: number, dir: "up" | "down") {
@@ -133,6 +72,7 @@ export function QuestionEditor({ name, initial }: { name: string; initial: Surve
 			<ol className="grid min-w-0 gap-4">
 				{drafts.map((draft, index) => {
 					const number = index + 1;
+					const tracked = trackedKey(draft);
 					return (
 						<li key={draft.key} className="grid min-w-0 gap-4 rounded-xl border border-border/60 bg-card p-4">
 							<div className="flex flex-wrap items-center justify-between gap-2">
@@ -228,14 +168,14 @@ export function QuestionEditor({ name, initial }: { name: string; initial: Surve
 								</label>
 							) : null}
 
-							{draft.metricKey ? (
+							{tracked ? (
 								<div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
-									<Badge variant="info">Tracked: {metricLabel(draft.metricKey)}</Badge>
+									<Badge variant="info">Tracked: {metricLabel(tracked)}</Badge>
 									<Button
 										type="button"
 										variant="ghost"
 										size="sm"
-										aria-label={`Remove the ${metricLabel(draft.metricKey)} tag from question ${number}`}
+										aria-label={`Remove the ${metricLabel(tracked)} tag from question ${number}`}
 										onClick={() => update(draft.key, { metricKey: undefined })}
 									>
 										Remove tag

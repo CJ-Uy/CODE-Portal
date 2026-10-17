@@ -53,10 +53,13 @@ describe("formatEstimate", () => {
 	it.each([
 		[0, "About 1 min"],
 		[14, "About 1 min"],
+		[59, "About 1 min"],
 		[60, "About 1 min"],
-		[80, "About 2 min"],
+		[80, "About 1 min"],
+		[125, "About 2 min"], // the seeded Standard form: 5 scale + 2 text
 		[180, "About 3 min"],
-		[181, "About 4 min"],
+		[181, "About 3 min"],
+		[210, "About 4 min"],
 	])("%i seconds -> %s", (seconds, label) => {
 		expect(formatEstimate(seconds)).toBe(label);
 	});
