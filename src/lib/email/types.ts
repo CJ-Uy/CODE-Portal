@@ -21,7 +21,9 @@ export type AudienceRule =
 	| { kind: "status"; status: "active" | "pending" | "inactive" }
 	| { kind: "event"; eventId: string; relation: "rsvp" | "attended" | "no_show" }
 	| { kind: "member"; memberId: string }
-	| { kind: "emails"; emails: string[] };
+	| { kind: "emails"; emails: string[] }
+	/** Members invited to a feedback form. Set by the feedback emails; the audience picker does not offer it. */
+	| { kind: "survey_invitees"; surveyId: string };
 
 export type Audience = {
 	match: "all" | "any";

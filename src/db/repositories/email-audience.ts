@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
-import { crsAttendance, eventRsvps, memberRoles, members, roles, termMemberRoster, terms } from "@/db/schema";
+import { crsAttendance, eventRsvps, memberRoles, members, roles, surveyAssignments, termMemberRoster, terms } from "@/db/schema";
 import type { Audience, AudienceRule } from "@/lib/email/types";
 import type * as schema from "../schema";
 
@@ -82,6 +82,13 @@ async function idsForRule(db: EmailDb, rule: AudienceRule, now: Date): Promise<S
 					.where(and(eq(termMemberRoster.termId, termId), isNotNull(termMemberRoster.memberId))),
 			);
 		}
+		case "survey_invitees":
+			return toSet(
+				await db
+					.select({ id: surveyAssignments.memberId })
+					.from(surveyAssignments)
+					.where(and(eq(surveyAssignments.surveyId, rule.surveyId), eq(surveyAssignments.source, "invited"))),
+			);
 		case "event": {
 			const going = toSet(
 				await db

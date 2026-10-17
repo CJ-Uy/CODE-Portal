@@ -4,6 +4,7 @@ import { crsEvents, emailCampaigns, emailCategories, emailDeliveries, emailOptou
 import { audienceSchema, emailContentSchema, mergeOverridesSchema } from "@/lib/email/blocks";
 import { mergeValuesFor, missingMergeTags, type MergeOverrides, type MergeTag, type MergeValues } from "@/lib/email/merge";
 import { startOfUtc8Day } from "@/lib/date-slots";
+import { FEEDBACK_EMAIL_CATEGORY_ID } from "@/lib/feedback/email";
 import { createId } from "@/lib/ids";
 import type { Audience, EmailBlock, EmailDeliveryStatus } from "@/lib/email/types";
 import type { Actor } from "@/server/auth/permissions";
@@ -74,6 +75,17 @@ export const formatEventWhen = (date: Date) => EVENT_WHEN.format(date);
 
 const ZERO_COUNTS: Record<EmailDeliveryStatus, number> = { pending: 0, sent: 0, failed: 0, skipped_optout: 0, cancelled: 0 };
 
+/** The category and sender feedback emails go out under, or null when either is missing or archived. */
+export async function feedbackEmailRoute(db: EmailDb): Promise<{ categoryId: string; senderId: string } | null> {
+	const [row] = await db
+		.select({ categoryId: emailCategories.id, senderId: emailSenders.id })
+		.from(emailCategories)
+		.innerJoin(emailSenders, eq(emailSenders.id, emailCategories.defaultSenderId))
+		.where(and(eq(emailCategories.id, FEEDBACK_EMAIL_CATEGORY_ID), isNull(emailCategories.archivedAt), isNull(emailSenders.archivedAt)))
+		.limit(1);
+	return row ?? null;
+}
+
 export function createEmailCampaignsRepository(db: EmailDb, audit: AuditRepository) {
 	const record = (actor: Actor, action: string, targetId: string, detail?: string) =>
 		audit.record(actor, { action, targetType: "email_campaign", targetId, category: "email", detail: detail ?? null });
@@ -119,6 +131,38 @@ export function createEmailCampaignsRepository(db: EmailDb, audit: AuditReposito
 
 	return {
 		get,
+
+		/**
+		 * Inserts a scheduled feedback campaign for a survey's invitees. No permission check: survey actions authorize
+		 * with survey:configure and the reminder cron runs as the system. Null when the feedback category has no usable sender.
+		 */
+		async createFeedbackCampaign(input: {
+			surveyId: string;
+			createdBy: string;
+			subject: string;
+			preheader: string;
+			blocks: EmailBlock[];
+			at: Date;
+		}): Promise<EmailCampaignRow | null> {
+			const route = await feedbackEmailRoute(db);
+			if (!route) return null;
+			const [row] = await db
+				.insert(emailCampaigns)
+				.values({
+					id: createId("ecmp"),
+					categoryId: route.categoryId,
+					senderId: route.senderId,
+					subject: input.subject,
+					preheader: input.preheader,
+					blocks: input.blocks,
+					audience: { match: "any", include: [{ kind: "survey_invitees", surveyId: input.surveyId }], exclude: [] },
+					status: "scheduled",
+					scheduledAt: input.at,
+					createdBy: input.createdBy,
+				})
+				.returning();
+			return row;
+		},
 
 		async saveDraft(actor: Actor, input: CampaignInput): Promise<EmailCampaignRow> {
 			assertEmail(actor, "email:send");
