@@ -2,6 +2,7 @@ import { createAnnouncementsRepository, createUnavailableAnnouncementsRepository
 import { createAuditRepository, createUnavailableAuditRepository } from "./audit";
 import { createCalendarRepository, type CalendarRepository } from "./calendar";
 import { createEmailRepositories, createUnavailableEmailRepositories } from "./email";
+import { createEventDebriefsRepository, createUnavailableEventDebriefsRepository } from "./event-debriefs";
 import { createEventForumRepository } from "./event-forum";
 import { createEventMediaRepository } from "./event-media";
 import { createEventsRepository } from "./events";
@@ -59,6 +60,7 @@ export function createDrizzleRepositories(db: DrizzleDb) {
 		roles: createRolesRepository(d1),
 		surveys: createSurveysRepository(d1, audit),
 		surveyResults: createSurveyResultsRepository(d1, audit),
+		eventDebriefs: createEventDebriefsRepository(d1, audit),
 		notifications: createNotificationsRepository(d1),
 		overview: createOverviewRepository(d1),
 		calendar: createCalendarRepository(d1),
@@ -138,6 +140,7 @@ export function createSharedRepositories(adapter: DatabaseAdapter): Repositories
 		roles: new Proxy({}, { get: () => unavailable }) as ReturnType<typeof createRolesRepository>,
 		surveys: createUnavailableSurveysRepository(),
 		surveyResults: createUnavailableSurveyResultsRepository(),
+		eventDebriefs: createUnavailableEventDebriefsRepository(),
 		notifications: createUnavailableNotificationsRepository(),
 		overview: createUnavailableOverviewRepository(),
 		calendar: createUnavailableCalendarRepository(),

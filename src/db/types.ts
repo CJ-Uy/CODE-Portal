@@ -239,3 +239,21 @@ export type EventFeedbackRow = {
 	invitedRate: number | null;
 	hasDebrief: boolean;
 };
+
+// The After Action Review. Each field is trimmed and an empty one is stored as null; a field left out of a save keeps its value.
+const debriefTextSchema = z
+	.string()
+	.trim()
+	.max(2000)
+	.transform((value) => value || null)
+	.optional();
+
+export const debriefInputSchema = z.object({
+	eventId: z.string().trim().min(1),
+	intended: debriefTextSchema,
+	happened: debriefTextSchema,
+	why: debriefTextSchema,
+	change: debriefTextSchema,
+});
+
+export type DebriefInput = z.infer<typeof debriefInputSchema>;
