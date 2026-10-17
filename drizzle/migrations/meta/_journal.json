@@ -57,6 +57,20 @@
       "when": 1791210005244,
       "tag": "0011_email_personalization",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1792148137579,
+      "tag": "0012_event_feedback",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1792217456749,
+      "tag": "0013_library_v2",
+      "breakpoints": true
     }
   ]
 }

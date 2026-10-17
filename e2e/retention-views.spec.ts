@@ -6,7 +6,7 @@ test("members switch retention charts, scrub the race and filter color-coded his
 	page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
 	page.on("pageerror", (error) => errors.push(error.message));
 	await signInAs(page, "member");
-	await page.goto("/portal/events");
+	await page.goto("/portal/retention");
 	await page.getByRole("button", { name: "Pie", exact: true }).click();
 	await expect(page.getByRole("img", { name: /category share/i })).toBeVisible();
 	await page.getByRole("button", { name: "Bar race", exact: true }).click();

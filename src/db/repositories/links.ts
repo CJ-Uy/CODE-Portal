@@ -8,6 +8,7 @@ import { isValidDestinationUrl, isValidSlugFormat, normalizeSlug, RESERVED_SLUG_
 import type { Actor } from "@/server/auth/permissions";
 import { can } from "@/server/auth/permissions";
 import type { AuditRepository } from "./audit";
+import { runAtomic } from "./atomic";
 import { pageLimit } from "./types";
 
 export type ShortLink = InferSelectModel<typeof shortLinks>;
@@ -347,21 +348,6 @@ async function enrichLink(db: LinkDb, link: ShortLink): Promise<LinkListItem> {
 
 function listQuery(db: LinkDb) {
 	return db.select({ link: shortLinks, owner: { id: members.id, name: members.name, image: members.image } }).from(shortLinks).leftJoin(members, eq(members.id, shortLinks.ownerMemberId));
-}
-
-export async function runAtomic(db: LinkDb, queries: unknown[]): Promise<void> {
-	const atomicDb = db as unknown as {
-		batch?: (items: unknown[]) => Promise<unknown>;
-		transaction?: (callback: () => void) => unknown;
-	};
-	if (atomicDb.batch) {
-		await atomicDb.batch(queries);
-		return;
-	}
-	if (!atomicDb.transaction) throw new Error("Atomic database updates are unavailable.");
-	atomicDb.transaction(() => {
-		for (const query of queries) (query as { run: () => unknown }).run();
-	});
 }
 
 export function createLinksRepository(db: LinkDb, audit: AuditRepository): LinksRepository {

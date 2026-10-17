@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { signInPath } from "@/server/auth/sign-in";
 import { CalendarDays, ChevronDown, Link2, QrCode } from "lucide-react";
 import { getRepositories } from "@/db";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,7 @@ export const dynamic = "force-dynamic";
 const EMPTY_SUMMARY: OverviewSummary = {
 	retention: { points: 0, retainedAt: null, termName: null },
 	pendingSurveys: 0,
+	oldestPendingSurveyId: null,
 	upcomingEvents: 0,
 	linkClicks: 0,
 };
@@ -33,11 +35,11 @@ function initialsFrom(name: string): string {
 
 export default async function ProfilePage() {
 	const actor = await getActor();
-	if (!actor) redirect("/signin");
+	if (!actor) redirect(await signInPath());
 
 	const repositories = await getRepositories();
 	const member = await repositories.members.getById(actor, actor.memberId);
-	if (!member) redirect("/signin");
+	if (!member) redirect(await signInPath());
 	const [summary, loadedHistory, pointTypes] = await Promise.all([
 		repositories.overview.getSummary(actor).catch(() => EMPTY_SUMMARY),
 		repositories.retention.myHistory(actor, {}).catch(() => null),

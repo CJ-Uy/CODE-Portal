@@ -40,6 +40,8 @@ export const permissionActions = [
 	"library:moderate",
 	"email:send",
 	"email:configure",
+	// Never granted to any role; marks gates only super admins pass (super passes every can() check).
+	"system:super_only",
 ] as const;
 
 export type PermissionAction = (typeof permissionActions)[number];
@@ -55,7 +57,7 @@ export type Actor = {
 const rolePermissions: Record<Exclude<RoleKey, "super" | "member">, PermissionAction[]> = {
 	events: ["event:moderate", "event:points", "event:create_restricted"],
 	link: ["link:moderate"],
-	retention: ["points:assign", "retention:record", "retention:configure"],
+	retention: ["points:assign", "retention:record", "retention:configure", "survey:configure"],
 	member_admin: ["member:manage", "role:assign", "roster:manage", "nav:configure"],
 	publishing: ["announcement:manage", "library:manage", "library:moderate"],
 	email: ["email:send", "email:configure"],

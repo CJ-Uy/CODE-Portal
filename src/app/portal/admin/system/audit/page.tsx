@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AdminIntro } from "@/components/portal/admin-intro";
 import { redirect } from "next/navigation";
+import { signInPath } from "@/server/auth/sign-in";
 import { getRepositories } from "@/db";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -51,7 +52,7 @@ export default async function AdminAuditPage({
 	searchParams: Promise<{ actor?: string; category?: string }>;
 }) {
 	const actor = await getActor();
-	if (!actor) redirect("/signin");
+	if (!actor) redirect(await signInPath());
 	if (!hasAnyAdminScope(actor)) redirect("/portal");
 
 	const params = await searchParams;

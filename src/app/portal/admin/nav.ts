@@ -40,7 +40,7 @@ export const adminGroups: AdminGroup[] = [
 	]),
 	G("content", "Content", [
 		{ segment: "announcements", label: "Announcements", description: "Publish updates for the member feed.", permission: "announcement:manage", feature: "announcements" },
-		{ segment: "library", label: "Library", description: "Manage articles, case studies and resource access.", permission: "library:manage", feature: "library" },
+		{ segment: "library", label: "Library moderation", description: "Approve submissions, handle reports and manage tags.", permission: "library:moderate", feature: "library" },
 		{ segment: "surveys", label: "Surveys", description: "Create questions and select survey participants.", permission: "survey:configure", feature: "surveys" },
 		{
 			segment: "submissions",
@@ -160,13 +160,18 @@ export function crumbFor(pathname: string): { label: string; href?: string }[] {
 		if (page.href !== group.href) trail.push({ label: page.label, href: clean === page.href ? undefined : page.href });
 		if (clean !== page.href) {
 			const remainder = clean.slice(page.href.length + 1);
-			const detail = page.segment === "surveys" ? "Survey details"
+			const surveyDetail = remainder === "templates" ? "Feedback templates"
+				: remainder === "templates/new" ? "New template"
+					: remainder.startsWith("templates/") ? "Edit template" : "Survey details";
+			const detail = page.segment === "surveys" ? surveyDetail
 				: page.segment === "events" ? "Event roster"
 					: page.segment === "inbox" ? "Reply details"
 						: page.segment === "templates" ? (remainder === "new" ? "New template" : "Edit template")
 							: page.segment === "home" && remainder.startsWith("sends/") ? "Email details" : "Details";
 			if (page.segment === "home" && /^sends\/[^/]+\/edit$/.test(remainder)) {
 				trail.push({ label: "Email details", href: clean.replace(/\/edit$/, "") }, { label: "Edit email" });
+			} else if (page.segment === "surveys" && remainder.startsWith("templates/")) {
+				trail.push({ label: "Feedback templates", href: `${page.href}/templates` }, { label: detail });
 			} else trail.push({ label: detail });
 		}
 	}

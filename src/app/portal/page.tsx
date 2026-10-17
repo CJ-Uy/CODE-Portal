@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
+import { signInPath } from "@/server/auth/sign-in";
 import Link from "next/link";
 import { ArrowRight, BookOpen, CalendarDays, ClipboardCheck, Link2, Megaphone, MessageSquare } from "lucide-react";
 import { getRepositories } from "@/db";
 import { EventScanPanel } from "@/components/event-scan-panel";
+import { LibraryItemCard } from "@/components/library/library-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,13 +20,14 @@ export const dynamic = "force-dynamic";
 const EMPTY_SUMMARY: OverviewSummary = {
 	retention: { points: 0, retainedAt: null, termName: null },
 	pendingSurveys: 0,
+	oldestPendingSurveyId: null,
 	upcomingEvents: 0,
 	linkClicks: 0,
 };
 
 export default async function PortalOverviewPage() {
 	const actor = await getActor();
-	if (!actor) redirect("/signin");
+	if (!actor) redirect(await signInPath());
 
 	const flags = getFeatureFlags();
 	const repositories = await getRepositories();
@@ -34,7 +37,12 @@ export default async function PortalOverviewPage() {
 	const [summary, announcements, libraryItems, scanEvents, terms] = await Promise.all([
 		repositories.overview.getSummary(actor).catch(() => EMPTY_SUMMARY),
 		flags.announcements ? repositories.announcements.listForMember(actor, { limit: 3 }).catch(() => []) : Promise.resolve([]),
-		flags.library ? repositories.library.listItems(actor, { limit: 3 }).catch(() => []) : Promise.resolve([]),
+		flags.library
+			? repositories.library
+					.search(actor, { sort: "newest", limit: 3 })
+					.then((result) => result.cards)
+					.catch(() => [])
+			: Promise.resolve([]),
 		repositories.events.listPublished(actor, { limit: 100 }).catch(() => []),
 		repositories.retention.listTerms(actor).catch(() => []),
 	]);
@@ -125,7 +133,15 @@ export default async function PortalOverviewPage() {
 						icon={ClipboardCheck}
 					/>
 				) : null}
-				{flags.surveys ? (
+				{/* A member who signed in from a feedback email lands here, so a pending form is one tap away. */}
+				{flags.surveys && summary.oldestPendingSurveyId ? (
+					<Link
+						href={`/portal/surveys/${encodeURIComponent(summary.oldestPendingSurveyId)}`}
+						className="block min-w-0 rounded-lg transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					>
+						<MetricCard label="Surveys" value={String(summary.pendingSurveys)} description="Pending responses. Open the next one." icon={MessageSquare} />
+					</Link>
+				) : flags.surveys ? (
 					<MetricCard label="Surveys" value={String(summary.pendingSurveys)} description="Pending responses" icon={MessageSquare} />
 				) : null}
 				<MetricCard label="Events" value={String(summary.upcomingEvents)} description="Upcoming approved events" icon={CalendarDays} />
@@ -181,16 +197,7 @@ export default async function PortalOverviewPage() {
 						{libraryItems.length === 0 ? (
 							<p className="text-sm text-muted-foreground">No library items yet.</p>
 						) : (
-							libraryItems.map((item) => (
-								<Link
-									key={item.id}
-									href={`/portal/library/${item.id}`}
-									className="group grid gap-1 rounded-lg border border-border p-3 transition-colors hover:border-accent"
-								>
-									<span className="text-xs text-muted-foreground">{item.category}</span>
-									<span className="text-sm font-medium leading-snug group-hover:text-accent">{item.title}</span>
-								</Link>
-							))
+							libraryItems.map((item) => <LibraryItemCard key={item.id} card={item} compact />)
 						)}
 					</CardContent>
 				</Card>

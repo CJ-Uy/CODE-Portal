@@ -9,8 +9,18 @@ import {
 	seedAuditLogs,
 	seedAttendance,
 	seedEvents,
+	seedFeedbackDemoAnswers,
+	seedFeedbackDemoAssignments,
+	seedFeedbackDemoAttendance,
+	seedFeedbackDemoDebriefs,
+	seedFeedbackDemoEvents,
+	seedFeedbackDemoMembers,
+	seedFeedbackDemoQuestions,
+	seedFeedbackDemoResponses,
+	seedFeedbackDemoSurveys,
 	seedForumPosts,
 	seedLibraryItems,
+	seedLibraryTags,
 	seedLinkDailyStats,
 	seedLinkHourlyStats,
 	seedMemberRoles,
@@ -76,11 +86,22 @@ async function seedLocal() {
 	await insertChunks(db, schema.surveys, seedSurveys);
 	await insertChunks(db, schema.surveyQuestions, seedSurveyQuestions);
 	await insertChunks(db, schema.surveyAssignments, seedSurveyAssignments);
+	// The feedback demo: a past event with a sent form and its answers. Local only, never exported to the dev D1 seed.
+	await insertChunks(db, schema.members, seedFeedbackDemoMembers);
+	await insertChunks(db, schema.crsEvents, seedFeedbackDemoEvents);
+	await insertChunks(db, schema.crsAttendance, seedFeedbackDemoAttendance);
+	await insertChunks(db, schema.eventDebriefs, seedFeedbackDemoDebriefs);
+	await insertChunks(db, schema.surveys, seedFeedbackDemoSurveys);
+	await insertChunks(db, schema.surveyQuestions, seedFeedbackDemoQuestions);
+	await insertChunks(db, schema.surveyAssignments, seedFeedbackDemoAssignments);
+	await insertChunks(db, schema.surveyResponses, seedFeedbackDemoResponses);
+	await insertChunks(db, schema.surveyAnswers, seedFeedbackDemoAnswers);
 	await insertChunks(db, schema.auditLogs, seedAuditLogs);
 	await insertChunks(db, schema.sharedDevTokens, seedSharedDevTokens);
 	await insertChunks(db, schema.navPins, seedNavPins);
 	await insertChunks(db, schema.quickLinks, seedQuickLinks);
 	await insertChunks(db, schema.libraryItems, seedLibraryItems);
+	await insertChunks(db, schema.libraryTags, seedLibraryTags);
 
 	sqlite.close();
 	console.log(`Seeded ${localPath}`);

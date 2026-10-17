@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { signInPath } from "@/server/auth/sign-in";
 import { Pin, Plus, Save, Trash2 } from "lucide-react";
 import { AdminIntro } from "@/components/portal/admin-intro";
 import { getRepositories } from "@/db";
@@ -18,7 +19,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminAnnouncementsPage() {
 	if (!isFeatureEnabled("announcements")) notFound();
 	const actor = await getActor();
-	if (!actor) redirect("/signin");
+	if (!actor) redirect(await signInPath());
 	if (!can(actor, "announcement:manage")) redirect("/portal");
 
 	const repositories = await getRepositories();

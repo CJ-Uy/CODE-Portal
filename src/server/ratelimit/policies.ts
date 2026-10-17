@@ -6,6 +6,7 @@ export const RATE_LIMITS = {
 	scanSubmit: { limit: 120, windowMs: 60_000 },
 	contactSubmit: { limit: 5, windowMs: 600_000 },
 	feedbackSubmit: { limit: 3, windowMs: 600_000 },
+	libraryActivity: { limit: 20, windowMs: 60_000 },
 } as const;
 
 export function clientIpFromRequest(request: Request): string {

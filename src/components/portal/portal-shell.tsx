@@ -10,6 +10,7 @@ import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle, SheetTri
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Breadcrumb } from "./breadcrumb";
+import { libraryPageTitle } from "./library-title";
 import { AdminNavigation } from "./admin-navigation";
 import { MemberAvatar } from "./member-avatar";
 import { adminNav, primaryNav, secondaryNav, visiblePrimaryNav, visibleSecondaryNav, visibleMobileNav, type NavItem } from "./nav-items";
@@ -55,6 +56,10 @@ function getPageHeading(pathname: string): { section: string; title: string } {
 	if (cleanPath === "/portal/admin") return { section: "Admin", title: "Console" };
 
 	if (cleanPath.startsWith("/portal/admin/")) {
+		// Feedback templates are not survey details; their own breadcrumbs carry the title.
+		if (cleanPath.startsWith("/portal/admin/content/surveys/templates")) {
+			return adminHeading(cleanPath) ?? { section: "Admin", title: "Console" };
+		}
 		// dynamic detail pages (e.g. content/surveys/[id]) use the generic detail title.
 		for (const [prefix, title] of Object.entries(detailTitles)) {
 			if (cleanPath.startsWith(`${prefix}/`)) {
@@ -64,6 +69,10 @@ function getPageHeading(pathname: string): { section: string; title: string } {
 		}
 		return adminHeading(cleanPath) ?? { section: "Admin", title: "Console" };
 	}
+
+	// Before the prefix loop: "/portal/library" would otherwise title every library subpage "Library item".
+	const libraryTitle = libraryPageTitle(cleanPath);
+	if (libraryTitle) return { section: "Library", title: libraryTitle };
 
 	for (const [prefix, title] of Object.entries(detailTitles)) {
 		if (cleanPath.startsWith(`${prefix}/`)) {

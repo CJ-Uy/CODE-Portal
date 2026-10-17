@@ -9,6 +9,13 @@ export type RedirectDependencies = {
 	previewImageBaseUrl: string;
 };
 
+// Portal sections someone might type at the root, e.g. ateneocode.org/guides. A real short link with
+// the same slug still wins. Kept in sync with the nav by nav-items.test.ts.
+export const PORTAL_SECTIONS = new Set(["calendar", "retention", "ments", "links", "mail", "notifications", "profile", "library", "announcements", "guides", "surveys"]);
+
+// Route handlers cannot render app/not-found.tsx, so an unknown slug is sent to a page that can.
+export const LINK_NOT_FOUND_PATH = "/link-not-found";
+
 function isQrScan(params: URLSearchParams): boolean {
 	const canonical = params.getAll("source");
 	if (canonical.length > 0) return canonical.length === 1 && canonical[0] === "qr";
@@ -20,7 +27,11 @@ export async function buildRedirectResponse(deps: RedirectDependencies, request:
 	const requestUrl = new URL(request.url);
 	const slug = routeSlug ?? requestUrl.pathname.replace(/^\//, "");
 	const link = await deps.resolveForRedirect(slug);
-	if (!link) return new Response("Not found", { status: 404 });
+	if (!link) {
+		const section = slug.toLowerCase();
+		// Relative, so it also works when shared dev mode proxies this response from another host.
+		return new Response(null, { status: 302, headers: { location: PORTAL_SECTIONS.has(section) ? `/portal/${section}` : LINK_NOT_FOUND_PATH } });
+	}
 
 	const userAgent = request.headers.get("user-agent");
 	if (isCrawlerUserAgent(userAgent)) {

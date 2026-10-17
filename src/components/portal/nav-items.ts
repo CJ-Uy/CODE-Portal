@@ -1,4 +1,4 @@
-import { CalendarDays, CircleUserRound, House, Bell, BookOpen, Link2, Award, Megaphone, ShieldCheck, Mail, GitBranch } from "lucide-react";
+import { CalendarDays, CircleUserRound, House, Bell, BookOpen, Link2, Award, Megaphone, ShieldCheck, Mail, GitBranch, LifeBuoy } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 // Type-only, so no server module reaches the client bundle.
 import type { FeatureFlags } from "@/server/features";
@@ -17,8 +17,7 @@ export type NavItem = {
 export const primaryNav: NavItem[] = [
 	{ id: "overview", label: "Overview", href: "/portal", icon: House },
 	{ id: "calendar", label: "Calendar", href: "/portal/calendar", icon: CalendarDays },
-	// /portal/events currently renders the member retention-history page.
-	{ id: "retention", label: "Retention", href: "/portal/events", icon: Award, feature: "retention" },
+	{ id: "retention", label: "Retention", href: "/portal/retention", icon: Award, feature: "retention" },
 	{ id: "ments", label: "Ments Tree", href: "/portal/ments", icon: GitBranch, feature: "ments" },
 	{ id: "links", label: "Link shortener", href: "/portal/links", icon: Link2 },
 	{ id: "mail", label: "Mail", href: "/portal/mail", icon: Mail, feature: "email" },
@@ -30,6 +29,7 @@ export const primaryNav: NavItem[] = [
 export const secondaryNav: NavItem[] = [
 	{ id: "library", label: "Library", href: "/portal/library", icon: BookOpen, feature: "library" },
 	{ id: "announcements", label: "Announcements", href: "/portal/announcements", icon: Megaphone, feature: "announcements" },
+	{ id: "guides", label: "Guides", href: "/portal/guides", icon: LifeBuoy },
 ];
 
 // Admin entry is rendered only when the actor has at least one admin scope.

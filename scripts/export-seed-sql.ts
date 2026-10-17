@@ -8,6 +8,7 @@ import {
 	seedAuditLogs,
 	seedEvents,
 	seedLibraryItems,
+	seedLibraryTags,
 	seedLinkDailyStats,
 	seedMemberRoles,
 	seedMembers,
@@ -59,6 +60,7 @@ const TABLES_IN_ORDER: SeedTableEntry<SQLiteTable>[] = [
 	entry(schema.auditLogs, "audit_logs", seedAuditLogs),
 	entry(schema.sharedDevTokens, "shared_dev_tokens", seedSharedDevTokens),
 	entry(schema.libraryItems, "library_items", seedLibraryItems),
+	entry(schema.libraryTags, "library_tags", seedLibraryTags),
 ];
 
 function chunk<T>(items: T[], size: number): T[][] {

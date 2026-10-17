@@ -263,7 +263,10 @@ export function RetentionHistory({
 										aria-valuetext={`${formatPoints(points)} of ${target} points`}
 										className="overflow-x-auto pb-1"
 									>
-										<ol className="flex min-w-max items-start">
+										<ol className="flex w-max min-w-full items-start">
+											{/* Half a column, so the first segment (0 to the first milestone) is as
+											    long as the rest while every dot sits centred over its label. */}
+											<li aria-hidden className="w-14 shrink-0 grow-[0.5] sm:w-18" />
 											{milestones.map((milestone, index) => {
 												const floor = index === 0 ? 0 : milestones[index - 1].points;
 												const span = milestone.points - floor;
@@ -278,19 +281,19 @@ export function RetentionHistory({
 												const eta = !reached && typeStats && summary ? projectedDateFor(typeStats, milestone.points, now) : null;
 												const etaInTerm = eta && summary && eta <= summary.endsAt;
 												return (
-													<li key={milestone.points} className="flex w-32 shrink-0 flex-col gap-1.5 sm:w-36">
-														<div className="flex items-center">
-															<div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-																<div className="h-full rounded-full bg-accent" style={{ width: `${fill}%` }} />
-															</div>
-															<span
-																className={cn(
-																	"ml-1 size-3 shrink-0 rounded-full border-2",
-																	reached ? "border-accent bg-accent" : "border-border bg-background",
-																)}
-															/>
+													<li key={milestone.points} className="relative flex w-28 shrink-0 grow flex-col items-center gap-1.5 sm:w-36">
+														{/* Spans from the previous dot (or the rail start) to this dot; the
+														    dot's card-coloured ring cuts the gap on either side. */}
+														<div className="absolute right-1/2 top-[3px] h-1.5 w-full overflow-hidden rounded-full bg-muted">
+															<div className="h-full rounded-full bg-accent" style={{ width: `${fill}%` }} />
 														</div>
-														<div className="pr-1 text-right">
+														<span
+															className={cn(
+																"relative size-3 shrink-0 rounded-full border-2 ring-4 ring-card",
+																reached ? "border-accent bg-accent" : "border-border bg-background",
+															)}
+														/>
+														<div className="w-full px-1 text-center">
 															<p className="text-xs font-semibold tabular-nums">
 																{milestone.points} pts {reached ? "✓" : ""}
 															</p>

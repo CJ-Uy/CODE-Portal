@@ -80,7 +80,7 @@ test("Profile reveals the check-in QR by touch and keyboard at its high-DPI disp
 
 test("a full school-year term fits mobile in all retention views", async ({ page }) => {
 	await signInAs(page, "member");
-	await page.goto("/portal/events");
+	await page.goto("/portal/retention");
 	await expect(page.getByRole("heading", { name: "Points by week" })).toBeVisible();
 	await expect(page.getByText("W46", { exact: true })).toBeAttached();
 	for (const width of [320, 390, 430, 844, 1440]) {

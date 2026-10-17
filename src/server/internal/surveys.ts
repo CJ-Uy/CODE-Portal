@@ -2,6 +2,7 @@ import type { DrizzleD1Database } from "drizzle-orm/d1";
 import * as schema from "@/db/schema";
 import { surveysContract } from "@/db/contract/surveys";
 import { createAuditRepository } from "@/db/repositories/audit";
+import { createSurveyResultsRepository } from "@/db/repositories/survey-results";
 import { createSurveysRepository } from "@/db/repositories/surveys";
 import type { DeployEnv } from "@/server/env";
 import { getInternalCorsHeaders } from "./cors";
@@ -19,7 +20,9 @@ async function readBody(request: Request) {
 }
 
 export function createSurveysInternalHandlers({ db, deployEnv, allowedOrigins = [] }: SurveysInternalDependencies) {
-	const repository = createSurveysRepository(db, createAuditRepository(db));
+	const audit = createAuditRepository(db);
+	const repository = createSurveysRepository(db, audit);
+	const resultsRepository = createSurveyResultsRepository(db, audit);
 
 	return {
 		async fetch(request: Request, surveyId?: string): Promise<Response> {
@@ -70,7 +73,7 @@ export function createSurveysInternalHandlers({ db, deployEnv, allowedOrigins = 
 
 				if (request.method === "GET" && op === "results") {
 					const input = surveysContract.results.input.parse({ id: surveyId ?? url.searchParams.get("id") });
-					const results = await repository.getResults(actor, input.id);
+					const results = await resultsRepository.getResults(actor, input.id, { filter: "all" });
 					return Response.json(surveysContract.results.output.parse({ results }), { headers: responseHeaders });
 				}
 
@@ -80,16 +83,10 @@ export function createSurveysInternalHandlers({ db, deployEnv, allowedOrigins = 
 					return Response.json(surveysContract.create.output.parse({ survey }), { status: 201, headers: responseHeaders });
 				}
 
-				if (request.method === "POST" && op === "sample") {
-					const input = surveysContract.sample.input.parse(await readBody(request));
-					const result = await repository.sample(actor, input);
-					return Response.json(surveysContract.sample.output.parse(result), { headers: responseHeaders });
-				}
-
-				if (request.method === "POST" && op === "submit") {
-					const input = surveysContract.submit.input.parse(await readBody(request));
-					const result = await repository.submitResponse(input);
-					return Response.json(surveysContract.submit.output.parse(result), { headers: responseHeaders });
+				if (request.method === "POST" && op === "send") {
+					const input = surveysContract.send.input.parse(await readBody(request));
+					const result = await repository.send(actor, input);
+					return Response.json(surveysContract.send.output.parse(result), { headers: responseHeaders });
 				}
 
 				return new Response("Method not allowed", { status: 405, headers: responseHeaders });

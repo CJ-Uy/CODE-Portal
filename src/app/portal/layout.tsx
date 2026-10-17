@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { signInPath } from "@/server/auth/sign-in";
 import { getRepositories } from "@/db";
 import { NotificationBell } from "@/components/portal/notification-bell";
 import { PortalShell } from "@/components/portal/portal-shell";
@@ -18,7 +19,7 @@ function initialsFrom(name: string): string {
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
 	const actor = await getActor();
-	if (!actor) redirect("/signin");
+	if (!actor) redirect(await signInPath());
 
 	const repositories = await getRepositories();
 	const flags = getFeatureFlags();
@@ -31,7 +32,7 @@ export default async function PortalLayout({ children }: { children: React.React
 		flags.notifications ? repositories.notifications.unreadCount(actor).catch(() => 0) : Promise.resolve(0),
 		repositories.navPins.listVisible(actor).catch(() => []),
 	]);
-	if (!member) redirect("/signin");
+	if (!member) redirect(await signInPath());
 
 	const displayName = member.nickname ?? member.fullName ?? member.name ?? member.email;
 	const showAdmin = hasAnyAdminScope(actor);

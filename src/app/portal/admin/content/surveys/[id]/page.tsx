@@ -1,108 +1,207 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Shuffle } from "lucide-react";
+import { signInPath } from "@/server/auth/sign-in";
 import { getRepositories } from "@/db";
+import type { ResultsFilter } from "@/db/repositories/survey-results";
+import type { SurveyQuestion, SurveyQuestionInput } from "@/db/types";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { ResultsList } from "@/components/feedback/results";
+import { SummaryPanel } from "@/components/feedback/summary-panel";
+import { toLocalInput } from "@/lib/date-slots";
+import { formatEstimate } from "@/lib/feedback/editor-input";
+import { parseOptions } from "@/lib/feedback/form";
+import { canDraftSummary, canFilterInvited, countComments, summaryView } from "@/lib/feedback/results-view";
+import { errorLabel } from "@/lib/feedback/safe-log";
+import { sendDefaultClosesAt } from "@/lib/feedback/send-input";
+import { effectiveStatus, estimateSeconds, suggestInviteCount } from "@/lib/feedback/stats";
 import { getActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
+import { emailDbFromEnv } from "@/server/email/db";
 import { isFeatureEnabled } from "@/server/features";
-import { sampleSurveyAction } from "../actions";
+import { getSummarizer } from "@/server/feedback/ai";
+import { feedbackEmailReady } from "@/server/feedback/email";
+import { DraftWorkspace } from "./draft-workspace";
+import { RunningControls } from "./running-controls";
+import { ShareToggle } from "./share-toggle";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminSurveyDetailPage({ params }: { params: Promise<{ id: string }> }) {
+// Only these `?notice=` values print anything. The text says what already happened: the send itself went through.
+const NOTICES: Record<string, string> = {
+	no_sender: "Sent. Members have their notice in the portal, but no email went out because the Feedback requests category has no default sender.",
+	email_failed: "Sent. Members have their notice in the portal, but the email invites could not be queued.",
+};
+
+function toEditorQuestion(question: SurveyQuestion): SurveyQuestionInput {
+	return {
+		type: question.type,
+		prompt: question.prompt,
+		required: question.required,
+		help: question.help ?? undefined,
+		metricKey: question.metricKey ?? undefined,
+		options: question.type === "text" ? undefined : parseOptions(question.optionsJson),
+	};
+}
+
+async function emailOption(): Promise<"off" | "no_sender" | "ready"> {
+	if (!isFeatureEnabled("email")) return "off";
+	try {
+		return (await feedbackEmailReady(emailDbFromEnv())) ? "ready" : "no_sender";
+	} catch (error) {
+		console.error("Could not check the feedback email sender.", error);
+		return "no_sender";
+	}
+}
+
+// A pill in the filter row. The current one is marked for assistive tech as well as by colour.
+function FilterLink({ href, current, children }: { href: string; current: boolean; children: string }) {
+	return (
+		<Link
+			href={href}
+			aria-current={current ? "page" : undefined}
+			className={
+				current
+					? "rounded-full border border-primary bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
+					: "rounded-full border border-border bg-secondary px-3 py-1.5 text-sm font-medium text-secondary-foreground hover:bg-secondary/70"
+			}
+		>
+			{children}
+		</Link>
+	);
+}
+
+export default async function AdminSurveyDetailPage({
+	params,
+	searchParams,
+}: {
+	params: Promise<{ id: string }>;
+	searchParams: Promise<{ notice?: string; filter?: string }>;
+}) {
 	// The portal layout already redirects signed-out visitors to /signin, so this guard is
 	// what a signed-in member hits. Kept above the data loading so a disabled surface
 	// never touches a repository.
 	if (!isFeatureEnabled("surveys")) notFound();
 
 	const actor = await getActor();
-	if (!actor) redirect("/signin");
+	if (!actor) redirect(await signInPath());
 	if (!can(actor, "survey:configure")) redirect("/portal");
 
-	const { id } = await params;
+	const [{ id }, { notice, filter }] = await Promise.all([params, searchParams]);
 	const repositories = await getRepositories();
-	// surveys has no shared-dev internal proxy yet; degrade to not-found instead of crashing.
-	const detail = await repositories.surveys.getById(actor, id).catch(() => null);
+	// Errors are logged by type only: the text of a failed query or parse can quote comments. A form that can't be read
+	// degrades to not-found (surveys has no shared-dev internal proxy yet) rather than crashing the page.
+	const detail = await repositories.surveys.getById(actor, id).catch((error: unknown) => {
+		console.error("Could not load the survey.", { surveyId: id, error: errorLabel(error) });
+		return null;
+	});
 	if (!detail) notFound();
-	const results = await repositories.surveys.getResults(actor, id).catch(
-		() =>
-			({
-				surveyId: id,
-				title: detail.survey.title,
-				status: detail.survey.status,
-				assignedCount: 0,
-				completedCount: 0,
-				questions: [],
-			}) satisfies Awaited<ReturnType<typeof repositories.surveys.getResults>>,
-	);
+	const isDraft = detail.survey.status === "draft";
+	const event = detail.survey.eventId
+		? await repositories.events.getById(actor, detail.survey.eventId).catch((error: unknown) => {
+				console.error("Could not load the survey's event.", { surveyId: id, error: errorLabel(error) });
+				return null;
+			})
+		: null;
+
+	const loadResults = (which: ResultsFilter) =>
+		repositories.surveyResults.getResults(actor, id, { filter: which }).catch((error: unknown) => {
+			console.error("Could not load the survey results.", { surveyId: id, error: errorLabel(error) });
+			return null;
+		});
+	// The unfiltered results feed the summary and the filter row; the filter only changes what the questions show.
+	const allResults = isDraft ? null : await loadResults("all");
+	// With 1 or 2 walk-ins, comparing the invited-only view with the full one would single out their answers, so the
+	// filter is not offered and a hand-typed ?filter=invited shows everything.
+	const filterOffered = allResults !== null && allResults.invitedCount > 0 && canFilterInvited(allResults.walkInCount);
+	const invitedOnly = filter === "invited" && filterOffered;
+	const results = invitedOnly ? await loadResults("invited") : allResults;
+
+	const now = new Date();
+	// Only a draft has a send panel, so only a draft pays for the head count and the email check.
+	const [eligible, email] = isDraft ? await Promise.all([repositories.surveys.eligibleCount(actor, id), emailOption()]) : [0, "off" as const];
+
+	// A form closed by hand has nothing left to change; one that only ran past its closing time can still be reopened.
+	const running = detail.survey.status === "running";
+	const timeClosed = running && effectiveStatus(detail.survey, now) === "closed";
+	const summarizerAvailable = getSummarizer() !== null;
+	const base = `/portal/admin/content/surveys/${id}`;
 
 	return (
 		<div>
 			<div className="grid gap-6">
-					<header className="grid gap-2 border-b border-border/60 pb-5">
-						<h1 className="text-3xl font-semibold text-primary sm:text-4xl">{detail.survey.title}</h1>
-						<div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-							<Badge variant="outline">{detail.survey.status}</Badge> {results.completedCount} of {results.assignedCount}{" "}
-							assigned members responded.
-						</div>
-					</header>
-					{detail.survey.status === "draft" ? (
-						<section aria-label="Survey sampling" className="rounded-xl border border-border/60 bg-card p-5">
-							<form action={sampleSurveyAction} className="flex flex-wrap items-end gap-3">
-								<input type="hidden" name="surveyId" value={detail.survey.id} />
-								<label className="grid gap-2 text-sm font-medium">
-									Sample size
-									<Input name="sampleSize" type="number" min={1} defaultValue={10} className="w-32" />
-								</label>
-								<label className="grid gap-2 text-sm font-medium">
-									Seed (optional)
-									<Input name="seed" className="w-48" />
-								</label>
-								<Button type="submit">
-									<Shuffle />
-									Draw sample and start
-								</Button>
-							</form>
-						</section>
-					) : null}
+				<header className="grid min-w-0 gap-2 border-b border-border/60 pb-5">
+					<h1 className="min-w-0 text-3xl font-semibold text-primary [overflow-wrap:anywhere] sm:text-4xl">{detail.survey.title}</h1>
+					{event ? <p className="min-w-0 text-sm text-muted-foreground [overflow-wrap:anywhere]">For the event {event.title}</p> : null}
+					<div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+						<Badge variant="outline">{results?.status ?? detail.survey.status}</Badge>
+					</div>
+				</header>
 
-				<Card>
-					<CardHeader>
-						<h2 className="text-xl font-semibold text-primary">Results</h2>
-						<CardDescription>Aggregated and anonymous. Responses cannot be traced to any member.</CardDescription>
-					</CardHeader>
-					<CardContent className="grid gap-5">
-						{results.questions.map((question) => (
-							<div key={question.questionId} className="grid gap-2">
-								<p className="font-medium">{question.prompt}</p>
-								{question.textAnswers ? (
-									<ul className="grid gap-1 text-sm text-muted-foreground">
-										{question.textAnswers.length === 0 ? (
-											<li>No answers yet.</li>
-										) : (
-											question.textAnswers.map((answer, index) => <li key={index}>{answer}</li>)
-										)}
-									</ul>
-								) : (
-									<ul className="grid gap-1 text-sm text-muted-foreground">
-										{Object.entries(question.valueCounts ?? {}).length === 0 ? (
-											<li>No answers yet.</li>
-										) : (
-											Object.entries(question.valueCounts ?? {}).map(([value, count]) => (
-												<li key={value}>
-													{value}: {count}
-												</li>
-											))
-										)}
-									</ul>
-								)}
-							</div>
-						))}
-					</CardContent>
-				</Card>
+				{notice && Object.hasOwn(NOTICES, notice) ? (
+					<p role="status" className="min-w-0 rounded-lg border border-border bg-secondary p-3 text-sm text-secondary-foreground">
+						{NOTICES[notice]}
+					</p>
+				) : null}
+
+				{isDraft ? (
+					<DraftWorkspace
+						draft={{ surveyId: detail.survey.id, title: detail.survey.title, questions: detail.questions.map(toEditorQuestion) }}
+						send={{
+							surveyId: detail.survey.id,
+							hasEvent: Boolean(detail.survey.eventId),
+							eligible,
+							suggested: suggestInviteCount(eligible),
+							stillCheckingIn: event ? (event.endsAt ?? event.startsAt) > now : false,
+							closesAt: toLocalInput(sendDefaultClosesAt(event, now)),
+							email,
+							questionCount: detail.questions.length,
+							estimate: formatEstimate(estimateSeconds(detail.questions)),
+						}}
+					/>
+				) : (
+					<>
+						{running ? (
+							<RunningControls
+								surveyId={detail.survey.id}
+								closesAt={toLocalInput(timeClosed || !detail.survey.closesAt ? sendDefaultClosesAt(null, now) : detail.survey.closesAt)}
+								timeClosed={timeClosed}
+								reminder={detail.survey.reminderSentAt ? "sent" : timeClosed ? "closed" : "ready"}
+							/>
+						) : null}
+
+						{/* Works on a closed form too: an admin can stop sharing with organizers at any time after sending. */}
+						{detail.survey.eventId ? <ShareToggle surveyId={detail.survey.id} shared={detail.survey.shareWithOrganizers} /> : null}
+
+						{!results || !allResults ? (
+							<p className="min-w-0 rounded-lg border border-border bg-secondary p-3 text-sm text-secondary-foreground">
+								The results couldn&apos;t be loaded. Try again in a moment.
+							</p>
+						) : (
+							<>
+								{filterOffered ? (
+									<nav aria-label="Which responses to show" className="flex flex-wrap gap-2">
+										<FilterLink href={base} current={!invitedOnly}>
+											All responses
+										</FilterLink>
+										<FilterLink href={`${base}?filter=invited`} current={invitedOnly}>
+											Invited sample only
+										</FilterLink>
+									</nav>
+								) : null}
+
+								<ResultsList results={results} mode="admin" />
+
+								{summarizerAvailable && !allResults.belowThreshold ? (
+									<SummaryPanel
+										surveyId={detail.survey.id}
+										view={summaryView(allResults.summary, allResults.responseCount, countComments(allResults.questions))}
+										canDraft={canDraftSummary(allResults)}
+									/>
+								) : null}
+							</>
+						)}
+					</>
+				)}
 			</div>
 		</div>
 	);

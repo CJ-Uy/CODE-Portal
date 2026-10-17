@@ -73,7 +73,7 @@ async function ensureE2eData(db: ReturnType<typeof getDb>): Promise<void> {
 			retainedAt: 20,
 			probationBelow: 10,
 			startsAt: now,
-			endsAt: new Date("2026-10-31T00:00:00.000Z"),
+			endsAt: new Date("2027-05-15T00:00:00.000Z"),
 		})
 		.onConflictDoNothing();
 	await db

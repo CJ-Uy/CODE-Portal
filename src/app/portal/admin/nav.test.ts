@@ -16,6 +16,7 @@ const allFlags: FeatureFlags = {
 	leaderboard: true,
 	email: true,
 	ments: true,
+	librarySmartSearch: true,
 };
 
 describe("admin nav registry", () => {
@@ -55,6 +56,15 @@ describe("admin nav registry", () => {
 		expect(visible).toContain("/portal/admin/content/links");
 		expect(visible).toContain("/portal/admin/system/audit"); // permission null means always visible
 		expect(visible).not.toContain("/portal/admin/members/roles");
+	});
+
+	it("gates Library moderation on library:moderate, the permission the page and its actions check", () => {
+		const page = adminGroups.find((g) => g.segment === "content")?.pages.find((p) => p.segment === "library");
+		expect(page?.permission).toBe("library:moderate");
+		const publishing: Actor = { memberId: "m4", roles: ["publishing"] };
+		const hrefs = (actor: Actor) => visibleGroups(actor, allFlags).flatMap((g) => g.pages.map((p) => p.href));
+		expect(hrefs(publishing)).toContain("/portal/admin/content/library");
+		expect(hrefs(linkOnly)).not.toContain("/portal/admin/content/library");
 	});
 
 	it("shows Point Types only to retention configuration holders", () => {
@@ -123,6 +133,9 @@ describe("admin nav registry", () => {
 		["/portal/admin/members/m1?termId=t1", "Member profile", "/portal/admin/members/list"],
 		["/portal/admin/data/events/e1", "Event roster", "/portal/admin/data/events"],
 		["/portal/admin/content/surveys/s1", "Survey details", "/portal/admin/content/surveys"],
+		["/portal/admin/content/surveys/templates", "Feedback templates", "/portal/admin/content/surveys"],
+		["/portal/admin/content/surveys/templates/new", "New template", "/portal/admin/content/surveys/templates"],
+		["/portal/admin/content/surveys/templates/stpl_standard", "Edit template", "/portal/admin/content/surveys/templates"],
 		["/portal/admin/email/inbox/thread1", "Reply details", "/portal/admin/email/inbox"],
 		["/portal/admin/email/templates/new", "New template", "/portal/admin/email/templates"],
 		["/portal/admin/email/templates/t1", "Edit template", "/portal/admin/email/templates"],
