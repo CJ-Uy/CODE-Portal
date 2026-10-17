@@ -1,0 +1,187 @@
+import { and, asc, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
+import { libraryItemMemberDays, libraryItems, libraryListItems } from "@/db/schema";
+import { creditSeconds, utc8Day } from "@/lib/library/activity";
+import type { Actor } from "@/server/auth/permissions";
+import { cardsByIds } from "./library";
+import type { Db, LibraryCard } from "./library";
+import { canEditItem, canSeeItem, publishedVisibleWhere } from "./library-access";
+
+export type LibraryPing = { kind: "open" | "active" | "download"; seconds?: number };
+export type LibraryItemStats = { saves: number; opens: number; uniqueReaders: number; activeSeconds: number; downloads: number };
+export type LibraryWeek = { week: string; opens: number; activeSeconds: number };
+
+export type LibraryActivityRepository = {
+	/** Silently ignores items the actor cannot see. Active seconds are credited through `creditSeconds`, so the daily cap holds. */
+	record(actor: Actor, itemId: string, ping: LibraryPing, now?: Date): Promise<void>;
+	/** An entry for every id asked for, zeroed when there is no activity. Does not check who may see the items. */
+	statsFor(itemIds: string[]): Promise<Map<string, LibraryItemStats>>;
+	/** Published, non-confidential items only. */
+	totalActiveSeconds(): Promise<number>;
+	/** Items ranked by how many distinct members saved them since `since`; only items this actor can browse. */
+	mostSavedSince(actor: Actor, since: Date, limit: number): Promise<LibraryCard[]>;
+	/** The item's owner or a moderator who can see it; anyone else gets "Library item not found.". Weeks with no activity are left out. */
+	weeklyForOwner(actor: Actor, itemId: string, now?: Date): Promise<LibraryWeek[]>;
+};
+
+// Each id is one bind; D1 allows 100 per statement.
+const ID_CHUNK = 40;
+const WEEKS_SHOWN = 12;
+const DAY_MS = 86_400_000;
+
+const zeroStats = (): LibraryItemStats => ({ saves: 0, opens: 0, uniqueReaders: 0, activeSeconds: 0, downloads: 0 });
+
+/** "2026-W42" for a "YYYY-MM-DD" day: the ISO week, labelled with the ISO year (which can differ from the calendar year). */
+function isoWeekLabel(day: string): string {
+	const date = new Date(`${day}T00:00:00Z`);
+	const mondayBased = (date.getUTCDay() + 6) % 7;
+	date.setUTCDate(date.getUTCDate() - mondayBased + 3); // the Thursday of this week decides the ISO year
+	const jan4 = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+	const week = 1 + Math.round(((date.getTime() - jan4.getTime()) / DAY_MS - 3 + ((jan4.getUTCDay() + 6) % 7)) / 7);
+	return `${date.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
+/** First day of the oldest of the last `WEEKS_SHOWN` ISO weeks, counting the week that contains `today`. */
+function windowStart(today: string): string {
+	const date = new Date(`${today}T00:00:00Z`);
+	const mondayBased = (date.getUTCDay() + 6) % 7;
+	return new Date(date.getTime() - (mondayBased + 7 * (WEEKS_SHOWN - 1)) * DAY_MS).toISOString().slice(0, 10);
+}
+
+export function createLibraryActivityRepository(db: Db): LibraryActivityRepository {
+	return {
+		async record(actor, itemId, ping, now = new Date()) {
+			const [item] = await db
+				.select({ status: libraryItems.status, confidentiality: libraryItems.confidentiality, createdBy: libraryItems.createdBy })
+				.from(libraryItems)
+				.where(eq(libraryItems.id, itemId))
+				.limit(1);
+			if (!item || !canSeeItem(actor, item)) return;
+
+			const day = utc8Day(now);
+			const where = and(
+				eq(libraryItemMemberDays.itemId, itemId),
+				eq(libraryItemMemberDays.memberId, actor.memberId),
+				eq(libraryItemMemberDays.day, day),
+			);
+			let seconds = 0;
+			if (ping.kind === "active") {
+				const [today] = await db.select({ activeSeconds: libraryItemMemberDays.activeSeconds }).from(libraryItemMemberDays).where(where).limit(1);
+				seconds = creditSeconds(ping.seconds ?? 0, today?.activeSeconds ?? 0);
+				if (seconds === 0) return;
+			}
+
+			const delta = { opens: ping.kind === "open" ? 1 : 0, activeSeconds: seconds, downloads: ping.kind === "download" ? 1 : 0 };
+			// ponytail: read-then-write, so concurrent pings (two tabs) can overshoot the daily cap by at most one ping each. The increment itself is atomic, so no seconds are lost.
+			await db
+				.insert(libraryItemMemberDays)
+				.values({ itemId, memberId: actor.memberId, day, ...delta })
+				.onConflictDoUpdate({
+					target: [libraryItemMemberDays.itemId, libraryItemMemberDays.memberId, libraryItemMemberDays.day],
+					set: {
+						opens: sql`${libraryItemMemberDays.opens} + ${delta.opens}`,
+						activeSeconds: sql`${libraryItemMemberDays.activeSeconds} + ${delta.activeSeconds}`,
+						downloads: sql`${libraryItemMemberDays.downloads} + ${delta.downloads}`,
+					},
+				});
+		},
+
+		async statsFor(itemIds) {
+			const ids = [...new Set(itemIds)];
+			const stats = new Map(ids.map((id) => [id, zeroStats()]));
+			for (let start = 0; start < ids.length; start += ID_CHUNK) {
+				const chunk = ids.slice(start, start + ID_CHUNK);
+				const [usage, saved] = await Promise.all([
+					db
+						.select({
+							itemId: libraryItemMemberDays.itemId,
+							opens: sql<number>`COALESCE(SUM(${libraryItemMemberDays.opens}), 0)`.mapWith(Number),
+							uniqueReaders: sql<number>`COUNT(DISTINCT CASE WHEN ${libraryItemMemberDays.opens} > 0 THEN ${libraryItemMemberDays.memberId} END)`.mapWith(Number),
+							activeSeconds: sql<number>`COALESCE(SUM(${libraryItemMemberDays.activeSeconds}), 0)`.mapWith(Number),
+							downloads: sql<number>`COALESCE(SUM(${libraryItemMemberDays.downloads}), 0)`.mapWith(Number),
+						})
+						.from(libraryItemMemberDays)
+						.where(inArray(libraryItemMemberDays.itemId, chunk))
+						.groupBy(libraryItemMemberDays.itemId),
+					db
+						.select({
+							itemId: libraryListItems.libraryItemId,
+							saves: sql<number>`COUNT(DISTINCT ${libraryListItems.addedBy})`.mapWith(Number),
+						})
+						.from(libraryListItems)
+						.where(inArray(libraryListItems.libraryItemId, chunk))
+						.groupBy(libraryListItems.libraryItemId),
+				]);
+				for (const { itemId, ...row } of usage) Object.assign(stats.get(itemId)!, row);
+				for (const { itemId, saves } of saved) stats.get(itemId)!.saves = saves;
+			}
+			return stats;
+		},
+
+		async totalActiveSeconds() {
+			const [row] = await db
+				.select({ total: sql<number>`COALESCE(SUM(${libraryItemMemberDays.activeSeconds}), 0)`.mapWith(Number) })
+				.from(libraryItemMemberDays)
+				.innerJoin(libraryItems, eq(libraryItems.id, libraryItemMemberDays.itemId))
+				.where(and(eq(libraryItems.status, "published"), ne(libraryItems.confidentiality, "confidential")));
+			return row?.total ?? 0;
+		},
+
+		async mostSavedSince(actor, since, limit) {
+			if (limit < 1) return [];
+			const savers = sql<number>`COUNT(DISTINCT ${libraryListItems.addedBy})`;
+			const ranked = await db
+				.select({ id: libraryListItems.libraryItemId })
+				.from(libraryListItems)
+				.innerJoin(libraryItems, eq(libraryItems.id, libraryListItems.libraryItemId))
+				.where(and(gte(libraryListItems.createdAt, since), publishedVisibleWhere(actor)))
+				.groupBy(libraryListItems.libraryItemId)
+				.orderBy(desc(savers), desc(libraryItems.publishedAt), asc(libraryItems.id))
+				.limit(limit);
+			const order = ranked.map((row) => row.id);
+			const cards = new Map((await cardsByIds(db, order)).map((card) => [card.id, card]));
+			return order.flatMap((id) => cards.get(id) ?? []);
+		},
+
+		async weeklyForOwner(actor, itemId, now = new Date()) {
+			const [item] = await db
+				.select({ status: libraryItems.status, confidentiality: libraryItems.confidentiality, createdBy: libraryItems.createdBy })
+				.from(libraryItems)
+				.where(eq(libraryItems.id, itemId))
+				.limit(1);
+			if (!item || !canEditItem(actor, item)) throw new Error("Library item not found.");
+
+			const days = await db
+				.select({
+					day: libraryItemMemberDays.day,
+					opens: sql<number>`SUM(${libraryItemMemberDays.opens})`.mapWith(Number),
+					activeSeconds: sql<number>`SUM(${libraryItemMemberDays.activeSeconds})`.mapWith(Number),
+				})
+				.from(libraryItemMemberDays)
+				.where(and(eq(libraryItemMemberDays.itemId, itemId), gte(libraryItemMemberDays.day, windowStart(utc8Day(now)))))
+				.groupBy(libraryItemMemberDays.day)
+				.orderBy(asc(libraryItemMemberDays.day));
+			const weeks = new Map<string, LibraryWeek>();
+			for (const { day, opens, activeSeconds } of days) {
+				const week = isoWeekLabel(day);
+				const total = weeks.get(week) ?? { week, opens: 0, activeSeconds: 0 };
+				total.opens += opens;
+				total.activeSeconds += activeSeconds;
+				weeks.set(week, total);
+			}
+			return [...weeks.values()];
+		},
+	};
+}
+
+export function createUnavailableLibraryActivityRepository(): LibraryActivityRepository {
+	const unavailable = () => {
+		throw new Error("Library activity is unavailable through this repository adapter.");
+	};
+	return {
+		record: unavailable,
+		statsFor: unavailable,
+		totalActiveSeconds: unavailable,
+		mostSavedSince: unavailable,
+		weeklyForOwner: unavailable,
+	};
+}
