@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { dropStaleFacets, facetsFor, hasActiveSearch, parseLibrarySearchParams, toLibrarySearchParams } from "./search-params";
+import {
+	applySearchChange,
+	dropStaleFacets,
+	effectiveSort,
+	facetsFor,
+	hasActiveSearch,
+	pageInfo,
+	parseLibrarySearchParams,
+	toggleValue,
+	toLibrarySearchParams,
+} from "./search-params";
 
 describe("parseLibrarySearchParams", () => {
 	it("parses repeatable filters and drops unknown values", () => {
@@ -135,5 +145,93 @@ describe("facets", () => {
 
 	it("leaves a search with no chosen type alone", () => {
 		expect(dropStaleFacets({ subtype: "Module" })).toEqual({ subtype: "Module" });
+	});
+});
+
+describe("toggleValue", () => {
+	it("adds a value, keeps the order, and removes it again", () => {
+		expect(toggleValue(undefined, "guide")).toEqual(["guide"]);
+		expect(toggleValue(["guide"], "template")).toEqual(["guide", "template"]);
+		expect(toggleValue(["guide", "template"], "guide")).toEqual(["template"]);
+	});
+
+	it("gives undefined, not an empty list, when the last one goes", () => {
+		expect(toggleValue(["guide"], "guide")).toBeUndefined();
+	});
+
+	it("does not change its input", () => {
+		const list = ["guide"] as const;
+		toggleValue(list, "template");
+		expect(list).toEqual(["guide"]);
+	});
+});
+
+describe("applySearchChange", () => {
+	it("composes two taps made before the first one came back", () => {
+		// Each tap is built from the search as the first tap left it, not from the page the server last sent.
+		const server = parseLibrarySearchParams({ q: "burnout" });
+		const afterGuide = applySearchChange(server, { kinds: toggleValue(server.kinds, "guide") });
+		const afterTemplate = applySearchChange(afterGuide, { kinds: toggleValue(afterGuide.kinds, "template") });
+		expect(afterTemplate).toMatchObject({ q: "burnout", kinds: ["guide", "template"], offset: 0 });
+		expect(toLibrarySearchParams(afterTemplate).toString()).toBe("q=burnout&type=guide&type=template");
+	});
+
+	it("returns to the first page and keeps smart", () => {
+		const search = parseLibrarySearchParams({ page: "4", smart: "0" });
+		expect(applySearchChange(search, { sort: "most_read" })).toMatchObject({ offset: 0, sort: "most_read", smart: false });
+	});
+
+	it("drops a facet the new types do not allow, and keeps one when no type is left", () => {
+		const search = parseLibrarySearchParams({ type: "code_document", subtype: "Module", format: "SLE" });
+		const next = applySearchChange(search, { kinds: toggleValue(search.kinds, "code_document") });
+		expect(next.kinds).toBeUndefined();
+		expect(next).toMatchObject({ subtype: "Module", formatDetail: "SLE" });
+		const guide = applySearchChange(search, { kinds: ["guide"] });
+		expect(guide.subtype).toBeUndefined();
+		expect(guide.formatDetail).toBeUndefined();
+	});
+
+	it("does not change the search it was given", () => {
+		const search = parseLibrarySearchParams({ type: "guide" });
+		applySearchChange(search, { kinds: ["template"] });
+		expect(search.kinds).toEqual(["guide"]);
+	});
+});
+
+describe("effectiveSort", () => {
+	it("is relevance with a query and newest without one, unless a sort was chosen", () => {
+		expect(effectiveSort({ q: "x" })).toBe("relevance");
+		expect(effectiveSort({})).toBe("newest");
+		expect(effectiveSort({ q: "x", sort: "most_read" })).toBe("most_read");
+		expect(effectiveSort({ sort: "most_saved" })).toBe("most_saved");
+	});
+
+	it("shows newest for ?sort=relevance without a query", () => {
+		expect(effectiveSort(parseLibrarySearchParams({ sort: "relevance" }))).toBe("newest");
+		expect(effectiveSort(parseLibrarySearchParams({ sort: "relevance", q: "x" }))).toBe("relevance");
+	});
+});
+
+describe("pageInfo", () => {
+	it("walks the middle, the first and the last page", () => {
+		expect(pageInfo(130, 48)).toEqual({ page: 3, pages: 6, prev: 2, next: 4 });
+		expect(pageInfo(130, 0)).toEqual({ page: 1, pages: 6, prev: null, next: 2 });
+		expect(pageInfo(130, 120)).toEqual({ page: 6, pages: 6, prev: 5, next: null });
+	});
+
+	it("counts a partial last page and treats an exact multiple as full", () => {
+		expect(pageInfo(25, 0).pages).toBe(2);
+		expect(pageInfo(24, 0).pages).toBe(1);
+		expect(pageInfo(48, 24)).toEqual({ page: 2, pages: 2, prev: 1, next: null });
+	});
+
+	it("points Previous at the last real page from a page past the end", () => {
+		expect(pageInfo(130, 24 * 8)).toEqual({ page: 9, pages: 6, prev: 6, next: null });
+		expect(pageInfo(5, 24)).toEqual({ page: 2, pages: 1, prev: 1, next: null });
+	});
+
+	it("is one empty page with no results", () => {
+		expect(pageInfo(0, 0)).toEqual({ page: 1, pages: 1, prev: null, next: null });
+		expect(pageInfo(0, 48)).toEqual({ page: 3, pages: 1, prev: 1, next: null });
 	});
 });

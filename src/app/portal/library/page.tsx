@@ -6,11 +6,11 @@ import type { LibraryCard } from "@/db/repositories/library";
 import type { LibraryListSummary } from "@/db/repositories/library-lists";
 import { LibraryItemCard } from "@/components/library/library-card";
 import { PitchBanner } from "@/components/library/pitch-banner";
-import { FilterPanel, SearchBar, SortSelect } from "@/components/library/search-filters";
+import { FilterPanel, SearchBar, SearchProvider, SortSelect } from "@/components/library/search-filters";
 import { EmptyState } from "@/components/portal/empty-state";
 import { Button } from "@/components/ui/button";
 import { formatHours } from "@/lib/library/activity";
-import { hasActiveSearch, PAGE_SIZE, parseLibrarySearchParams, toLibrarySearchParams } from "@/lib/library/search-params";
+import { hasActiveSearch, PAGE_SIZE, pageInfo, parseLibrarySearchParams, toLibrarySearchParams } from "@/lib/library/search-params";
 import type { ParsedLibrarySearch } from "@/lib/library/search-params";
 import { getActor } from "@/server/auth/actor";
 import { isFeatureEnabled } from "@/server/features";
@@ -79,20 +79,18 @@ function CollectionsShelf({ lists }: { lists: LibraryListSummary[] }) {
 }
 
 function Results({ search, cards, total }: { search: ParsedLibrarySearch; cards: LibraryCard[]; total: number }) {
-	const offset = search.offset ?? 0;
-	const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-	const page = Math.floor(offset / PAGE_SIZE) + 1;
+	const { page, pages, prev, next } = pageInfo(total, search.offset ?? 0);
 
 	return (
 		<section aria-labelledby="library-results" className="grid min-w-0 gap-4">
 			<div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-				<div className="min-w-0">
+				<div className="min-w-0" aria-live="polite">
 					<h2 id="library-results" className="font-heading text-xl">
 						{total.toLocaleString("en-US")} {total === 1 ? "result" : "results"}
 					</h2>
 					{search.q ? <p className="min-w-0 break-all text-sm text-muted-foreground">for &ldquo;{search.q}&rdquo;</p> : null}
 				</div>
-				<SortSelect value={search} />
+				<SortSelect />
 			</div>
 
 			{cards.length > 0 ? (
@@ -114,9 +112,9 @@ function Results({ search, cards, total }: { search: ParsedLibrarySearch; cards:
 
 			{pages > 1 ? (
 				<nav aria-label="Pages" className="flex items-center justify-between gap-3">
-					{page > 1 ? (
+					{prev !== null ? (
 						<Button asChild variant="outline" size="sm" className="min-h-10">
-							<Link href={pageHref(search, page - 1)} rel="prev">
+							<Link href={pageHref(search, prev)} rel="prev">
 								<ChevronLeft aria-hidden />
 								Previous
 							</Link>
@@ -127,9 +125,9 @@ function Results({ search, cards, total }: { search: ParsedLibrarySearch; cards:
 					<span className="text-sm text-muted-foreground">
 						Page {page} of {pages}
 					</span>
-					{page < pages ? (
+					{next !== null ? (
 						<Button asChild variant="outline" size="sm" className="min-h-10">
-							<Link href={pageHref(search, page + 1)} rel="next">
+							<Link href={pageHref(search, next)} rel="next">
 								Next
 								<ChevronRight aria-hidden />
 							</Link>
@@ -169,7 +167,10 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
 				libraryActivity.totalActiveSeconds().catch(() => 0),
 				library.search(actor, { sort: "newest", limit: RECENT_SIZE }).catch(() => NO_CARDS),
 			]);
-	const filterTags = (await tags).map(({ id, name, groupName }) => ({ id, name, groupName }));
+	// Only tags that have something to find, plus any already in the URL so a shared link can still be cleared.
+	const filterTags = (await tags)
+		.filter((tag) => tag.itemCount > 0 || search.tagIds?.includes(tag.id))
+		.map(({ id, name, groupName }) => ({ id, name, groupName }));
 
 	return (
 		<div className="mx-auto grid min-w-0 max-w-6xl gap-6">
@@ -199,57 +200,59 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
 
 			<PitchBanner />
 
-			<SearchBar value={search} />
+			<SearchProvider value={search}>
+				<SearchBar />
 
-			<div className="grid min-w-0 items-start gap-6 lg:grid-cols-[17rem_minmax(0,1fr)]">
-				<aside aria-label="Filters" className="min-w-0">
-					<FilterPanel value={search} tags={filterTags} total={results?.total ?? null} />
-				</aside>
+				<div className="grid min-w-0 items-start gap-6 lg:grid-cols-[17rem_minmax(0,1fr)]">
+					<aside aria-label="Filters" className="min-w-0">
+						<FilterPanel tags={filterTags} total={results?.total ?? null} />
+					</aside>
 
-				<div className="grid min-w-0 gap-8">
-					{results ? (
-						<Results search={search} cards={results.cards} total={results.total} />
-					) : home ? (
-						<>
-							{home[0].length > 0 ? (
-								<Section id="library-collections" title="Collections">
-									<CollectionsShelf lists={home[0]} />
+					<div className="grid min-w-0 gap-8">
+						{results ? (
+							<Results search={search} cards={results.cards} total={results.total} />
+						) : home ? (
+							<>
+								{home[0].length > 0 ? (
+									<Section id="library-collections" title="Collections">
+										<CollectionsShelf lists={home[0]} />
+									</Section>
+								) : null}
+								{home[1].length > 0 ? (
+									<Section id="library-most-saved" title="Most saved this term">
+										<Cards cards={home[1]} />
+									</Section>
+								) : null}
+								<p className="min-w-0 rounded-xl border border-border bg-secondary/50 px-4 py-3 font-heading text-lg">{`${formatHours(home[2])} of reading so far`}</p>
+								<Section
+									id="library-recent"
+									title="Recently added"
+									action={
+										<Link href="/portal/library?sort=newest" className="shrink-0 text-sm text-accent hover:underline">
+											See everything
+										</Link>
+									}
+								>
+									{home[3].cards.length > 0 ? (
+										<Cards cards={home[3].cards} />
+									) : (
+										<EmptyState
+											icon={BookOpen}
+											title="Nothing here yet"
+											description="The first thing added will show up here."
+											action={
+												<Button asChild variant="secondary" size="sm">
+													<Link href="/portal/library/new">Add to library</Link>
+												</Button>
+											}
+										/>
+									)}
 								</Section>
-							) : null}
-							{home[1].length > 0 ? (
-								<Section id="library-most-saved" title="Most saved this term">
-									<Cards cards={home[1]} />
-								</Section>
-							) : null}
-							<p className="min-w-0 rounded-xl border border-border bg-secondary/50 px-4 py-3 font-heading text-lg">{`${formatHours(home[2])} of reading so far`}</p>
-							<Section
-								id="library-recent"
-								title="Recently added"
-								action={
-									<Link href="/portal/library?sort=newest" className="shrink-0 text-sm text-accent hover:underline">
-										See everything
-									</Link>
-								}
-							>
-								{home[3].cards.length > 0 ? (
-									<Cards cards={home[3].cards} />
-								) : (
-									<EmptyState
-										icon={BookOpen}
-										title="Nothing here yet"
-										description="The first thing added will show up here."
-										action={
-											<Button asChild variant="secondary" size="sm">
-												<Link href="/portal/library/new">Add to library</Link>
-											</Button>
-										}
-									/>
-								)}
-							</Section>
-						</>
-					) : null}
+							</>
+						) : null}
+					</div>
 				</div>
-			</div>
+			</SearchProvider>
 		</div>
 	);
 }

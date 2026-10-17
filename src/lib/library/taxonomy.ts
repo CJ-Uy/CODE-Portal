@@ -36,6 +36,9 @@ export const SOURCE_LABELS: Record<LibrarySource, string> = {
 	outside: "From outside",
 };
 
+/** Every source, in the order the filters and the editor list them. */
+export const LIBRARY_SOURCES: readonly LibrarySource[] = ["code", "member", "outside"];
+
 /** Shown on an item only when a moderator has set one; an unreviewed item (null) shows nothing. */
 export const READINESS_LABELS: Record<LibraryPublicReadiness, string> = {
 	not_eligible: "Not for public release",

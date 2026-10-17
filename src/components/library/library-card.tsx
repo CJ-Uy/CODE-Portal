@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { Lock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import type { LibraryCard } from "@/db/repositories/library";
 import { showSaveCount } from "@/lib/library/activity";
+import type { LibraryCardFields } from "@/lib/library/card-fields";
 import { KIND_LABELS, READINESS_LABELS, SOURCE_LABELS } from "@/lib/library/taxonomy";
 import { cn } from "@/lib/utils";
 
@@ -11,9 +11,10 @@ const MAX_TAGS = 3;
 /**
  * The one card every library surface shows an item with. Server- or client-renderable: it is a plain link.
  * It carries no per-member reading data, only the save count (from 3 up) and what a moderator marked public-ready.
+ * It takes display fields only (`toCardFields` makes them), so a client component never receives a member id.
  * `compact` drops the summary and tags, for narrow shelves and the dashboard.
  */
-export function LibraryItemCard({ card, compact = false, className }: { card: LibraryCard; compact?: boolean; className?: string }) {
+export function LibraryItemCard({ card, compact = false, className }: { card: LibraryCardFields; compact?: boolean; className?: string }) {
 	const authors = card.authorsJson.map((author) => author.name).join(", ");
 	const byline = [authors, card.year ? String(card.year) : ""].filter(Boolean).join(" · ");
 	const tags = card.tagNames.slice(0, MAX_TAGS);

@@ -1,39 +1,62 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { createContext, useContext, useEffect, useOptimistic, useRef, useTransition } from "react";
 import { ChevronDown, Search, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import type { LibrarySearchInput } from "@/db/repositories/library";
-import { dropStaleFacets, facetsFor, SORT_LABELS, SORTS, toLibrarySearchParams } from "@/lib/library/search-params";
+import { applySearchChange, effectiveSort, facetsFor, SORT_LABELS, SORTS, toggleValue, toLibrarySearchParams } from "@/lib/library/search-params";
 import type { ParsedLibrarySearch } from "@/lib/library/search-params";
-import { ENGAGEMENT_TYPES, FORMAT_DETAILS, KIND_LABELS, LIBRARY_KINDS, SOURCE_LABELS } from "@/lib/library/taxonomy";
-import type { LibrarySource } from "@/lib/library/taxonomy";
+import { ENGAGEMENT_TYPES, FORMAT_DETAILS, KIND_LABELS, LIBRARY_KINDS, LIBRARY_SOURCES, SOURCE_LABELS } from "@/lib/library/taxonomy";
 import { cn } from "@/lib/utils";
 
 export type FilterTag = { id: string; name: string; groupName: string };
 
-const SOURCES = Object.keys(SOURCE_LABELS) as LibrarySource[];
+type Patch = Partial<LibrarySearchInput> | ((now: ParsedLibrarySearch) => Partial<LibrarySearchInput>);
+type Change = (patch: Patch, how?: "replace" | "push") => void;
+type SearchState = { query: ParsedLibrarySearch; pending: boolean; change: Change };
 
-/** Every change is a navigation: the URL is the only state, so a filtered search can be shared and the back button works. */
-function useNavigate(value: ParsedLibrarySearch) {
-	const router = useRouter();
-	const [pending, startTransition] = useTransition();
-	function change(patch: Partial<LibrarySearchInput>) {
-		const next = dropStaleFacets({ ...value, ...patch, offset: 0 });
-		const query = toLibrarySearchParams(next).toString();
-		startTransition(() => router.push(query ? `/portal/library?${query}` : "/portal/library"));
-	}
-	return { change, pending };
+const SearchContext = createContext<SearchState | null>(null);
+
+function useSearch(): SearchState {
+	const state = useContext(SearchContext);
+	if (!state) throw new Error("The library search controls must sit inside a SearchProvider.");
+	return state;
 }
 
-const toggle = <T extends string>(list: readonly T[] | undefined, item: T): T[] | undefined => {
-	const next = list?.includes(item) ? list.filter((entry) => entry !== item) : [...(list ?? []), item];
-	return next.length ? next : undefined;
-};
+/**
+ * Holds the search the member is building. Every tap is applied to this at once and the URL follows, so a second tap made
+ * before the first navigation returns is built on top of the first (the server's copy of the search is always one step behind).
+ * Filters and sort replace the history entry; a submitted search pushes one.
+ */
+export function SearchProvider({ value, children }: { value: ParsedLibrarySearch; children: React.ReactNode }) {
+	const router = useRouter();
+	const [pending, startTransition] = useTransition();
+	// Shows the latest tap until the navigation lands, then falls back to what the server sent.
+	const [query, setQuery] = useOptimistic(value, (_current: ParsedLibrarySearch, next: ParsedLibrarySearch) => next);
+	// What the next tap builds on. State alone is not enough: two taps in one tick both see the render before them.
+	const latest = useRef(value);
+	useEffect(() => {
+		latest.current = query;
+	}, [query]);
+
+	const change: Change = (patch, how = "replace") => {
+		const next = applySearchChange(latest.current, typeof patch === "function" ? patch(latest.current) : patch);
+		latest.current = next;
+		const params = toLibrarySearchParams(next).toString();
+		const href = params ? `/portal/library?${params}` : "/portal/library";
+		startTransition(() => {
+			setQuery(next);
+			if (how === "push") router.push(href);
+			else router.replace(href, { scroll: false });
+		});
+	};
+
+	return <SearchContext.Provider value={{ query, pending, change }}>{children}</SearchContext.Provider>;
+}
 
 function Chip({ pressed, onClick, children }: { pressed: boolean; onClick: () => void; children: React.ReactNode }) {
 	return (
@@ -80,18 +103,18 @@ function activeFilterCount(value: LibrarySearchInput): number {
 	return (value.kinds?.length ?? 0) + (value.sources?.length ?? 0) + (value.tagIds?.length ?? 0) + [value.subtype, value.formatDetail, value.engagementType].filter(Boolean).length;
 }
 
-function FilterFields({ value, tags, change }: { value: ParsedLibrarySearch; tags: FilterTag[]; change: (patch: Partial<LibrarySearchInput>) => void }) {
-	const facets = facetsFor(value);
+function FilterFields({ tags }: { tags: FilterTag[] }) {
+	const { query, change } = useSearch();
+	const facets = facetsFor(query);
 	const grouped = new Map<string, FilterTag[]>();
 	for (const tag of tags) grouped.set(tag.groupName, [...(grouped.get(tag.groupName) ?? []), tag]);
 	const groups = [...grouped];
-	const count = activeFilterCount(value);
 
 	return (
 		<div className="grid min-w-0 gap-5">
 			<Group title="Type">
 				{LIBRARY_KINDS.map((kind) => (
-					<Chip key={kind} pressed={Boolean(value.kinds?.includes(kind))} onClick={() => change({ kinds: toggle(value.kinds, kind) })}>
+					<Chip key={kind} pressed={Boolean(query.kinds?.includes(kind))} onClick={() => change((now) => ({ kinds: toggleValue(now.kinds, kind) }))}>
 						{KIND_LABELS[kind]}
 					</Chip>
 				))}
@@ -99,19 +122,19 @@ function FilterFields({ value, tags, change }: { value: ParsedLibrarySearch; tag
 
 			{facets.showSubtype || facets.showModuleFacets ? (
 				<div className="grid min-w-0 gap-3">
-					{facets.showSubtype ? <FacetSelect label="Kind of document" value={value.subtype} options={facets.subtypes} onChange={(subtype) => change({ subtype })} /> : null}
+					{facets.showSubtype ? <FacetSelect label="Kind of document" value={query.subtype} options={facets.subtypes} onChange={(subtype) => change({ subtype })} /> : null}
 					{facets.showModuleFacets ? (
 						<>
-							<FacetSelect label="Module format" value={value.formatDetail} options={FORMAT_DETAILS} onChange={(formatDetail) => change({ formatDetail })} />
-							<FacetSelect label="Engagement" value={value.engagementType} options={ENGAGEMENT_TYPES} onChange={(engagementType) => change({ engagementType })} />
+							<FacetSelect label="Module format" value={query.formatDetail} options={FORMAT_DETAILS} onChange={(formatDetail) => change({ formatDetail })} />
+							<FacetSelect label="Engagement" value={query.engagementType} options={ENGAGEMENT_TYPES} onChange={(engagementType) => change({ engagementType })} />
 						</>
 					) : null}
 				</div>
 			) : null}
 
 			<Group title="Source">
-				{SOURCES.map((source) => (
-					<Chip key={source} pressed={Boolean(value.sources?.includes(source))} onClick={() => change({ sources: toggle(value.sources, source) })}>
+				{LIBRARY_SOURCES.map((source) => (
+					<Chip key={source} pressed={Boolean(query.sources?.includes(source))} onClick={() => change((now) => ({ sources: toggleValue(now.sources, source) }))}>
 						{SOURCE_LABELS[source]}
 					</Chip>
 				))}
@@ -121,14 +144,14 @@ function FilterFields({ value, tags, change }: { value: ParsedLibrarySearch; tag
 				<div className="grid min-w-0 gap-1">
 					<p className="mb-1 text-xs font-semibold uppercase text-muted-foreground">Tags</p>
 					{groups.map(([groupName, groupTags]) => (
-						<details key={groupName} open={groupTags.some((tag) => value.tagIds?.includes(tag.id))} className="group min-w-0 border-t border-border py-1">
+						<details key={groupName} open={groupTags.some((tag) => query.tagIds?.includes(tag.id))} className="group min-w-0 border-t border-border py-1">
 							<summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
 								<span className="min-w-0 break-all">{groupName}</span>
 								<ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden />
 							</summary>
 							<div className="flex min-w-0 flex-wrap gap-1.5 pb-2 pt-1">
 								{groupTags.map((tag) => (
-									<Chip key={tag.id} pressed={Boolean(value.tagIds?.includes(tag.id))} onClick={() => change({ tagIds: toggle(value.tagIds, tag.id) })}>
+									<Chip key={tag.id} pressed={Boolean(query.tagIds?.includes(tag.id))} onClick={() => change((now) => ({ tagIds: toggleValue(now.tagIds, tag.id) }))}>
 										{tag.name}
 									</Chip>
 								))}
@@ -138,8 +161,14 @@ function FilterFields({ value, tags, change }: { value: ParsedLibrarySearch; tag
 				</div>
 			) : null}
 
-			{count > 0 ? (
-				<Button type="button" variant="ghost" size="sm" className="justify-self-start" onClick={() => change({ kinds: undefined, sources: undefined, tagIds: undefined, subtype: undefined, formatDetail: undefined, engagementType: undefined })}>
+			{activeFilterCount(query) > 0 ? (
+				<Button
+					type="button"
+					variant="ghost"
+					size="sm"
+					className="justify-self-start"
+					onClick={() => change({ kinds: undefined, sources: undefined, tagIds: undefined, subtype: undefined, formatDetail: undefined, engagementType: undefined })}
+				>
 					Clear filters
 				</Button>
 			) : null}
@@ -148,8 +177,8 @@ function FilterFields({ value, tags, change }: { value: ParsedLibrarySearch; tag
 }
 
 /** The search box. A search keeps the filters and starts again from the first page. */
-export function SearchBar({ value }: { value: ParsedLibrarySearch }) {
-	const { change, pending } = useNavigate(value);
+export function SearchBar() {
+	const { query, pending, change } = useSearch();
 	return (
 		<form
 			role="search"
@@ -158,13 +187,13 @@ export function SearchBar({ value }: { value: ParsedLibrarySearch }) {
 			onSubmit={(event) => {
 				event.preventDefault();
 				const q = new FormData(event.currentTarget).get("q");
-				change({ q: typeof q === "string" && q.trim() ? q.trim() : undefined });
+				change({ q: typeof q === "string" && q.trim() ? q.trim() : undefined }, "push");
 			}}
 		>
 			<div className="relative min-w-0 flex-1">
 				<Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
 				{/* key: a navigation that changes q (a clear, or the back button) replaces what is typed. */}
-				<Input key={value.q ?? ""} name="q" type="search" defaultValue={value.q ?? ""} maxLength={200} placeholder="Search the library" aria-label="Search the library" className="h-11 pl-9" />
+				<Input key={query.q ?? ""} name="q" type="search" defaultValue={query.q ?? ""} maxLength={200} placeholder="Search the library" aria-label="Search the library" className="h-11 pl-9" />
 			</div>
 			<Button type="submit" variant="secondary" className="h-11" disabled={pending}>
 				Search
@@ -174,9 +203,9 @@ export function SearchBar({ value }: { value: ParsedLibrarySearch }) {
 }
 
 /** Filters: a panel beside the results on a wide screen, a sheet behind one button on a phone. */
-export function FilterPanel({ value, tags, total }: { value: ParsedLibrarySearch; tags: FilterTag[]; total: number | null }) {
-	const { change, pending } = useNavigate(value);
-	const count = activeFilterCount(value);
+export function FilterPanel({ tags, total }: { tags: FilterTag[]; total: number | null }) {
+	const { query, pending } = useSearch();
+	const count = activeFilterCount(query);
 
 	return (
 		<>
@@ -188,7 +217,14 @@ export function FilterPanel({ value, tags, total }: { value: ParsedLibrarySearch
 								<SlidersHorizontal aria-hidden />
 								Filters
 							</span>
-							{count > 0 ? <span className="rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">{count}</span> : null}
+							{count > 0 ? (
+								<span className="rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
+									<span aria-hidden>{count}</span>
+									<span className="sr-only">
+										{count} {count === 1 ? "filter" : "filters"} active
+									</span>
+								</span>
+							) : null}
 						</Button>
 					</SheetTrigger>
 					<SheetContent side="right" className="w-[88%] max-w-sm gap-0">
@@ -197,7 +233,7 @@ export function FilterPanel({ value, tags, total }: { value: ParsedLibrarySearch
 							<SheetDescription className="sr-only">Narrow the library by type, source and tag.</SheetDescription>
 						</SheetHeader>
 						<div className={cn("min-h-0 flex-1 overflow-y-auto p-4", pending && "opacity-60")}>
-							<FilterFields value={value} tags={tags} change={change} />
+							<FilterFields tags={tags} />
 						</div>
 						<SheetFooter className="border-t border-border">
 							<SheetClose asChild>
@@ -210,21 +246,20 @@ export function FilterPanel({ value, tags, total }: { value: ParsedLibrarySearch
 				</Sheet>
 			</div>
 			<div className={cn("hidden min-w-0 rounded-xl border border-border bg-card p-4 lg:block", pending && "opacity-60")}>
-				<FilterFields value={value} tags={tags} change={change} />
+				<FilterFields tags={tags} />
 			</div>
 		</>
 	);
 }
 
-export function SortSelect({ value }: { value: ParsedLibrarySearch }) {
-	const { change, pending } = useNavigate(value);
-	// Relevance only means something while there is a query to rank against.
-	const options = SORTS.filter((sort) => sort !== "relevance" || value.q);
-	const current = value.sort ?? (value.q ? "relevance" : "newest");
+export function SortSelect() {
+	const { query, change } = useSearch();
+	// Relevance only means something while there is a query to rank against, and the select shows the sort the results really use.
+	const options = SORTS.filter((sort) => sort !== "relevance" || query.q);
 	return (
 		<label className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
 			Sort by
-			<Select value={current} disabled={pending} onChange={(event) => change({ sort: event.target.value as (typeof SORTS)[number] })} className="h-10 w-auto text-foreground">
+			<Select value={effectiveSort(query)} onChange={(event) => change({ sort: event.target.value as (typeof SORTS)[number] })} className="h-10 w-auto text-foreground">
 				{options.map((sort) => (
 					<option key={sort} value={sort}>
 						{SORT_LABELS[sort]}

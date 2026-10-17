@@ -1,6 +1,5 @@
 import type { LibrarySearchInput } from "@/db/repositories/library";
-import { ENGAGEMENT_TYPES, FORMAT_DETAILS, LIBRARY_KINDS, SUBTYPES } from "./taxonomy";
-import type { LibrarySource } from "./taxonomy";
+import { ENGAGEMENT_TYPES, FORMAT_DETAILS, LIBRARY_KINDS, LIBRARY_SOURCES, SUBTYPES } from "./taxonomy";
 
 /** The library search page and its URL: one place that decides which query values are believed. */
 export const PAGE_SIZE = 24;
@@ -12,7 +11,6 @@ export const SORT_LABELS: Record<(typeof SORTS)[number], string> = {
 	most_saved: "Most saved",
 	most_read: "Most read",
 };
-const SOURCES: readonly LibrarySource[] = ["code", "member", "outside"];
 const SUBTYPE_VALUES: readonly string[] = [...SUBTYPES.code_document, ...SUBTYPES.reading];
 
 const Q_MAX = 200;
@@ -34,7 +32,7 @@ function oneOf<T extends string>(values: string[], allowed: readonly T[]): T[] |
 export function parseLibrarySearchParams(params: RawParams): ParsedLibrarySearch {
 	const q = Array.from(many(params.q)[0]?.trim() ?? "").slice(0, Q_MAX).join("").trim();
 	const kinds = oneOf(many(params.type), LIBRARY_KINDS);
-	const sources = oneOf(many(params.source), SOURCES);
+	const sources = oneOf(many(params.source), LIBRARY_SOURCES);
 	const tagIds = [...new Set(many(params.tag).filter((id) => TAG_ID.test(id)))].slice(0, TAGS_MAX);
 	const subtype = oneOf(many(params.subtype).slice(0, 1), SUBTYPE_VALUES)?.[0];
 	const formatDetail = oneOf(many(params.format).slice(0, 1), FORMAT_DETAILS)?.[0];
@@ -115,4 +113,28 @@ export function dropStaleFacets(search: LibrarySearchInput): LibrarySearchInput 
 		delete next.engagementType;
 	}
 	return next;
+}
+
+/** The list with `item` added, or taken out when it is already there. An empty list becomes `undefined`, which the URL leaves out. */
+export function toggleValue<T extends string>(list: readonly T[] | undefined, item: T): T[] | undefined {
+	const next = list?.includes(item) ? list.filter((entry) => entry !== item) : [...(list ?? []), item];
+	return next.length ? next : undefined;
+}
+
+/** A filter or sort change on top of the search as it stands now: back to the first page, stale facets dropped. */
+export function applySearchChange<T extends LibrarySearchInput>(current: T, patch: Partial<LibrarySearchInput>): T {
+	return { ...dropStaleFacets({ ...current, ...patch }), offset: 0 } as T;
+}
+
+/** The sort the results really use: relevance has nothing to rank against without a query, so it is newest. */
+export function effectiveSort(search: LibrarySearchInput): (typeof SORTS)[number] {
+	if (search.sort === "relevance") return search.q ? "relevance" : "newest";
+	return search.sort ?? (search.q ? "relevance" : "newest");
+}
+
+/** Where a results page sits. `prev` never points past the last real page, so a link from a page past the end lands on results. */
+export function pageInfo(total: number, offset: number, limit: number = PAGE_SIZE): { page: number; pages: number; prev: number | null; next: number | null } {
+	const page = Math.floor(Math.max(0, offset) / limit) + 1;
+	const pages = Math.max(1, Math.ceil(total / limit));
+	return { page, pages, prev: page > 1 ? Math.min(page - 1, pages) : null, next: page < pages ? page + 1 : null };
 }

@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 const LABEL_MEANINGS: { value: LibraryPublicReadiness; meaning: string }[] = [
 	{
 		value: "not_eligible",
-		meaning: "Books, papers and outside websites start here. They belong to someone else, so they stay a resource for members and would never be republished.",
+		meaning: "Books, papers and outside websites start here. They belong to someone else, so we don't plan to share them publicly.",
 	},
 	{
 		value: "needs_adapting",
@@ -50,7 +50,7 @@ export default async function LibraryAboutPage() {
 					<h1 className="font-heading text-3xl">Toward a public library</h1>
 				</div>
 				<p className="leading-7 text-muted-foreground">
-					CODE has spent years doing organization-development work with student organizations: working out what is stuck, then designing the modules and sessions that help. Most of what we learned sits in IDFs and modules that one batch of CODErs wrote for one engagement. This library keeps that work where the next batch can find it.
+					CODE has spent years doing organization-development work with student organizations: working out what is stuck, then designing the modules and sessions that help. Most of what we learned sits in Intervention Design Forms (IDFs) and modules that one batch of CODErs wrote for one engagement. This library keeps that work where the next batch can find it.
 				</p>
 			</div>
 
@@ -105,7 +105,7 @@ export default async function LibraryAboutPage() {
 					Members only, for now
 				</h2>
 				<p className="leading-7 text-muted-foreground">
-					Everything in the library is visible to signed-in CODE members and no one else, and confidential items are limited further.
+					Published items are visible to every signed-in CODE member and no one else. Drafts and items waiting for review stay with their owners and the library moderators, and confidential items are limited further.
 				</p>
 				<p className="leading-7 text-muted-foreground">If you wrote something that helped a team, adding it is the best way to move this forward.</p>
 				<div className="flex flex-wrap gap-2">

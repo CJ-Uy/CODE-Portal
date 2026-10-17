@@ -8,6 +8,7 @@ import { ReportButton } from "@/components/library/report-button";
 import { EmptyState } from "@/components/portal/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { toCardFields } from "@/lib/library/card-fields";
 import { fullStopFor, relativeAge } from "@/lib/library/list-view";
 import { getActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
@@ -27,7 +28,7 @@ function toRows(list: LibraryListView, now: Date): ListRow[] {
 		return {
 			available: true,
 			id: item.card.id,
-			card: item.card,
+			card: toCardFields(item.card),
 			note: item.note,
 			addedBy: item.addedByName,
 			added: relativeAge(item.addedAt, now),

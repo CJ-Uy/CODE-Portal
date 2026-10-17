@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { ArrowDown, ArrowUp, GripVertical, Trash2 } from "lucide-react";
 import { LibraryItemCard } from "@/components/library/library-card";
-import type { LibraryCard } from "@/db/repositories/library";
+import type { LibraryCardFields } from "@/lib/library/card-fields";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -14,7 +14,7 @@ import { removeListItemAction, reorderAction, setNoteAction } from "../../list-a
 
 /** What the page hands over for one row. A placeholder carries only its id: nothing about the item leaks to a reader who cannot open it. */
 export type ListRow =
-	| { available: true; id: string; card: LibraryCard; note: string; addedBy: string | null; added: string }
+	| { available: true; id: string; card: LibraryCardFields; note: string; addedBy: string | null; added: string }
 	| { available: false; id: string };
 
 /** An editor's note: edited in place, saved when the field loses focus or with the Save button. */

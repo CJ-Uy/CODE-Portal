@@ -8,6 +8,7 @@ import {
 	FORMAT_DETAILS,
 	KIND_LABELS,
 	LIBRARY_KINDS,
+	LIBRARY_SOURCES,
 	normalizeDocType,
 	normalizeEngagementType,
 	SOURCE_LABELS,
@@ -214,6 +215,7 @@ describe("taxonomy constants", () => {
 		expect(KIND_LABELS.reading).toBe("Book/paper");
 		expect(KIND_LABELS.case_study).toBe("Case study");
 		expect(SOURCE_LABELS).toEqual({ code: "Made by CODE", member: "From members", outside: "From outside" });
+		expect([...LIBRARY_SOURCES]).toEqual(Object.keys(SOURCE_LABELS));
 	});
 
 	it("exposes the subtype, format and engagement vocabularies", () => {
