@@ -58,7 +58,7 @@ export async function runFeedbackReminders(db: SurveyDb, deps: ReminderDeps): Pr
 						memberId,
 						kind: "survey_reminder",
 						title: `Reminder: feedback on ${title}`,
-						body: estimate ? `It takes ${estimate.toLowerCase()}.` : "Your name isn't attached to your answers.",
+						body: estimate ? `It takes ${estimate.toLowerCase()}.` : "Your feedback helps the next one go better.",
 						href: `/portal/surveys/${survey.id}`,
 					});
 					notified++;

@@ -40,7 +40,8 @@ export function feedbackEmailContent(
 		preheader: PREHEADER,
 		blocks: [
 			greeting,
-			text("fb_body", `Thanks for coming to ${title}. We'd like your feedback${takes ? `. It ${takes}` : ""}, and your name isn't attached to your answers.`),
+			text("fb_body", `Thanks for coming to ${title}. We'd like your feedback${takes ? `. It ${takes}` : ""}.`),
+			text("fb_names", "CRS can see your name with your answers so they can follow up. Organizers see the answers without names."),
 			button,
 			text("fb_open", `Open until ${closes}.`),
 		],
