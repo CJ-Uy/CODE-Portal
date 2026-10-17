@@ -274,11 +274,13 @@ describe("library repository: drafts and edits", () => {
 		expect((await repo.listMine(actors.owner)).map((item) => item.id).sort()).toEqual(["m1", "m2", "m3"]);
 	});
 
-	it("setExtractedText feeds search and ignores a missing item", async () => {
-		const id = await insertItem({ title: "Scanned" });
-		await repo.setExtractedText(id, "Findable ocrterm inside");
+	it("setExtractedText feeds search and ignores a missing item or a replaced file", async () => {
+		const id = await insertItem({ title: "Scanned", format: "file", fileKey: "library/x/new.pdf" });
+		await expect(repo.setExtractedText(id, "library/x/old.pdf", "Stale oldterm")).resolves.toBe(false);
+		await expect(repo.setExtractedText(id, "library/x/new.pdf", "Findable ocrterm inside")).resolves.toBe(true);
 		expect((await repo.search(actors.other, { q: "ocrterm" })).cards.map((c) => c.id)).toEqual([id]);
-		await expect(repo.setExtractedText("missing", "x")).resolves.toBeUndefined();
+		expect((await repo.search(actors.other, { q: "oldterm" })).total).toBe(0);
+		await expect(repo.setExtractedText("missing", null, "x")).resolves.toBe(false);
 	});
 });
 

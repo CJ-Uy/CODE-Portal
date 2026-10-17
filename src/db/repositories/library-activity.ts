@@ -17,7 +17,7 @@ export type LibraryActivityRepository = {
 	statsFor(itemIds: string[]): Promise<Map<string, LibraryItemStats>>;
 	/** Published, non-confidential items only. */
 	totalActiveSeconds(): Promise<number>;
-	/** Items ranked by how many distinct members saved them since `since`; only items this actor can browse. */
+	/** Items saved by at least 3 distinct members since `since`, most first; only items this actor can browse. */
 	mostSavedSince(actor: Actor, since: Date, limit: number): Promise<LibraryCard[]>;
 	/** When the current term started (`startsAt <= now < endsAt`), or 120 days before `now` while no term covers it. */
 	termStart(now?: Date): Promise<Date>;
@@ -30,6 +30,10 @@ const ID_CHUNK = 40;
 const WEEKS_SHOWN = 12;
 const DAY_MS = 86_400_000;
 const NO_TERM_DAYS = 120;
+// Opens and downloads a member can add to one item per UTC+8 day: a script re-opening an item cannot inflate its stats.
+const DAILY_COUNT_CAP = 10;
+// The same floor as showSaveCount: a shelf of items saved by one or two members would point at who saved them.
+const MOST_SAVED_FLOOR = 3;
 
 const zeroStats = (): LibraryItemStats => ({ saves: 0, opens: 0, uniqueReaders: 0, activeSeconds: 0, downloads: 0 });
 
@@ -81,9 +85,9 @@ export function createLibraryActivityRepository(db: Db): LibraryActivityReposito
 				.onConflictDoUpdate({
 					target: [libraryItemMemberDays.itemId, libraryItemMemberDays.memberId, libraryItemMemberDays.day],
 					set: {
-						opens: sql`${libraryItemMemberDays.opens} + ${delta.opens}`,
+						opens: sql`MIN(${DAILY_COUNT_CAP}, ${libraryItemMemberDays.opens} + ${delta.opens})`,
 						activeSeconds: sql`MIN(${ACTIVITY.dailyCapSeconds}, ${libraryItemMemberDays.activeSeconds} + ${delta.activeSeconds})`,
-						downloads: sql`${libraryItemMemberDays.downloads} + ${delta.downloads}`,
+						downloads: sql`MIN(${DAILY_COUNT_CAP}, ${libraryItemMemberDays.downloads} + ${delta.downloads})`,
 					},
 				});
 		},
@@ -138,6 +142,7 @@ export function createLibraryActivityRepository(db: Db): LibraryActivityReposito
 				.innerJoin(libraryItems, eq(libraryItems.id, libraryListItems.libraryItemId))
 				.where(and(gte(libraryListItems.createdAt, since), publishedVisibleWhere(actor)))
 				.groupBy(libraryListItems.libraryItemId)
+				.having(gte(savers, MOST_SAVED_FLOOR))
 				.orderBy(desc(savers), desc(libraryItems.publishedAt), asc(libraryItems.id))
 				.limit(limit);
 			const order = ranked.map((row) => row.id);

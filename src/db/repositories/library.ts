@@ -160,7 +160,8 @@ export type LibraryRepository = {
 	addComment(actor: Actor, input: { itemId: string; parentId?: string | null; anonymous: boolean; body: string }): Promise<void>;
 	setCommentHidden(actor: Actor, commentId: string, hidden: boolean): Promise<void>;
 	related(actor: Actor, id: string, limit?: number): Promise<LibraryCard[]>;
-	setExtractedText(id: string, text: string): Promise<void>;
+	/** False when the item is gone or its file is no longer `fileKey`: the text belongs to no file on it. */
+	setExtractedText(id: string, fileKey: string | null, text: string): Promise<boolean>;
 	requestAccess(actor: Actor, itemId: string): Promise<void>;
 };
 
@@ -435,8 +436,8 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 			if (event.action === "submit_review") {
 				await notifyMembers(db, await moderatorIds(db), event.actorId, {
 					kind: "library_needs_review",
-					title: "Library item waiting for review",
-					body: `${quoted} is waiting for review.`,
+					title: "Library item waiting for approval",
+					body: `${quoted} is waiting for approval.`,
 					href: MODERATION_QUEUE_HREF,
 				});
 				return;
@@ -601,8 +602,10 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 			const row = await loadItem(id);
 			if (!row || row.createdBy !== actor.memberId) throw new Error("Library item not found.");
 			if (row.status !== "draft") throw new Error("Only a draft can be published.");
-			const to: LibraryStatus = input.containsClientData ? "pending_review" : "published";
-			await transition(actor, row, "draft", to, { containsClientData: input.containsClientData, moderationReason: null, publishedAt: new Date(), indexedAt: null });
+			// Fail closed: a draft that was once flagged (then sent back) goes through review again whatever the owner answers now.
+			const containsClientData = input.containsClientData || row.containsClientData === true;
+			const to: LibraryStatus = containsClientData ? "pending_review" : "published";
+			await transition(actor, row, "draft", to, { containsClientData, moderationReason: null, publishedAt: new Date(), indexedAt: null });
 			await audited(actor, to === "published" ? "library:publish" : "library:submit_review", row);
 			if (to === "pending_review") {
 				await announce({ action: "submit_review", itemId: id, title: row.title, ownerId: row.createdBy, actorId: actor.memberId, reason: null });
@@ -623,6 +626,8 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 			} as const;
 			const rule = rules[action];
 			if (row.status !== rule.from) throw new Error(`Cannot ${action.replace("_", " ")} an item that is ${row.status.replace("_", " ")}.`);
+			// Only the owner can publish a draft, so an ownerless (seeded) item sent back would be stuck for good.
+			if (action === "send_back" && !row.createdBy) throw new Error("This item has no owner to send it back to. Take it down instead.");
 			await transition(actor, row, rule.from, rule.to, rule.set);
 			await audited(actor, `library:${action}`, row, why);
 			await announce({ action, itemId: id, title: row.title, ownerId: row.createdBy, actorId: actor.memberId, reason: why });
@@ -905,10 +910,16 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 			return ids.flatMap((itemId) => cards.filter((card) => card.id === itemId));
 		},
 
-		async setExtractedText(id, text) {
-			// A missing item is a no-op: it may have been deleted while the indexer was reading its file.
-			await db.update(libraryItems).set({ extractedText: text }).where(eq(libraryItems.id, id));
+		async setExtractedText(id, fileKey, text) {
+			// The item may have been deleted, or given a new file, while the indexer was reading the old one.
+			const updated = await db
+				.update(libraryItems)
+				.set({ extractedText: text })
+				.where(and(eq(libraryItems.id, id), sql`${libraryItems.fileKey} IS ${fileKey}`))
+				.returning({ id: libraryItems.id });
+			if (updated.length === 0) return false;
 			await refreshSearchText(db, id);
+			return true;
 		},
 
 		async requestAccess(actor, itemId) {

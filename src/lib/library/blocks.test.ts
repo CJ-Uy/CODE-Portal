@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
 	blocksToPlainText,
+	buildSearchText,
 	libraryBlockSchema,
 	libraryBlocksSchema,
 	newLibraryBlock,
 	readMinutes,
+	SEARCH_TEXT_MAX_BYTES,
 	type LibraryBlockType,
 } from "./blocks";
 
@@ -126,6 +128,22 @@ describe("blocksToPlainText", () => {
 
 	it("returns an empty string for no blocks", () => {
 		expect(blocksToPlainText([])).toBe("");
+	});
+});
+
+describe("buildSearchText", () => {
+	const item = { title: "T", dek: "", fileCode: null, authorsJson: [], extractedText: "" };
+	const bytes = (text: string) => new TextEncoder().encode(text).length;
+
+	it("clips a huge page to 300 KB of UTF-8 without cutting a character in half", () => {
+		// "é" is two bytes and the leading "ab\n" (three) makes the cut fall in the middle of one.
+		const text = buildSearchText({ ...item, title: "Ab", blocksJson: [{ id: "b", type: "code", props: { code: "é".repeat(200_000) } }] }, []);
+		expect(bytes(text)).toBe(SEARCH_TEXT_MAX_BYTES - 1);
+		expect(text.endsWith("é")).toBe(true);
+	});
+
+	it("leaves ordinary text alone", () => {
+		expect(buildSearchText({ ...item, blocksJson: [] }, ["Tag"])).toBe("t\ntag");
 	});
 });
 

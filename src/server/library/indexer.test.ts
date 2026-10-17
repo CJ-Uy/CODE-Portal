@@ -137,6 +137,76 @@ describe("indexItem", () => {
 		expect((await row(id)).indexedAt).toBeNull();
 	});
 
+	it("drops the text of a file that was replaced while it was read, and embeds nothing", async () => {
+		const id = await insertItem({ title: "Swapped", format: "file", fileKey: "library/x/owner/old.pdf", fileName: "old.pdf", fileBytes: 100 });
+		const { ai, calls } = fakeAi("Synthetic old file text");
+		const replaceMidway: LibraryAi = {
+			...ai,
+			toMarkdown: async (file) => {
+				// What setFile writes.
+				await db
+					.update(libraryItems)
+					.set({ fileKey: "library/x/owner/new.pdf", fileName: "new.pdf", extractedText: "", indexedAt: null, updatedAt: new Date(Date.now() + 1000) })
+					.where(eq(libraryItems.id, id));
+				return ai.toMarkdown(file);
+			},
+		};
+		const { vectorize, upserted } = fakeVectorize();
+		await indexItem(id, { ai: replaceMidway, vectorize, db, storage });
+		expect(calls.filter((call) => call.startsWith("embed"))).toEqual([]);
+		expect(upserted).toEqual([]);
+		expect(await row(id)).toMatchObject({ fileKey: "library/x/owner/new.pdf", extractedText: "", indexedAt: null });
+	});
+
+	it("sends nothing to a model when the item turns confidential while its file is read", async () => {
+		const id = await insertItem({ title: "Turning", format: "file", fileKey: "library/x/owner/t.pdf", fileName: "t.pdf", fileBytes: 100 });
+		const { ai, calls } = fakeAi("Synthetic text");
+		const flipMidway: LibraryAi = {
+			...ai,
+			toMarkdown: async (file) => {
+				await db.update(libraryItems).set({ confidentiality: "confidential", indexedAt: null, updatedAt: new Date(Date.now() + 1000) }).where(eq(libraryItems.id, id));
+				return ai.toMarkdown(file);
+			},
+		};
+		const { vectorize, upserted } = fakeVectorize();
+		await indexItem(id, { ai: flipMidway, vectorize, db, storage });
+		expect(calls.filter((call) => call.startsWith("embed"))).toEqual([]);
+		expect(upserted).toEqual([]);
+		expect((await row(id)).indexedAt).toBeNull();
+	});
+
+	it("deletes the vectors it just wrote when the item is taken down while it embeds", async () => {
+		const id = await insertItem({ title: "Going down" });
+		const { ai } = fakeAi();
+		const takeDownMidway: LibraryAi = {
+			...ai,
+			embed: async (texts) => {
+				await db.update(libraryItems).set({ status: "taken_down", updatedAt: new Date(Date.now() + 1000) }).where(eq(libraryItems.id, id));
+				return ai.embed(texts);
+			},
+		};
+		const { vectorize, upserted, deleted } = fakeVectorize();
+		await indexItem(id, { ai: takeDownMidway, vectorize, db, storage });
+		expect(upserted).toHaveLength(1);
+		expect(deleted.at(-1)).toHaveLength(MAX_CHUNKS);
+		expect(deleted.at(-1)).toContain(`${id}:0`);
+	});
+
+	it("puts the item back on the rebuild list when a newer run finished first", async () => {
+		const id = await insertItem({ title: "Overlap" });
+		const { ai } = fakeAi();
+		const newerRunFirst: LibraryAi = {
+			...ai,
+			embed: async (texts) => {
+				// An edit, then its own (faster) run marking the item indexed, all before this older run finishes.
+				await db.update(libraryItems).set({ dek: "Edited", updatedAt: new Date(Date.now() + 1000), indexedAt: new Date() }).where(eq(libraryItems.id, id));
+				return ai.embed(texts);
+			},
+		};
+		await indexItem(id, { ai: newerRunFirst, vectorize: fakeVectorize().vectorize, db, storage });
+		expect((await row(id)).indexedAt).toBeNull();
+	});
+
 	it("leaves drafts alone", async () => {
 		const id = await insertItem({ title: "Draft", status: "draft" });
 		const { ai, calls } = fakeAi();

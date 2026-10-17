@@ -66,6 +66,16 @@ async function fileText(item: LibraryItem, deps: IndexDeps): Promise<string> {
 	return markdown.slice(0, EXTRACTED_TEXT_CAP);
 }
 
+/** Read fresh: a take-down or a confidential flip can land while a file is converted or embedded. */
+async function mayEmbed(itemId: string, db: Db): Promise<boolean> {
+	const [now] = await db
+		.select({ status: libraryItems.status, confidentiality: libraryItems.confidentiality })
+		.from(libraryItems)
+		.where(eq(libraryItems.id, itemId))
+		.limit(1);
+	return now?.status === "published" && now.confidentiality !== "confidential";
+}
+
 /**
  * Brings one item's vectors in line with it. A published item is embedded as `${itemId}:${n}` chunks (its stale chunks
  * deleted), and a file's text is stored for plain search. A published confidential item is never sent to a model: its
@@ -87,20 +97,26 @@ export async function indexItem(itemId: string, deps: IndexDeps): Promise<void> 
 		let body = "";
 		if (item.format === "file") {
 			body = await fileText(item, deps);
-			if (body !== item.extractedText) await createLibraryRepository(deps.db, createAuditRepository(deps.db)).setExtractedText(itemId, body);
+			const repo = createLibraryRepository(deps.db, createAuditRepository(deps.db));
+			// A new file (or a delete) while this one was read: the text is no one's, and setFile left the item unindexed.
+			if (body !== item.extractedText && !(await repo.setExtractedText(itemId, item.fileKey, body))) return;
 		} else if (item.format === "page") body = blocksToPlainText(item.blocksJson);
 
+		if (!(await mayEmbed(itemId, deps.db))) return;
 		const doc = [item.title, item.dek, tags.map((tag) => tag.name).join(", "), body].filter((part) => part.trim()).join("\n\n");
 		const chunks = chunkText(doc).slice(0, MAX_CHUNKS);
 		const vectors = await deps.ai.embed(chunks);
 		await deps.vectorize.upsert(chunks.map((_, n) => ({ id: `${itemId}:${n}`, values: vectors[n], metadata: { itemId, chunk: n } })));
 		await deps.vectorize.deleteByIds(chunkIds(itemId, chunks.length));
+		// Its own deindex may have run before this upsert, so the vectors just written go again.
+		if (!(await mayEmbed(itemId, deps.db))) return deindexItem(itemId, deps);
 	}
-	// Only if nothing changed while this ran: an edit in the meantime cleared indexedAt, and it must stay cleared.
+	// An edit while this ran makes what was embedded stale (a slower, older run can finish after a newer one), so the
+	// item goes back on the rebuild list instead of being marked done.
 	await deps.db
 		.update(libraryItems)
-		.set({ indexedAt: new Date() })
-		.where(and(eq(libraryItems.id, itemId), eq(libraryItems.updatedAt, item.updatedAt)));
+		.set({ indexedAt: sql`CASE WHEN ${eq(libraryItems.updatedAt, item.updatedAt)} THEN ${Date.now()} ELSE NULL END` })
+		.where(eq(libraryItems.id, itemId));
 }
 
 /** Deletes every chunk id the item could have. Unknown ids are a no-op in Vectorize, so this needs no record of how many there were. */

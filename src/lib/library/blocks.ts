@@ -118,8 +118,17 @@ export function blocksToPlainText(blocks: LibraryBlock[]): string {
 }
 
 const EXTRACTED_TEXT_INDEX_CAP = 200_000;
+// ponytail: search text stops at 300 KB (UTF-8) so a 1.5 MB page plus its search text fits D1's 2 MB row; words past
+// that are not found by plain search. Move search_text to its own table (or FTS5) if huge pages need full coverage.
+export const SEARCH_TEXT_MAX_BYTES = 300_000;
 
-/** searchText = lower(title, summary, file code, authors, tags, block text, extracted text up to 200k chars). The seed import uses it too. */
+/** The longest prefix of `text` that is at most `maxBytes` in UTF-8, never cutting a character in half. */
+function clipUtf8(text: string, maxBytes: number): string {
+	if (text.length * 3 <= maxBytes) return text;
+	return text.slice(0, new TextEncoder().encodeInto(text, new Uint8Array(maxBytes)).read);
+}
+
+/** searchText = lower(title, summary, file code, authors, tags, block text, extracted text up to 200k chars), at most 300 KB. The seed import uses it too. */
 export function buildSearchText(
 	item: {
 		title: string;
@@ -131,7 +140,7 @@ export function buildSearchText(
 	},
 	tagNames: string[],
 ): string {
-	return [
+	const text = [
 		item.title,
 		item.dek,
 		item.fileCode,
@@ -143,6 +152,7 @@ export function buildSearchText(
 		.filter(Boolean)
 		.join("\n")
 		.toLowerCase();
+	return clipUtf8(text, SEARCH_TEXT_MAX_BYTES);
 }
 
 /** Reading time at 200 words a minute, never less than one. */

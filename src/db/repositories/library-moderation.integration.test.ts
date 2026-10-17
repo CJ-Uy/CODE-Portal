@@ -316,7 +316,7 @@ describe("library notifications: moderation", () => {
 		await repo.publish(actors.owner, item.id, { containsClientData: true });
 		for (const id of ["moderator", "moderator2", "admin"]) {
 			expect(await feed(id)).toEqual([
-				{ kind: "library_needs_review", title: "Library item waiting for review", body: '"Case" is waiting for review.', href: "/portal/admin/content/library" },
+				{ kind: "library_needs_review", title: "Library item waiting for approval", body: '"Case" is waiting for approval.', href: "/portal/admin/content/library" },
 			]);
 		}
 		expect(await feed("owner")).toEqual([]);
@@ -450,7 +450,7 @@ describe("flagging an item as containing client data", () => {
 		expect(await repo.getItem(actors.owner, id)).toMatchObject({ status: "pending_review", containsClientData: true });
 		expect((await repo.search(actors.other, { q: "oops" })).total).toBe(0);
 		expect(await feed("moderator")).toEqual([
-			{ kind: "library_needs_review", title: "Library item waiting for review", body: '"Oops" is waiting for review.', href: "/portal/admin/content/library" },
+			{ kind: "library_needs_review", title: "Library item waiting for approval", body: '"Oops" is waiting for approval.', href: "/portal/admin/content/library" },
 		]);
 		expect(await kinds("admin")).toEqual(["library_needs_review"]);
 		expect(await feed("owner")).toEqual([]);
@@ -475,6 +475,21 @@ describe("flagging an item as containing client data", () => {
 		expect(await repo.flagClientData(actors.moderator, id)).toBe("pending_review");
 		expect(await kinds("moderator")).toEqual([]);
 		expect(await kinds("moderator2")).toEqual(["library_needs_review"]);
+	});
+
+	it("a sent-back item goes through review again even when the owner now answers No", async () => {
+		const item = await repo.createDraft(actors.owner, { kind: "case_study", title: "Case" });
+		await repo.publish(actors.owner, item.id, { containsClientData: true });
+		await repo.moderate(actors.moderator, item.id, "send_back", "Blur the client name");
+		expect(await repo.publish(actors.owner, item.id, { containsClientData: false })).toBe("pending_review");
+		expect(await repo.getItem(actors.other, item.id)).toBeNull();
+		expect(await repo.getItem(actors.owner, item.id)).toMatchObject({ status: "pending_review", containsClientData: true });
+	});
+
+	it("refuses to send back an ownerless item: nobody could publish the draft", async () => {
+		const seeded = await insertItem({ status: "pending_review" });
+		await expect(repo.moderate(actors.moderator, seeded, "send_back", "Fix it")).rejects.toThrow("This item has no owner to send it back to. Take it down instead.");
+		expect((await repo.getItem(actors.moderator, seeded))?.status).toBe("pending_review");
 	});
 });
 

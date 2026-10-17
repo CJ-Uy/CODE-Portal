@@ -20,7 +20,7 @@ async function seedDay(itemId: string, day: string, opens: number, activeSeconds
 
 beforeEach(async () => {
 	await resetLibrary();
-	await seedMembers(["owner", "other", "moderator", "third"]);
+	await seedMembers(["owner", "other", "moderator", "third", "fourth", "fifth"]);
 });
 
 describe("library activity: record and stats", () => {
@@ -82,6 +82,17 @@ describe("library activity: record and stats", () => {
 		expect((await activity.statsFor([id])).get(id)?.opens).toBe(1);
 	});
 
+	it("counts at most 10 opens and 10 downloads per member, item and UTC+8 day", async () => {
+		const id = await insertItem({});
+		const now = new Date("2026-10-16T02:00:00Z");
+		for (let i = 0; i < 12; i++) {
+			await activity.record(actors.other, id, { kind: "open" }, now);
+			await activity.record(actors.other, id, { kind: "download" }, now);
+		}
+		await activity.record(actors.other, id, { kind: "open" }, new Date("2026-10-16T16:30:00Z")); // the 17th in UTC+8
+		expect((await activity.statsFor([id])).get(id)).toMatchObject({ opens: 11, downloads: 10 });
+	});
+
 	it("counts opens, unique readers and downloads", async () => {
 		const id = await insertItem({});
 		await activity.record(actors.other, id, { kind: "open" });
@@ -131,39 +142,50 @@ describe("library activity: mostSavedSince", () => {
 	const inside = new Date("2026-10-12T00:00:00Z");
 	const before = new Date("2026-10-01T00:00:00Z");
 
+	/** Saved by the first `count` of five members. */
+	async function savedBy(count: number, itemId: string, at = inside): Promise<void> {
+		for (const memberId of ["owner", "other", "third", "fourth", "fifth"].slice(0, count)) await saveToList(memberId, itemId, at);
+	}
+
 	it("ranks by distinct savers inside the window, then by newest publish", async () => {
 		const old = await insertItem({ title: "Old", publishedAt: new Date("2026-09-01T00:00:00Z") });
 		const recent = await insertItem({ title: "Recent", publishedAt: new Date("2026-10-05T00:00:00Z") });
 		const popular = await insertItem({ title: "Popular", publishedAt: new Date("2026-08-01T00:00:00Z") });
-		await saveToList("other", popular, inside);
-		await saveToList("owner", popular, inside);
-		await saveToList("other", old, inside);
-		await saveToList("other", recent, inside);
+		await savedBy(4, popular);
+		await savedBy(3, old);
+		await savedBy(3, recent);
 		const cards = await activity.mostSavedSince(actors.other, since, 10);
 		expect(cards.map((card) => card.title)).toEqual(["Popular", "Recent", "Old"]);
-		expect(cards[0].saves).toBe(2);
+		expect(cards[0].saves).toBe(4);
+	});
+
+	it("leaves out items fewer than 3 members saved, so the shelf never points at who saved them", async () => {
+		await savedBy(3, await insertItem({ title: "Three" }));
+		await savedBy(2, await insertItem({ title: "Two" }));
+		expect((await activity.mostSavedSince(actors.other, since, 10)).map((card) => card.title)).toEqual(["Three"]);
+		await db.delete(libraryListItems);
+		expect(await activity.mostSavedSince(actors.other, since, 10)).toEqual([]);
 	});
 
 	it("ignores saves added before the window", async () => {
 		const fresh = await insertItem({ title: "Fresh" });
 		const stale = await insertItem({ title: "Stale" });
-		await saveToList("other", fresh, inside);
-		await saveToList("other", stale, before);
-		await saveToList("owner", stale, before);
+		await savedBy(3, fresh);
+		await saveToList("owner", stale, inside);
+		await saveToList("other", stale, inside);
+		for (const memberId of ["third", "fourth", "fifth"]) await saveToList(memberId, stale, before);
 		const cards = await activity.mostSavedSince(actors.other, since, 10);
 		expect(cards.map((card) => card.title)).toEqual(["Fresh"]);
 	});
 
 	it("counts one member saving into two lists once", async () => {
-		const id = await insertItem({ title: "Twice" });
-		const other = await insertItem({ title: "Once" });
-		await saveToList("other", id, inside);
+		const twice = await insertItem({ title: "Twice" });
+		await savedBy(2, twice);
 		await db.insert(libraryLists).values({ id: "lst_second", memberId: "other", name: "Second" });
-		await db.insert(libraryListItems).values({ listId: "lst_second", libraryItemId: id, addedBy: "other", createdAt: inside });
-		await saveToList("owner", other, inside);
-		await saveToList("third", other, inside);
+		await db.insert(libraryListItems).values({ listId: "lst_second", libraryItemId: twice, addedBy: "other", createdAt: inside });
+		await savedBy(3, await insertItem({ title: "Three" }));
 		const cards = await activity.mostSavedSince(actors.other, since, 10);
-		expect(cards.map((card) => card.title)).toEqual(["Once", "Twice"]);
+		expect(cards.map((card) => card.title)).toEqual(["Three"]);
 	});
 
 	it("hides confidential, draft and taken-down items, except confidential for managers", async () => {
@@ -171,7 +193,7 @@ describe("library activity: mostSavedSince", () => {
 		const conf = await insertItem({ title: "Confidential", confidentiality: "confidential" });
 		const draft = await insertItem({ title: "Draft", status: "draft", createdBy: "owner" });
 		const down = await insertItem({ title: "Down", status: "taken_down" });
-		for (const id of [pub, conf, draft, down]) await saveToList("other", id, inside);
+		for (const id of [pub, conf, draft, down]) await savedBy(3, id);
 		const member = await activity.mostSavedSince(actors.other, since, 10);
 		expect(member.map((card) => card.title)).toEqual(["Public"]);
 		const manager = await activity.mostSavedSince(actors.moderator, since, 10);
@@ -179,7 +201,7 @@ describe("library activity: mostSavedSince", () => {
 	});
 
 	it("respects the limit", async () => {
-		for (let i = 0; i < 4; i++) await saveToList("other", await insertItem({ title: `Item ${i}` }), inside);
+		for (let i = 0; i < 4; i++) await savedBy(3, await insertItem({ title: `Item ${i}` }));
 		expect(await activity.mostSavedSince(actors.other, since, 2)).toHaveLength(2);
 		expect(await activity.mostSavedSince(actors.other, since, 0)).toEqual([]);
 	});

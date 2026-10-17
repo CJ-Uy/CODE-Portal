@@ -19,6 +19,14 @@ export const LIBRARY_FILE_TYPES: Record<string, string> = {
 
 const utf8 = new TextEncoder();
 
+/**
+ * The editor's tag choices: tags already on an item every member can browse, plus the item's own. A tag someone just
+ * created (it could be a client's name) reaches other members' pickers only once it is on a published item.
+ */
+export function pickerTags<T extends { id: string; itemCount: number }>(tags: T[], ownTagIds: string[]): T[] {
+	return tags.filter((tag) => tag.itemCount > 0 || ownTagIds.includes(tag.id));
+}
+
 const itemId = z
 	.string()
 	.regex(/^[A-Za-z0-9._-]{1,80}$/, "Unknown library item.")

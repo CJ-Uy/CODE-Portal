@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { getRepositories } from "@/db";
 import { getActor } from "@/server/auth/actor";
 import { isFeatureEnabled } from "@/server/features";
+import { pickerTags } from "../../editor-input";
 import { ItemEditor, type EditorItem } from "./item-editor";
 
 export const dynamic = "force-dynamic";
@@ -60,7 +61,7 @@ export default async function EditLibraryItemPage({ params }: { params: Promise<
 	return (
 		<ItemEditor
 			item={editorItem}
-			tags={tags.map(({ id: tagId, name, groupName }) => ({ id: tagId, name, groupName }))}
+			tags={pickerTags(tags, editorItem.tagIds).map(({ id: tagId, name, groupName }) => ({ id: tagId, name, groupName }))}
 			itemPicker={picked.flat().filter((card) => card.id !== item.id).map((card) => ({ id: card.id, title: card.title }))}
 			isOwner={item.createdBy === actor.memberId}
 		/>

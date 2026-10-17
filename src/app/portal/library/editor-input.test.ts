@@ -8,6 +8,7 @@ import {
 	isOwnFileKey,
 	MAX_BLOCKS_BYTES,
 	MAX_TAGS,
+	pickerTags,
 	publishInputSchema,
 	publishProblems,
 	saveItemInputSchema,
@@ -227,5 +228,17 @@ describe("draftProblem", () => {
 		expect(code({ kind: "guide", format: "file", title: "T" })).toBe("format");
 		expect(code({ title: "T" })).toBe("kind");
 		expect(code({ kind: "guide", title: "T" })).toBeNull();
+	});
+});
+
+describe("pickerTags", () => {
+	it("offers tags in use on browsable items plus the item's own, never someone's fresh tag", () => {
+		const tags = [
+			{ id: "used", itemCount: 2 },
+			{ id: "mine", itemCount: 0 },
+			{ id: "fresh", itemCount: 0 },
+		];
+		expect(pickerTags(tags, ["mine"]).map((tag) => tag.id)).toEqual(["used", "mine"]);
+		expect(pickerTags(tags, []).map((tag) => tag.id)).toEqual(["used"]);
 	});
 });

@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
 	deleteItem: vi.fn(),
 	report: vi.fn(async () => undefined),
 	moderate: vi.fn(async () => undefined),
+	setConfidentiality: vi.fn(async () => undefined),
 	ensureSaved: vi.fn(async () => "lst_saved_mem_1"),
 	addItem: vi.fn(async () => undefined),
 	removeItem: vi.fn(async () => undefined),
@@ -17,7 +18,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/db", () => ({
 	getRepositories: async () => ({
-		library: { getItem: mocks.getItem, deleteItem: mocks.deleteItem, report: mocks.report, moderate: mocks.moderate },
+		library: { getItem: mocks.getItem, deleteItem: mocks.deleteItem, report: mocks.report, moderate: mocks.moderate, setConfidentiality: mocks.setConfidentiality },
 		libraryLists: { ensureSaved: mocks.ensureSaved, addItem: mocks.addItem, removeItem: mocks.removeItem },
 	}),
 }));
@@ -28,7 +29,7 @@ vi.mock("next/cache", () => ({ revalidatePath: () => undefined }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 vi.mock("@/server/library/indexer", () => ({ scheduleLibraryIndex: mocks.scheduleLibraryIndex }));
 
-import { deleteItemAction, moderateItemAction, reportAction, toggleSaveAction } from "./item-actions";
+import { deleteItemAction, moderateItemAction, reportAction, setConfidentialityAction, toggleSaveAction } from "./item-actions";
 
 beforeEach(() => {
 	vi.clearAllMocks();
@@ -126,5 +127,22 @@ describe("reportAction and moderateItemAction", () => {
 			["lib_1", "deindex"],
 			["lib_2", "index"],
 		]);
+	});
+});
+
+describe("setConfidentialityAction", () => {
+	it("drops a confidential item from the vector index and embeds one opened to members again", async () => {
+		await setConfidentialityAction({ itemId: "lib_1", value: "confidential" });
+		expect(mocks.setConfidentiality).toHaveBeenCalledWith(expect.anything(), "lib_1", "confidential");
+		expect(mocks.scheduleLibraryIndex).toHaveBeenLastCalledWith("lib_1", "deindex");
+		await setConfidentialityAction({ itemId: "lib_1", value: "members" });
+		expect(mocks.scheduleLibraryIndex).toHaveBeenLastCalledWith("lib_1", "index");
+		expect(mocks.scheduleLibraryIndex).toHaveBeenCalledTimes(2);
+	});
+
+	it("schedules nothing when the repository refuses", async () => {
+		mocks.setConfidentiality.mockRejectedValueOnce(new Error("Not authorized to manage the library."));
+		await expect(setConfidentialityAction({ itemId: "lib_1", value: "members" })).rejects.toThrow("Not authorized");
+		expect(mocks.scheduleLibraryIndex).not.toHaveBeenCalled();
 	});
 });
