@@ -17,8 +17,9 @@ export const DEBRIEF_FAILED = "Couldn't save the debrief. Try again.";
 
 /**
  * Reads the debrief form. A textarea posts its line breaks as CRLF, which would count twice against the 2000-character
- * limit the browser itself counted once, so they are folded to LF first. A field the form did not post is left out and
- * keeps its saved value; an empty one is posted as "" and clears it. Throws when the form does not fit.
+ * limit the browser itself counted once, so they are folded to LF first. The form posts only the fields edited since it
+ * loaded: a field it did not post is left out and keeps its saved value, and one emptied on purpose is posted as "" and
+ * clears it. Throws when the form does not fit.
  */
 export function parseDebriefForm(formData: FormData): DebriefInput {
 	const text = (name: string) => {

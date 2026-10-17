@@ -21,6 +21,11 @@ describe("parseDebriefForm", () => {
 		expect(input.change).toBe("Start earlier");
 	});
 
+	it("keeps every saved value when only the event is posted, and clears a field posted empty", () => {
+		expect(parseDebriefForm(form({ eventId: "evt_1" }))).toEqual({ eventId: "evt_1" });
+		expect(parseDebriefForm(form({ eventId: "evt_1", why: "" }))).toEqual({ eventId: "evt_1", why: null });
+	});
+
 	it("folds the CRLF line breaks a textarea posts, so the 2000-character limit matches what the browser counted", () => {
 		const twoThousand = "a\r\n".repeat(1000);
 		const input = parseDebriefForm(form({ eventId: "evt_1", intended: twoThousand }));

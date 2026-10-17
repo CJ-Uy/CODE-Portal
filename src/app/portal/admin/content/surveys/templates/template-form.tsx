@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { unstable_rethrow } from "next/navigation";
 import { useState, useTransition, type FormEvent } from "react";
 import { Save } from "lucide-react";
 import { QuestionEditor } from "@/components/feedback/question-editor";
@@ -23,8 +24,14 @@ export function TemplateForm({ template }: { template: TemplateFormValues }) {
 		const data = new FormData(event.currentTarget);
 		setError(null);
 		startTransition(async () => {
-			const result = await saveTemplateAction(data);
-			if (result) setError(result.error);
+			try {
+				const result = await saveTemplateAction(data);
+				if (result) setError(result.error);
+			} catch (error) {
+				// Rethrows the success redirect; anything else (network, expired session) keeps the edits on screen.
+				unstable_rethrow(error);
+				setError("Couldn't reach the server. Your changes are still here. Try again.");
+			}
 		});
 	}
 

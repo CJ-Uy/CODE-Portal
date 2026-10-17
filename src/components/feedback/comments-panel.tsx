@@ -1,5 +1,6 @@
 "use client";
 
+import { unstable_rethrow } from "next/navigation";
 import { useState, useTransition } from "react";
 import { setAnswerHiddenAction } from "@/app/portal/admin/content/surveys/actions";
 import { Badge } from "@/components/ui/badge";
@@ -40,8 +41,13 @@ export function CommentsPanel({ answers, terms, canModerate }: { answers: Answer
 		data.set("answerId", answer.id);
 		data.set("hidden", answer.hidden ? "0" : "1");
 		startTransition(async () => {
-			const result = await setAnswerHiddenAction(data);
-			if (result) setError(result.error);
+			try {
+				const result = await setAnswerHiddenAction(data);
+				if (result) setError(result.error);
+			} catch (error) {
+				unstable_rethrow(error);
+				setError("Couldn't reach the server. Try again.");
+			}
 			setPendingId(null);
 		});
 	}

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { unstable_rethrow } from "next/navigation";
 import { useState, useTransition, type FormEvent } from "react";
 import { FilePlus2 } from "lucide-react";
 import { createFromTemplateAction } from "@/app/portal/admin/content/surveys/actions";
@@ -23,9 +24,16 @@ export function StartFormCards({ eventId, templates }: { eventId: string; templa
 		setError(null);
 		setPendingId(String(data.get("templateId")));
 		startTransition(async () => {
-			const result = await createFromTemplateAction(data);
-			if (result) {
-				setError(result.error);
+			try {
+				const result = await createFromTemplateAction(data);
+				if (result) {
+					setError(result.error);
+					setPendingId(null);
+				}
+			} catch (error) {
+				// Rethrows the success redirect; anything else (network, expired session) shows here.
+				unstable_rethrow(error);
+				setError("Couldn't reach the server. Try again.");
 				setPendingId(null);
 			}
 		});

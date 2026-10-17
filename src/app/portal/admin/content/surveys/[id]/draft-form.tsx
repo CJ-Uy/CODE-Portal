@@ -1,5 +1,6 @@
 "use client";
 
+import { unstable_rethrow } from "next/navigation";
 import { useRef, useState, useTransition, type FormEvent } from "react";
 import { Save } from "lucide-react";
 import { QuestionEditor } from "@/components/feedback/question-editor";
@@ -27,11 +28,17 @@ export function DraftForm({ surveyId, title, questions, onDirtyChange }: DraftFo
 		setSaved(false);
 		const editsAtSubmit = edits.current;
 		startTransition(async () => {
-			const result = await saveDraftAction(data);
-			if ("error" in result) setError(result.error);
-			else if (edits.current === editsAtSubmit) {
-				setSaved(true);
-				onDirtyChange(false);
+			try {
+				const result = await saveDraftAction(data);
+				if ("error" in result) setError(result.error);
+				else if (edits.current === editsAtSubmit) {
+					setSaved(true);
+					onDirtyChange(false);
+				}
+			} catch (error) {
+				// A thrown action (network, expired session) would otherwise reach the error boundary and drop the edits.
+				unstable_rethrow(error);
+				setError("Couldn't reach the server. Your changes are still here. Try again.");
 			}
 		});
 	}

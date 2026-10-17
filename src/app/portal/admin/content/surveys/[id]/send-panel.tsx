@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { unstable_rethrow } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import { Eye, Send, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -58,10 +59,17 @@ export function SendPanel(props: SendPanelProps & { unsaved: boolean }) {
 		const data = new FormData(event.currentTarget);
 		setError(null);
 		startTransition(async () => {
-			const result = await sendSurveyAction(data);
-			// Success redirects; only a failure comes back, and the admin goes back to the choices to fix it.
-			if (result) {
-				setError(result.error);
+			try {
+				const result = await sendSurveyAction(data);
+				// Success redirects; only a failure comes back, and the admin goes back to the choices to fix it.
+				if (result) {
+					setError(result.error);
+					setConfirming(false);
+				}
+			} catch (error) {
+				// Rethrows the success redirect. On a dropped connection the send may or may not have landed.
+				unstable_rethrow(error);
+				setError("Couldn't reach the server. Reload the page to check whether the form went out before you try again.");
 				setConfirming(false);
 			}
 		});
