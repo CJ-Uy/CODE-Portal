@@ -31,6 +31,7 @@ export default defineConfig({
 			FEATURE_RETENTION: "true",
 			FEATURE_MENTS: "true",
 			FEATURE_EMAIL: "true",
+			FEATURE_LIBRARY: "true",
 			LOCAL_SQLITE_PATH,
 		},
 	},
