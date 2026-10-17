@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { signInPath } from "@/server/auth/sign-in";
 import { Plus } from "lucide-react";
 import { AdminIntro } from "@/components/portal/admin-intro";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,7 @@ export default async function FeedbackTemplatesPage() {
 	if (!isFeatureEnabled("surveys")) notFound();
 
 	const actor = await getActor();
-	if (!actor) redirect("/signin");
+	if (!actor) redirect(await signInPath());
 	if (!can(actor, "survey:configure")) redirect("/portal");
 
 	const repositories = await getRepositories();

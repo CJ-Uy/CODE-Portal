@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { signInPath } from "@/server/auth/sign-in";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { READINESS_LABELS } from "@/lib/library/taxonomy";
@@ -36,7 +37,7 @@ const WHY_NOT_BUSINESS: { title: string; body: string }[] = [
 export default async function LibraryAboutPage() {
 	if (!isFeatureEnabled("library")) notFound();
 	const actor = await getActor();
-	if (!actor) redirect("/signin");
+	if (!actor) redirect(await signInPath());
 
 	return (
 		<article className="mx-auto grid min-w-0 max-w-2xl gap-8">

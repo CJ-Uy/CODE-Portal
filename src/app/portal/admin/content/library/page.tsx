@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { signInPath } from "@/server/auth/sign-in";
 import { ArchiveRestore, Flag, Inbox, SearchCheck } from "lucide-react";
 import { AdminIntro } from "@/components/portal/admin-intro";
 import { EmptyState } from "@/components/portal/empty-state";
@@ -34,7 +35,7 @@ const plural = (count: number, one: string, many: string) => `${count.toLocaleSt
 export default async function AdminLibraryModerationPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
 	if (!isFeatureEnabled("library")) notFound();
 	const actor = await getActor();
-	if (!actor) redirect("/signin");
+	if (!actor) redirect(await signInPath());
 	if (!can(actor, "library:moderate")) notFound();
 
 	const params = await searchParams;

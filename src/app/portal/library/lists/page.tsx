@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { signInPath } from "@/server/auth/sign-in";
 import { Bookmark, Layers, ListPlus, Users } from "lucide-react";
 import { getRepositories } from "@/db";
 import type { LibraryListSummary } from "@/db/repositories/library-lists";
@@ -38,7 +39,7 @@ function ListRow({ list }: { list: LibraryListSummary }) {
 export default async function LibraryListsPage() {
 	if (!isFeatureEnabled("library")) notFound();
 	const actor = await getActor();
-	if (!actor) redirect("/signin");
+	if (!actor) redirect(await signInPath());
 
 	const repositories = await getRepositories();
 	const [{ owned, editable }, collections] = await Promise.all([

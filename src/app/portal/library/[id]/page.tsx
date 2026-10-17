@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { signInPath } from "@/server/auth/sign-in";
 import { ArrowLeft, ExternalLink, FileText, Lock, Pencil } from "lucide-react";
 import { getRepositories } from "@/db";
 import { LINK_URL, type LibraryCard, type LibraryCommentView, type LibraryItemView } from "@/db/repositories/library";
@@ -58,7 +59,7 @@ async function loadRelated(actor: Actor, repositories: Repositories, id: string)
 export default async function LibraryItemPage({ params }: { params: Promise<{ id: string }> }) {
 	if (!isFeatureEnabled("library")) notFound();
 	const actor = await getActor();
-	if (!actor) redirect("/signin");
+	if (!actor) redirect(await signInPath());
 	const { id } = await params;
 
 	const repositories = await getRepositories();

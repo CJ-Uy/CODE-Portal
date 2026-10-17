@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { signInPath } from "@/server/auth/sign-in";
 import { Check, Megaphone, Pin } from "lucide-react";
 import { getRepositories } from "@/db";
 import { Badge } from "@/components/ui/badge";
@@ -61,7 +62,7 @@ export default async function AnnouncementsPage() {
 	if (!isFeatureEnabled("announcements")) notFound();
 
 	const actor = await getActor();
-	if (!actor) redirect("/signin");
+	if (!actor) redirect(await signInPath());
 
 	const repositories = await getRepositories();
 	const items = await repositories.announcements.listForMember(actor, { limit: 50 }).catch(() => []);

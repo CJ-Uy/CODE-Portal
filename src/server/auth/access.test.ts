@@ -3,6 +3,7 @@ import {
 	getGoogleAuthorizationParams,
 	getGoogleProviderOptions,
 	getRosterDeniedRedirect,
+	getSignInReturnPath,
 	isGoogleSignInAllowed,
 } from "./access";
 
@@ -69,5 +70,42 @@ describe("Google sign-in policy", () => {
 		{ provider: "google", email: null, emailVerified: true },
 	])("rejects an ineligible profile", (profile) => {
 		expect(isGoogleSignInAllowed(profile, { ...policy, bootstrapEmail: "bootstrap@example.com" })).toBe(false);
+	});
+});
+
+describe("sign-in return path", () => {
+	it.each([
+		["/portal", "/portal"],
+		["/portal/surveys/survey_1", "/portal/surveys/survey_1"],
+		["/portal/library?q=hello%20world&tag=a", "/portal/library?q=hello%20world&tag=a"],
+		["/events/K7P2QM", "/events/K7P2QM"],
+		["/portal/admin/../surveys/x", "/portal/surveys/x"],
+	])("returns %s to %s", (next, expected) => {
+		expect(getSignInReturnPath(next)).toBe(expected);
+	});
+
+	it.each([
+		undefined,
+		null,
+		"",
+		["/portal/surveys/x"],
+		"portal/surveys/x",
+		"https://evil.example/portal",
+		"javascript:alert(1)",
+		"//evil.example/portal",
+		"/\\evil.example/portal",
+		"/portal\\..\\..\\api",
+		"/\t/evil.example/portal",
+		"/\n/evil.example",
+		"/portal /x",
+		"/",
+		"/signin",
+		"/api/auth/signout",
+		"/portalx",
+		"/portal/../api/auth/signout",
+		"/portal/%2e%2e/api/auth/signout",
+		"/eventsx/K7P2QM",
+	])("falls back to /portal for %j", (next) => {
+		expect(getSignInReturnPath(next)).toBe("/portal");
 	});
 });

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { signInPath } from "@/server/auth/sign-in";
 import { ArrowLeft, ArrowRight, Clock, Lightbulb } from "lucide-react";
 import { AnnotatedShot } from "@/components/guides/annotated-shot";
 import { AUDIENCE_BADGE, GUIDE_ICONS } from "@/components/guides/guide-meta";
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic";
 
 export default async function GuidePage({ params }: { params: Promise<{ slug: string }> }) {
 	const actor = await getActor();
-	if (!actor) redirect("/signin");
+	if (!actor) redirect(await signInPath());
 	const { slug } = await params;
 
 	// A guide this member can't see (admin-only, or behind a flag that's off) 404s like an unknown slug.
