@@ -47,6 +47,7 @@
 		// Beta is where unfinished surfaces get exercised, so every flag is on here.
 		"FEATURE_RETENTION": "true",
 		"FEATURE_LIBRARY": "true",
+		"FEATURE_LIBRARY_SMART_SEARCH": "true",
 		"FEATURE_ANNOUNCEMENTS": "true",
 		"FEATURE_NOTIFICATIONS": "true",
 		"FEATURE_SURVEYS": "true",
