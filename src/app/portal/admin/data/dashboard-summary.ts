@@ -1,6 +1,8 @@
+import type { RetentionRecordSource } from "@/db/schema";
+
 export type SummaryEvent = { id: string };
 export type SummaryAttendance = { eventId: string };
-export type SummaryRecord = { eventId: string | null; points: number | null; source: "event_attendance" | "manual" };
+export type SummaryRecord = { eventId: string | null; points: number | null; source: RetentionRecordSource };
 
 export function summarizeEvents<T extends SummaryEvent>(
 	events: T[],
