@@ -1,5 +1,5 @@
-import { and, asc, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
-import { libraryItemMemberDays, libraryItems, libraryListItems } from "@/db/schema";
+import { and, asc, desc, eq, gt, gte, inArray, lte, ne, sql } from "drizzle-orm";
+import { libraryItemMemberDays, libraryItems, libraryListItems, terms } from "@/db/schema";
 import { ACTIVITY, creditSeconds, utc8Day } from "@/lib/library/activity";
 import type { Actor } from "@/server/auth/permissions";
 import { cardsByIds } from "./library";
@@ -19,6 +19,8 @@ export type LibraryActivityRepository = {
 	totalActiveSeconds(): Promise<number>;
 	/** Items ranked by how many distinct members saved them since `since`; only items this actor can browse. */
 	mostSavedSince(actor: Actor, since: Date, limit: number): Promise<LibraryCard[]>;
+	/** When the current term started (`startsAt <= now < endsAt`), or 120 days before `now` while no term covers it. */
+	termStart(now?: Date): Promise<Date>;
 	/** The item's owner or a moderator who can see it; anyone else gets "Library item not found.". Always the last 12 ISO weeks, oldest first, with zeros for quiet weeks. */
 	weeklyForOwner(actor: Actor, itemId: string, now?: Date): Promise<LibraryWeek[]>;
 };
@@ -27,6 +29,7 @@ export type LibraryActivityRepository = {
 const ID_CHUNK = 40;
 const WEEKS_SHOWN = 12;
 const DAY_MS = 86_400_000;
+const NO_TERM_DAYS = 120;
 
 const zeroStats = (): LibraryItemStats => ({ saves: 0, opens: 0, uniqueReaders: 0, activeSeconds: 0, downloads: 0 });
 
@@ -142,6 +145,16 @@ export function createLibraryActivityRepository(db: Db): LibraryActivityReposito
 			return order.flatMap((id) => cards.get(id) ?? []);
 		},
 
+		async termStart(now = new Date()) {
+			const [term] = await db
+				.select({ startsAt: terms.startsAt })
+				.from(terms)
+				.where(and(lte(terms.startsAt, now), gt(terms.endsAt, now)))
+				.orderBy(desc(terms.startsAt))
+				.limit(1);
+			return term?.startsAt ?? new Date(now.getTime() - NO_TERM_DAYS * DAY_MS);
+		},
+
 		async weeklyForOwner(actor, itemId, now = new Date()) {
 			const [item] = await db
 				.select({ status: libraryItems.status, confidentiality: libraryItems.confidentiality, createdBy: libraryItems.createdBy })
@@ -186,6 +199,7 @@ export function createUnavailableLibraryActivityRepository(): LibraryActivityRep
 		statsFor: unavailable,
 		totalActiveSeconds: unavailable,
 		mostSavedSince: unavailable,
+		termStart: unavailable,
 		weeklyForOwner: unavailable,
 	};
 }

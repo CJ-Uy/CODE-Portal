@@ -249,3 +249,31 @@ describe("library activity: weeklyForOwner", () => {
 		await expect(activity.weeklyForOwner(actors.owner, "lib_missing", now)).rejects.toThrow("Library item not found.");
 	});
 });
+
+describe("library activity: termStart", () => {
+	const now = new Date("2026-10-16T02:00:00Z");
+	const noTermWindow = 120 * 86_400_000;
+	const term = (id: string, startsAt: string, endsAt: string) =>
+		db.insert(schema.terms).values({ id, name: id, retainedAt: 100, probationBelow: 20, startsAt: new Date(startsAt), endsAt: new Date(endsAt) });
+
+	beforeEach(async () => {
+		await env.DB.prepare("DELETE FROM terms").run();
+	});
+
+	it("is the start of the term that covers now", async () => {
+		await term("old", "2025-08-01T00:00:00Z", "2026-05-31T00:00:00Z");
+		await term("current", "2026-08-01T00:00:00Z", "2027-05-31T00:00:00Z");
+		expect((await activity.termStart(now)).toISOString()).toBe("2026-08-01T00:00:00.000Z");
+	});
+
+	it("treats a term's end as exclusive", async () => {
+		await term("ended", "2026-01-01T00:00:00Z", "2026-10-16T02:00:00Z");
+		expect((await activity.termStart(now)).getTime()).toBe(now.getTime() - noTermWindow);
+	});
+
+	it("falls back to the last 120 days when no term covers now", async () => {
+		expect((await activity.termStart(now)).getTime()).toBe(now.getTime() - noTermWindow);
+		await term("future", "2027-08-01T00:00:00Z", "2028-05-31T00:00:00Z");
+		expect((await activity.termStart(now)).getTime()).toBe(now.getTime() - noTermWindow);
+	});
+});

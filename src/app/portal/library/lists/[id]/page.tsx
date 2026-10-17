@@ -9,7 +9,6 @@ import { EmptyState } from "@/components/portal/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { fullStopFor, relativeAge } from "@/lib/library/list-view";
-import { KIND_LABELS } from "@/lib/library/taxonomy";
 import { getActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
 import { isFeatureEnabled } from "@/server/features";
@@ -28,10 +27,7 @@ function toRows(list: LibraryListView, now: Date): ListRow[] {
 		return {
 			available: true,
 			id: item.card.id,
-			kindLabel: KIND_LABELS[item.card.kind],
-			title: item.card.title,
-			authors: item.card.authorsJson.map((author) => author.name).join(", "),
-			summary: item.card.dek,
+			card: item.card,
 			note: item.note,
 			addedBy: item.addedByName,
 			added: relativeAge(item.addedAt, now),

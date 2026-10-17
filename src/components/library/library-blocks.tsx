@@ -1,14 +1,12 @@
 /* eslint-disable @next/next/no-img-element -- images come from our own authenticated /api/uploads route, which next/image's optimizer cannot read. */
 import { memo } from "react";
-import Link from "next/link";
 import { ExternalLink, Info, Lightbulb } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import type { LibraryBlock } from "@/lib/library/blocks";
 import { isBlankBlock, paragraphs } from "@/lib/library/block-view";
-import { KIND_LABELS } from "@/lib/library/taxonomy";
 import type { LibraryCard } from "@/db/repositories/library";
 import { cn } from "@/lib/utils";
 import { InlineText } from "./inline-text";
+import { LibraryItemCard } from "./library-card";
 
 // Prose wraps at word breaks but still lets one very long word break, so phones never scroll sideways.
 const PROSE = "min-w-0 [overflow-wrap:anywhere]";
@@ -38,21 +36,7 @@ function ItemEmbed({ card }: { card: LibraryCard | null | undefined }) {
 	if (!card) {
 		return <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">Not available</div>;
 	}
-	const authors = card.authorsJson.map((author) => author.name).join(", ");
-	return (
-		<Link
-			href={`/portal/library/${card.id}`}
-			className="block min-w-0 rounded-xl border border-border bg-card p-4 transition-colors hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-		>
-			<div className="flex flex-wrap items-center gap-2">
-				<Badge variant="secondary">{KIND_LABELS[card.kind]}</Badge>
-				{card.year ? <span className="text-xs text-muted-foreground">{card.year}</span> : null}
-			</div>
-			<div className="mt-2 min-w-0 break-all font-medium">{card.title}</div>
-			{card.dek ? <div className={cn(PROSE, "mt-1 line-clamp-2 text-sm text-muted-foreground")}>{card.dek}</div> : null}
-			{authors ? <div className="mt-1 min-w-0 break-all text-xs text-muted-foreground">{authors}</div> : null}
-		</Link>
-	);
+	return <LibraryItemCard card={card} />;
 }
 
 function LinkCard({ url, title, description }: { url: string; title: string; description?: string }) {

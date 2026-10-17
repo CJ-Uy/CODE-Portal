@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { ArrowDown, ArrowUp, GripVertical, Trash2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { LibraryItemCard } from "@/components/library/library-card";
+import type { LibraryCard } from "@/db/repositories/library";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -14,23 +14,8 @@ import { removeListItemAction, reorderAction, setNoteAction } from "../../list-a
 
 /** What the page hands over for one row. A placeholder carries only its id: nothing about the item leaks to a reader who cannot open it. */
 export type ListRow =
-	| { available: true; id: string; kindLabel: string; title: string; authors: string; summary: string; note: string; addedBy: string | null; added: string }
+	| { available: true; id: string; card: LibraryCard; note: string; addedBy: string | null; added: string }
 	| { available: false; id: string };
-
-// ponytail: a minimal row card. Task 15's library-card.tsx replaces it when it lands.
-function RowCard({ row }: { row: Extract<ListRow, { available: true }> }) {
-	return (
-		<Link
-			href={`/portal/library/${row.id}`}
-			className="block min-w-0 rounded-lg border border-border p-3 transition-colors hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-		>
-			<Badge variant="secondary">{row.kindLabel}</Badge>
-			<p className="mt-1.5 min-w-0 break-all font-medium">{row.title}</p>
-			{row.authors ? <p className="mt-0.5 line-clamp-1 min-w-0 break-all text-sm text-muted-foreground">{row.authors}</p> : null}
-			{row.summary ? <p className="mt-1 line-clamp-2 min-w-0 text-sm text-muted-foreground [overflow-wrap:anywhere]">{row.summary}</p> : null}
-		</Link>
-	);
-}
 
 /** An editor's note: edited in place, saved when the field loses focus or with the Save button. */
 function NoteField({ listId, itemId, note }: { listId: string; itemId: string; note: string }) {
@@ -125,7 +110,7 @@ export function ListEditor({ listId, rows, canEdit }: { listId: string; rows: Li
 
 	const byId = new Map(rows.map((row) => [row.id, row]));
 	const shown = order.map((id) => byId.get(id)).filter((row): row is ListRow => Boolean(row));
-	const titleOf = (row: ListRow) => (row.available ? row.title : "that item");
+	const titleOf = (row: ListRow) => (row.available ? row.card.title : "that item");
 	// One reorder rewrites every row in a single request, which the server caps; a longer list can still be edited, just not reordered here.
 	const canReorder = canEdit && rows.length <= REORDER_MAX;
 
@@ -261,7 +246,7 @@ export function ListEditor({ listId, rows, canEdit }: { listId: string; rows: Li
 								<div className="grid min-w-0 flex-1 gap-3">
 									{row.available ? (
 										<>
-											<RowCard row={row} />
+											<LibraryItemCard card={row.card} />
 											{canEdit ? (
 												<NoteField listId={listId} itemId={row.id} note={row.note} />
 											) : row.note ? (

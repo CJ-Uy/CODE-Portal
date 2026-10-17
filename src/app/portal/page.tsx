@@ -3,11 +3,11 @@ import Link from "next/link";
 import { ArrowRight, BookOpen, CalendarDays, ClipboardCheck, Link2, Megaphone, MessageSquare } from "lucide-react";
 import { getRepositories } from "@/db";
 import { EventScanPanel } from "@/components/event-scan-panel";
+import { LibraryItemCard } from "@/components/library/library-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MetricCard, RetentionProgress } from "@/components/portal/overview-metrics";
-import { KIND_LABELS } from "@/lib/library/taxonomy";
 import { getActor } from "@/server/auth/actor";
 import { getAppConfig } from "@/server/env";
 import { getFeatureFlags } from "@/server/features";
@@ -196,16 +196,7 @@ export default async function PortalOverviewPage() {
 						{libraryItems.length === 0 ? (
 							<p className="text-sm text-muted-foreground">No library items yet.</p>
 						) : (
-							libraryItems.map((item) => (
-								<Link
-									key={item.id}
-									href={`/portal/library/${item.id}`}
-									className="group grid gap-1 rounded-lg border border-border p-3 transition-colors hover:border-accent"
-								>
-									<span className="text-xs text-muted-foreground">{KIND_LABELS[item.kind]}</span>
-									<span className="text-sm font-medium leading-snug group-hover:text-accent">{item.title}</span>
-								</Link>
-							))
+							libraryItems.map((item) => <LibraryItemCard key={item.id} card={item} compact />)
 						)}
 					</CardContent>
 				</Card>

@@ -4,6 +4,7 @@ import { ArrowLeft, ExternalLink, FileText, Lock, Pencil } from "lucide-react";
 import { getRepositories } from "@/db";
 import { LINK_URL, type LibraryCard, type LibraryCommentView, type LibraryItemView } from "@/db/repositories/library";
 import { DownloadLink } from "@/components/library/download-link";
+import { LibraryItemCard } from "@/components/library/library-card";
 import { LibraryBlocks } from "@/components/library/library-blocks";
 import { ReadingTracker } from "@/components/library/reading-tracker";
 import { ReportButton } from "@/components/library/report-button";
@@ -224,7 +225,7 @@ export default async function LibraryItemPage({ params }: { params: Promise<{ id
 					<ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 						{related.map((card) => (
 							<li key={card.id} className="min-w-0">
-								<RelatedCard card={card} />
+								<LibraryItemCard card={card} compact />
 							</li>
 						))}
 					</ul>
@@ -323,20 +324,6 @@ function LinkBody({ url }: { url: string | null }) {
 		>
 			{content}
 		</a>
-	);
-}
-
-function RelatedCard({ card }: { card: LibraryCard }) {
-	const authors = card.authorsJson.map((author) => author.name).join(", ");
-	return (
-		<Link
-			href={`/portal/library/${card.id}`}
-			className="block h-full min-w-0 rounded-xl border border-border bg-card p-3 transition-colors hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-		>
-			<Badge variant="secondary">{KIND_LABELS[card.kind]}</Badge>
-			<div className="mt-2 line-clamp-2 min-w-0 break-all text-sm font-medium">{card.title}</div>
-			{authors ? <div className="mt-1 line-clamp-1 min-w-0 break-all text-xs text-muted-foreground">{authors}</div> : null}
-		</Link>
 	);
 }
 
