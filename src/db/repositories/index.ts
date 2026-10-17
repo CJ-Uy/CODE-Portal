@@ -35,6 +35,22 @@ import type { DatabaseAdapter } from "../types";
 
 type DrizzleDb = ReturnType<typeof getDb>;
 
+/**
+ * The library repositories commit related writes with `db.batch`, which D1 has and better-sqlite3 (local dev) does not.
+ * This gives the local handle one: the statements run in a single transaction, through the synchronous `.run()` each
+ * builder exposes (the same approach as `runAtomic` in events.ts). D1 already has `batch` and is returned as it is.
+ */
+function withLocalBatch(db: DrizzleD1Database<typeof schema>): DrizzleD1Database<typeof schema> {
+	if ("batch" in db) return db;
+	const local = db as unknown as { transaction: (run: () => unknown) => unknown };
+	return new Proxy(db, {
+		get(target, prop) {
+			if (prop !== "batch") return Reflect.get(target, prop);
+			return async (queries: { run: () => unknown }[]) => local.transaction(() => queries.map((query) => query.run()));
+		},
+	});
+}
+
 export function createDrizzleRepositories(db: DrizzleDb) {
 	// getDb() is typed as the union of the sync better-sqlite3 and async D1
 	// Drizzle clients. The notifications/overview/audit repos type their handle as
@@ -42,6 +58,7 @@ export function createDrizzleRepositories(db: DrizzleDb) {
 	// mirroring the existing members cast. The local handle stays compatible at
 	// runtime.
 	const d1 = db as unknown as DrizzleD1Database<typeof schema>;
+	const libraryDb = withLocalBatch(d1);
 	const audit = createAuditRepository(d1);
 	const retention = createRetentionRepository(db, audit);
 	return {
@@ -64,10 +81,10 @@ export function createDrizzleRepositories(db: DrizzleDb) {
 		overview: createOverviewRepository(d1),
 		calendar: createCalendarRepository(d1),
 		announcements: createAnnouncementsRepository(d1, audit),
-		library: createLibraryRepository(d1, audit),
-		libraryTags: createLibraryTagsRepository(d1, audit),
-		libraryLists: createLibraryListsRepository(d1, audit),
-		libraryActivity: createLibraryActivityRepository(d1),
+		library: createLibraryRepository(libraryDb, audit),
+		libraryTags: createLibraryTagsRepository(libraryDb, audit),
+		libraryLists: createLibraryListsRepository(libraryDb, audit),
+		libraryActivity: createLibraryActivityRepository(libraryDb),
 		submissions: createSubmissionsRepository(d1),
 		email: createEmailRepositories(d1, audit),
 		audit,
