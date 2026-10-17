@@ -8,7 +8,7 @@ import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "
 import path from "node:path";
 import { ARTICLES } from "@/content/site";
 import { seedLibraryTags } from "@/db/seed/data";
-import { buildSearchText, libraryBlocksSchema, type LibraryBlock } from "@/lib/library/blocks";
+import { libraryBlocksSchema, type LibraryBlock } from "@/lib/library/blocks";
 import {
 	defaultPublicReadiness,
 	defaultSource,
@@ -21,7 +21,17 @@ import {
 	type LibraryFormat,
 	type LibraryKind,
 } from "@/lib/library/taxonomy";
-import { dedupeByHash, EXTRACTED_TEXT_CAP, SEARCH_TEXT_CAP, seedStatements, verdictFields, type ImportItem, type SeedTag, type Verdict } from "./sql";
+import {
+	clientNameHits,
+	crossDocumentNames,
+	dedupeByHash,
+	seedStatements,
+	verdictContent,
+	type FlaggedString,
+	type ImportItem,
+	type SeedTag,
+	type Verdict,
+} from "./sql";
 import { assertTagMapComplete, proposeTagMap, type TagMap } from "./tag-map";
 
 const ROOT = path.resolve(".local/library-import");
@@ -177,7 +187,7 @@ const pageBlocks = (blocks: (LibraryBlock | false | null)[]): LibraryBlock[] =>
 
 // ---------- drafts (what plan records, before verdicts and tags are applied) ----------
 
-type Draft = Omit<ImportItem, "tagSlugs" | "file" | "confidentiality" | "clientDataRedacted" | "containsClientData" | "extractedText" | "searchText"> & {
+type Draft = Omit<ImportItem, "tagSlugs" | "tagNames" | "file" | "confidentiality" | "clientDataRedacted" | "containsClientData" | "extractedText"> & {
 	origin: string;
 	rawTopics: string[];
 	/** Tag names given directly, not through the tag map. */
@@ -193,7 +203,8 @@ type Draft = Omit<ImportItem, "tagSlugs" | "file" | "confidentiality" | "clientD
 	images: { key: string; file: LocalFile }[];
 };
 type Missing = { origin: string; label: string; driveId: string | null; reason: string };
-type Manifest = { importedAt: number; drafts: Draft[]; missing: Missing[]; duplicates: { id: string; of: string; origin: string }[] };
+type Held = { id: string; driveId: string | null; hits: number };
+type Manifest = { importedAt: number; drafts: Draft[]; missing: Missing[]; duplicates: { id: string; of: string; origin: string }[]; held: Held[] };
 
 const base = (kind: LibraryKind, format: LibraryFormat, publishedAt: number, year: number | null) => ({
 	kind,
@@ -221,16 +232,21 @@ const base = (kind: LibraryKind, format: LibraryFormat, publishedAt: number, yea
 	dek: "",
 });
 
-/** The review file (in the main checkout's .local) mapped to the same place in this checkout's .local. */
-function remapReviewed(file: string): string {
+/** A redacted file (recorded in the main checkout's .local) at the same place in this checkout. It must be under redacted/. */
+function remapRedacted(file: string): string {
 	const relative = file.split(/[\\/]\.local[\\/]library-import[\\/]/)[1];
-	if (!relative) throw new Error("A verdict file is not under .local/library-import.");
-	return at(...relative.split(/[\\/]/));
+	if (!relative) throw new Error("A redacted file is not under .local/library-import.");
+	const local = at(...relative.split(/[\\/]/));
+	const inside = path.relative(at("redacted"), local);
+	if (!inside || inside.startsWith("..") || path.isAbsolute(inside)) throw new Error("A redacted file is not under .local/library-import/redacted.");
+	return local;
 }
 
-function readReviewedFile(file: string): LocalFile {
-	const local = readLocal(remapReviewed(file));
-	if (typeof local === "string") throw new Error(`A reviewed file is unusable: ${local}.`);
+/** The redacted copy, which must differ from the original: an unchanged copy would upload the client names. */
+function readRedactedFile(file: string, original: LocalFile, origin: string): LocalFile {
+	const local = readLocal(remapRedacted(file));
+	if (typeof local === "string") throw new Error(`${origin}: the redacted file is unusable: ${local}.`);
+	if (local.sha256 === original.sha256) throw new Error(`${origin}: the redacted file is byte-identical to the original.`);
 	return local;
 }
 
@@ -238,11 +254,19 @@ function plan(): void {
 	const importedAt = Date.now();
 	const sheet = readJson<Sheet>("sheet.json");
 	const verdicts = readJson<Record<string, { verdict: Verdict; file: string }>>("redacted/verdicts.json");
+	if (!existsSync(at("members.json"))) console.warn("warning: members.json is missing, so no author is matched and every owner is NULL.");
 	const membersExport = existsSync(at("members.json")) ? readJson<{ results: Member[] }[]>("members.json") : [];
+	const reviews = new Map(
+		(existsSync(at("review")) ? readdirSync(at("review")) : [])
+			.filter((name) => name.endsWith(".json"))
+			.map((name) => [name.slice(0, -".json".length), readJson<{ strings?: FlaggedString[] }>(`review/${name}`).strings ?? []] as const),
+	);
+	const clientNames = crossDocumentNames([...reviews.values()].flat());
 	const authorsOf = authorMatcher(membersExport.flatMap((set) => set.results ?? []));
 	const log = downloadLog();
 	const drafts: Draft[] = [];
 	const missing: Missing[] = [];
+	const ownStrings = new Map<Draft, { driveId: string; strings: FlaggedString[] }>();
 
 	// Module/IDF documents.
 	const docTab = "⚙️ Document Data";
@@ -279,11 +303,12 @@ function plan(): void {
 			rawTopics: [...topics, ...docType.extraFormats],
 			verdict: reviewed?.verdict ?? null,
 			file,
-			redactedFile: reviewed?.verdict === "redacted" ? readReviewedFile(reviewed.file) : null,
+			redactedFile: reviewed?.verdict === "redacted" ? readRedactedFile(reviewed.file, file, origin) : null,
 			fileStem: code,
 			textFile: existsSync(at("text", `${id}.txt`)) ? at("text", `${id}.txt`) : null,
 		};
-		assertNoFlaggedStrings(id, draft);
+		assertNoFlaggedStrings(draft, reviews.get(id) ?? []);
+		ownStrings.set(draft, { driveId: id, strings: reviews.get(id) ?? [] });
 		drafts.push(draft);
 	}
 
@@ -324,7 +349,9 @@ function plan(): void {
 		const id = `lib_imp_fmrw_${number.padStart(3, "0")}`;
 		const origin = `${frameworkTab} row ${n}`;
 		const name = oneLine(cell(row, "B"));
-		const imageRow = frameworkRows.find(({ row: other }) => cell(other, "S") === code)?.row;
+		const imageRows = frameworkRows.filter(({ row: other }) => cell(other, "S") === code);
+		if (imageRows.length > 1) throw new Error(`${origin}: ${imageRows.length} diagram rows carry code ${code}.`);
+		const imageRow = imageRows[0]?.row;
 		const imageId = imageRow ? ["AF_url", "AI", "AJ", "AF"].map((column) => driveId(cell(imageRow, column))).find(Boolean) : null;
 		const image = imageId ? findLocal("Framework_Data", imageId) : "no image link";
 		if (typeof image === "string") missing.push({ origin, label: `${code} diagram`, driveId: imageId ?? null, reason: image });
@@ -393,6 +420,27 @@ function plan(): void {
 		});
 	}
 
+	// R32: anything that would show a client name flagged in any review is held as confidential. Before dedupe, so a
+	// held copy wins as the strictest.
+	const held: Held[] = [];
+	for (const draft of drafts) {
+		const own = ownStrings.get(draft);
+		const reads = draft.verdict === "clean" || draft.verdict === "redacted";
+		const hits = clientNameHits(
+			{
+				verdict: draft.verdict,
+				shown: [draft.title, draft.dek, draft.fileStem ?? ""],
+				text: reads && draft.textFile ? readText(draft.textFile) : "",
+				ownStrings: own?.strings ?? [],
+			},
+			clientNames,
+		);
+		if (hits > 0) {
+			draft.verdict = "confidential";
+			held.push({ id: draft.id, driveId: own?.driveId ?? null, hits });
+		}
+	}
+
 	const withFiles = drafts.flatMap((draft) => (draft.file ? [{ id: draft.id, sha256: draft.file.sha256, verdict: draft.verdict, draft }] : []));
 	const deduped = dedupeByHash(withFiles);
 	const keptFiles = new Set(deduped.kept.map((entry) => entry.draft));
@@ -407,6 +455,7 @@ function plan(): void {
 		drafts: kept,
 		missing,
 		duplicates: duplicates.map((duplicate) => ({ ...duplicate, origin: drafts.find((draft) => draft.id === duplicate.id)!.origin })),
+		held,
 	};
 	writeFileSync(at("manifest.json"), `${JSON.stringify(manifest, null, "\t")}\n`);
 
@@ -430,13 +479,19 @@ function plan(): void {
 			"",
 			...manifest.duplicates.map((duplicate) => `- ${duplicate.origin}: ${duplicate.id} is a duplicate of ${duplicate.of}`),
 			"",
+			"## Held for review (cross-document client name)",
+			"",
+			"Imported as confidential (admin-only, no stored text) because a client name flagged in another document's review appears in it.",
+			"",
+			...held.map((entry) => `- ${entry.driveId ?? entry.id}: ${entry.hits} match(es)`),
+			"",
 		].join("\n"),
 	);
 
 	console.log("plan written: manifest.json, tag-map.json, missing.md");
 	console.log(`items ${kept.length}`, countBy(kept, (draft) => draft.kind));
 	console.log("document verdicts", countBy(kept.filter((draft) => draft.kind === "code_document"), (draft) => String(draft.verdict)));
-	console.log(`missing ${missing.length}, duplicates ${duplicates.length}`);
+	console.log(`missing ${missing.length}, duplicates ${duplicates.length}, held for a cross-document client name ${held.length} (${held.reduce((sum, entry) => sum + entry.hits, 0)} matches)`);
 	console.log("tags", tagStats(tagMap, proposal));
 }
 
@@ -462,11 +517,10 @@ const GUIDE_TAGS: Record<string, string[]> = {
 };
 
 /** A redacted or clean document must not show, in its title or summary, a client string the review found in its file. */
-function assertNoFlaggedStrings(driveIdValue: string, draft: Draft): void {
-	if (draft.verdict === "confidential" || !existsSync(at("review", `${driveIdValue}.json`))) return;
-	const review = readJson<{ strings?: { text: string }[] }>(`review/${driveIdValue}.json`);
+function assertNoFlaggedStrings(draft: Draft, strings: FlaggedString[]): void {
+	if (draft.verdict === "confidential") return;
 	const shown = `${draft.title}\n${draft.dek}`.toLowerCase();
-	const leaked = (review.strings ?? []).filter(({ text: flagged }) => flagged.trim() && shown.includes(flagged.trim().toLowerCase()));
+	const leaked = strings.filter(({ text: flagged }) => flagged.trim() && shown.includes(flagged.trim().toLowerCase()));
 	if (leaked.length > 0) throw new Error(`${draft.origin}: the title or summary contains ${leaked.length} client string(s) flagged in its file.`);
 }
 
@@ -511,9 +565,9 @@ function sql(): void {
 	const uploads: { key: string; file: LocalFile }[] = [];
 
 	const items = manifest.drafts.map((draft): ImportItem => {
-		const visibility = verdictFields(draft.verdict);
-		// Redacted documents upload only their redacted copy; everything else uploads the original.
-		const upload = draft.verdict === "redacted" ? draft.redactedFile : draft.file;
+		const { upload, extractedText, ...visibility } = verdictContent(draft.verdict, { original: draft.file, redacted: draft.redactedFile }, () =>
+			draft.kind === "code_document" && draft.textFile ? readText(draft.textFile) : "",
+		);
 		if (draft.format === "file" && !upload) throw new Error(`${draft.origin}: no file to upload.`);
 		const file = upload && { key: `library/${draft.id}/import/${upload.sha256.slice(0, 8)}.${upload.ext}`, name: `${draft.fileStem}.${upload.ext}`, type: upload.contentType, bytes: upload.bytes };
 		if (upload && file) uploads.push({ key: file.key, file: upload });
@@ -522,9 +576,6 @@ function sql(): void {
 		const tagNames = [...new Set([...draft.fixedTags, ...draft.rawTopics.flatMap((topic) => (tagMap[topic] === "drop" ? [] : tagMap[topic]))])];
 		const missingTag = tagNames.find((name) => !slugOf.has(name));
 		if (missingTag) throw new Error(`${draft.origin}: unknown tag ${missingTag}.`);
-		// Only a clean document keeps the text of its original: a redacted original still has the client names in it.
-		const extractedText = draft.verdict === "clean" && draft.kind === "code_document" && draft.textFile ? readText(draft.textFile).slice(0, EXTRACTED_TEXT_CAP) : "";
-		const searchText = buildSearchText({ ...draft, authorsJson: draft.authors, blocksJson: draft.blocks, extractedText }, tagNames).slice(0, SEARCH_TEXT_CAP);
 		return {
 			id: draft.id,
 			kind: draft.kind,
@@ -540,13 +591,13 @@ function sql(): void {
 			engagementType: draft.engagementType,
 			year: draft.year,
 			tagSlugs: tagNames.map((name) => slugOf.get(name)!),
+			tagNames,
 			file,
 			url: draft.url,
 			blocks: draft.blocks,
 			...visibility,
 			publicReadiness: draft.publicReadiness,
 			extractedText,
-			searchText,
 			publishedAt: draft.publishedAt,
 		};
 	});

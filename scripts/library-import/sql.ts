@@ -2,7 +2,7 @@
  * Seed rows to SQL for the library import. Pure (no fs, no crypto) so the Workers test pool can load it.
  * Every statement is INSERT OR IGNORE, so applying seed.sql twice changes nothing.
  */
-import { blocksToPlainText, readMinutes, type LibraryBlock } from "@/lib/library/blocks";
+import { blocksToPlainText, buildSearchText, readMinutes, type LibraryBlock } from "@/lib/library/blocks";
 import type { LibraryAuthor, LibraryFormat, LibraryKind, LibraryPublicReadiness, LibrarySource } from "@/lib/library/taxonomy";
 
 export type Verdict = "clean" | "redacted" | "confidential";
@@ -22,6 +22,8 @@ export type ImportItem = {
 	engagementType: string | null;
 	year: number | null;
 	tagSlugs: string[];
+	/** The same tags by name, for search_text. */
+	tagNames: string[];
 	file: { key: string; name: string; type: string; bytes: number } | null;
 	url: string | null;
 	blocks: LibraryBlock[];
@@ -30,7 +32,6 @@ export type ImportItem = {
 	containsClientData: boolean;
 	publicReadiness: LibraryPublicReadiness | null;
 	extractedText: string;
-	searchText: string;
 	/** Epoch ms. */
 	publishedAt: number;
 };
@@ -57,6 +58,61 @@ export function verdictFields(verdict: Verdict | null): Pick<ImportItem, "confid
 	if (verdict === "redacted") return { confidentiality: "members", clientDataRedacted: true, containsClientData: false };
 	if (verdict === "confidential") return { confidentiality: "confidential", clientDataRedacted: false, containsClientData: true };
 	throw new Error("Every document needs a review verdict before the seed SQL is written.");
+}
+
+/**
+ * What a verdict uploads and stores. Clean: the original and its text. Redacted: the redacted copy and no text, since the
+ * original's text still has the client names. Confidential: the original (admin-only) and no text.
+ */
+export function verdictContent<F>(
+	verdict: Verdict | null,
+	files: { original: F | null; redacted: F | null },
+	originalText: () => string,
+): ReturnType<typeof verdictFields> & { upload: F | null; extractedText: string } {
+	const fields = verdictFields(verdict);
+	if (verdict === "redacted") {
+		if (!files.redacted) throw new Error("A redacted document has no redacted file.");
+		return { ...fields, upload: files.redacted, extractedText: "" };
+	}
+	return { ...fields, upload: files.original, extractedText: verdict === "clean" ? originalText().slice(0, EXTRACTED_TEXT_CAP) : "" };
+}
+
+export type FlaggedString = { text: string; label: string };
+const flat = (text: string) => text.replace(/\s+/g, " ").trim();
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Client names worth looking for in other documents: org and member names of two or more words. Single words and
+ * [Client detail] strings are left out, because they hit CODE authors and ordinary words.
+ */
+export function crossDocumentNames(strings: FlaggedString[]): string[] {
+	const names = strings
+		.filter(({ label }) => label === "[Client org]" || label === "[Client member]")
+		.map(({ text }) => flat(text).toLowerCase())
+		.filter((name) => name.split(" ").length >= 2);
+	return [...new Set(names)];
+}
+
+/** Whole-word, case-insensitive matches of any name. Whitespace is normalised first, so a name broken across lines still matches. */
+export function countClientNames(text: string, names: string[]): number {
+	const haystack = flat(text);
+	return names.reduce((sum, name) => sum + (haystack.match(new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(name)}(?![\\p{L}\\p{N}])`, "giu"))?.length ?? 0), 0);
+}
+
+/**
+ * Ruling R32, fail closed: how many client names (flagged in any review) a non-confidential item would show. Its title,
+ * summary and file name are always checked. A clean document's text is checked in full; a redacted document's text is
+ * checked for every name except its own flagged strings, which its redacted copy no longer has. Any hit holds the item
+ * as confidential.
+ */
+export function clientNameHits(
+	entry: { verdict: Verdict | null; shown: string[]; text: string; ownStrings: FlaggedString[] },
+	names: string[],
+): number {
+	if (entry.verdict === "confidential" || entry.verdict === null) return 0;
+	const own = new Set(entry.ownStrings.map(({ text }) => flat(text).toLowerCase()));
+	const textNames = entry.verdict === "redacted" ? names.filter((name) => !own.has(name)) : names;
+	return countClientNames(entry.shown.join("\n"), names) + countClientNames(entry.text, textNames);
 }
 
 const STRICTNESS: Record<Verdict, number> = { clean: 0, redacted: 1, confidential: 2 };
@@ -87,9 +143,20 @@ export function tagInsertSql(tag: SeedTag): string {
 /** NULL when the member is not in this database, so a seed made from beta's members still applies locally. */
 const memberRef = (memberId: string | null) => (memberId ? `(SELECT id FROM members WHERE id = ${sqlLiteral(memberId)})` : "NULL");
 
+const isClean = (item: Pick<ImportItem, "clientDataRedacted" | "confidentiality">) => !item.clientDataRedacted && item.confidentiality !== "confidential";
+
+/**
+ * search_text the same way the repository builds it (buildSearchText), capped. Only a clean item's extracted text goes
+ * in, so a redacted or confidential item's search text comes from its own shown fields alone.
+ */
+export function searchTextOf(item: ImportItem): string {
+	const extractedText = isClean(item) ? item.extractedText.slice(0, EXTRACTED_TEXT_CAP) : "";
+	return buildSearchText({ ...item, authorsJson: item.authors, blocksJson: item.blocks, extractedText }, item.tagNames).slice(0, SEARCH_TEXT_CAP);
+}
+
 /** The item insert, then one tag link per slug (resolved by slug, so it finds a tag whatever its id). */
 export function itemInsertSql(item: ImportItem): string[] {
-	if (item.extractedText && (item.clientDataRedacted || item.confidentiality === "confidential")) {
+	if (item.extractedText && !isClean(item)) {
 		throw new Error(`${item.id}: extracted text is only stored for clean items. Redacted and confidential files are read later by the indexer.`);
 	}
 	const columns: Record<string, string> = {
@@ -118,7 +185,7 @@ export function itemInsertSql(item: ImportItem): string[] {
 		client_data_redacted: sqlLiteral(item.clientDataRedacted),
 		public_readiness: sqlLiteral(item.publicReadiness),
 		extracted_text: sqlLiteral(item.extractedText.slice(0, EXTRACTED_TEXT_CAP)),
-		search_text: sqlLiteral(item.searchText.slice(0, SEARCH_TEXT_CAP)),
+		search_text: sqlLiteral(searchTextOf(item)),
 		created_by: memberRef(item.ownerMemberId),
 		published_at: sqlLiteral(item.publishedAt),
 		updated_at: sqlLiteral(item.publishedAt),
@@ -156,7 +223,7 @@ export function seedStatements(input: { tags: SeedTag[]; items: ImportItem[]; au
 	];
 	for (const { label, statement } of labelled) {
 		const bytes = utf8.encode(statement).length;
-		if (bytes > MAX_STATEMENT_BYTES) throw new Error(`${label}: a statement is ${bytes} bytes, over the ${MAX_STATEMENT_BYTES} bytes D1 can take.`);
+		if (bytes >= MAX_STATEMENT_BYTES) throw new Error(`${label}: a statement is ${bytes} bytes; it must stay under ${MAX_STATEMENT_BYTES} for D1.`);
 	}
 	return labelled.map(({ statement }) => statement);
 }

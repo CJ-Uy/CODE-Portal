@@ -1,6 +1,19 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { dedupeByHash, itemInsertSql, seedStatements, sqlLiteral, verdictFields, type ImportItem, type SeedTag } from "./sql";
+import {
+	clientNameHits,
+	countClientNames,
+	crossDocumentNames,
+	dedupeByHash,
+	itemInsertSql,
+	searchTextOf,
+	seedStatements,
+	sqlLiteral,
+	verdictContent,
+	verdictFields,
+	type ImportItem,
+	type SeedTag,
+} from "./sql";
 
 // Synthetic fixtures only: nothing here comes from the real sheet.
 const fakeImportItem = (over: Partial<ImportItem> = {}): ImportItem => ({
@@ -18,6 +31,7 @@ const fakeImportItem = (over: Partial<ImportItem> = {}): ImportItem => ({
 	engagementType: null,
 	year: 2020,
 	tagSlugs: [],
+	tagNames: [],
 	file: { key: "library/lib_imp_fake/import/abcdef12.pdf", name: "MOD-999.pdf", type: "application/pdf", bytes: 10 },
 	url: null,
 	blocks: [],
@@ -26,7 +40,6 @@ const fakeImportItem = (over: Partial<ImportItem> = {}): ImportItem => ({
 	containsClientData: false,
 	publicReadiness: null,
 	extractedText: "",
-	searchText: "synthetic module",
 	publishedAt: Date.UTC(2020, 0, 1),
 	...over,
 });
@@ -62,6 +75,67 @@ describe("itemInsertSql", () => {
 			itemInsertSql(fakeImportItem({ confidentiality: "confidential", containsClientData: true, extractedText: "client name" })),
 		).toThrow(/extracted text/i);
 		expect(() => itemInsertSql(fakeImportItem({ clientDataRedacted: true, extractedText: "" }))).not.toThrow();
+	});
+});
+
+describe("searchTextOf", () => {
+	it("builds search text from the item's own fields, with extracted text only for a clean item", () => {
+		const clean = searchTextOf(fakeImportItem({ extractedText: "Needle", tagNames: ["Leadership"] }));
+		expect(clean).toContain("needle");
+		expect(clean).toContain("leadership");
+		expect(clean).toContain("synthetic module");
+		for (const over of [{ clientDataRedacted: true }, { confidentiality: "confidential" as const, containsClientData: true }]) {
+			expect(searchTextOf(fakeImportItem({ ...over, extractedText: "Needle" }))).not.toContain("needle");
+		}
+	});
+
+	it("caps search text at 60k characters", () => {
+		expect(searchTextOf(fakeImportItem({ dek: "c".repeat(70_000) }))).toHaveLength(60_000);
+	});
+});
+
+describe("verdictContent", () => {
+	const files = { original: "original.pdf", redacted: "redacted.pdf" };
+	const text = () => "Original text";
+	it("uploads the original with its text when clean, the redacted copy without text when redacted, the original without text when confidential", () => {
+		expect(verdictContent("clean", files, text)).toMatchObject({ upload: "original.pdf", extractedText: "Original text", confidentiality: "members" });
+		expect(verdictContent("redacted", files, text)).toMatchObject({ upload: "redacted.pdf", extractedText: "", clientDataRedacted: true });
+		expect(verdictContent("confidential", files, text)).toMatchObject({ upload: "original.pdf", extractedText: "", confidentiality: "confidential" });
+		expect(() => verdictContent("redacted", { original: "original.pdf", redacted: null }, text)).toThrow(/redacted file/);
+	});
+});
+
+describe("cross-document client names (R32)", () => {
+	// Synthetic: "Acme Widgets" is a client org flagged in document A.
+	const reviewA = [
+		{ text: "Acme  Widgets", label: "[Client org]" },
+		{ text: "Zed", label: "[Client org]" },
+		{ text: "Jane Roe", label: "[Client member]" },
+		{ text: "Budget figures for 2020", label: "[Client detail]" },
+	];
+	const names = crossDocumentNames(reviewA);
+
+	it("keeps org and member names of two or more words only", () => {
+		expect(names).toEqual(["acme widgets", "jane roe"]);
+	});
+
+	it("matches whole words, case-insensitively, across line breaks", () => {
+		expect(countClientNames("We met ACME\nWidgets twice; acme widgets again.", names)).toBe(2);
+		expect(countClientNames("Acme Widgetsmith and Jane Roebuck are other people.", names)).toBe(0);
+	});
+
+	it("holds a clean document B that mentions document A's client", () => {
+		const docB = { verdict: "clean" as const, shown: ["Module B", "Topics"], text: "Notes from the Acme\n Widgets session.", ownStrings: [] };
+		expect(clientNameHits(docB, names)).toBe(1);
+		// A single-word flag never escalates.
+		expect(clientNameHits({ ...docB, text: "Notes from the Zed session." }, crossDocumentNames([{ text: "Zed", label: "[Client org]" }]))).toBe(0);
+	});
+
+	it("checks shown fields of any non-confidential item, and a redacted text except for its own (already removed) strings", () => {
+		expect(clientNameHits({ verdict: "clean", shown: ["Working with Jane Roe"], text: "", ownStrings: [] }, names)).toBe(1);
+		const redacted = { verdict: "redacted" as const, shown: ["Module C"], text: "Acme Widgets and Jane Roe", ownStrings: [{ text: "Acme Widgets", label: "[Client org]" }] };
+		expect(clientNameHits(redacted, names)).toBe(1);
+		expect(clientNameHits({ ...redacted, verdict: "confidential" }, names)).toBe(0);
 	});
 });
 
@@ -115,17 +189,12 @@ describe("seedStatements", () => {
 		]);
 	});
 
-	it("caps extracted text at 40k and search text at 60k characters", async () => {
-		const items = [
-			fakeImportItem({ id: "lib_imp_long_text", extractedText: "a".repeat(50_000), searchText: "b".repeat(45_000) }),
-			fakeImportItem({ id: "lib_imp_long_search", searchText: "c".repeat(70_000) }),
-		];
-		await run(seedStatements({ tags, items }));
-		const rows = await env.DB.prepare("SELECT id, length(extracted_text) AS e, length(search_text) AS s FROM library_items WHERE id LIKE 'lib_imp_long%' ORDER BY id").all();
-		expect(rows.results).toEqual([
-			{ id: "lib_imp_long_search", e: 0, s: 60_000 },
-			{ id: "lib_imp_long_text", e: 40_000, s: 45_000 },
-		]);
+	it("caps extracted text at 40k characters, and search text follows it", async () => {
+		const item = fakeImportItem({ id: "lib_imp_long_text", extractedText: "a".repeat(50_000) });
+		await run(seedStatements({ tags, items: [item] }));
+		const row = await env.DB.prepare("SELECT length(extracted_text) AS e, length(search_text) AS s FROM library_items WHERE id = 'lib_imp_long_text'").first();
+		expect(row).toEqual({ e: 40_000, s: searchTextOf(item).length });
+		expect(searchTextOf(item).length).toBeGreaterThan(40_000);
 	});
 
 	it("fails loudly when a statement would pass D1's size limit", () => {
