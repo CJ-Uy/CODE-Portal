@@ -28,3 +28,17 @@ export function formatHours(totalSeconds: number): string {
 export function showSaveCount(saves: number): boolean {
 	return saves >= 3;
 }
+
+const count = (n: number, noun: string) => `${n.toLocaleString("en-US")} ${noun}${n === 1 ? "" : "s"}`;
+
+/**
+ * The item page's stats line, as parts to join with a dot: "Saved by 12", "Opened 340 times by 61 members", "37 hours read".
+ * The save count is left out below 3 (a small number would point at who saved it); opens and hours always show.
+ */
+export function statsLine(stats: { saves: number; opens: number; uniqueReaders: number; activeSeconds: number }): string[] {
+	return [
+		...(showSaveCount(stats.saves) ? [`Saved by ${stats.saves.toLocaleString("en-US")}`] : []),
+		`Opened ${count(stats.opens, "time")} by ${count(stats.uniqueReaders, "member")}`,
+		`${formatHours(stats.activeSeconds)} read`,
+	];
+}

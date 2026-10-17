@@ -6,16 +6,6 @@ import { getRepositories } from "@/db";
 import { requireActor } from "@/server/auth/actor";
 import { assertFeatureEnabled } from "@/server/features";
 
-export async function toggleFavoriteAction(formData: FormData): Promise<void> {
-	assertFeatureEnabled("library");
-	const actor = await requireActor();
-	const itemId = z.string().min(1).parse(formData.get("itemId"));
-	const repositories = await getRepositories();
-	await repositories.library.toggleFavorite(actor, itemId);
-	revalidatePath(`/portal/library/${itemId}`);
-	revalidatePath("/portal/library/lists");
-}
-
 export async function addCommentAction(formData: FormData): Promise<void> {
 	assertFeatureEnabled("library");
 	const actor = await requireActor();

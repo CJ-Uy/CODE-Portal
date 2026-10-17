@@ -1,5 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { ACTIVITY, creditSeconds, formatHours, showSaveCount, utc8Day } from "./activity";
+import { ACTIVITY, creditSeconds, formatHours, showSaveCount, statsLine, utc8Day } from "./activity";
+
+describe("statsLine", () => {
+	const base = { saves: 12, opens: 340, uniqueReaders: 61, activeSeconds: 37 * 3600 + 120 };
+
+	it("reads like the spec's example", () => {
+		expect(statsLine(base)).toEqual(["Saved by 12", "Opened 340 times by 61 members", "37 hours read"]);
+	});
+
+	it("hides the save count below 3 but always shows opens and hours", () => {
+		expect(statsLine({ ...base, saves: 2 })).toEqual(["Opened 340 times by 61 members", "37 hours read"]);
+		expect(statsLine({ ...base, saves: 3 })[0]).toBe("Saved by 3");
+		expect(statsLine({ saves: 0, opens: 0, uniqueReaders: 0, activeSeconds: 0 })).toEqual(["Opened 0 times by 0 members", "Less than an hour read"]);
+	});
+
+	it("uses the singular for one", () => {
+		expect(statsLine({ ...base, opens: 1, uniqueReaders: 1, activeSeconds: 3600 })).toEqual(["Saved by 12", "Opened 1 time by 1 member", "1 hour read"]);
+	});
+
+	it("groups thousands", () => {
+		expect(statsLine({ ...base, opens: 1204 })[1]).toBe("Opened 1,204 times by 61 members");
+	});
+});
 
 describe("utc8Day", () => {
 	it("uses the UTC+8 calendar day", () => {

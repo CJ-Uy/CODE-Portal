@@ -17,6 +17,11 @@ export function isBlankBlock(block: LibraryBlock): boolean {
 	}
 }
 
+/** The distinct ids of the library items a page embeds, in page order. */
+export function embeddedItemIds(blocks: LibraryBlock[]): string[] {
+	return [...new Set(blocks.flatMap((block) => (block.type === "item" ? [block.props.itemId] : [])))];
+}
+
 /**
  * Paragraphs of a text field: a blank line (which may hold spaces) ends one.
  * Single line breaks stay inside the paragraph, and empty paragraphs are dropped.

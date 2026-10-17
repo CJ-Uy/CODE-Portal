@@ -36,6 +36,24 @@ export const SOURCE_LABELS: Record<LibrarySource, string> = {
 	outside: "From outside",
 };
 
+/** Shown on an item only when a moderator has set one; an unreviewed item (null) shows nothing. */
+export const READINESS_LABELS: Record<LibraryPublicReadiness, string> = {
+	not_eligible: "Not for public release",
+	needs_adapting: "Needs adapting for public",
+	public_ready: "Ready for public",
+};
+
+/** Why a member reports an item or a shared list. The values match library_reports.reason. */
+export const REPORT_REASONS = ["client_data", "inappropriate", "copyright", "broken_file", "other"] as const;
+export type ReportReason = (typeof REPORT_REASONS)[number];
+export const REPORT_REASON_OPTIONS: Record<ReportReason, string> = {
+	client_data: "Includes client names or client data",
+	inappropriate: "Inappropriate content",
+	copyright: "Copyright problem",
+	broken_file: "Broken or wrong file",
+	other: "Something else",
+};
+
 export function defaultFormat(kind: LibraryKind): LibraryFormat {
 	if (kind === "code_document" || kind === "template" || kind === "reading") return "file";
 	return kind === "website" ? "link" : "page";

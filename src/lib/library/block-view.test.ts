@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LibraryBlock } from "./blocks";
-import { isBlankBlock, paragraphs } from "./block-view";
+import { embeddedItemIds, isBlankBlock, paragraphs } from "./block-view";
 
 const block = (type: LibraryBlock["type"], props: object) => ({ id: "b", type, props }) as LibraryBlock;
 
@@ -45,5 +45,18 @@ describe("paragraphs", () => {
 		expect(paragraphs("")).toEqual([]);
 		expect(paragraphs("\n\n  \n\n")).toEqual([]);
 		expect(paragraphs("  a  ")).toEqual(["a"]);
+	});
+});
+
+describe("embeddedItemIds", () => {
+	it("lists each embedded item once, in page order", () => {
+		const blocks = [
+			{ ...block("item", { itemId: "lib_b" }), id: "1" },
+			block("text", { text: "hi" }),
+			{ ...block("item", { itemId: "lib_a" }), id: "2" },
+			{ ...block("item", { itemId: "lib_b" }), id: "3" },
+		];
+		expect(embeddedItemIds(blocks)).toEqual(["lib_b", "lib_a"]);
+		expect(embeddedItemIds([])).toEqual([]);
 	});
 });
