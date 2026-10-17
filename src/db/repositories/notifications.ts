@@ -13,7 +13,16 @@ import { isFeatureEnabled } from "@/server/features";
 // is structurally compatible at runtime, matching the existing members repo.
 type Db = DrizzleD1Database<typeof schema>;
 
-export type NotificationKind = "event_approved" | "event_invite" | "survey_assigned" | "forum_reply" | "points_awarded";
+export type NotificationKind =
+	| "event_approved"
+	| "event_invite"
+	| "survey_assigned"
+	| "forum_reply"
+	| "points_awarded"
+	| "library_moderated"
+	| "library_needs_review"
+	| "library_list_editor"
+	| "library_comment";
 
 export type FeedItem = {
 	id: string;

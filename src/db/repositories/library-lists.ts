@@ -1,11 +1,11 @@
 import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { InferInsertModel, SQL } from "drizzle-orm";
-import { libraryItems, libraryListComments, libraryListItems, libraryListMembers, libraryLists, members } from "@/db/schema";
+import { libraryItems, libraryListComments, libraryListItems, libraryListMembers, libraryLists, libraryReports, members } from "@/db/schema";
 import { createId } from "@/lib/ids";
 import type { Actor } from "@/server/auth/permissions";
 import { can } from "@/server/auth/permissions";
 import type { AuditRepository } from "./audit";
-import { cardsByIds } from "./library";
+import { cardsByIds, memberLabel, notifyMembers, quietly } from "./library";
 import type { Db, LibraryCard, LibraryCommentView, LibraryList } from "./library";
 import { canSeeItem } from "./library-access";
 
@@ -32,7 +32,10 @@ export type LibraryListsRepository = {
 	myLists(actor: Actor): Promise<{ owned: LibraryListSummary[]; editable: LibraryListSummary[] }>;
 	/** Pinned, shared, not taken down, ordered by pinOrder. Open to any member. */
 	collections(actor: Actor): Promise<LibraryListSummary[]>;
-	/** Owner and editors always; anyone else only while the list is shared and not taken down. Null otherwise. */
+	/**
+	 * Owner and editors always; anyone else only while the list is shared and not taken down. Null otherwise.
+	 * Holders of library:moderate can also read (never change) a list that is taken down or has an open report.
+	 */
 	getList(actor: Actor, listId: string): Promise<LibraryListView | null>;
 	/** Creates the member's "Saved" list (isDefault) on first use and returns its id. */
 	ensureSaved(actor: Actor): Promise<string>;
@@ -43,7 +46,7 @@ export type LibraryListsRepository = {
 	deleteList(actor: Actor, listId: string): Promise<void>;
 	/** Owner. Sharing is refused while the list is taken down; turning it off also unpins it. */
 	setShared(actor: Actor, listId: string, shared: boolean): Promise<void>;
-	/** Owner. Adding someone who is already an editor does nothing. */
+	/** Owner. Adding someone who is already an editor does nothing. A new editor is notified. */
 	addEditor(actor: Actor, listId: string, memberId: string): Promise<void>;
 	/** The owner, or an editor removing themselves. */
 	removeEditor(actor: Actor, listId: string, memberId: string): Promise<void>;
@@ -57,9 +60,9 @@ export type LibraryListsRepository = {
 	reorder(actor: Actor, listId: string, itemIds: string[]): Promise<void>;
 	/** Ids of the member's own lists and the lists they edit that contain the item. */
 	savedIn(actor: Actor, itemId: string): Promise<string[]>;
-	/** Empty when the actor cannot open the list. Anonymous authors show as "Anonymous" to everyone except moderators. */
+	/** Empty when the actor cannot read the list (same rule as getList). Anonymous authors show as "Anonymous" to everyone except moderators. */
 	listComments(actor: Actor, listId: string): Promise<LibraryCommentView[]>;
-	/** Anyone who can open the list. */
+	/** Anyone who can open the list. The owner and the editors (not the commenter) are notified. */
 	addComment(actor: Actor, input: { listId: string; parentId?: string | null; anonymous: boolean; body: string }): Promise<void>;
 	/** library:moderate. */
 	setCommentHidden(actor: Actor, commentId: string, hidden: boolean): Promise<void>;
@@ -162,6 +165,26 @@ export function createLibraryListsRepository(db: Db, audit: AuditRepository): Li
 		return { list, role };
 	}
 
+	/**
+	 * openList, plus read-only sight for holders of library:moderate of a list that is taken down or has an open report.
+	 * An ordinary unshared list stays closed to them. Writes keep using openList, so this never lets a moderator change anything.
+	 */
+	async function openListForReview(actor: Actor, listId: string): Promise<{ list: LibraryList; role: ListRole } | null> {
+		const open = await openList(actor, listId);
+		if (open || !can(actor, "library:moderate")) return open;
+		const list = await loadList(listId);
+		if (!list) return null;
+		if (!list.takenDownAt) {
+			const [report] = await db
+				.select({ id: libraryReports.id })
+				.from(libraryReports)
+				.where(and(eq(libraryReports.listId, listId), isNull(libraryReports.resolvedAt)))
+				.limit(1);
+			if (!report) return null;
+		}
+		return { list, role: "viewer" };
+	}
+
 	/** A list the actor may not open reads as missing, so nobody can probe for other members' private lists. */
 	async function requireRole(actor: Actor, listId: string, needs: "owner" | "editor"): Promise<LibraryList> {
 		const open = await openList(actor, listId);
@@ -221,7 +244,7 @@ export function createLibraryListsRepository(db: Db, audit: AuditRepository): Li
 		},
 
 		async getList(actor, listId) {
-			const open = await openList(actor, listId);
+			const open = await openListForReview(actor, listId);
 			if (!open) return null;
 			const { list, role } = open;
 			const [[owner], editors, rows] = await Promise.all([
@@ -329,7 +352,21 @@ export function createLibraryListsRepository(db: Db, audit: AuditRepository): Li
 				.where(and(eq(members.id, memberId), eq(members.status, "active")))
 				.limit(1);
 			if (!member) throw new Error("Member not found.");
-			await db.insert(libraryListMembers).values({ listId, memberId, role: "editor" }).onConflictDoNothing();
+			const added = await db
+				.insert(libraryListMembers)
+				.values({ listId, memberId, role: "editor" })
+				.onConflictDoNothing()
+				.returning({ memberId: libraryListMembers.memberId });
+			// Only a new editor hears about it: adding someone twice must not send a second notification.
+			if (added.length === 0) return;
+			await quietly(async () =>
+				notifyMembers(db, [memberId], actor.memberId, {
+					kind: "library_list_editor",
+					title: "You can now edit a list",
+					body: `${await memberLabel(db, actor.memberId)} added you as an editor of "${list.name}".`,
+					href: `/portal/library/lists/${listId}`,
+				}),
+			);
 		},
 
 		async removeEditor(actor, listId, memberId) {
@@ -415,7 +452,7 @@ export function createLibraryListsRepository(db: Db, audit: AuditRepository): Li
 		},
 
 		async listComments(actor, listId) {
-			if (!(await openList(actor, listId))) return [];
+			if (!(await openListForReview(actor, listId))) return [];
 			const canModerate = can(actor, "library:moderate");
 			const rows = await db
 				.select({
@@ -450,7 +487,8 @@ export function createLibraryListsRepository(db: Db, audit: AuditRepository): Li
 			const body = input.body.trim();
 			if (!body) throw new Error("Comment cannot be empty.");
 			if (body.length > COMMENT_MAX) throw new Error(`Comments can be at most ${COMMENT_MAX} characters.`);
-			if (!(await openList(actor, input.listId))) throw new Error("List not found.");
+			const open = await openList(actor, input.listId);
+			if (!open) throw new Error("List not found.");
 			if (input.parentId) {
 				const [parent] = await db
 					.select({ id: libraryListComments.id })
@@ -466,6 +504,17 @@ export function createLibraryListsRepository(db: Db, audit: AuditRepository): Li
 				parentId: input.parentId ?? null,
 				anonymous: input.anonymous,
 				body,
+			});
+			await quietly(async () => {
+				const editors = await db.select({ memberId: libraryListMembers.memberId }).from(libraryListMembers).where(eq(libraryListMembers.listId, input.listId));
+				// Anonymity holds here too: recipients are told that someone commented, not who.
+				const who = input.anonymous ? "Someone" : await memberLabel(db, actor.memberId);
+				await notifyMembers(db, [open.list.memberId, ...editors.map((editor) => editor.memberId)], actor.memberId, {
+					kind: "library_comment",
+					title: "New comment on your list",
+					body: `${who} commented on "${open.list.name}".`,
+					href: `/portal/library/lists/${input.listId}`,
+				});
 			});
 		},
 
@@ -489,7 +538,13 @@ export function createLibraryListsRepository(db: Db, audit: AuditRepository): Li
 			const set: { pinned: boolean; updatedAt: Date; pinOrder?: number | SQL } = { pinned, updatedAt: new Date() };
 			if (pinOrder !== undefined) set.pinOrder = pinOrder;
 			else if (pinned && !list.pinned) set.pinOrder = sql`(SELECT COALESCE(MAX(pin_order) + 1, 0) FROM library_lists WHERE pinned = 1)`;
-			await db.update(libraryLists).set(set).where(eq(libraryLists.id, listId));
+			// The shared / taken-down guard sits in the write itself, so an unshare or takedown that lands between the read and the write still wins.
+			const changed = await db
+				.update(libraryLists)
+				.set(set)
+				.where(and(eq(libraryLists.id, listId), pinned ? and(eq(libraryLists.shared, true), isNull(libraryLists.takenDownAt)) : undefined))
+				.returning({ id: libraryLists.id });
+			if (changed.length === 0) throw new Error("Only shared lists can be pinned.");
 			await audited(actor, pinned ? "library:list_pin" : "library:list_unpin", list);
 		},
 

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import type { InferInsertModel, InferSelectModel, SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
@@ -8,9 +8,13 @@ import {
 	libraryItemTags,
 	libraryListItems,
 	libraryLists,
+	libraryReports,
 	libraryTags,
+	memberRoles,
 	members,
+	roles,
 	type LibraryConfidentiality,
+	type LibraryReportReason,
 } from "@/db/schema";
 import { createId } from "@/lib/ids";
 import { blocksToPlainText, readMinutes } from "@/lib/library/blocks";
@@ -28,9 +32,13 @@ import { can } from "@/server/auth/permissions";
 import type * as schema from "../schema";
 import type { AuditRepository } from "./audit";
 import { canEditItem, canSeeItem, publishedVisibleWhere } from "./library-access";
+import { createLibraryListsRepository } from "./library-lists";
+import { notify } from "./notifications";
+import type { NotifyInput } from "./notifications";
 
 export type LibraryItem = InferSelectModel<typeof libraryItems>;
 export type LibraryList = InferSelectModel<typeof libraryLists>;
+export type LibraryReport = InferSelectModel<typeof libraryReports>;
 
 export type LibraryItemDraftInput = {
 	kind: LibraryKind;
@@ -99,7 +107,10 @@ export type LibraryCommentView = {
 	authorName: string;
 };
 
-/** Fired after a status transition that someone needs to hear about (notifications land in Task 9). */
+/**
+ * Fired after a status transition that someone needs to hear about. The notifications themselves are sent by the
+ * repository; this hook is for anything extra a caller wants to do with the same event.
+ */
 export type LibraryModerationEvent = {
 	action: "submit_review" | "approve" | "send_back" | "take_down" | "restore";
 	itemId: string;
@@ -121,6 +132,19 @@ export type LibraryRepository = {
 	setFile(actor: Actor, id: string, file: { key: string; name: string; type: string; bytes: number }): Promise<void>;
 	publish(actor: Actor, id: string, input: { containsClientData: boolean }): Promise<LibraryStatus>;
 	moderate(actor: Actor, id: string, action: "approve" | "send_back" | "take_down" | "restore", reason?: string): Promise<void>;
+	/** Owner or library:moderate, on a published item: it goes back to pending_review, hidden until a moderator approves it. */
+	flagClientData(actor: Actor, id: string): Promise<LibraryStatus>;
+	/** Exactly one target the actor can see (an item, or a shared list). Details at most 1000 characters. A repeat by the same member while their report is open does nothing. */
+	report(actor: Actor, input: { itemId?: string; listId?: string; reason: LibraryReport["reason"]; details?: string }): Promise<void>;
+	/** library:moderate. "taken_down" takes the target down first (the reason is required unless it is already down). */
+	resolveReport(actor: Actor, reportId: string, resolution: "dismissed" | "taken_down", reason?: string): Promise<void>;
+	/** library:moderate. Pending items oldest first, taken-down items and lists newest first, open reports only (oldest first). */
+	moderationQueue(actor: Actor): Promise<{
+		pending: LibraryItem[];
+		takenDown: LibraryItem[];
+		takenDownLists: LibraryList[];
+		reports: (LibraryReport & { targetTitle: string })[];
+	}>;
 	setPublicReadiness(actor: Actor, id: string, value: LibraryPublicReadiness | null): Promise<void>;
 	setConfidentiality(actor: Actor, id: string, value: Exclude<LibraryConfidentiality, "public">): Promise<void>;
 	deleteItem(actor: Actor, id: string): Promise<{ fileKeys: string[] }>;
@@ -297,6 +321,57 @@ export async function cardsByIds(db: Db, itemIds: string[]): Promise<LibraryCard
 	return found.flat();
 }
 
+const REPORT_REASONS: LibraryReportReason[] = ["client_data", "inappropriate", "copyright", "broken_file", "other"];
+const REPORT_REASON_LABELS: Record<LibraryReportReason, string> = {
+	client_data: "client data",
+	inappropriate: "inappropriate content",
+	copyright: "copyright",
+	broken_file: "broken file",
+	other: "general",
+};
+const REPORT_DETAILS_MAX = 1000;
+const MODERATION_QUEUE_HREF = "/portal/admin/content/library";
+
+/**
+ * Notifications are a courtesy: nothing that goes wrong while sending one may fail or undo the action that
+ * triggered it. The error is dropped on purpose, so no member data ends up in a log.
+ */
+export async function quietly(task: () => Promise<unknown>): Promise<void> {
+	try {
+		await task();
+	} catch {
+		// dropped: see above
+	}
+}
+
+/** One notification per distinct recipient, skipping `except` (the member who did the thing) and missing ids. */
+export async function notifyMembers(
+	db: Db,
+	recipients: Iterable<string | null>,
+	except: string,
+	message: Omit<NotifyInput, "memberId">,
+): Promise<void> {
+	const ids = [...new Set(recipients)].filter((id): id is string => id !== null && id !== except);
+	await Promise.all(ids.map((memberId) => quietly(() => notify(db, { ...message, memberId }))));
+}
+
+/** How a notification names a member: their full name, else their display name. */
+export async function memberLabel(db: Db, memberId: string): Promise<string> {
+	const [row] = await db.select({ fullName: members.fullName, name: members.name }).from(members).where(eq(members.id, memberId)).limit(1);
+	return row?.fullName || row?.name || "A member";
+}
+
+/** Holders of library:moderate: active members with the publishing or super role (see rolePermissions). */
+async function moderatorIds(db: Db): Promise<string[]> {
+	const rows = await db
+		.selectDistinct({ id: memberRoles.memberId })
+		.from(memberRoles)
+		.innerJoin(roles, eq(roles.id, memberRoles.roleId))
+		.innerJoin(members, eq(members.id, memberRoles.memberId))
+		.where(and(inArray(roles.key, ["publishing", "super"]), eq(members.status, "active")));
+	return rows.map((row) => row.id);
+}
+
 export function createLibraryRepository(db: Db, audit: AuditRepository, onModerated: LibraryModerationHook = () => {}): LibraryRepository {
 	async function ownList(actor: Actor, listId: string) {
 		const [list] = await db.select().from(libraryLists).where(eq(libraryLists.id, listId)).limit(1);
@@ -358,7 +433,31 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 		if (moved.length === 0) throw new Error("This item changed while you were working on it. Reload and try again.");
 	}
 
-	return {
+	/** The owner hears about every decision on their item, moderators about every item that needs one. */
+	async function announce(event: LibraryModerationEvent): Promise<void> {
+		await quietly(async () => {
+			const quoted = `"${event.title}"`;
+			if (event.action === "submit_review") {
+				await notifyMembers(db, await moderatorIds(db), event.actorId, {
+					kind: "library_needs_review",
+					title: "Library item waiting for review",
+					body: `${quoted} is waiting for review.`,
+					href: MODERATION_QUEUE_HREF,
+				});
+				return;
+			}
+			const [title, body] = {
+				approve: ["Your library item was approved", `${quoted} is now published.`],
+				send_back: ["Your library item was sent back", `${quoted} needs changes: ${event.reason}`],
+				take_down: ["Your library item was taken down", `${quoted} was taken down: ${event.reason}`],
+				restore: ["Your library item was restored", `${quoted} is published again.`],
+			}[event.action];
+			await notifyMembers(db, [event.ownerId], event.actorId, { kind: "library_moderated", title, body, href: `/portal/library/${event.itemId}` });
+		});
+		await onModerated(event);
+	}
+
+	const repo: LibraryRepository = {
 		async search(actor, input) {
 			const limit = clamp(input.limit ?? DEFAULT_LIMIT, 1, MAX_LIMIT);
 			const offset = Math.max(0, Math.trunc(input.offset ?? 0));
@@ -502,7 +601,7 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 			await transition(actor, row, "draft", to, { containsClientData: input.containsClientData, moderationReason: null, publishedAt: new Date() });
 			await audited(actor, to === "published" ? "library:publish" : "library:submit_review", row);
 			if (to === "pending_review") {
-				await onModerated({ action: "submit_review", itemId: id, title: row.title, ownerId: row.createdBy, actorId: actor.memberId, reason: null });
+				await announce({ action: "submit_review", itemId: id, title: row.title, ownerId: row.createdBy, actorId: actor.memberId, reason: null });
 			}
 			return to;
 		},
@@ -521,7 +620,112 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 			if (row.status !== rule.from) throw new Error(`Cannot ${action.replace("_", " ")} an item that is ${row.status.replace("_", " ")}.`);
 			await transition(actor, row, rule.from, rule.to, rule.set);
 			await audited(actor, `library:${action}`, row, why);
-			await onModerated({ action, itemId: id, title: row.title, ownerId: row.createdBy, actorId: actor.memberId, reason: why });
+			await announce({ action, itemId: id, title: row.title, ownerId: row.createdBy, actorId: actor.memberId, reason: why });
+		},
+
+		async flagClientData(actor, id) {
+			const row = await requireEditable(actor, id);
+			if (row.status !== "published") throw new Error("Only a published item can be flagged for review.");
+			await transition(actor, row, "published", "pending_review", { containsClientData: true, moderationReason: null });
+			await audited(actor, "library:flag_client_data", row);
+			await announce({ action: "submit_review", itemId: id, title: row.title, ownerId: row.createdBy, actorId: actor.memberId, reason: null });
+			return "pending_review";
+		},
+
+		async report(actor, input) {
+			if (Boolean(input.itemId) === Boolean(input.listId)) throw new Error("Report one item or one list.");
+			if (!REPORT_REASONS.includes(input.reason)) throw new Error("Choose a reason for the report.");
+			const details = (input.details ?? "").trim();
+			if (details.length > REPORT_DETAILS_MAX) throw new Error(`Details can be at most ${REPORT_DETAILS_MAX} characters.`);
+			let title: string;
+			if (input.itemId) {
+				const item = await loadItem(input.itemId);
+				if (!item || !canSeeItem(actor, item)) throw new Error("Library item not found.");
+				title = item.title;
+			} else {
+				// Only shared lists carry a Report button, so a private or taken-down list reads as missing.
+				const [list] = await db.select().from(libraryLists).where(eq(libraryLists.id, input.listId!)).limit(1);
+				if (!list || !list.shared || list.takenDownAt) throw new Error("List not found.");
+				title = list.name;
+			}
+			const target = input.itemId ? eq(libraryReports.itemId, input.itemId) : eq(libraryReports.listId, input.listId!);
+			const [open] = await db
+				.select({ id: libraryReports.id })
+				.from(libraryReports)
+				.where(and(target, eq(libraryReports.memberId, actor.memberId), isNull(libraryReports.resolvedAt)))
+				.limit(1);
+			if (open) return;
+			await db.insert(libraryReports).values({
+				id: createId("lrp"),
+				itemId: input.itemId || null,
+				listId: input.listId || null,
+				memberId: actor.memberId,
+				reason: input.reason,
+				details,
+			});
+			await quietly(async () =>
+				notifyMembers(db, await moderatorIds(db), actor.memberId, {
+					kind: "library_needs_review",
+					title: "New library report",
+					body: `A ${REPORT_REASON_LABELS[input.reason]} report was filed on "${title}".`,
+					href: MODERATION_QUEUE_HREF,
+				}),
+			);
+		},
+
+		async resolveReport(actor, reportId, resolution, reason) {
+			if (!can(actor, "library:moderate")) throw new Error("Not authorized to moderate the library.");
+			if (resolution !== "dismissed" && resolution !== "taken_down") throw new Error("Unknown resolution.");
+			const [report] = await db.select().from(libraryReports).where(eq(libraryReports.id, reportId)).limit(1);
+			if (!report || report.resolvedAt) throw new Error("Report not found.");
+			if (resolution === "taken_down") {
+				// A target a moderator already took down by another route just needs the report closed.
+				if (report.itemId) {
+					const item = await loadItem(report.itemId);
+					if (item && item.status !== "taken_down") await repo.moderate(actor, report.itemId, "take_down", reason);
+				} else if (report.listId) {
+					const [list] = await db.select({ takenDownAt: libraryLists.takenDownAt }).from(libraryLists).where(eq(libraryLists.id, report.listId)).limit(1);
+					if (list && !list.takenDownAt) await createLibraryListsRepository(db, audit).takeDown(actor, report.listId, reason ?? "");
+				}
+			}
+			// ponytail: the take-down above is already committed if two moderators resolve one report at once. The loser
+			// gets "already resolved" and the target stays down, which is what both of them asked for.
+			const resolved = await db
+				.update(libraryReports)
+				.set({ resolution, resolvedBy: actor.memberId, resolvedAt: new Date() })
+				.where(and(eq(libraryReports.id, reportId), isNull(libraryReports.resolvedAt)))
+				.returning({ id: libraryReports.id });
+			if (resolved.length === 0) throw new Error("This report was already resolved.");
+			const target = report.itemId ? `item=${report.itemId}` : `list=${report.listId}`;
+			await audit.record(actor, {
+				action: `library:report_${resolution}`,
+				targetType: "library_report",
+				targetId: reportId,
+				category: "library",
+				detail: `${target}${reason?.trim() ? `; ${reason.trim()}` : ""}`,
+			});
+		},
+
+		async moderationQueue(actor) {
+			if (!can(actor, "library:moderate")) throw new Error("Not authorized to moderate the library.");
+			const [pending, takenDown, takenDownLists, reports] = await Promise.all([
+				db.select().from(libraryItems).where(eq(libraryItems.status, "pending_review")).orderBy(asc(libraryItems.publishedAt), asc(libraryItems.id)),
+				db.select().from(libraryItems).where(eq(libraryItems.status, "taken_down")).orderBy(desc(libraryItems.updatedAt), asc(libraryItems.id)),
+				db.select().from(libraryLists).where(isNotNull(libraryLists.takenDownAt)).orderBy(desc(libraryLists.takenDownAt), asc(libraryLists.id)),
+				db
+					.select({ report: libraryReports, itemTitle: libraryItems.title, listName: libraryLists.name })
+					.from(libraryReports)
+					.leftJoin(libraryItems, eq(libraryItems.id, libraryReports.itemId))
+					.leftJoin(libraryLists, eq(libraryLists.id, libraryReports.listId))
+					.where(isNull(libraryReports.resolvedAt))
+					.orderBy(asc(libraryReports.createdAt), asc(libraryReports.id)),
+			]);
+			return {
+				pending: pending.filter((item) => canSeeItem(actor, item)),
+				takenDown: takenDown.filter((item) => canSeeItem(actor, item)),
+				takenDownLists,
+				reports: reports.map(({ report, itemTitle, listName }) => ({ ...report, targetTitle: itemTitle ?? listName ?? "Deleted" })),
+			};
 		},
 
 		async setPublicReadiness(actor, id, value) {
@@ -612,6 +816,17 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 				parentId: input.parentId ?? null,
 				anonymous: input.anonymous,
 				body,
+			});
+			await quietly(async () => {
+				if (!item.createdBy || item.createdBy === actor.memberId) return;
+				// Anonymity holds here too: the owner is told that someone commented, not who.
+				const who = input.anonymous ? "Someone" : await memberLabel(db, actor.memberId);
+				await notifyMembers(db, [item.createdBy], actor.memberId, {
+					kind: "library_comment",
+					title: "New comment on your library item",
+					body: `${who} commented on "${item.title}".`,
+					href: `/portal/library/${item.id}`,
+				});
 			});
 		},
 
@@ -723,6 +938,9 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 		},
 		async addToList(actor, input) {
 			await ownList(actor, input.listId);
+			// Same rule as toggleFavorite: filing an item needs sight of it, or a member could pad its save count by guessing ids.
+			const item = await loadItem(input.itemId);
+			if (!item || !canSeeItem(actor, item)) throw new Error("Library item not found.");
 			await db
 				.insert(libraryListItems)
 				.values({ listId: input.listId, libraryItemId: input.itemId, addedBy: actor.memberId })
@@ -735,6 +953,7 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 				.where(and(eq(libraryListItems.listId, input.listId), eq(libraryListItems.libraryItemId, input.itemId)));
 		},
 	};
+	return repo;
 }
 
 export function createUnavailableLibraryRepository(): LibraryRepository {
@@ -749,6 +968,10 @@ export function createUnavailableLibraryRepository(): LibraryRepository {
 		setFile: unavailable,
 		publish: unavailable,
 		moderate: unavailable,
+		flagClientData: unavailable,
+		report: unavailable,
+		resolveReport: unavailable,
+		moderationQueue: unavailable,
 		setPublicReadiness: unavailable,
 		setConfidentiality: unavailable,
 		deleteItem: unavailable,
