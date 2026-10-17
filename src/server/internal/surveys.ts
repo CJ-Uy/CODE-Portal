@@ -86,12 +86,6 @@ export function createSurveysInternalHandlers({ db, deployEnv, allowedOrigins = 
 					return Response.json(surveysContract.sample.output.parse(result), { headers: responseHeaders });
 				}
 
-				if (request.method === "POST" && op === "submit") {
-					const input = surveysContract.submit.input.parse(await readBody(request));
-					const result = await repository.submitResponse(input);
-					return Response.json(surveysContract.submit.output.parse(result), { headers: responseHeaders });
-				}
-
 				return new Response("Method not allowed", { status: 405, headers: responseHeaders });
 			} catch (error) {
 				const message = error instanceof Error ? error.message : "Internal request failed.";

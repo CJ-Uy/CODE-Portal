@@ -224,13 +224,11 @@ export const seedSurveys: InferInsertModel<typeof surveys>[] = [
 ];
 
 export const seedSurveyQuestions: InferInsertModel<typeof surveyQuestions>[] = [
-	{ id: "srvq_demo_1", surveyId: "srv_demo", position: 1, type: "scale", prompt: "How useful was the session?", optionsJson: "[1,2,3,4,5]" },
+	{ id: "srvq_demo_1", surveyId: "srv_demo", position: 1, type: "scale", prompt: "How useful was the session?", optionsJson: '["Strongly disagree","Strongly agree"]' },
 ];
 
 export const seedSurveyAssignments: InferInsertModel<typeof surveyAssignments>[] = [
-	// Raw token for local walkthrough: "demo-survey-token" (open
-	// /portal/surveys/srv_demo?t=demo-survey-token). Only the hash is stored.
-	{ surveyId: "srv_demo", memberId: "mem_demo_member", responseTokenHash: "e9bcf50bf9ddbf8980915113b56e639d69ee87c88828c8a05e04d4c0ffbcdf2d" },
+	{ surveyId: "srv_demo", memberId: "mem_demo_member" },
 ];
 
 export const seedAuditLogs: InferInsertModel<typeof auditLogs>[] = [

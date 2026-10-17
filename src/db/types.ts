@@ -2,15 +2,20 @@ import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
 import { z } from "zod";
 import { quantizePoints } from "@/lib/points";
 import type {
+	eventDebriefs,
 	members,
+	MetricKey,
 	surveyAnswers,
 	surveyAssignments,
 	surveyQuestions,
 	surveyResponses,
 	surveys,
+	surveyTemplates,
 	SurveyQuestionType,
 	SurveyStatus,
 } from "./schema";
+
+export type { MetricKey, SurveySource } from "./schema";
 
 export type Member = InferSelectModel<typeof members>;
 export type NewMember = InferInsertModel<typeof members>;
@@ -82,14 +87,31 @@ export type SurveyQuestion = InferSelectModel<typeof surveyQuestions>;
 export type SurveyAssignment = InferSelectModel<typeof surveyAssignments>;
 export type SurveyResponse = InferSelectModel<typeof surveyResponses>;
 export type SurveyAnswer = InferSelectModel<typeof surveyAnswers>;
+export type SurveyTemplate = InferSelectModel<typeof surveyTemplates>;
+export type EventDebrief = InferSelectModel<typeof eventDebriefs>;
+
+export const METRIC_KEYS = ["overall", "flow", "content", "venue", "return_intent", "learning"] as const satisfies readonly MetricKey[];
 
 // A survey is created together with its ordered questions in one call so the
-// admin form is a single submit. Choice/scale questions carry their options.
-export const surveyQuestionInputSchema = z.object({
-	type: z.enum(["scale", "text", "choice"]),
-	prompt: z.string().trim().min(1).max(500),
-	options: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
-});
+// admin form is a single submit. A scale is always 1-5 and its options are the
+// [low, high] end labels; a choice lists its choices; text has no options.
+export const surveyQuestionInputSchema = z
+	.object({
+		type: z.enum(["scale", "text", "choice"]),
+		prompt: z.string().trim().min(1).max(500),
+		help: z.string().trim().min(1).max(500).optional(),
+		required: z.boolean().default(false),
+		metricKey: z.enum(METRIC_KEYS).optional(),
+		options: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
+	})
+	.superRefine((question, ctx) => {
+		const count = question.options?.length ?? 0;
+		const issue = (path: string, message: string) => ctx.addIssue({ code: "custom", path: [path], message });
+		if (question.type === "scale" && count !== 2) issue("options", "A scale needs exactly two labels: low and high.");
+		if (question.type === "choice" && count < 2) issue("options", "A choice question needs 2 to 20 options.");
+		if (question.type === "text" && count > 0) issue("options", "A text question has no options.");
+		if (question.metricKey && question.type !== "scale") issue("metricKey", "Only scale questions can be tracked.");
+	});
 
 export type SurveyQuestionInput = z.infer<typeof surveyQuestionInputSchema>;
 
@@ -116,10 +138,9 @@ export const surveyAnswerInputSchema = z.object({
 	value: z.string().trim().min(1).max(2000),
 });
 
-// The raw token travels in the body; the server hashes it and never stores it.
+// The respondent is the signed-in member; eligibility comes from the session.
 export const submitSurveyResponseInputSchema = z.object({
 	surveyId: z.string().trim().min(1),
-	token: z.string().trim().min(1).max(200),
 	answers: z.array(surveyAnswerInputSchema).min(1).max(30),
 });
 

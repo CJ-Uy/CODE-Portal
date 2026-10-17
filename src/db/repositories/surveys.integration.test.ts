@@ -4,6 +4,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { beforeEach, describe, expect, it } from "vitest";
 import * as schema from "@/db/schema";
 import { surveyAssignments, surveys } from "@/db/schema";
+import { startOfUtc8Day } from "@/lib/date-slots";
 import type { Actor } from "@/server/auth/permissions";
 import { createAuditRepository } from "./audit";
 import { createSurveysRepository } from "./surveys";
@@ -18,6 +19,19 @@ async function seedMembers(count: number) {
 			.run();
 	}
 }
+
+function setup() {
+	const db = drizzle(env.DB, { schema });
+	return { db, repo: createSurveysRepository(db, createAuditRepository(db)) };
+}
+
+// The sample is seeded, so read who was drawn instead of guessing.
+async function assignedIds(db: ReturnType<typeof setup>["db"], surveyId: string) {
+	const rows = await db.select().from(surveyAssignments).where(eq(surveyAssignments.surveyId, surveyId));
+	return rows.map((row) => row.memberId);
+}
+
+const asMember = (memberId: string): Actor => ({ memberId, roles: ["member"] });
 
 describe("surveys repository on D1", () => {
 	beforeEach(async () => {
@@ -34,14 +48,13 @@ describe("surveys repository on D1", () => {
 	});
 
 	it("creates a survey with ordered questions and audits it", async () => {
-		const db = drizzle(env.DB, { schema });
-		const repo = createSurveysRepository(db, createAuditRepository(db));
+		const { db, repo } = setup();
 
 		const survey = await repo.create(admin, {
 			title: "Practice Night Feedback",
 			questions: [
-				{ type: "scale", prompt: "How useful was it?", options: ["1", "2", "3", "4", "5"] },
-				{ type: "text", prompt: "Anything to add?" },
+				{ type: "scale", prompt: "How useful was it?", options: ["Not useful", "Very useful"], required: true },
+				{ type: "text", prompt: "Anything to add?", required: false },
 			],
 		});
 
@@ -55,37 +68,32 @@ describe("surveys repository on D1", () => {
 	});
 
 	it("rejects create for a non-admin actor", async () => {
-		const db = drizzle(env.DB, { schema });
-		const repo = createSurveysRepository(db, createAuditRepository(db));
-		await expect(repo.create(member, { title: "X", questions: [{ type: "text", prompt: "Q" }] })).rejects.toThrow(
-			"Not authorized",
-		);
+		const { repo } = setup();
+		await expect(
+			repo.create(member, { title: "X", questions: [{ type: "text", prompt: "Q", required: false }] }),
+		).rejects.toThrow("Not authorized");
 	});
 
-	it("draws a deterministic sample, stores only token hashes, and flips to running", async () => {
+	it("draws a deterministic sample of invited assignments and flips to running", async () => {
 		await seedMembers(10);
-		const db = drizzle(env.DB, { schema });
-		const repo = createSurveysRepository(db, createAuditRepository(db));
-		const survey = await repo.create(admin, { title: "S", questions: [{ type: "text", prompt: "Q" }] });
+		const { db, repo } = setup();
+		const survey = await repo.create(admin, { title: "S", questions: [{ type: "text", prompt: "Q", required: false }] });
 
 		const first = await repo.sample(admin, { surveyId: survey.id, sampleSize: 4, seed: "fixed" });
 		const assignments = await db.select().from(surveyAssignments).where(eq(surveyAssignments.surveyId, survey.id));
 		const [running] = await db.select().from(surveys).where(eq(surveys.id, survey.id));
 
-		expect(first.assigned).toBe(4);
-		expect(first.tokens).toHaveLength(4);
+		expect(first).toEqual({ assigned: 4 });
 		expect(assignments).toHaveLength(4);
-		const hashes = new Set(assignments.map((a) => a.responseTokenHash));
-		expect(first.tokens.every((t) => !hashes.has(t.token))).toBe(true);
+		expect(assignments.every((a) => a.source === "invited")).toBe(true);
 		expect(running.status).toBe("running");
 		expect(running.sampleSize).toBe(4);
 	});
 
 	it("rejects sampling a survey that is not draft", async () => {
 		await seedMembers(5);
-		const db = drizzle(env.DB, { schema });
-		const repo = createSurveysRepository(db, createAuditRepository(db));
-		const survey = await repo.create(admin, { title: "S", questions: [{ type: "text", prompt: "Q" }] });
+		const { repo } = setup();
+		const survey = await repo.create(admin, { title: "S", questions: [{ type: "text", prompt: "Q", required: false }] });
 		await repo.sample(admin, { surveyId: survey.id, sampleSize: 2, seed: "a" });
 		await expect(repo.sample(admin, { surveyId: survey.id, sampleSize: 2, seed: "a" })).rejects.toThrow(
 			"already been sampled",
@@ -93,70 +101,81 @@ describe("surveys repository on D1", () => {
 	});
 
 	it("rejects list/get for a non-admin actor", async () => {
-		const db = drizzle(env.DB, { schema });
-		const repo = createSurveysRepository(db, createAuditRepository(db));
+		const { repo } = setup();
 		await expect(repo.list(member)).rejects.toThrow("Not authorized");
 		await expect(repo.getById(member, "srv_x")).rejects.toThrow("Not authorized");
 	});
 
-	it("accepts a valid token once, stores no member link, then rejects reuse", async () => {
+	it("lets an invited member answer once by session, with no token", async () => {
 		await seedMembers(3);
-		const db = drizzle(env.DB, { schema });
-		const repo = createSurveysRepository(db, createAuditRepository(db));
-		const survey = await repo.create(admin, {
-			title: "S",
-			questions: [{ type: "scale", prompt: "Rate", options: ["1", "2"] }],
-		});
-		const detail = await repo.getById(admin, survey.id);
-		const questionId = detail!.questions[0].id;
-		const { tokens } = await repo.sample(admin, { surveyId: survey.id, sampleSize: 1, seed: "fixed" });
-		const token = tokens[0].token;
+		const { db, repo } = setup();
+		const survey = await repo.create(admin, { title: "S", questions: [{ type: "text", prompt: "Q", required: false }] });
+		await repo.sample(admin, { surveyId: survey.id, sampleSize: 3, seed: "fixed" });
+		const [question] = (await repo.getById(admin, survey.id))!.questions;
+		const invited = asMember((await assignedIds(db, survey.id))[0]);
 
 		await expect(
-			repo.submitResponse({ surveyId: survey.id, token, answers: [{ questionId, value: "2" }] }),
+			repo.submitResponse(invited, { surveyId: survey.id, answers: [{ questionId: question.id, value: "ok" }] }),
 		).resolves.toEqual({ ok: true });
-
-		const [response] = await db.select().from(schema.surveyResponses);
-		expect(Object.keys(response)).toEqual(expect.arrayContaining(["id", "surveyId", "submittedAt"]));
-		expect(Object.keys(response)).not.toContain("memberId");
 		await expect(
-			repo.submitResponse({ surveyId: survey.id, token, answers: [{ questionId, value: "1" }] }),
-		).rejects.toThrow("already been used");
+			repo.submitResponse(invited, { surveyId: survey.id, answers: [{ questionId: question.id, value: "again" }] }),
+		).rejects.toThrow("already");
+
+		const responses = await db.select().from(schema.surveyResponses);
+		expect(responses).toHaveLength(1);
+		expect(responses[0].source).toBe("invited");
+		expect(Object.keys(responses[0])).not.toContain("memberId");
 	});
 
-	it("rejects an unknown or wrong-survey token", async () => {
-		await seedMembers(2);
-		const db = drizzle(env.DB, { schema });
-		const repo = createSurveysRepository(db, createAuditRepository(db));
-		const survey = await repo.create(admin, { title: "S", questions: [{ type: "text", prompt: "Q" }] });
-		const detail = await repo.getById(admin, survey.id);
-		await repo.sample(admin, { surveyId: survey.id, sampleSize: 1, seed: "x" });
+	it("rejects an uninvited member", async () => {
+		await seedMembers(3);
+		const { db, repo } = setup();
+		const survey = await repo.create(admin, { title: "S", questions: [{ type: "text", prompt: "Q", required: false }] });
+		await repo.sample(admin, { surveyId: survey.id, sampleSize: 1, seed: "fixed" });
+		const [question] = (await repo.getById(admin, survey.id))!.questions;
+		const invited = await assignedIds(db, survey.id);
+		const outsider = ["mem_admin", "mem_0", "mem_1", "mem_2"].find((id) => !invited.includes(id))!;
+
 		await expect(
-			repo.submitResponse({
-				surveyId: survey.id,
-				token: "not-a-real-token",
-				answers: [{ questionId: detail!.questions[0].id, value: "hi" }],
-			}),
-		).rejects.toThrow("already been used");
+			repo.submitResponse(asMember(outsider), { surveyId: survey.id, answers: [{ questionId: question.id, value: "hi" }] }),
+		).rejects.toThrow("not open to you");
+		expect(await db.select().from(schema.surveyResponses)).toHaveLength(0);
+	});
+
+	it("stores submittedAt truncated to the Manila day", async () => {
+		await seedMembers(1);
+		const { db, repo } = setup();
+		const survey = await repo.create(admin, { title: "S", questions: [{ type: "text", prompt: "Q", required: false }] });
+		await repo.sample(admin, { surveyId: survey.id, sampleSize: 2, seed: "fixed" });
+		const [question] = (await repo.getById(admin, survey.id))!.questions;
+		const now = new Date("2026-10-10T15:30:00Z");
+
+		await repo.submitResponse(
+			asMember("mem_0"),
+			{ surveyId: survey.id, answers: [{ questionId: question.id, value: "ok" }] },
+			now,
+		);
+
+		const [response] = await db.select().from(schema.surveyResponses);
+		expect(response.submittedAt.getTime()).toBe(startOfUtc8Day(now).getTime());
+		expect(response.submittedAt.toISOString()).toBe("2026-10-09T16:00:00.000Z");
 	});
 
 	it("aggregates identity-free results with assigned and completed counts", async () => {
 		await seedMembers(3);
-		const db = drizzle(env.DB, { schema });
-		const repo = createSurveysRepository(db, createAuditRepository(db));
+		const { db, repo } = setup();
 		const survey = await repo.create(admin, {
 			title: "S",
 			questions: [
-				{ type: "scale", prompt: "Rate", options: ["1", "2", "3"] },
-				{ type: "text", prompt: "Why?" },
+				{ type: "scale", prompt: "Rate", options: ["Low", "High"], required: true },
+				{ type: "text", prompt: "Why?", required: false },
 			],
 		});
 		const detail = await repo.getById(admin, survey.id);
 		const [scaleQ, textQ] = detail!.questions;
-		const { tokens } = await repo.sample(admin, { surveyId: survey.id, sampleSize: 2, seed: "x" });
-		await repo.submitResponse({
+		await repo.sample(admin, { surveyId: survey.id, sampleSize: 2, seed: "x" });
+		await repo.submitResponse(asMember((await assignedIds(db, survey.id))[0]), {
 			surveyId: survey.id,
-			token: tokens[0].token,
 			answers: [
 				{ questionId: scaleQ.id, value: "3" },
 				{ questionId: textQ.id, value: "Great session" },
@@ -173,9 +192,8 @@ describe("surveys repository on D1", () => {
 	});
 
 	it("rejects getResults for a non-admin actor", async () => {
-		const db = drizzle(env.DB, { schema });
-		const repo = createSurveysRepository(db, createAuditRepository(db));
-		const survey = await repo.create(admin, { title: "S", questions: [{ type: "text", prompt: "Q" }] });
+		const { repo } = setup();
+		const survey = await repo.create(admin, { title: "S", questions: [{ type: "text", prompt: "Q", required: false }] });
 		await expect(repo.getResults(member, survey.id)).rejects.toThrow("Not authorized");
 	});
 });

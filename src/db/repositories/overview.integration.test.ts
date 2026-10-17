@@ -62,10 +62,8 @@ describe("overview repository on D1", () => {
 		await env.DB.prepare("INSERT INTO surveys (id, title, status, created_by) VALUES (?, ?, ?, ?)")
 			.bind("srv_1", "Feedback", "running", "mem_admin")
 			.run();
-		await env.DB.prepare(
-			"INSERT INTO survey_assignments (survey_id, member_id, response_token_hash, completed_at) VALUES (?, ?, ?, ?)",
-		)
-			.bind("srv_1", "mem_ov", "hash_pending", null)
+		await env.DB.prepare("INSERT INTO survey_assignments (survey_id, member_id, completed_at) VALUES (?, ?, ?)")
+			.bind("srv_1", "mem_ov", null)
 			.run();
 		await env.DB.prepare(
 			"INSERT INTO crs_events (id, title, type, status, place, starts_at, description, created_by, checkin_secret) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",

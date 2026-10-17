@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createSurveyInputSchema, sampleSurveyInputSchema, submitSurveyResponseInputSchema } from "@/db/types";
+import { createSurveyInputSchema, sampleSurveyInputSchema } from "@/db/types";
 import { operation } from "./common";
 
 const surveyOutputSchema = z.object({
@@ -66,18 +66,9 @@ export const surveysContract = {
 	}),
 	sample: operation({
 		input: sampleSurveyInputSchema,
-		output: z.object({
-			assigned: z.number().int(),
-			tokens: z.array(z.object({ memberId: z.string(), token: z.string() })),
-		}),
+		output: z.object({ assigned: z.number().int() }),
 		auth: "admin",
 		permission: "survey:configure",
-		sharedDev: "deny",
-	}),
-	submit: operation({
-		input: submitSurveyResponseInputSchema,
-		output: z.object({ ok: z.literal(true) }),
-		auth: "public",
 		sharedDev: "deny",
 	}),
 	results: operation({
