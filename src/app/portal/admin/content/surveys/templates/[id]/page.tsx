@@ -40,7 +40,7 @@ export default async function FeedbackTemplatePage({ params }: { params: Promise
 		<div className="grid gap-6">
 			<AdminIntro
 				title={isNew ? "New template" : "Edit template"}
-				whoFor="Organizers pick a template, then adjust the questions before they send"
+				whoFor="Admins pick a template for an event, then adjust the questions before sending"
 				effect="Forms already made from this template keep their own copy of the questions"
 			/>
 			<TemplateForm template={values} />

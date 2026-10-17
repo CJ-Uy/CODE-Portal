@@ -27,7 +27,7 @@ export default async function FeedbackTemplatesPage() {
 		<div className="grid gap-6">
 			<AdminIntro
 				title="Feedback templates"
-				whoFor="The question sets organizers start from when they ask for event feedback"
+				whoFor="The question sets admins start from when they ask for event feedback"
 				effect="Editing a template never changes forms already made from it"
 			/>
 			<div>
@@ -49,8 +49,8 @@ export default async function FeedbackTemplatesPage() {
 							className="flex items-center justify-between gap-3 rounded-xl px-4 py-4 text-sm hover:bg-secondary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
 						>
 							<span className="grid min-w-0 gap-1">
-								<span className="min-w-0 break-all font-medium">{template.name}</span>
-								{template.description ? <span className="min-w-0 break-all text-muted-foreground">{template.description}</span> : null}
+								<span className="min-w-0 font-medium [overflow-wrap:anywhere]">{template.name}</span>
+								{template.description ? <span className="min-w-0 text-muted-foreground [overflow-wrap:anywhere]">{template.description}</span> : null}
 								<span className="text-muted-foreground">
 									{template.questionsJson.length} {template.questionsJson.length === 1 ? "question" : "questions"}. {formatEstimate(estimateSeconds(template.questionsJson))}.
 								</span>

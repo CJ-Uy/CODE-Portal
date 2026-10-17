@@ -51,7 +51,7 @@ export default async function EventRosterPage({ params }: { params: Promise<{ id
 	return (
 		<div className="grid gap-5">
 			<header className="border-b border-border pb-5">
-				<h1 className="min-w-0 break-all font-heading text-3xl tracking-tight text-primary sm:text-4xl">{event.title}</h1>
+				<h1 className="min-w-0 font-heading text-3xl tracking-tight text-primary [overflow-wrap:anywhere] sm:text-4xl">{event.title}</h1>
 				<p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">Who attended, and who was late.</p>
 				<div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
 					<span className="tabular-nums">{formatDateTime(event.startsAt)}</span>

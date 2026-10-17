@@ -45,7 +45,7 @@ export default async function MemberSurveyPage({
 		<div className="mx-auto grid w-full min-w-0 max-w-2xl gap-6">
 			<header className="grid min-w-0 gap-1">
 				<p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Feedback</p>
-				<h1 className="min-w-0 break-all font-heading text-3xl leading-tight">{eventTitle ?? survey.title}</h1>
+				<h1 className="min-w-0 font-heading text-3xl leading-tight [overflow-wrap:anywhere]">{eventTitle ?? survey.title}</h1>
 				<p className="text-sm text-muted-foreground">
 					Your name isn&apos;t attached to your answers. Used only to evaluate this project (RA 10173).
 				</p>
@@ -111,7 +111,7 @@ function QuestionCards({ questions }: { questions: SurveyQuestion[] }) {
 						<TextQuestion question={question} index={index} />
 					) : (
 						<fieldset className="grid min-w-0 gap-3 border-0 p-0" aria-describedby={question.help ? `help-${question.id}` : undefined}>
-							<legend className="w-full min-w-0 break-all text-base font-medium leading-snug">
+							<legend className="w-full min-w-0 text-base font-medium leading-snug [overflow-wrap:anywhere]">
 								<Prompt question={question} index={index} />
 							</legend>
 							<Help question={question} />
@@ -160,7 +160,7 @@ function Prompt({ question, index }: { question: SurveyQuestion; index: number }
 function Help({ question }: { question: SurveyQuestion }) {
 	if (!question.help) return null;
 	return (
-		<p id={`help-${question.id}`} className="-mt-1 min-w-0 break-all text-sm text-muted-foreground">
+		<p id={`help-${question.id}`} className="-mt-1 min-w-0 text-sm text-muted-foreground [overflow-wrap:anywhere]">
 			{question.help}
 		</p>
 	);
@@ -169,7 +169,7 @@ function Help({ question }: { question: SurveyQuestion }) {
 function TextQuestion({ question, index }: { question: SurveyQuestion; index: number }) {
 	return (
 		<div className="grid min-w-0 gap-3">
-			<label htmlFor={`q-${question.id}`} className="min-w-0 break-all text-base font-medium leading-snug">
+			<label htmlFor={`q-${question.id}`} className="min-w-0 text-base font-medium leading-snug [overflow-wrap:anywhere]">
 				<Prompt question={question} index={index} />
 			</label>
 			<Help question={question} />
@@ -198,8 +198,8 @@ function ScaleOptions({ question }: { question: SurveyQuestion }) {
 				))}
 			</div>
 			<div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
-				<span className="min-w-0 break-all">{low}</span>
-				<span className="min-w-0 break-all text-right">{high}</span>
+				<span className="min-w-0 [overflow-wrap:anywhere]">{low}</span>
+				<span className="min-w-0 text-right [overflow-wrap:anywhere]">{high}</span>
 			</div>
 		</div>
 	);
@@ -211,7 +211,7 @@ function ChoiceOptions({ question }: { question: SurveyQuestion }) {
 			{parseOptions(question.optionsJson).map((option) => (
 				<label key={option} className={`${PILL} min-h-11 max-w-full rounded-full px-4 py-2 text-left font-medium`}>
 					<input type="radio" name={`q:${question.id}`} value={option} required={question.required} className={PILL_INPUT} />
-					<span className="min-w-0 break-all">{option}</span>
+					<span className="min-w-0 [overflow-wrap:anywhere]">{option}</span>
 				</label>
 			))}
 		</div>

@@ -109,8 +109,8 @@ export default async function AdminSurveysPage() {
 										className="grid min-w-0 gap-2 rounded-xl px-4 py-4 text-sm hover:bg-secondary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-4"
 									>
 										<span className="grid min-w-0 gap-1">
-											<span className="min-w-0 break-all font-medium">{survey.title}</span>
-											<span className="min-w-0 break-all text-muted-foreground">
+											<span className="min-w-0 font-medium [overflow-wrap:anywhere]">{survey.title}</span>
+											<span className="min-w-0 text-muted-foreground [overflow-wrap:anywhere]">
 												{survey.eventId ? (eventTitles.get(survey.eventId) ?? "Event no longer listed") : "General form"}
 											</span>
 										</span>

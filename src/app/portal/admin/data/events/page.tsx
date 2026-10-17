@@ -121,7 +121,7 @@ export default async function EventsAdminPage({ searchParams }: { searchParams: 
 									lines.map(({ row, cells }) => (
 										<tr key={row.eventId}>
 											<td className="min-w-0 px-4 py-2.5 font-medium">
-												<Link href={`/portal/admin/data/events/${row.eventId}`} className="break-all text-primary underline-offset-4 hover:underline">
+												<Link href={`/portal/admin/data/events/${row.eventId}`} className="text-primary underline-offset-4 hover:underline [overflow-wrap:anywhere]">
 													{row.title}
 												</Link>
 											</td>
