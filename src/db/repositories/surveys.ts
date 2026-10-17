@@ -31,6 +31,7 @@ import { createId } from "@/lib/ids";
 import { seededSample } from "@/lib/sample";
 import type { Actor } from "@/server/auth/permissions";
 import { can } from "@/server/auth/permissions";
+import { runAtomic } from "./atomic";
 import type { AuditRepository } from "./audit";
 import { chunk } from "./email-audience";
 import { notify } from "./notifications";
@@ -47,7 +48,7 @@ const QUESTION_ROWS_PER_INSERT = rowsPerInsert(surveyQuestions);
 const ANSWER_ROWS_PER_INSERT = rowsPerInsert(surveyAnswers);
 const ASSIGNMENT_ROWS_PER_INSERT = rowsPerInsert(surveyAssignments);
 
-// One insert per chunk; callers put them in a db.batch so a form's questions land together or not at all.
+// One insert per chunk; callers put them in a runAtomic so a form's questions land together or not at all.
 function questionInserts(db: SurveyDb, surveyId: string, questions: SurveyQuestionInput[]) {
 	const rows = questions.map((question, index) => ({
 		id: createId("srvq"),
@@ -141,7 +142,7 @@ function validateAnswers(questions: SurveyQuestion[], answers: SubmitSurveyRespo
 }
 
 // The only writer of survey_responses. submittedAt is always the Manila day, so a response cannot be matched
-// to its assignment's exact completedAt. Callers put these in a db.batch with the assignment write.
+// to its assignment's exact completedAt. Callers put these in a runAtomic with the assignment write.
 function responseInserts(
 	db: SurveyDb,
 	surveyId: string,
@@ -162,8 +163,14 @@ function responseInserts(
 	] as const;
 }
 
+// D1 and better-sqlite3 (local dev) both put "UNIQUE constraint failed: survey_assignments..." in the message, on the error or its cause.
+// better-sqlite3 also sets a code; trust it only when the message does not name some other constraint.
 const isPrimaryKeyConflict = (error: unknown) =>
-	/UNIQUE constraint failed: survey_assignments/.test(`${(error as Error)?.message} ${(error as { cause?: Error })?.cause?.message}`);
+	[error, (error as { cause?: unknown })?.cause].some((e) => {
+		const { message = "", code } = (e ?? {}) as { message?: string; code?: string };
+		if (/UNIQUE constraint failed: survey_assignments/.test(message)) return true;
+		return (code === "SQLITE_CONSTRAINT_PRIMARYKEY" || code === "SQLITE_CONSTRAINT_UNIQUE") && !/UNIQUE constraint failed/.test(message);
+	});
 
 export type SurveysRepository = {
 	create(actor: Actor, input: CreateSurveyInput): Promise<Survey>;
@@ -201,8 +208,7 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 				})
 				.returning();
 
-			const [firstQuestions, ...moreQuestions] = questionInserts(db, surveyId, input.questions);
-			await db.batch([firstQuestions, ...moreQuestions]);
+			await runAtomic(db, questionInserts(db, surveyId, input.questions));
 
 			await audit.record(actor, {
 				action: "survey:create",
@@ -302,28 +308,26 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 					.where(and(eq(crsEvents.id, input.eventId), isNull(crsEvents.deletedAt)))
 					.limit(1);
 				if (!event) throw new Error("Event not found.");
-				// If two admins race past this check, the unique index on surveys.event_id fails the loser's whole batch (raw D1 error, no orphan).
+				// If two admins race past this check, the unique index on surveys.event_id fails the loser's whole write (raw D1 error, no orphan).
 				const [existing] = await db.select({ id: surveys.id }).from(surveys).where(eq(surveys.eventId, input.eventId)).limit(1);
 				if (existing) throw new Error("This event already has a feedback form.");
 				eventTitle = event.title;
 			}
 
 			const surveyId = createId("srv");
-			// One batch, so a failed question insert cannot leave an empty draft behind.
-			const [[survey]] = await db.batch([
-				db
-					.insert(surveys)
-					.values({
-						id: surveyId,
-						title: input.title ?? (eventTitle ? `Feedback: ${eventTitle}` : template.name),
-						eventId: input.eventId,
-						templateId: template.id,
-						status: "draft",
-						createdBy: actor.memberId,
-					})
-					.returning(),
+			// One atomic write, so a failed question insert cannot leave an empty draft behind.
+			await runAtomic(db, [
+				db.insert(surveys).values({
+					id: surveyId,
+					title: input.title ?? (eventTitle ? `Feedback: ${eventTitle}` : template.name),
+					eventId: input.eventId,
+					templateId: template.id,
+					status: "draft",
+					createdBy: actor.memberId,
+				}),
 				...questionInserts(db, surveyId, template.questionsJson),
 			]);
+			const [survey] = await db.select().from(surveys).where(eq(surveys.id, surveyId)).limit(1);
 
 			await audit.record(actor, {
 				action: "survey:create",
@@ -342,8 +346,8 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 			if (!survey) throw new Error("Survey not found.");
 			if (survey.status !== "draft") throw new Error("Questions can't change after sending.");
 
-			// ponytail: a send landing between the check above and this batch would still be overwritten; guard in SQL if sends become concurrent.
-			await db.batch([
+			// ponytail: a send landing between the check above and this write would still be overwritten; guard in SQL if sends become concurrent.
+			await runAtomic(db, [
 				db.update(surveys).set({ title: input.title }).where(eq(surveys.id, input.surveyId)),
 				db.delete(surveyQuestions).where(eq(surveyQuestions.surveyId, input.surveyId)),
 				...questionInserts(db, input.surveyId, input.questions),
@@ -389,9 +393,9 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 			}
 
 			const assignmentRows = drawn.map((memberId) => ({ surveyId: input.surveyId, memberId, source: "invited" as const }));
-			// One batch is atomic, so the form never runs without its invitees or the reverse.
+			// One atomic write, so the form never runs without its invitees or the reverse.
 			// ponytail: a concurrent send that passed the draft check above can still add a second sample; guard in SQL if sends become concurrent.
-			await db.batch([
+			await runAtomic(db, [
 				db
 					.update(surveys)
 					.set({
@@ -518,10 +522,10 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 			validateAnswers(await orderedQuestions(db, survey.id), input.answers);
 
 			if (!invited) {
-				// A walk-in's assignment, response and answers land in one atomic batch. A second submit hits the
-				// (survey, member) primary key, which rolls the whole batch back.
+				// A walk-in's assignment, response and answers land in one atomic write. A second submit hits the
+				// (survey, member) primary key, which rolls the whole write back.
 				try {
-					await db.batch([
+					await runAtomic(db, [
 						db.insert(surveyAssignments).values({ surveyId: survey.id, memberId: actor.memberId, source: "walk_in", completedAt: now }),
 						...responseInserts(db, survey.id, "walk_in", input.answers, now),
 					]);
@@ -546,8 +550,8 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 			if (!claimed) throw new Error(RESPONDENT_STATE_MESSAGES.answered);
 
 			// ponytail: rare crash after the claim can lose one response slot; use a transactional DB if that matters.
-			// One batch is atomic, so the response and every answer chunk land together or not at all.
-			await db.batch([...responseInserts(db, survey.id, claimed.source, input.answers, now)]);
+			// One atomic write, so the response and every answer chunk land together or not at all.
+			await runAtomic(db, [...responseInserts(db, survey.id, claimed.source, input.answers, now)]);
 			return { ok: true };
 		},
 

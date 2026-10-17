@@ -7,7 +7,7 @@ import { createId } from "@/lib/ids";
 import { mentorLine, parseMentsPaste } from "@/lib/ments";
 import { can, type Actor } from "@/server/auth/permissions";
 import type { AuditRepository } from "./audit";
-import { runAtomic } from "./links";
+import { runAtomic } from "./atomic";
 
 export type MentsRepository = {
 	list(actor: Actor): Promise<MentsPerson[]>;
