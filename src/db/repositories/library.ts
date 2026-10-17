@@ -28,7 +28,7 @@ import type {
 	LibraryStatus,
 } from "@/lib/library/taxonomy";
 import type { Actor } from "@/server/auth/permissions";
-import { can } from "@/server/auth/permissions";
+import { can, roleKeys } from "@/server/auth/permissions";
 import type * as schema from "../schema";
 import type { AuditRepository } from "./audit";
 import { canEditItem, canSeeItem, publishedVisibleWhere } from "./library-access";
@@ -136,7 +136,7 @@ export type LibraryRepository = {
 	flagClientData(actor: Actor, id: string): Promise<LibraryStatus>;
 	/** Exactly one target the actor can see (an item, or a shared list). Details at most 1000 characters. A repeat by the same member while their report is open does nothing. */
 	report(actor: Actor, input: { itemId?: string; listId?: string; reason: LibraryReport["reason"]; details?: string }): Promise<void>;
-	/** library:moderate. "taken_down" takes the target down first (the reason is required unless it is already down). */
+	/** library:moderate. "taken_down" takes a published item or a live list down first (the reason is required then); a target that is already out of view just has its report closed. */
 	resolveReport(actor: Actor, reportId: string, resolution: "dismissed" | "taken_down", reason?: string): Promise<void>;
 	/** library:moderate. Pending items oldest first, taken-down items and lists newest first, open reports only (oldest first). */
 	moderationQueue(actor: Actor): Promise<{
@@ -361,14 +361,17 @@ export async function memberLabel(db: Db, memberId: string): Promise<string> {
 	return row?.fullName || row?.name || "A member";
 }
 
-/** Holders of library:moderate: active members with the publishing or super role (see rolePermissions). */
+// Asked of can() rather than listed by hand, so a role granted library:moderate later is not silently left out (super always passes).
+const MODERATOR_ROLE_KEYS = roleKeys.filter((key) => can({ memberId: "", roles: [key] }, "library:moderate"));
+
+/** Holders of library:moderate: active members with a role that grants it. */
 async function moderatorIds(db: Db): Promise<string[]> {
 	const rows = await db
 		.selectDistinct({ id: memberRoles.memberId })
 		.from(memberRoles)
 		.innerJoin(roles, eq(roles.id, memberRoles.roleId))
 		.innerJoin(members, eq(members.id, memberRoles.memberId))
-		.where(and(inArray(roles.key, ["publishing", "super"]), eq(members.status, "active")));
+		.where(and(inArray(roles.key, MODERATOR_ROLE_KEYS), eq(members.status, "active")));
 	return rows.map((row) => row.id);
 }
 
@@ -667,7 +670,7 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 				notifyMembers(db, await moderatorIds(db), actor.memberId, {
 					kind: "library_needs_review",
 					title: "New library report",
-					body: `A ${REPORT_REASON_LABELS[input.reason]} report was filed on "${title}".`,
+					body: `${/^[aeiou]/i.test(REPORT_REASON_LABELS[input.reason]) ? "An" : "A"} ${REPORT_REASON_LABELS[input.reason]} report was filed on "${title}".`,
 					href: MODERATION_QUEUE_HREF,
 				}),
 			);
@@ -679,10 +682,11 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 			const [report] = await db.select().from(libraryReports).where(eq(libraryReports.id, reportId)).limit(1);
 			if (!report || report.resolvedAt) throw new Error("Report not found.");
 			if (resolution === "taken_down") {
-				// A target a moderator already took down by another route just needs the report closed.
+				// Only a published item can be taken down. Anything else (already down, or pulled back into review or to a draft
+				// since the report) is already out of public view, so the report is just closed, with no reason needed.
 				if (report.itemId) {
 					const item = await loadItem(report.itemId);
-					if (item && item.status !== "taken_down") await repo.moderate(actor, report.itemId, "take_down", reason);
+					if (item?.status === "published") await repo.moderate(actor, report.itemId, "take_down", reason);
 				} else if (report.listId) {
 					const [list] = await db.select({ takenDownAt: libraryLists.takenDownAt }).from(libraryLists).where(eq(libraryLists.id, report.listId)).limit(1);
 					if (list && !list.takenDownAt) await createLibraryListsRepository(db, audit).takeDown(actor, report.listId, reason ?? "");

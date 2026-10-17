@@ -68,7 +68,7 @@ export type LibraryListsRepository = {
 	setCommentHidden(actor: Actor, commentId: string, hidden: boolean): Promise<void>;
 	/** library:moderate. Only a shared list can be pinned. Without `pinOrder` a newly pinned list goes last. */
 	setPinned(actor: Actor, listId: string, pinned: boolean, pinOrder?: number): Promise<void>;
-	/** library:moderate. Records the reason, and unshares and unpins the list. */
+	/** library:moderate. Records the reason, and unshares and unpins the list. Only a shared list, or one with an open report, can be taken down; any other reads as "List not found.". */
 	takeDown(actor: Actor, listId: string, reason: string): Promise<void>;
 	/** library:moderate. The list stays unshared: its owner chooses whether to share it again. */
 	restore(actor: Actor, listId: string): Promise<void>;
@@ -174,15 +174,17 @@ export function createLibraryListsRepository(db: Db, audit: AuditRepository): Li
 		if (open || !can(actor, "library:moderate")) return open;
 		const list = await loadList(listId);
 		if (!list) return null;
-		if (!list.takenDownAt) {
-			const [report] = await db
-				.select({ id: libraryReports.id })
-				.from(libraryReports)
-				.where(and(eq(libraryReports.listId, listId), isNull(libraryReports.resolvedAt)))
-				.limit(1);
-			if (!report) return null;
-		}
+		if (!list.takenDownAt && !(await hasOpenReport(listId))) return null;
 		return { list, role: "viewer" };
+	}
+
+	async function hasOpenReport(listId: string): Promise<boolean> {
+		const [report] = await db
+			.select({ id: libraryReports.id })
+			.from(libraryReports)
+			.where(and(eq(libraryReports.listId, listId), isNull(libraryReports.resolvedAt)))
+			.limit(1);
+		return Boolean(report);
 	}
 
 	/** A list the actor may not open reads as missing, so nobody can probe for other members' private lists. */
@@ -553,6 +555,9 @@ export function createLibraryListsRepository(db: Db, audit: AuditRepository): Li
 			const why = cleanReason(reason);
 			const list = await requireList(listId);
 			if (list.takenDownAt) throw new Error("This list is already taken down.");
+			// A taken-down list is readable by moderators, so only a list that is shared or under an open report may be taken down.
+			// Otherwise a moderator could take down any private list (the Saved list id is predictable) just to read it.
+			if (!list.shared && !(await hasOpenReport(listId))) throw new Error("List not found.");
 			const now = new Date();
 			const changed = await db
 				.update(libraryLists)

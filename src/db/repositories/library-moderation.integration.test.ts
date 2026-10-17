@@ -127,7 +127,18 @@ describe("library reports and the moderation queue", () => {
 		expect(await db.select().from(libraryReports)).toHaveLength(1);
 	});
 
+	it("words the report notification with the right article", async () => {
+		const itemId = await insertItem({ title: "Leaky" });
+		await repo.report(actors.other, { itemId, reason: "inappropriate" });
+		await repo.report(actors.owner, { itemId, reason: "broken_file" });
+		expect((await feed("moderator")).map((row) => row.body)).toEqual([
+			'An inappropriate content report was filed on "Leaky".',
+			'A broken file report was filed on "Leaky".',
+		]);
+	});
+
 	it("tells every moderator about a new report, but never the reporter", async () => {
+		await grant("editor", "email"); // a role that does not hold library:moderate
 		const itemId = await insertItem({ title: "Leaky", createdBy: "owner" });
 		await repo.report(actors.other, { itemId, reason: "copyright" });
 		for (const id of ["moderator", "moderator2", "admin"]) {
@@ -227,6 +238,25 @@ describe("library reports and the moderation queue", () => {
 		expect(row.takenDownAt).not.toBeNull();
 		expect(row).toMatchObject({ moderationReason: "Not for the library", shared: false, pinned: false });
 		expect((await repo.moderationQueue(actors.moderator)).reports).toHaveLength(0);
+	});
+
+	it("closes a taken_down report on an item that is not published, without a reason and without moving it", async () => {
+		const flagged = await insertItem({ createdBy: "owner" });
+		const draft = await insertItem({ status: "draft", createdBy: "owner" });
+		const down = await insertItem({ status: "taken_down", createdBy: "owner" });
+		await repo.report(actors.other, { itemId: flagged, reason: "client_data" });
+		await repo.report(actors.owner, { itemId: draft, reason: "other" });
+		await db.insert(libraryReports).values({ id: "lrp_down", itemId: down, memberId: "other", reason: "other" });
+		await repo.flagClientData(actors.owner, flagged); // the owner pulls it back into review after the report
+		for (const report of (await repo.moderationQueue(actors.moderator)).reports) {
+			await repo.resolveReport(actors.moderator, report.id, "taken_down");
+		}
+		expect((await repo.moderationQueue(actors.moderator)).reports).toHaveLength(0);
+		expect((await db.select().from(libraryReports)).map((row) => row.resolution)).toEqual(["taken_down", "taken_down", "taken_down"]);
+		for (const [id, status] of [[flagged, "pending_review"], [draft, "draft"], [down, "taken_down"]] as const) {
+			expect((await repo.getItem(actors.owner, id))?.status).toBe(status);
+		}
+		expect(await auditActions()).toEqual(["library:flag_client_data", "library:report_taken_down", "library:report_taken_down", "library:report_taken_down"]);
 	});
 
 	it("resolves a report on a target that is already taken down without asking for a reason", async () => {
@@ -450,6 +480,50 @@ describe("moderators reading lists under review", () => {
 		// An open report on a different list opens nothing here.
 		await repo.report(actors.other, { listId: await sharedList("Other"), reason: "other" });
 		expect(await lists.getList(actors.moderator, listId)).toBeNull();
+	});
+
+	it("refuses to take down a list that was never shared and has no open report, so it cannot be opened that way", async () => {
+		const privateList = await owned("Private");
+		const saved = await lists.ensureSaved(actors.owner); // the id is predictable: lst_saved_<memberId>
+		for (const listId of [privateList, saved]) {
+			await expect(lists.takeDown(actors.moderator, listId, "Peek")).rejects.toThrow("List not found.");
+			await expect(lists.takeDown(admin, listId, "Peek")).rejects.toThrow("List not found.");
+			const [row] = await db.select().from(libraryLists).where(eq(libraryLists.id, listId));
+			expect(row.takenDownAt).toBeNull();
+			expect(await lists.getList(actors.moderator, listId)).toBeNull();
+			expect(await lists.listComments(actors.moderator, listId)).toEqual([]);
+		}
+		// The same message as a list that does not exist: no oracle for private list ids.
+		await expect(lists.takeDown(actors.moderator, "lst_missing", "Peek")).rejects.toThrow("List not found.");
+	});
+
+	it("takes down an unshared list while a report on it is open, and refuses once the report is dismissed", async () => {
+		const listId = await sharedList("Pack");
+		await repo.report(actors.other, { listId, reason: "inappropriate" });
+		await lists.setShared(actors.owner, listId, false); // the owner hides it after being reported
+		const [report] = (await repo.moderationQueue(actors.moderator)).reports;
+
+		await repo.resolveReport(actors.moderator, report.id, "dismissed");
+		await expect(lists.takeDown(actors.moderator, listId, "Too late")).rejects.toThrow("List not found.");
+
+		const again = await sharedList("Again");
+		await repo.report(actors.other, { listId: again, reason: "other" });
+		await lists.setShared(actors.owner, again, false);
+		await lists.takeDown(actors.moderator, again, "Reported");
+		const [row] = await db.select().from(libraryLists).where(eq(libraryLists.id, again));
+		expect(row).toMatchObject({ moderationReason: "Reported", shared: false });
+		expect(row.takenDownAt).not.toBeNull();
+	});
+
+	it("resolves a list report as taken_down even after the owner unshared the list", async () => {
+		const listId = await sharedList("Pack");
+		await repo.report(actors.other, { listId, reason: "inappropriate" });
+		await lists.setShared(actors.owner, listId, false);
+		const [report] = (await repo.moderationQueue(actors.moderator)).reports;
+		await repo.resolveReport(actors.moderator, report.id, "taken_down", "Not for the library");
+		const [row] = await db.select().from(libraryLists).where(eq(libraryLists.id, listId));
+		expect(row).toMatchObject({ moderationReason: "Not for the library" });
+		expect(row.takenDownAt).not.toBeNull();
 	});
 
 	it("shows a moderator the comments of a taken-down list, hidden and anonymous ones included", async () => {
