@@ -77,11 +77,18 @@ describe("buildRedirectResponse", () => {
 		expect(d.scheduleBackground).not.toHaveBeenCalled();
 	});
 
-	it("404s an unknown slug", async () => {
+	it("sends an unknown slug to the not-found page", async () => {
 		const d = deps();
 		const res = await buildRedirectResponse(d, new Request("https://app.example/missing"));
-		expect(res.status).toBe(404);
+		expect(res.status).toBe(302);
+		expect(res.headers.get("location")).toBe("/link-not-found");
 		expect(d.scheduleBackground).not.toHaveBeenCalled();
+	});
+
+	it("sends a portal section name with no short link to that section", async () => {
+		const res = await buildRedirectResponse(deps(), new Request("https://app.example/Guides"));
+		expect(res.status).toBe(302);
+		expect(res.headers.get("location")).toBe("/portal/guides");
 	});
 
 	it("never throws when the background click write rejects", async () => {

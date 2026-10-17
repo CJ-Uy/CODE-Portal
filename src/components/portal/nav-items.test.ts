@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
 import type { FeatureFlags } from "@/server/features";
+import { PORTAL_SECTIONS } from "@/server/links/redirect";
 import { primaryNav, secondaryNav, visibleMobileNav, visiblePrimaryNav, visibleSecondaryNav } from "./nav-items";
 
 it("keeps released tools above Profile and every visible destination reachable on mobile", () => {
@@ -16,4 +17,9 @@ it("keeps released tools above Profile and every visible destination reachable o
 		const menu = desktop.filter((item) => !mobile.some((tab) => tab.id === item.id));
 		expect([...mobile, ...menu].map((item) => item.id).sort()).toEqual(expected.map((item) => item.id).sort());
 	}
+});
+
+it("lets every portal nav section be typed at the root, e.g. /guides", () => {
+	const sections = [...primaryNav, ...secondaryNav].map((item) => item.href.split("/")[2]).filter(Boolean);
+	expect(sections.filter((section) => !PORTAL_SECTIONS.has(section))).toEqual([]);
 });
