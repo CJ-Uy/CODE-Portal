@@ -76,6 +76,12 @@ describe("itemInsertSql", () => {
 		).toThrow(/extracted text/i);
 		expect(() => itemInsertSql(fakeImportItem({ clientDataRedacted: true, extractedText: "" }))).not.toThrow();
 	});
+
+	it("leaves a confidential item ownerless, so only library:manage can open its original (R35)", () => {
+		expect(itemInsertSql(fakeImportItem({ ownerMemberId: "mem_owner" }))[0]).toContain("'mem_owner'");
+		const confidential = fakeImportItem({ ownerMemberId: "mem_owner", confidentiality: "confidential", containsClientData: true });
+		expect(itemInsertSql(confidential)[0]).not.toContain("mem_owner");
+	});
 });
 
 describe("searchTextOf", () => {
@@ -136,6 +142,13 @@ describe("cross-document client names (R32)", () => {
 		const redacted = { verdict: "redacted" as const, shown: ["Module C"], text: "Acme Widgets and Jane Roe", ownStrings: [{ text: "Acme Widgets", label: "[Client org]" }] };
 		expect(clientNameHits(redacted, names)).toBe(1);
 		expect(clientNameHits({ ...redacted, verdict: "confidential" }, names)).toBe(0);
+	});
+
+	it("counts a redacted document's own flagged name when its title or summary shows it, and skips an unreviewed one", () => {
+		const own = [{ text: "Acme Widgets", label: "[Client org]" }];
+		expect(clientNameHits({ verdict: "redacted", shown: ["Acme Widgets retreat"], text: "", ownStrings: own }, names)).toBe(1);
+		expect(clientNameHits({ verdict: "redacted", shown: ["Module C", "Summary naming acme widgets"], text: "", ownStrings: own }, names)).toBe(1);
+		expect(clientNameHits({ verdict: null, shown: ["Acme Widgets"], text: "Jane Roe", ownStrings: [] }, names)).toBe(0);
 	});
 });
 

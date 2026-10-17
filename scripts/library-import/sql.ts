@@ -186,7 +186,8 @@ export function itemInsertSql(item: ImportItem): string[] {
 		public_readiness: sqlLiteral(item.publicReadiness),
 		extracted_text: sqlLiteral(item.extractedText.slice(0, EXTRACTED_TEXT_CAP)),
 		search_text: sqlLiteral(searchTextOf(item)),
-		created_by: memberRef(item.ownerMemberId),
+		// R35, spec 5.6/15: a confidential original is for library:manage only, and an owner could open it.
+		created_by: memberRef(item.confidentiality === "confidential" ? null : item.ownerMemberId),
 		published_at: sqlLiteral(item.publishedAt),
 		updated_at: sqlLiteral(item.publishedAt),
 	};

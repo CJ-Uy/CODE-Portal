@@ -8,7 +8,7 @@ import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "
 import path from "node:path";
 import { ARTICLES } from "@/content/site";
 import { seedLibraryTags } from "@/db/seed/data";
-import { libraryBlocksSchema, type LibraryBlock } from "@/lib/library/blocks";
+import { blocksToPlainText, libraryBlocksSchema, type LibraryBlock } from "@/lib/library/blocks";
 import {
 	defaultPublicReadiness,
 	defaultSource,
@@ -429,7 +429,7 @@ function plan(): void {
 		const hits = clientNameHits(
 			{
 				verdict: draft.verdict,
-				shown: [draft.title, draft.dek, draft.fileStem ?? ""],
+				shown: [draft.title, draft.dek, draft.fileStem ?? "", draft.url ?? "", ...draft.authors.map((author) => author.name), blocksToPlainText(draft.blocks)],
 				text: reads && draft.textFile ? readText(draft.textFile) : "",
 				ownStrings: own?.strings ?? [],
 			},
@@ -449,13 +449,15 @@ function plan(): void {
 	const ids = kept.map((draft) => draft.id);
 	const repeated = ids.filter((id, n) => ids.indexOf(id) !== n);
 	if (repeated.length > 0) throw new Error(`Item ids are not unique: ${repeated.join(", ")}`);
+	// A held draft dropped as a duplicate is not imported at all; its kept copy is listed under Duplicates.
+	const heldKept = held.filter((entry) => ids.includes(entry.id));
 
 	const manifest: Manifest = {
 		importedAt,
 		drafts: kept,
 		missing,
 		duplicates: duplicates.map((duplicate) => ({ ...duplicate, origin: drafts.find((draft) => draft.id === duplicate.id)!.origin })),
-		held,
+		held: heldKept,
 	};
 	writeFileSync(at("manifest.json"), `${JSON.stringify(manifest, null, "\t")}\n`);
 
@@ -479,11 +481,11 @@ function plan(): void {
 			"",
 			...manifest.duplicates.map((duplicate) => `- ${duplicate.origin}: ${duplicate.id} is a duplicate of ${duplicate.of}`),
 			"",
-			"## Held for review (cross-document client name)",
+			"## Imported as confidential",
 			"",
-			"Imported as confidential (admin-only, no stored text) because a client name flagged in another document's review appears in it.",
+			"Admin-only, with no stored text, because a client name flagged in another document's review appears in it.",
 			"",
-			...held.map((entry) => `- ${entry.driveId ?? entry.id}: ${entry.hits} match(es)`),
+			...heldKept.map((entry) => `- ${entry.driveId ?? entry.id}: ${entry.hits} match(es)`),
 			"",
 		].join("\n"),
 	);
@@ -491,7 +493,7 @@ function plan(): void {
 	console.log("plan written: manifest.json, tag-map.json, missing.md");
 	console.log(`items ${kept.length}`, countBy(kept, (draft) => draft.kind));
 	console.log("document verdicts", countBy(kept.filter((draft) => draft.kind === "code_document"), (draft) => String(draft.verdict)));
-	console.log(`missing ${missing.length}, duplicates ${duplicates.length}, held for a cross-document client name ${held.length} (${held.reduce((sum, entry) => sum + entry.hits, 0)} matches)`);
+	console.log(`missing ${missing.length}, duplicates ${duplicates.length}, held for a cross-document client name ${heldKept.length} (${heldKept.reduce((sum, entry) => sum + entry.hits, 0)} matches)`);
 	console.log("tags", tagStats(tagMap, proposal));
 }
 
@@ -623,7 +625,7 @@ function sql(): void {
 	console.log("documents", countBy(manifest.drafts.filter((draft) => draft.kind === "code_document"), (draft) => String(draft.verdict)));
 	console.log("confidential", items.filter((item) => item.confidentiality === "confidential").length, "redacted", items.filter((item) => item.clientDataRedacted).length);
 	console.log("with extracted text", items.filter((item) => item.extractedText).length, "with tags", items.filter((item) => item.tagSlugs.length > 0).length);
-	console.log("owners matched", items.filter((item) => item.ownerMemberId).length, "authors matched", items.flatMap((item) => item.authors).filter((author) => author.memberId).length);
+	console.log("owners matched", items.filter((item) => item.ownerMemberId && item.confidentiality !== "confidential").length, "authors matched", items.flatMap((item) => item.authors).filter((author) => author.memberId).length);
 	console.log(`uploads ${uploads.length} files, ${(uploads.reduce((sum, { file }) => sum + file.bytes, 0) / MB).toFixed(1)} MB`);
 	console.log(`seed.sql ${statements.length} statements, ${(Buffer.byteLength(seed) / MB).toFixed(2)} MB, largest statement ${largest} bytes`);
 }
