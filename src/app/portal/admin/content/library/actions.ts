@@ -37,6 +37,7 @@ function revalidateItem(itemId: string) {
 	revalidatePath(PAGE);
 	revalidatePath(`/portal/library/${itemId}`);
 	revalidatePath("/portal/library");
+	revalidatePath("/portal/library/lists");
 	revalidatePath("/portal/library/mine");
 }
 
@@ -73,7 +74,7 @@ export async function restoreItemAction(input: { itemId: string }): Promise<void
 }
 
 /** The list stays unshared until its owner shares it again. The moderator stays on this page, so unlike the list page there is nowhere to be sent away from. */
-export async function restoreListAction(input: { listId: string }): Promise<void> {
+export async function restoreListFromQueueAction(input: { listId: string }): Promise<void> {
 	const { actor, repositories, input: data } = await guard(listInputSchema, input);
 	await repositories.libraryLists.restore(actor, data.listId);
 	revalidateList(data.listId);
@@ -99,10 +100,20 @@ export async function dismissReportAction(input: { reportId: string }): Promise<
 	await resolve(context, data.reportId, "dismissed");
 }
 
-/** Takes the item or list down with the reason, then closes the report. A target that is already out of view just has the report closed. */
+/** Takes the item or list down with the reason, then closes the report. */
 export async function takeDownReportAction(input: { reportId: string; reason: string }): Promise<void> {
 	const { input: data, ...context } = await guard(reportReasonInputSchema, input);
 	await resolve(context, data.reportId, "taken_down", data.reason);
+}
+
+/**
+ * For a report whose target is already out of view (taken down, or back in review or draft since): there is nothing left to
+ * take down, so no reason is asked and the repository just closes the report as handled. A target that is still live is
+ * refused for want of a reason, so this cannot take anything down.
+ */
+export async function closeReportAction(input: { reportId: string }): Promise<void> {
+	const { input: data, ...context } = await guard(reportInputSchema, input);
+	await resolve(context, data.reportId, "taken_down");
 }
 
 export async function renameTagAction(input: { tagId: string; name: string }): Promise<void> {

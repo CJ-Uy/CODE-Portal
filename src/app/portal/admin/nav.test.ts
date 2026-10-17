@@ -57,6 +57,15 @@ describe("admin nav registry", () => {
 		expect(visible).not.toContain("/portal/admin/members/roles");
 	});
 
+	it("gates Library moderation on library:moderate, the permission the page and its actions check", () => {
+		const page = adminGroups.find((g) => g.segment === "content")?.pages.find((p) => p.segment === "library");
+		expect(page?.permission).toBe("library:moderate");
+		const publishing: Actor = { memberId: "m4", roles: ["publishing"] };
+		const hrefs = (actor: Actor) => visibleGroups(actor, allFlags).flatMap((g) => g.pages.map((p) => p.href));
+		expect(hrefs(publishing)).toContain("/portal/admin/content/library");
+		expect(hrefs(linkOnly)).not.toContain("/portal/admin/content/library");
+	});
+
 	it("shows Point Types only to retention configuration holders", () => {
 		const retentionPages = visibleGroups(retentionActor, allFlags).flatMap((group) => group.pages.map((page) => page.href));
 		const linkPages = visibleGroups(linkOnly, allFlags).flatMap((group) => group.pages.map((page) => page.href));

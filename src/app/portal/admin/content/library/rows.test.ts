@@ -48,15 +48,16 @@ describe("toListRow", () => {
 });
 
 describe("toReportRow", () => {
-	const base = { id: "lrp_1", memberId: "mem_secret", reason: "client_data", details: "Names Acme", createdAt: new Date("2026-10-05T04:00:00Z"), targetTitle: "Some title" };
+	const base = { id: "lrp_1", memberId: "mem_secret", reason: "client_data", details: "Names Acme", createdAt: new Date("2026-10-05T04:00:00Z"), targetTitle: "Some title", targetLive: true };
 
 	it("links an item report to the item page", () => {
-		const row = toReportRow({ ...base, itemId: "lib_1", listId: null } as LibraryReport & { targetTitle: string });
+		const row = toReportRow({ ...base, itemId: "lib_1", listId: null } as LibraryReport & { targetTitle: string; targetLive: boolean });
 		expect(row).toEqual({
 			id: "lrp_1",
 			href: "/portal/library/lib_1",
 			targetTitle: "Some title",
 			targetKind: "Item",
+			live: true,
 			reason: "Includes client names or client data",
 			details: "Names Acme",
 			when: "Oct 5, 2026",
@@ -65,8 +66,13 @@ describe("toReportRow", () => {
 	});
 
 	it("links a list report to the list page", () => {
-		const row = toReportRow({ ...base, itemId: null, listId: "lst_1", reason: "other" } as LibraryReport & { targetTitle: string });
+		const row = toReportRow({ ...base, itemId: null, listId: "lst_1", reason: "other" } as LibraryReport & { targetTitle: string; targetLive: boolean });
 		expect(row).toMatchObject({ href: "/portal/library/lists/lst_1", targetKind: "List", reason: "Something else" });
+	});
+
+	it("says when the target is already out of view, so nothing is left to take down", () => {
+		const row = toReportRow({ ...base, itemId: "lib_1", listId: null, targetLive: false } as LibraryReport & { targetTitle: string; targetLive: boolean });
+		expect(row.live).toBe(false);
 	});
 });
 

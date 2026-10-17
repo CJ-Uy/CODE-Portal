@@ -47,18 +47,21 @@ export type ReportRow = {
 	href: string;
 	targetTitle: string;
 	targetKind: "Item" | "List";
+	/** Still up (a published item, a list that is not taken down). Anything else has nothing left to take down. */
+	live: boolean;
 	reason: string;
 	details: string;
 	when: string;
 };
 
-export function toReportRow(report: LibraryReport & { targetTitle: string }): ReportRow {
+export function toReportRow(report: LibraryReport & { targetTitle: string; targetLive: boolean }): ReportRow {
 	const isList = !report.itemId && Boolean(report.listId);
 	return {
 		id: report.id,
 		href: isList ? `/portal/library/lists/${report.listId}` : `/portal/library/${report.itemId}`,
 		targetTitle: report.targetTitle,
 		targetKind: isList ? "List" : "Item",
+		live: report.targetLive,
 		reason: REPORT_REASON_OPTIONS[report.reason],
 		details: report.details,
 		when: when(report.createdAt),

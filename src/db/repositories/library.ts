@@ -145,7 +145,8 @@ export type LibraryRepository = {
 		pending: LibraryItem[];
 		takenDown: LibraryItem[];
 		takenDownLists: LibraryList[];
-		reports: (LibraryReport & { targetTitle: string })[];
+		/** `targetLive`: the item is published, or the list is not taken down. Resolving the report of anything else just closes it. */
+		reports: (LibraryReport & { targetTitle: string; targetLive: boolean })[];
 	}>;
 	/** library:moderate. Published items the search index has not read yet (indexedAt is null), whatever their confidentiality. */
 	unindexedCount(actor: Actor): Promise<number>;
@@ -337,7 +338,9 @@ const REPORT_REASON_LABELS: Record<LibraryReportReason, string> = {
 	other: "general",
 };
 const REPORT_DETAILS_MAX = 1000;
+// Where a moderator lands from a notification: "waiting for approval" is the page's first tab, a report has its own.
 const MODERATION_QUEUE_HREF = "/portal/admin/content/library";
+const MODERATION_REPORTS_HREF = `${MODERATION_QUEUE_HREF}?tab=reports`;
 
 /**
  * Notifications are a courtesy: nothing that goes wrong while sending one may fail or undo the action that
@@ -679,7 +682,7 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 					kind: "library_needs_review",
 					title: "New library report",
 					body: `${/^[aeiou]/i.test(REPORT_REASON_LABELS[input.reason]) ? "An" : "A"} ${REPORT_REASON_LABELS[input.reason]} report was filed on "${title}".`,
-					href: MODERATION_QUEUE_HREF,
+					href: MODERATION_REPORTS_HREF,
 				}),
 			);
 		},
@@ -725,7 +728,7 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 				db.select().from(libraryItems).where(eq(libraryItems.status, "taken_down")).orderBy(desc(libraryItems.updatedAt), asc(libraryItems.id)),
 				db.select().from(libraryLists).where(isNotNull(libraryLists.takenDownAt)).orderBy(desc(libraryLists.takenDownAt), asc(libraryLists.id)),
 				db
-					.select({ report: libraryReports, itemTitle: libraryItems.title, listName: libraryLists.name })
+					.select({ report: libraryReports, itemTitle: libraryItems.title, itemStatus: libraryItems.status, listName: libraryLists.name, listTakenDownAt: libraryLists.takenDownAt })
 					.from(libraryReports)
 					.leftJoin(libraryItems, eq(libraryItems.id, libraryReports.itemId))
 					.leftJoin(libraryLists, eq(libraryLists.id, libraryReports.listId))
@@ -736,7 +739,11 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 				pending: pending.filter((item) => canSeeItem(actor, item)),
 				takenDown: takenDown.filter((item) => canSeeItem(actor, item)),
 				takenDownLists,
-				reports: reports.map(({ report, itemTitle, listName }) => ({ ...report, targetTitle: itemTitle ?? listName ?? "Deleted" })),
+				reports: reports.map(({ report, itemTitle, itemStatus, listName, listTakenDownAt }) => ({
+					...report,
+					targetTitle: itemTitle ?? listName ?? "Deleted",
+					targetLive: report.itemId ? itemStatus === "published" : Boolean(report.listId) && !listTakenDownAt,
+				})),
 			};
 		},
 

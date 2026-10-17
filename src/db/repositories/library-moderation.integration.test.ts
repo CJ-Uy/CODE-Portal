@@ -143,7 +143,7 @@ describe("library reports and the moderation queue", () => {
 		await repo.report(actors.other, { itemId, reason: "copyright" });
 		for (const id of ["moderator", "moderator2", "admin"]) {
 			expect(await feed(id)).toEqual([
-				{ kind: "library_needs_review", title: "New library report", body: 'A copyright report was filed on "Leaky".', href: "/portal/admin/content/library" },
+				{ kind: "library_needs_review", title: "New library report", body: 'A copyright report was filed on "Leaky".', href: "/portal/admin/content/library?tab=reports" },
 			]);
 		}
 		for (const id of ["owner", "other", "bystander", "editor"]) expect(await feed(id)).toEqual([]);
@@ -208,6 +208,26 @@ describe("library reports and the moderation queue", () => {
 		await insertItem({ title: "Draft", status: "draft", createdBy: "owner" });
 		await insertItem({ title: "Down", status: "taken_down", createdBy: "owner" });
 		expect(await repo.unindexedCount(actors.moderator)).toBe(2);
+	});
+
+	it("marks whether a report's target is still live, so a moderator is not asked for a reason to close one that is already down", async () => {
+		const live = await insertItem({ title: "Live item", createdBy: "owner" });
+		const taken = await insertItem({ title: "Taken item", createdBy: "owner" });
+		const liveList = await sharedList("Live pack");
+		const downList = await sharedList("Down pack");
+		await repo.report(actors.other, { itemId: live, reason: "other" });
+		await repo.report(actors.other, { itemId: taken, reason: "other" });
+		await repo.report(actors.other, { listId: liveList, reason: "other" });
+		await repo.report(actors.other, { listId: downList, reason: "other" });
+		await repo.moderate(actors.moderator, taken, "take_down", "Complaint");
+		await lists.takeDown(actors.moderator, downList, "Spam");
+		const { reports } = await repo.moderationQueue(actors.moderator);
+		expect(Object.fromEntries(reports.map((report) => [report.targetTitle, report.targetLive]))).toEqual({
+			"Live item": true,
+			"Taken item": false,
+			"Live pack": true,
+			"Down pack": false,
+		});
 	});
 
 	it("dismissing a report leaves the target up and writes an audit row", async () => {

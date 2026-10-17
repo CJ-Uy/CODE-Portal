@@ -31,13 +31,14 @@ vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 
 import {
 	approveItemAction,
+	closeReportAction,
 	deleteTagAction,
 	dismissReportAction,
 	mergeTagsAction,
 	regroupTagAction,
 	renameTagAction,
 	restoreItemAction,
-	restoreListAction,
+	restoreListFromQueueAction,
 	sendBackItemAction,
 	takeDownReportAction,
 } from "./actions";
@@ -66,6 +67,7 @@ describe("who may call these", () => {
 		await expect(approveItemAction({ itemId: "lib_1" })).rejects.toThrow("Not authorized");
 		await expect(renameTagAction({ tagId: "ltg_1", name: "New" })).rejects.toThrow("Not authorized");
 		await expect(dismissReportAction({ reportId: "lrp_item" })).rejects.toThrow("Not authorized");
+		await expect(closeReportAction({ reportId: "lrp_item" })).rejects.toThrow("Not authorized");
 		mocks.roles = ["publishing"];
 		mocks.featureOn = false;
 		await expect(approveItemAction({ itemId: "lib_1" })).rejects.toThrow("Feature disabled");
@@ -78,7 +80,7 @@ describe("item actions", () => {
 	it("approve and restore call the repository and refresh this page and the item", async () => {
 		await approveItemAction({ itemId: "lib_1" });
 		expect(mocks.moderate).toHaveBeenLastCalledWith(expect.objectContaining({ memberId: "mem_1" }), "lib_1", "approve");
-		expect(paths()).toEqual([PAGE, "/portal/library/lib_1", "/portal/library", "/portal/library/mine"]);
+		expect(paths()).toEqual([PAGE, "/portal/library/lib_1", "/portal/library", "/portal/library/lists", "/portal/library/mine"]);
 		await restoreItemAction({ itemId: "lib_2" });
 		expect(mocks.moderate).toHaveBeenLastCalledWith(expect.anything(), "lib_2", "restore");
 	});
@@ -103,9 +105,9 @@ describe("item actions", () => {
 	});
 });
 
-describe("restoreListAction", () => {
+describe("restoreListFromQueueAction", () => {
 	it("restores and refreshes this page and the list, without sending the moderator anywhere", async () => {
-		await restoreListAction({ listId: "lst_1" });
+		await restoreListFromQueueAction({ listId: "lst_1" });
 		expect(mocks.restore).toHaveBeenCalledWith(expect.anything(), "lst_1");
 		expect(paths()).toEqual([PAGE, "/portal/library", "/portal/library/lists", "/portal/library/lists/lst_1"]);
 	});
@@ -124,6 +126,18 @@ describe("report actions", () => {
 		expect(paths()).toContain("/portal/library/lists/lst_9");
 	});
 
+	it("close resolves a report on something already out of view without a reason, and refreshes it", async () => {
+		await closeReportAction({ reportId: "lrp_item" });
+		expect(mocks.resolveReport).toHaveBeenCalledWith(expect.anything(), "lrp_item", "taken_down", undefined);
+		expect(paths()).toEqual([PAGE, "/portal/library/lib_9", "/portal/library", "/portal/library/lists", "/portal/library/mine"]);
+	});
+
+	it("close cannot take down something still live: the repository refuses it without a reason", async () => {
+		mocks.resolveReport.mockRejectedValueOnce(new Error("A reason is required."));
+		await expect(closeReportAction({ reportId: "lrp_item" })).rejects.toThrow("A reason is required.");
+		expect(mocks.revalidatePath).not.toHaveBeenCalled();
+	});
+
 	it("take down needs a reason", async () => {
 		await expect(takeDownReportAction({ reportId: "lrp_item", reason: "" })).rejects.toThrow("A reason is required.");
 		expect(mocks.resolveReport).not.toHaveBeenCalled();
@@ -131,6 +145,7 @@ describe("report actions", () => {
 
 	it("refuses a report that is not in the open queue, so a crafted id never reaches the repository", async () => {
 		await expect(dismissReportAction({ reportId: "lrp_gone" })).rejects.toThrow("already resolved");
+		await expect(closeReportAction({ reportId: "lrp_gone" })).rejects.toThrow("already resolved");
 		expect(mocks.resolveReport).not.toHaveBeenCalled();
 		expect(mocks.revalidatePath).not.toHaveBeenCalled();
 	});

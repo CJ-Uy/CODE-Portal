@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { approveItemAction, dismissReportAction, restoreItemAction, restoreListAction, sendBackItemAction, takeDownReportAction } from "./actions";
+import { approveItemAction, closeReportAction, dismissReportAction, restoreItemAction, restoreListFromQueueAction, sendBackItemAction, takeDownReportAction } from "./actions";
 import { ReasonForm } from "./reason-form";
 import type { ItemRow, ListRow, ReportRow } from "./rows";
 import { RowError, useRun } from "./use-run";
@@ -83,14 +83,27 @@ export function ReportCard({ report }: { report: ReportRow }) {
 				<p className="text-xs text-muted-foreground">Reported {report.when}</p>
 			</div>
 			<div className="flex flex-wrap gap-2">
-				<Button type="button" variant="outline" disabled={pending} onClick={() => run(() => dismissReportAction({ reportId: report.id }), "Report dismissed. It stays up.")}>
+				<Button
+					type="button"
+					variant="outline"
+					disabled={pending}
+					onClick={() => run(() => dismissReportAction({ reportId: report.id }), report.live ? "Report dismissed. It stays up." : "Report dismissed.")}
+				>
 					Dismiss
 				</Button>
-				<Button type="button" variant={asking ? "default" : "outline"} disabled={pending} onClick={() => setAsking(!asking)}>
-					Take down
-				</Button>
+				{report.live ? (
+					<Button type="button" variant={asking ? "default" : "outline"} disabled={pending} onClick={() => setAsking(!asking)}>
+						Take down
+					</Button>
+				) : (
+					// Already out of view: nothing to take down, so nothing to explain to the owner.
+					<Button type="button" disabled={pending} onClick={() => run(() => closeReportAction({ reportId: report.id }), "Report closed.")}>
+						Close report
+					</Button>
+				)}
 			</div>
-			{asking ? (
+			{!report.live ? <p className="text-sm text-muted-foreground">This {report.targetKind.toLowerCase()} is already out of view, so there is nothing left to take down.</p> : null}
+			{report.live && asking ? (
 				<ReasonForm
 					label="Why? The owner will read this."
 					confirmLabel="Confirm: take down"
@@ -132,7 +145,7 @@ export function TakenDownListRow({ list }: { list: ListRow }) {
 			</div>
 			<Reason text={list.reason} />
 			<div className="flex flex-wrap items-center gap-3">
-				<Button type="button" disabled={pending} onClick={() => run(() => restoreListAction({ listId: list.id }), "Restored. Its owner can share it again.")}>
+				<Button type="button" disabled={pending} onClick={() => run(() => restoreListFromQueueAction({ listId: list.id }), "Restored. Its owner can share it again.")}>
 					{pending ? "Restoring..." : "Restore"}
 				</Button>
 				<p className="min-w-0 text-sm text-muted-foreground">It stays unshared until its owner shares it again.</p>
