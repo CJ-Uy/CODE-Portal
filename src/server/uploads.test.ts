@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/server/auth/permissions";
 import type { StorageAdapter, StorageBody } from "@/storage/types";
 import { createUploadHandlers, MAX_UPLOAD_BYTES } from "./uploads";
@@ -177,6 +177,202 @@ describe("upload handlers", () => {
 	});
 });
 
+const MB = 1024 * 1024;
+const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const PPTX = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const libraryMember: Actor = { memberId: "m1", roles: ["member"] };
+const libraryManager: Actor = { memberId: "mgr", roles: ["publishing"] };
+const pdfKey = "library/lib_1/m1/lfile_x.pdf";
+
+const pdfFile = () => new File([new TextEncoder().encode("%PDF-1.7 test")], "a.pdf", { type: "application/pdf" });
+const zipFile = (type: string, name: string) => new File([new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14])], name, { type });
+const pngFile = (bytes = 8) => new File([new Uint8Array(bytes)], "a.png", { type: "image/png" });
+
+function upload(
+	fields: Record<string, string | File>,
+	options: HandlerOptions & { actor?: Actor | null; headers?: Record<string, string> } = {},
+) {
+	const { actor = libraryMember, headers, ...handlerOptions } = options;
+	const form = new FormData();
+	for (const [name, value] of Object.entries(fields)) form.set(name, value);
+	return createHandlers(actor, handlerOptions).collection(
+		new Request("https://example.com/api/uploads", { method: "POST", body: form, headers }),
+	);
+}
+
+function get(path: string, method = "GET") {
+	return new Request(`https://example.com/api/uploads/${path}`, { method });
+}
+
+async function seededStorage(key = pdfKey, contentType = "application/pdf", body = "%PDF-1.7 test") {
+	const storage = new MemoryStorage();
+	await storage.putObject({ key, body, contentType });
+	return storage;
+}
+
+describe("library uploads", () => {
+	it("accepts a real PDF for an editable item and rejects a renamed exe", async () => {
+		const storage = new MemoryStorage();
+		const res = await upload({ purpose: "library_file", itemId: "lib_1", file: pdfFile() }, { storage });
+		expect(res.status).toBe(201);
+		const { key } = await res.json() as { key: string };
+		expect(key).toMatch(/^library\/lib_1\/m1\/lfile_[a-z0-9]+\.pdf$/);
+		expect(storage.keys()).toEqual([key]);
+
+		const fake = new File([new Uint8Array([0x4d, 0x5a, 0x90])], "a.pdf", { type: "application/pdf" });
+		expect((await upload({ purpose: "library_file", itemId: "lib_1", file: fake }, { storage })).status).toBe(415);
+		expect(storage.keys()).toEqual([key]);
+	});
+
+	it.each([
+		[DOCX, "docx"],
+		[PPTX, "pptx"],
+		[XLSX, "xlsx"],
+	])("accepts %s with a zip header and rejects it without one", async (type, extension) => {
+		const ok = await upload({ purpose: "library_file", itemId: "lib_1", file: zipFile(type, `a.${extension}`) });
+		expect(ok.status).toBe(201);
+		expect((await ok.json() as { key: string }).key).toMatch(new RegExp(`^library/lib_1/m1/lfile_[a-z0-9]+\\.${extension}$`));
+
+		const noHeader = new File([new TextEncoder().encode("not a zip")], `a.${extension}`, { type });
+		expect((await upload({ purpose: "library_file", itemId: "lib_1", file: noHeader })).status).toBe(415);
+		// a PDF payload does not pass as an Office file either
+		const pdfAsOffice = new File([new TextEncoder().encode("%PDF-1.7")], `a.${extension}`, { type });
+		expect((await upload({ purpose: "library_file", itemId: "lib_1", file: pdfAsOffice })).status).toBe(415);
+	});
+
+	it("rejects a ZIP-headed file that claims to be a PDF", async () => {
+		const res = await upload({ purpose: "library_file", itemId: "lib_1", file: zipFile("application/pdf", "a.pdf") });
+		expect(res.status).toBe(415);
+	});
+
+	it("accepts library images and refuses non-image or non-document types per purpose", async () => {
+		const image = await upload({ purpose: "library_image", itemId: "lib_1", file: pngFile() });
+		expect(image.status).toBe(201);
+		expect((await image.json() as { key: string }).key).toMatch(/^library\/lib_1\/m1\/limg_[a-z0-9]+\.png$/);
+
+		expect((await upload({ purpose: "library_image", itemId: "lib_1", file: pdfFile() })).status).toBe(415);
+		expect((await upload({ purpose: "library_file", itemId: "lib_1", file: pngFile() })).status).toBe(415);
+		const text = new File(["hello"], "a.txt", { type: "text/plain" });
+		expect((await upload({ purpose: "library_file", itemId: "lib_1", file: text })).status).toBe(415);
+	});
+
+	it("rejects library uploads over 50 MB and images over 10 MB", async () => {
+		const header = (megabytes: number) => ({ "content-length": String(megabytes * MB) });
+		expect((await upload({ purpose: "library_file", itemId: "lib_1", file: pdfFile() }, { headers: header(51) })).status).toBe(413);
+		expect((await upload({ purpose: "library_file", itemId: "lib_1", file: pdfFile() }, { headers: header(60) })).status).toBe(413);
+		const bigPng = pngFile(10 * MB + 1);
+		expect((await upload({ purpose: "library_image", itemId: "lib_1", file: bigPng })).status).toBe(413);
+	});
+
+	it("rejects a PDF body over 50 MB when no content-length announces it", async () => {
+		const big = new File([new Uint8Array(50 * MB + 1)], "big.pdf", { type: "application/pdf" });
+		expect((await upload({ purpose: "library_file", itemId: "lib_1", file: big })).status).toBe(413);
+	}, 30_000);
+
+	it("sizes the limit by purpose: 10 MB for library images, still 5 MB for avatars", async () => {
+		expect((await upload({ purpose: "library_image", itemId: "lib_1", file: pngFile(6 * MB) })).status).toBe(201);
+		expect((await upload({ purpose: "avatar", file: pngFile(6 * MB) })).status).toBe(413);
+	});
+
+	it("rejects uploads to items the actor cannot edit and passes the actor and item to the check", async () => {
+		const storage = new MemoryStorage();
+		const canEditLibraryItem = vi.fn(async () => false);
+		const res = await upload({ purpose: "library_file", itemId: "lib_other", file: pdfFile() }, { storage, canEditLibraryItem });
+		expect(res.status).toBe(403);
+		expect(canEditLibraryItem).toHaveBeenCalledWith(libraryMember, "lib_other");
+		expect(storage.keys()).toEqual([]);
+	});
+
+	it.each(["library_file", "library_image"])("requires a safe itemId for %s", async (purpose) => {
+		const canEditLibraryItem = vi.fn(async () => true);
+		const file = purpose === "library_file" ? pdfFile() : pngFile();
+		expect((await upload({ purpose, file }, { canEditLibraryItem })).status).toBe(400);
+		for (const itemId of ["", "..", "a/b", "../x", "a b"]) {
+			expect((await upload({ purpose, itemId, file }, { canEditLibraryItem })).status).toBe(400);
+		}
+		expect(canEditLibraryItem).not.toHaveBeenCalled();
+	});
+
+	it("requires authentication and still rejects unknown purposes", async () => {
+		expect((await upload({ purpose: "library_file", itemId: "lib_1", file: pdfFile() }, { actor: null })).status).toBe(401);
+		expect((await upload({ purpose: "nope", file: pngFile() })).status).toBe(400);
+	});
+});
+
+describe("library file access", () => {
+	it("serves library files only to members who can read the item", async () => {
+		const storage = await seededStorage();
+		const denied = vi.fn(async () => false);
+		const res = await createHandlers(libraryMember, { storage, canReadLibraryObject: denied }).object(get(pdfKey), pdfKey);
+		expect(res.status).toBe(404);
+		expect(denied).toHaveBeenCalledWith(libraryMember, "lib_1");
+
+		const allowed = await createHandlers(libraryMember, storage).object(get(pdfKey), pdfKey);
+		expect(allowed.status).toBe(200);
+		expect(allowed.headers.get("content-type")).toBe("application/pdf");
+		expect(new TextDecoder().decode(await allowed.arrayBuffer())).toBe("%PDF-1.7 test");
+	});
+
+	it("requires a signed-in member before touching storage or the item check", async () => {
+		const canReadLibraryObject = vi.fn(async () => true);
+		const res = await createHandlers(null, { storage: await seededStorage(), canReadLibraryObject }).object(get(pdfKey), pdfKey);
+		expect(res.status).toBe(401);
+		expect(canReadLibraryObject).not.toHaveBeenCalled();
+	});
+
+	it("returns 404 for a missing object and for keys of any other shape", async () => {
+		const canReadLibraryObject = vi.fn(async () => true);
+		const handlers = createHandlers(libraryMember, { storage: await seededStorage(), canReadLibraryObject });
+		const keys = ["library/lib_1/m1/missing.pdf", "library/a/b", "library/../x/y", "library/a/../y/z", "library/a/b/c/d", "library//b/c", "library/a/b/c d"];
+		for (const key of keys) expect((await handlers.object(get(key), key)).status).toBe(404);
+		expect(canReadLibraryObject).toHaveBeenCalledTimes(1); // only the well-formed missing key reached the item check
+	});
+
+	it("sets inline disposition for PDFs and attachment for downloads", async () => {
+		const storage = await seededStorage();
+		const res = await createHandlers(libraryMember, storage).object(get(`${pdfKey}?name=Module%201.pdf`), pdfKey);
+		expect(res.headers.get("content-disposition")).toBe('inline; filename="Module 1.pdf"');
+		expect(res.headers.get("content-length")).toBe("13");
+		expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+		const dl = await createHandlers(libraryMember, storage).object(get(`${pdfKey}?download=1`), pdfKey);
+		expect(dl.headers.get("content-disposition")).toMatch(/^attachment/);
+	});
+
+	it("shows images inline, forces Office files to download, and defaults the filename to the key basename", async () => {
+		const png = "library/lib_1/m1/limg_x.png";
+		const docx = "library/lib_1/m1/lfile_y.docx";
+		const storage = new MemoryStorage();
+		await storage.putObject({ key: png, body: "png", contentType: "image/png" });
+		await storage.putObject({ key: docx, body: "PK", contentType: DOCX });
+		const handlers = createHandlers(libraryMember, storage);
+
+		expect((await handlers.object(get(png), png)).headers.get("content-disposition")).toBe('inline; filename="limg_x.png"');
+		expect((await handlers.object(get(docx), docx)).headers.get("content-disposition")).toBe('attachment; filename="lfile_y.docx"');
+		expect((await handlers.object(get(`${docx}?name=Brief.docx&download=1`), docx)).headers.get("content-disposition")).toBe('attachment; filename="Brief.docx"');
+	});
+
+	it("sanitizes the filename: quotes, backslashes, control characters and non-ASCII", async () => {
+		const storage = await seededStorage();
+		const name = encodeURIComponent('a"b\\c\r\nd é\u{1F600}.pdf');
+		const res = await createHandlers(libraryMember, storage).object(get(`${pdfKey}?name=${name}`), pdfKey);
+		expect(res.headers.get("content-disposition")).toBe('inline; filename="abc__d __.pdf"');
+		const blank = await createHandlers(libraryMember, storage).object(get(`${pdfKey}?name=%22%22`), pdfKey);
+		expect(blank.headers.get("content-disposition")).toBe('inline; filename="lfile_x.pdf"');
+	});
+
+	it("allows only library:manage to delete library objects, not the uploader", async () => {
+		const storage = await seededStorage();
+		const uploader = await createHandlers(libraryMember, storage).object(get(pdfKey, "DELETE"), pdfKey);
+		expect(uploader.status).toBe(403);
+		expect(storage.keys()).toEqual([pdfKey]);
+
+		const manager = await createHandlers(libraryManager, storage).object(get(pdfKey, "DELETE"), pdfKey);
+		expect(manager.status).toBe(204);
+		expect(storage.keys()).toEqual([]);
+	});
+});
+
 function imageForm(): FormData {
 	const form = new FormData();
 	form.set("purpose", "avatar");
@@ -187,6 +383,8 @@ function imageForm(): FormData {
 type HandlerOptions = {
 	storage?: MemoryStorage;
 	canEditLink?: (actor: Actor, linkId: string) => Promise<boolean>;
+	canEditLibraryItem?: (actor: Actor, itemId: string) => Promise<boolean>;
+	canReadLibraryObject?: (actor: Actor, itemId: string) => Promise<boolean>;
 };
 
 function createHandlers(actor: Actor | null, options: MemoryStorage | HandlerOptions = {}) {
@@ -197,7 +395,16 @@ function createHandlers(actor: Actor | null, options: MemoryStorage | HandlerOpt
 		storage,
 		canPostEvent: async () => true,
 		canEditLink,
+		canEditLibraryItem: options instanceof MemoryStorage ? async () => true : options.canEditLibraryItem ?? (async () => true),
+		canReadLibraryObject: options instanceof MemoryStorage ? async () => true : options.canReadLibraryObject ?? (async () => true),
 	});
+}
+
+function sizeOf(body: StorageBody): number | undefined {
+	if (typeof body === "string") return new TextEncoder().encode(body).byteLength;
+	if (body instanceof Blob) return body.size;
+	if (body instanceof ArrayBuffer) return body.byteLength;
+	return undefined;
 }
 
 class MemoryStorage implements StorageAdapter {
@@ -211,7 +418,9 @@ class MemoryStorage implements StorageAdapter {
 
 	async getObject(key: string) {
 		const object = this.objects.get(key);
-		return object ? { body: object.body as ReadableStream, contentType: object.contentType } : { body: null };
+		return object
+			? { body: object.body as ReadableStream, contentType: object.contentType, contentLength: sizeOf(object.body) }
+			: { body: null };
 	}
 
 	async deleteObject(key: string) {

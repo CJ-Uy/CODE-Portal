@@ -12,6 +12,8 @@ export interface StorageAdapter {
 	getObject(key: string): Promise<{
 		body: ReadableStream | null;
 		contentType?: string;
+		/** Bytes, when the backend reports them; callers omit Content-Length otherwise. */
+		contentLength?: number;
 	}>;
 
 	deleteObject(key: string): Promise<void>;

@@ -32,7 +32,7 @@ export class R2S3StorageAdapter implements StorageAdapter {
 		return { key: input.key };
 	}
 
-	async getObject(key: string): Promise<{ body: ReadableStream | null; contentType?: string }> {
+	async getObject(key: string): ReturnType<StorageAdapter["getObject"]> {
 		const config = getAppConfig();
 		const response = await this.client().send(new GetObjectCommand({
 			Bucket: config.R2_BUCKET_NAME,
@@ -41,6 +41,7 @@ export class R2S3StorageAdapter implements StorageAdapter {
 		return {
 			body: response.Body?.transformToWebStream() ?? null,
 			contentType: response.ContentType,
+			contentLength: response.ContentLength,
 		};
 	}
 

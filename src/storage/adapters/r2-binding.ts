@@ -19,11 +19,12 @@ export class R2BindingStorageAdapter implements StorageAdapter {
 		return { key: input.key };
 	}
 
-	async getObject(key: string): Promise<{ body: ReadableStream | null; contentType?: string }> {
+	async getObject(key: string): ReturnType<StorageAdapter["getObject"]> {
 		const object = await this.bucket().get(key);
 		return {
 			body: object?.body ?? null,
 			contentType: object?.httpMetadata?.contentType,
+			contentLength: object?.size,
 		};
 	}
 
