@@ -14,16 +14,20 @@ type Entry = { id: string; name: string };
 /** The member's default list is always the entry "saved", whether or not it exists yet: the action creates it on first use. */
 const SAVED = "saved";
 
-/** Saved first, then the member's other lists and the lists they edit. A list a moderator took down cannot take new items. */
+/** Only the viewer's own default list is "their Saved list"; another member's default list that they edit is an ordinary one. */
+const isOwnSaved = (list: LibraryListSummary) => list.isDefault && list.role === "owner";
+
+/** Saved first (under whatever name its owner gave it), then the member's other lists and the lists they edit. A list a moderator took down cannot take new items. */
 function entriesFor(lists: LibraryListSummary[]): Entry[] {
-	return [{ id: SAVED, name: "Saved" }, ...lists.filter((list) => !list.isDefault && !list.takenDownAt).map((list) => ({ id: list.id, name: list.name }))];
+	const saved = lists.find(isOwnSaved);
+	return [{ id: SAVED, name: saved?.name ?? "Saved" }, ...lists.filter((list) => !isOwnSaved(list) && !list.takenDownAt).map((list) => ({ id: list.id, name: list.name }))];
 }
 
 /** The Save button and its list picker: one tap per list, "New list" at the bottom. An item can sit in several lists. */
 export function SavePicker({ itemId, lists, savedIn }: { itemId: string; lists: LibraryListSummary[]; savedIn: string[] }) {
 	const [open, setOpen] = useState(false);
 	const [saved, setSaved] = useState(() => {
-		const defaultId = lists.find((list) => list.isDefault)?.id;
+		const defaultId = lists.find(isOwnSaved)?.id;
 		return new Set(savedIn.map((id) => (id === defaultId ? SAVED : id)));
 	});
 	const [added, setAdded] = useState<Entry[]>([]);
@@ -104,7 +108,7 @@ export function SavePicker({ itemId, lists, savedIn }: { itemId: string; lists: 
 										onChange={() => toggle(entry)}
 										className="size-4 shrink-0 accent-[#06192F]"
 									/>
-									<span className="min-w-0 break-all">{entry.name}</span>
+									<span className="min-w-0 [overflow-wrap:anywhere]">{entry.name}</span>
 								</label>
 							</li>
 						))}

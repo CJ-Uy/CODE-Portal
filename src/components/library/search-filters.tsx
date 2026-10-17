@@ -10,7 +10,7 @@ import { Select } from "@/components/ui/select";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import type { LibrarySearchInput } from "@/db/repositories/library";
-import { applySearchChange, effectiveSort, facetsFor, SORT_LABELS, SORTS, toggleValue, toLibrarySearchParams } from "@/lib/library/search-params";
+import { applySearchChange, effectiveSort, facetsFor, hasActiveSearch, SORT_LABELS, SORTS, toggleValue, toLibrarySearchParams } from "@/lib/library/search-params";
 import type { ParsedLibrarySearch } from "@/lib/library/search-params";
 import { ENGAGEMENT_TYPES, FORMAT_DETAILS, KIND_LABELS, LIBRARY_KINDS, LIBRARY_SOURCES, SOURCE_LABELS } from "@/lib/library/taxonomy";
 import { cn } from "@/lib/utils";
@@ -32,7 +32,8 @@ function useSearch(): SearchState {
 /**
  * Holds the search the member is building. Every tap is applied to this at once and the URL follows, so a second tap made
  * before the first navigation returns is built on top of the first (the server's copy of the search is always one step behind).
- * Filters and sort replace the history entry; a submitted search pushes one.
+ * A submitted search pushes a history entry, and so does the first filter or sort tap from the bare home; taps after that
+ * refine the same results and replace the entry.
  */
 export function SearchProvider({ value, children }: { value: ParsedLibrarySearch; children: React.ReactNode }) {
 	const router = useRouter();
@@ -45,14 +46,16 @@ export function SearchProvider({ value, children }: { value: ParsedLibrarySearch
 		latest.current = query;
 	}, [query]);
 
-	const change: Change = (patch, how = "replace") => {
+	const change: Change = (patch, how) => {
+		// The first tap from the bare home pushes, so Back returns to the home; later taps refine the same results and replace.
+		const mode = how ?? (hasActiveSearch(latest.current) ? "replace" : "push");
 		const next = applySearchChange(latest.current, typeof patch === "function" ? patch(latest.current) : patch);
 		latest.current = next;
 		const params = toLibrarySearchParams(next).toString();
 		const href = params ? `/portal/library?${params}` : "/portal/library";
 		startTransition(() => {
 			setQuery(next);
-			if (how === "push") router.push(href);
+			if (mode === "push") router.push(href);
 			else router.replace(href, { scroll: false });
 		});
 	};
@@ -67,7 +70,7 @@ function Chip({ pressed, onClick, children }: { pressed: boolean; onClick: () =>
 			aria-pressed={pressed}
 			onClick={onClick}
 			className={cn(
-				"min-h-10 min-w-0 max-w-full break-all rounded-full border px-3 py-1 text-left text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:min-h-8",
+				"min-h-10 min-w-0 max-w-full [overflow-wrap:anywhere] rounded-full border px-3 py-1 text-left text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:min-h-8",
 				pressed ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-muted-foreground hover:border-accent hover:text-foreground",
 			)}
 		>
@@ -192,7 +195,7 @@ function FilterFields({ tags, smart }: { tags: FilterTag[]; smart: boolean | nul
 					{groups.map(([groupName, groupTags]) => (
 						<details key={groupName} open={groupTags.some((tag) => query.tagIds?.includes(tag.id))} className="group min-w-0 border-t border-border py-1">
 							<summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
-								<span className="min-w-0 break-all">{groupName}</span>
+								<span className="min-w-0 [overflow-wrap:anywhere]">{groupName}</span>
 								<ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden />
 							</summary>
 							<div className="flex min-w-0 flex-wrap gap-1.5 pb-2 pt-1">

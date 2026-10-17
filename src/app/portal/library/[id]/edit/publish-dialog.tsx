@@ -131,7 +131,7 @@ export function ClientDataDialog({ open, onOpenChange, itemId }: FlagProps) {
 				onOpenChange(false);
 				router.refresh();
 			} catch (e) {
-				setError(actionErrorMessage(e, "Could not send it for review. Reload the page and try again."));
+				setError(actionErrorMessage(e, "Could not send it for approval. Reload the page and try again."));
 			}
 		});
 
@@ -139,7 +139,7 @@ export function ClientDataDialog({ open, onOpenChange, itemId }: FlagProps) {
 		<Modal open={open} onOpenChange={onOpenChange} locked={pending} labelledBy="flag-title">
 			<div className="grid gap-4 p-5">
 				<h2 id="flag-title" className="font-heading text-2xl">
-					Hide this and send it for review?
+					Hide this and send it for approval?
 				</h2>
 				<p className="text-sm">
 					If this item now includes client names or client data, it goes back to a library moderator for approval. It is hidden from other members until a moderator approves it. You can keep editing it meanwhile.
@@ -154,7 +154,7 @@ export function ClientDataDialog({ open, onOpenChange, itemId }: FlagProps) {
 						Cancel
 					</Button>
 					<Button type="button" disabled={pending} onClick={confirm}>
-						{pending ? "Working..." : "Hide and send for review"}
+						{pending ? "Working..." : "Hide and send for approval"}
 					</Button>
 				</div>
 			</div>

@@ -68,7 +68,7 @@ export default async function LibraryListPage({ params }: { params: Promise<{ id
 					A library moderator took this list down
 					{list.moderationReason ? (
 						<>
-							: <span className="break-all">{list.moderationReason}</span>
+							: <span className="[overflow-wrap:anywhere]">{list.moderationReason}</span>
 							{fullStopFor(list.moderationReason)}
 						</>
 					) : (
@@ -86,10 +86,10 @@ export default async function LibraryListPage({ params }: { params: Promise<{ id
 			<header className="grid min-w-0 gap-3">
 				<div className="flex min-w-0 items-start gap-3">
 					<span className="mt-3 size-4 shrink-0 rounded-full" style={{ backgroundColor: list.color }} aria-hidden />
-					<h1 className="min-w-0 break-all font-heading text-3xl leading-tight">{list.name}</h1>
+					<h1 className="min-w-0 [overflow-wrap:anywhere] font-heading text-3xl leading-tight">{list.name}</h1>
 				</div>
 				<div className="flex flex-wrap items-center gap-2">
-					{list.isDefault ? <Badge variant="outline">Your saved items</Badge> : null}
+					{list.isDefault && isOwner ? <Badge variant="outline">Your saved items</Badge> : null}
 					{list.shared ? <Badge variant="secondary">Shared with members</Badge> : <Badge variant="outline">Private</Badge>}
 					{list.pinned ? <Badge variant="info">Collection</Badge> : null}
 					{takenDown ? <Badge variant="warn">Taken down</Badge> : null}
@@ -100,7 +100,7 @@ export default async function LibraryListPage({ params }: { params: Promise<{ id
 				{list.description.trim() ? <p className="min-w-0 whitespace-pre-line text-muted-foreground [overflow-wrap:anywhere]">{list.description}</p> : null}
 				<div className="grid min-w-0 gap-1 text-sm text-muted-foreground">
 					<p className="min-w-0">
-						Owner <span className="break-all font-medium text-foreground">{list.ownerName}</span>
+						Owner <span className="[overflow-wrap:anywhere] font-medium text-foreground">{list.ownerName}</span>
 					</p>
 					{list.editors.length > 0 ? (
 						<p className="min-w-0">
@@ -108,7 +108,7 @@ export default async function LibraryListPage({ params }: { params: Promise<{ id
 							{list.editors.map((editor, index) => (
 								<span key={editor.memberId}>
 									{index > 0 ? ", " : ""}
-									<span className="break-all font-medium text-foreground">{editor.name}</span>
+									<span className="[overflow-wrap:anywhere] font-medium text-foreground">{editor.name}</span>
 								</span>
 							))}
 						</p>

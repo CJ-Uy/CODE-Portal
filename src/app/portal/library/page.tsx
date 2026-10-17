@@ -68,7 +68,7 @@ function CollectionsShelf({ lists }: { lists: LibraryListSummary[] }) {
 					>
 						<span className="mt-1 size-4 shrink-0 rounded-full" style={{ backgroundColor: list.color }} aria-hidden />
 						<div className="grid min-w-0 flex-1 gap-1">
-							<p className="min-w-0 break-all font-medium leading-snug">{list.name}</p>
+							<p className="min-w-0 [overflow-wrap:anywhere] font-medium leading-snug">{list.name}</p>
 							{list.description.trim() ? <p className="line-clamp-2 min-w-0 text-sm text-muted-foreground [overflow-wrap:anywhere]">{list.description}</p> : null}
 							<p className="text-xs text-muted-foreground">
 								{list.itemCount} {list.itemCount === 1 ? "item" : "items"}
@@ -96,7 +96,7 @@ function KeywordChips({ search, chips }: { search: ParsedLibrarySearch; chips: S
 								aria-label={`Remove ${chip.label}`}
 								title="Remove"
 								scroll={false}
-								className="inline-flex min-h-8 min-w-0 max-w-full items-center break-all rounded-full border border-border bg-secondary/60 px-3 py-1 text-xs font-medium text-secondary-foreground transition-colors hover:border-accent hover:line-through focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+								className="inline-flex min-h-8 min-w-0 max-w-full items-center [overflow-wrap:anywhere] rounded-full border border-border bg-secondary/60 px-3 py-1 text-xs font-medium text-secondary-foreground transition-colors hover:border-accent hover:line-through focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 							>
 								{chip.label}
 							</Link>
@@ -114,11 +114,11 @@ function Results({ search, cards, total }: { search: ParsedLibrarySearch; cards:
 	return (
 		<section aria-labelledby="library-results" className="grid min-w-0 gap-4">
 			<div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-				<div className="min-w-0" aria-live="polite">
+				<div className="min-w-0">
 					<h2 id="library-results" className="font-heading text-xl">
 						{total.toLocaleString("en-US")} {total === 1 ? "result" : "results"}
 					</h2>
-					{search.q ? <p className="min-w-0 break-all text-sm text-muted-foreground">for &ldquo;{search.q}&rdquo;</p> : null}
+					{search.q ? <p className="min-w-0 [overflow-wrap:anywhere] text-sm text-muted-foreground">for &ldquo;{search.q}&rdquo;</p> : null}
 				</div>
 				<SortSelect />
 			</div>
@@ -201,6 +201,7 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
 				libraryActivity.totalActiveSeconds().catch(() => 0),
 				library.search(actor, { sort: "newest", limit: RECENT_SIZE }).catch(() => NO_CARDS),
 			]);
+	const resultsAnnouncement = results ? `${results.total.toLocaleString("en-US")} ${results.total === 1 ? "result" : "results"}${search.q ? ` for ${search.q}` : ""}` : "";
 	// Only tags that have something to find, plus any already in the URL so a shared link can still be cleared.
 	const filterTags = (await tags)
 		.filter((tag) => tag.itemCount > 0 || search.tagIds?.includes(tag.id))
@@ -220,14 +221,17 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
 					<Button asChild size="sm" className="min-h-10">
 						<Link href="/portal/library/new">
 							<Plus aria-hidden />
-							Add to library
+							Add to the library
 						</Link>
 					</Button>
 					<Button asChild variant="ghost" size="sm" className="min-h-10">
-						<Link href="/portal/library/mine">My items</Link>
+						<Link href="/portal/library/mine">My library</Link>
 					</Button>
 					<Button asChild variant="ghost" size="sm" className="min-h-10">
 						<Link href="/portal/library/lists">My lists</Link>
+					</Button>
+					<Button asChild variant="ghost" size="sm" className="min-h-10">
+						<Link href="/portal/library/about">About the library</Link>
 					</Button>
 				</div>
 			</div>
@@ -235,6 +239,10 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
 			<PitchBanner />
 
 			<SearchProvider value={search}>
+				{/* One live region that stays mounted across home and results, so the first switch to results is announced too. */}
+				<p aria-live="polite" aria-atomic="true" className="sr-only">
+					{resultsAnnouncement}
+				</p>
 				<div className="grid min-w-0 gap-2">
 					<SearchBar />
 					{results?.chips.length ? <KeywordChips search={search} chips={results.chips} /> : null}
@@ -279,7 +287,7 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
 											description="The first thing added will show up here."
 											action={
 												<Button asChild variant="secondary" size="sm">
-													<Link href="/portal/library/new">Add to library</Link>
+													<Link href="/portal/library/new">Add to the library</Link>
 												</Button>
 											}
 										/>

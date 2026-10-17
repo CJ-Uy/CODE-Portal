@@ -105,12 +105,12 @@ export default async function LibraryAboutPage() {
 					Members only, for now
 				</h2>
 				<p className="leading-7 text-muted-foreground">
-					Published items are visible to every signed-in CODE member and no one else. Drafts and items waiting for review stay with their owners and the library moderators, and confidential items are limited further.
+					Published items are visible to every signed-in CODE member and no one else. Drafts and items waiting for approval stay with their owners and the library moderators, and confidential items are limited further.
 				</p>
 				<p className="leading-7 text-muted-foreground">If you wrote something that helped a team, adding it is the best way to move this forward.</p>
 				<div className="flex flex-wrap gap-2">
 					<Button asChild className="min-h-10">
-						<Link href="/portal/library/new">Add to library</Link>
+						<Link href="/portal/library/new">Add to the library</Link>
 					</Button>
 					<Button asChild variant="outline" className="min-h-10">
 						<Link href="/portal/library">Back to the library</Link>

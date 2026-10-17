@@ -44,7 +44,7 @@ function LinkCard({ url, title, description }: { url: string; title: string; des
 		<>
 			<ExternalLink className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
 			<div className="min-w-0">
-				<div className="min-w-0 break-all font-medium">{title.trim() || hostOf(url)}</div>
+				<div className="min-w-0 [overflow-wrap:anywhere] font-medium">{title.trim() || hostOf(url)}</div>
 				{description?.trim() ? <div className={cn(PROSE, "mt-1 line-clamp-3 text-sm text-muted-foreground")}>{description}</div> : null}
 				<div className="mt-1 min-w-0 break-all text-xs text-muted-foreground">{hostOf(url)}</div>
 			</div>
@@ -114,19 +114,19 @@ export const LibraryBlockView = memo(function LibraryBlockView({ block, embeds }
 			const tip = block.props.tone === "tip";
 			const Icon = tip ? Lightbulb : Info;
 			return (
-				<aside className={cn("flex min-w-0 gap-3 rounded-xl border p-4", tip ? "border-accent bg-accent/10" : "border-border bg-secondary")}>
+				<div role="note" className={cn("flex min-w-0 gap-3 rounded-xl border p-4", tip ? "border-accent bg-accent/10" : "border-border bg-secondary")}>
 					<Icon className="mt-1 size-4 shrink-0" aria-hidden />
 					<div className="min-w-0 flex-1 space-y-2">
 						<div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{tip ? "Tip" : "Note"}</div>
 						<Paragraphs text={block.props.text} />
 					</div>
-				</aside>
+				</div>
 			);
 		}
 		case "code":
 			return (
 				<div className="min-w-0">
-					{block.props.language?.trim() ? <div className="mb-1 min-w-0 break-all text-xs font-medium text-muted-foreground">{block.props.language}</div> : null}
+					{block.props.language?.trim() ? <div className="mb-1 min-w-0 [overflow-wrap:anywhere] text-xs font-medium text-muted-foreground">{block.props.language}</div> : null}
 					<pre
 						tabIndex={0}
 						aria-label={block.props.language?.trim() ? `${block.props.language} code` : "Code"}
@@ -147,7 +147,7 @@ export const LibraryBlockView = memo(function LibraryBlockView({ block, embeds }
 						className="mx-auto h-auto max-h-[80vh] max-w-full rounded-lg border border-border"
 					/>
 					{block.props.caption?.trim() ? (
-						<figcaption className="mt-2 min-w-0 break-all text-center text-sm text-muted-foreground">{block.props.caption}</figcaption>
+						<figcaption className="mt-2 min-w-0 [overflow-wrap:anywhere] text-center text-sm text-muted-foreground">{block.props.caption}</figcaption>
 					) : null}
 				</figure>
 			);

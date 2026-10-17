@@ -73,7 +73,7 @@ function ItemRow({ item, stats, weeks }: { item: LibraryItem; stats: LibraryItem
 					</div>
 					<Link
 						href={item.status === "published" ? `/portal/library/${item.id}` : `/portal/library/${item.id}/edit`}
-						className="min-w-0 break-all font-heading text-lg leading-snug hover:underline"
+						className="min-w-0 [overflow-wrap:anywhere] font-heading text-lg leading-snug hover:underline"
 					>
 						{item.title || "Untitled"}
 					</Link>
@@ -84,7 +84,7 @@ function ItemRow({ item, stats, weeks }: { item: LibraryItem; stats: LibraryItem
 			</div>
 
 			{item.moderationReason && (item.status === "taken_down" || item.status === "draft") ? (
-				<p className="min-w-0 break-all rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm">
+				<p className="min-w-0 [overflow-wrap:anywhere] rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm">
 					{item.status === "taken_down" ? "A library moderator took this down: " : "A library moderator sent this back: "}
 					{item.moderationReason}
 				</p>
@@ -132,7 +132,7 @@ export default async function MyLibraryPage() {
 				<div>
 					<p className="text-xs font-semibold uppercase text-primary">Member workspace</p>
 					<h1 className="font-heading text-3xl">My library</h1>
-					<p className="mt-1 max-w-2xl text-sm text-muted-foreground">Everything you have added, with how it is doing. Only you see these numbers.</p>
+					<p className="mt-1 max-w-2xl text-sm text-muted-foreground">Everything you have added, with how it is doing. Members see an item&apos;s opens, readers and reading time on its page. The weekly chart and download counts are only for you.</p>
 				</div>
 				<Button asChild>
 					<Link href="/portal/library/new">

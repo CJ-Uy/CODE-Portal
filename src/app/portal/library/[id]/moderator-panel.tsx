@@ -66,6 +66,11 @@ export function ModeratorPanel({ itemId, title, status, publicReadiness, confide
 			}
 		});
 
+	const openDelete = () => {
+		setError("");
+		setDeleteOpen(true);
+	};
+
 	const moderate = (action: Action, why?: string) =>
 		run(
 			async () => {
@@ -171,7 +176,7 @@ export function ModeratorPanel({ itemId, title, status, publicReadiness, confide
 						</Select>
 					</label>
 					<div>
-						<Button type="button" variant="outline" className="border-destructive/40 text-destructive" disabled={pending} onClick={() => setDeleteOpen(true)}>
+						<Button type="button" variant="outline" className="border-destructive/40 text-destructive" disabled={pending} onClick={openDelete}>
 							<Trash2 aria-hidden />
 							Delete this item
 						</Button>
@@ -179,7 +184,8 @@ export function ModeratorPanel({ itemId, title, status, publicReadiness, confide
 				</>
 			) : null}
 
-			{error ? (
+			{/* While the delete dialog is open the page is inert behind it, so its error is shown inside the dialog instead. */}
+			{error && !deleteOpen ? (
 				<p role="alert" className="text-sm text-destructive [overflow-wrap:anywhere]">
 					{error}
 				</p>
@@ -189,6 +195,7 @@ export function ModeratorPanel({ itemId, title, status, publicReadiness, confide
 				open={deleteOpen}
 				onOpenChange={(next) => {
 					setDeleteOpen(next);
+					setError("");
 					if (!next) setTyped("");
 				}}
 				locked={pending}
@@ -203,9 +210,14 @@ export function ModeratorPanel({ itemId, title, status, publicReadiness, confide
 					</p>
 					<label className="grid gap-1 text-sm font-medium">
 						Type the title to confirm
-						<span className="min-w-0 break-all rounded-md bg-secondary px-2 py-1 font-normal">{title}</span>
+						<span className="min-w-0 [overflow-wrap:anywhere] rounded-md bg-secondary px-2 py-1 font-normal">{title}</span>
 						<Input value={typed} onChange={(event) => setTyped(event.target.value)} autoComplete="off" disabled={pending} className="font-normal" />
 					</label>
+					{error && deleteOpen ? (
+						<p role="alert" className="min-w-0 text-sm text-destructive [overflow-wrap:anywhere]">
+							{error}
+						</p>
+					) : null}
 					<div className="flex flex-wrap justify-end gap-2">
 						<Button type="button" variant="outline" disabled={pending} onClick={() => setDeleteOpen(false)}>
 							Cancel

@@ -171,7 +171,7 @@ export default async function AdminLibraryModerationPage({ searchParams }: { sea
 								<>
 									<p className="max-w-2xl text-sm text-muted-foreground">
 										New and edited items are read on their own shortly after they change. Rebuild reads anything that was missed, such as items added by an import, 10 at a time until none are left.
-										{membersSeeIt ? null : " Members do not see smart search yet: rebuild first, then turn it on."}
+										{membersSeeIt ? null : " Members do not see smart search yet. It is switched on by the admins' deploy setting (FEATURE_LIBRARY_SMART_SEARCH) once the rebuild reaches 0."}
 									</p>
 									{can(actor, "library:manage") ? (
 										<RebuildIndexButton remaining={unindexed} />

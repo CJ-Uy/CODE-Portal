@@ -258,7 +258,7 @@ function ComposerPanel({ kind, itemPicker, uploading, uploadError, onUpload, onP
 					<ul className="grid max-h-64 grid-cols-1 gap-1 overflow-y-auto">
 						{matches.slice(0, 50).map((item) => (
 							<li key={item.id} className="min-w-0">
-								<button type="button" onClick={() => onPickItem(item.id)} className="block w-full min-w-0 break-all rounded-md px-2 py-1.5 text-left text-sm hover:bg-secondary">
+								<button type="button" onClick={() => onPickItem(item.id)} className="block w-full min-w-0 [overflow-wrap:anywhere] rounded-md px-2 py-1.5 text-left text-sm hover:bg-secondary">
 									{item.title}
 								</button>
 							</li>
@@ -597,7 +597,7 @@ export function LibraryBlockEditor({ itemId, blocks, onChange, itemPicker, onUpl
 								{block.type === "item" ? (
 									<div className="min-w-0 rounded-xl border border-border p-4 text-sm">
 										<span className="text-xs text-muted-foreground">Library item</span>
-										<div className="min-w-0 break-all font-medium">{titles.get(block.props.itemId) ?? "This item is not in your list"}</div>
+										<div className="min-w-0 [overflow-wrap:anywhere] font-medium">{titles.get(block.props.itemId) ?? "Title not available"}</div>
 									</div>
 								) : isBlankBlock(block) ? (
 									<p className="text-sm italic text-muted-foreground">Empty {TYPE_LABELS[block.type]}</p>
@@ -714,7 +714,7 @@ export function LibraryBlockEditor({ itemId, blocks, onChange, itemPicker, onUpl
 				<label className="grid min-w-0 gap-2 text-sm font-medium">
 					Library item
 					<select value={selected.props.itemId} onChange={(e) => update(selected.id, { itemId: e.target.value })} className={SELECT_CLASS}>
-						{titles.has(selected.props.itemId) ? null : <option value={selected.props.itemId}>This item is not in your list</option>}
+						{titles.has(selected.props.itemId) ? null : <option value={selected.props.itemId}>Current item (title not available)</option>}
 						{itemPicker.map((item) => (
 							<option key={item.id} value={item.id}>{item.title}</option>
 						))}
