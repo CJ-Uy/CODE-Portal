@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, ExternalLink, FileText, Lock, Pencil } from "lucide-react";
 import { getRepositories } from "@/db";
-import type { LibraryCard, LibraryCommentView, LibraryItemView } from "@/db/repositories/library";
+import { LINK_URL, type LibraryCard, type LibraryCommentView, type LibraryItemView } from "@/db/repositories/library";
 import { DownloadLink } from "@/components/library/download-link";
 import { LibraryBlocks } from "@/components/library/library-blocks";
 import { ReadingTracker } from "@/components/library/reading-tracker";
@@ -11,7 +11,7 @@ import { SavePicker } from "@/components/library/save-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { statsLine } from "@/lib/library/activity";
-import { embeddedItemIds } from "@/lib/library/block-view";
+import { embeddedItemIds, paragraphs } from "@/lib/library/block-view";
 import { filePreview, formatFileSize, libraryFileHref } from "@/lib/library/file-link";
 import { KIND_LABELS, READINESS_LABELS, SOURCE_LABELS } from "@/lib/library/taxonomy";
 import { getActor } from "@/server/auth/actor";
@@ -31,7 +31,6 @@ type Repositories = Awaited<ReturnType<typeof getRepositories>>;
 const EMBED_CHUNK = 100;
 const WHEN = new Intl.DateTimeFormat("en", { timeZone: "Asia/Manila", day: "numeric", month: "short", year: "numeric" });
 const OFFICE_CHIP = { word: "Word", powerpoint: "PowerPoint", excel: "Excel" } as const;
-const HTTP_URL = /^https?:\/\/\S+$/i;
 
 /** Every embedded id gets an answer: its card, or null ("Not available") when it is hidden from this reader or gone. */
 async function loadEmbeds(actor: Actor, repositories: Repositories, item: LibraryItemView): Promise<Map<string, LibraryCard | null>> {
@@ -107,7 +106,15 @@ export default async function LibraryItemPage({ params }: { params: Promise<{ id
 				</div>
 
 				<h1 className="min-w-0 font-heading text-3xl leading-tight [overflow-wrap:anywhere]">{item.title}</h1>
-				{item.dek ? <p className="min-w-0 text-lg text-muted-foreground [overflow-wrap:anywhere]">{item.dek}</p> : null}
+				{item.dek.trim() ? (
+					<div className="grid min-w-0 gap-2 text-lg text-muted-foreground">
+						{paragraphs(item.dek).map((part, index) => (
+							<p key={index} className="min-w-0 whitespace-pre-line [overflow-wrap:anywhere]">
+								{part}
+							</p>
+						))}
+					</div>
+				) : null}
 
 				{item.authors.length > 0 ? (
 					<ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm" aria-label="Authors">
@@ -140,7 +147,7 @@ export default async function LibraryItemPage({ params }: { params: Promise<{ id
 				<div className="flex flex-wrap items-center gap-2 pt-1">
 					<SavePicker itemId={item.id} lists={[...lists.owned, ...lists.editable]} savedIn={savedIn} />
 					{file && preview === "pdf" ? <DownloadLink itemId={item.id} href={libraryFileHref(file, { download: true })} /> : null}
-					{item.format === "link" && item.url && HTTP_URL.test(item.url) ? (
+					{item.format === "link" && item.url && LINK_URL.test(item.url) ? (
 						<Button asChild variant="outline">
 							<a href={item.url} target="_blank" rel="noopener noreferrer">
 								<ExternalLink aria-hidden />
@@ -306,7 +313,7 @@ function LinkBody({ url }: { url: string | null }) {
 		</>
 	);
 	// Stored links are checked on save; this only stops a corrupt row from becoming a javascript: link.
-	if (!url || !HTTP_URL.test(url)) return <div className={box}>{content}</div>;
+	if (!url || !LINK_URL.test(url)) return <div className={box}>{content}</div>;
 	return (
 		<a
 			href={url}

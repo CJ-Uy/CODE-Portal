@@ -35,7 +35,8 @@ export function SavePicker({ itemId, lists, savedIn }: { itemId: string; lists: 
 	const base = entriesFor(lists);
 	// A list made here shows at once; once the page re-renders it arrives in `lists` too, so it is listed only once.
 	const entries = [...base, ...added.filter((entry) => !base.some((known) => known.id === entry.id))];
-	const anySaved = saved.size > 0;
+	// Only the lists shown count: the item may also sit in a list that is hidden here, and the button must match what is ticked.
+	const anySaved = entries.some((entry) => saved.has(entry.id));
 
 	const mark = (id: string, on: boolean) =>
 		setSaved((current) => {

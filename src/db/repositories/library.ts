@@ -19,7 +19,7 @@ import {
 import { createId } from "@/lib/ids";
 import { blocksToPlainText, readMinutes } from "@/lib/library/blocks";
 import type { LibraryBlock } from "@/lib/library/blocks";
-import { allowedFormats, defaultFormat, defaultPublicReadiness, defaultSource } from "@/lib/library/taxonomy";
+import { allowedFormats, defaultFormat, defaultPublicReadiness, defaultSource, REPORT_REASONS } from "@/lib/library/taxonomy";
 import type {
 	LibraryAuthor,
 	LibraryFormat,
@@ -198,8 +198,11 @@ function searchWords(q: string | undefined): string[] {
 	return [...new Set((q ?? "").toLowerCase().split(/\s+/).filter(Boolean))].slice(0, MAX_WORDS);
 }
 
+/** What a stored link may look like. The item page checks the same pattern before it renders one as a link. */
+export const LINK_URL = /^https?:\/\/\S+$/i;
+
 function assertLink(url: string | null | undefined): void {
-	if (url && !/^https?:\/\/\S+$/i.test(url)) throw new Error("Use a link that starts with http:// or https://");
+	if (url && !LINK_URL.test(url)) throw new Error("Use a link that starts with http:// or https://");
 }
 
 function requireFormat(kind: LibraryKind, format: LibraryFormat): LibraryFormat {
@@ -331,7 +334,7 @@ export async function cardsByIds(db: Db, itemIds: string[]): Promise<LibraryCard
 	return found.flat();
 }
 
-const REPORT_REASONS: LibraryReportReason[] = ["client_data", "inappropriate", "copyright", "broken_file", "other"];
+// How a reason reads inside a sentence ("A copyright report was filed ..."). Keyed by the type, so a new reason cannot be left without one.
 const REPORT_REASON_LABELS: Record<LibraryReportReason, string> = {
 	client_data: "client data",
 	inappropriate: "inappropriate content",

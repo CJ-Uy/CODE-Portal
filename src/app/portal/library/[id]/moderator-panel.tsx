@@ -101,7 +101,8 @@ export function ModeratorPanel({ itemId, title, status, publicReadiness, confide
 						<div className="grid gap-2">
 							<label className="grid gap-1 text-sm font-medium">
 								Why? The owner will read this.
-								<Textarea value={reason} onChange={(event) => setReason(event.target.value)} maxLength={1000} rows={3} disabled={pending} className="font-normal" />
+								{/* It only exists because the moderator just chose an action that needs a reason, so the cursor goes straight to it. */}
+								<Textarea autoFocus value={reason} onChange={(event) => setReason(event.target.value)} maxLength={1000} rows={3} disabled={pending} className="font-normal" />
 							</label>
 							<div className="flex flex-wrap gap-2">
 								<Button type="button" disabled={pending || !reason.trim()} onClick={() => moderate(asking, reason)}>
@@ -153,7 +154,7 @@ export function ModeratorPanel({ itemId, title, status, publicReadiness, confide
 								setVisibleTo(value);
 								run(
 									() => setConfidentialityAction({ itemId, value }),
-									value === "confidential" ? "Now confidential: library admins only." : "Now open to every member.",
+									value === "confidential" ? "Now confidential: library admins and the owner." : "Now open to every member.",
 									undefined,
 									() => setVisibleTo(before),
 								);

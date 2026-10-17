@@ -12,6 +12,7 @@ import type {
 	LibraryPublicReadiness,
 	LibrarySource,
 	LibraryStatus,
+	ReportReason,
 } from "@/lib/library/taxonomy";
 import type { SurveyQuestionInput } from "./types";
 
@@ -743,7 +744,8 @@ export const announcementReads = sqliteTable(
 );
 
 export type LibraryConfidentiality = "public" | "members" | "confidential";
-export type LibraryReportReason = "client_data" | "inappropriate" | "copyright" | "broken_file" | "other";
+/** The list lives in taxonomy.ts (REPORT_REASONS), next to the labels the report dialog shows. */
+export type LibraryReportReason = ReportReason;
 export type LibraryReportResolution = "dismissed" | "taken_down";
 
 export const libraryItems = sqliteTable(

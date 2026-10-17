@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createReadingTracker } from "./activity-tracker";
+import { createFrameFocus, createReadingTracker, PDF_FOCUS_MS } from "./activity-tracker";
 
 function active() {
 	const t = createReadingTracker();
@@ -77,5 +77,61 @@ describe("createReadingTracker", () => {
 		t.feed({ type: "tick", at: 10_000 });
 		expect(t.feed({ type: "tick", at: 5_000 })).toBe(0);
 		expect(t.feed({ type: "tick", at: 15_000 })).toBe(15);
+	});
+});
+
+describe("createFrameFocus", () => {
+	it("counts focus in the preview for five minutes, then stops", () => {
+		const frame = createFrameFocus();
+		expect(frame.counts(true, 1_000)).toBe(true);
+		expect(frame.counts(true, 1_000 + PDF_FOCUS_MS - 1)).toBe(true);
+		expect(frame.counts(true, 1_000 + PDF_FOCUS_MS)).toBe(false);
+		expect(frame.counts(true, 1_000 + PDF_FOCUS_MS + 60_000)).toBe(false);
+	});
+
+	it("never counts focus that is not in the preview, and starts a new entry on return", () => {
+		const frame = createFrameFocus();
+		expect(frame.counts(false, 0)).toBe(false);
+		expect(frame.counts(true, 1_000)).toBe(true);
+		expect(frame.counts(true, 1_000 + PDF_FOCUS_MS)).toBe(false);
+		expect(frame.counts(false, 400_000)).toBe(false);
+		// Focus came back (a click, or the window regained focus): a fresh five minutes.
+		expect(frame.counts(true, 401_000)).toBe(true);
+		expect(frame.counts(true, 401_000 + PDF_FOCUS_MS - 1_000)).toBe(true);
+	});
+});
+
+describe("reading a PDF with focus resting in the preview", () => {
+	// The same loop the page runs: a tick a second, focus in the preview counted as an interaction first.
+	function read(seconds: number, inFrame: (second: number) => boolean) {
+		const tracker = createReadingTracker();
+		const frame = createFrameFocus();
+		tracker.feed({ type: "visible", at: 0 });
+		tracker.feed({ type: "interact", at: 0 });
+		let sent = 0;
+		for (let second = 1; second <= seconds; second++) {
+			const at = second * 1_000;
+			if (frame.counts(inFrame(second), at)) tracker.feed({ type: "interact", at });
+			sent += tracker.feed({ type: "tick", at });
+		}
+		return sent + tracker.feed({ type: "hidden", at: seconds * 1_000 });
+	}
+
+	it("credits what was read: three minutes in the preview is about 180 s", () => {
+		expect(read(180, () => true)).toBe(180);
+	});
+
+	it("stops after five minutes of focus plus the one-minute idle tail, however long the tab stays open", () => {
+		expect(read(600, () => true)).toBe(360);
+	});
+
+	it("stops soon after the window or the preview loses focus", () => {
+		// Focus leaves at 120 s: the idle tail is all that is left.
+		expect(read(600, (second) => second <= 120)).toBe(180);
+	});
+
+	it("counts nothing when focus was never in the preview", () => {
+		// Only the mount interaction at 0, so one idle minute.
+		expect(read(600, () => false)).toBe(60);
 	});
 });
