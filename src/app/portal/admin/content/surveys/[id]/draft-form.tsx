@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, type FormEvent } from "react";
+import { useRef, useState, useTransition, type FormEvent } from "react";
 import { Save } from "lucide-react";
 import { QuestionEditor } from "@/components/feedback/question-editor";
 import { Button } from "@/components/ui/button";
@@ -8,10 +8,15 @@ import { Input } from "@/components/ui/input";
 import type { SurveyQuestionInput } from "@/db/types";
 import { saveDraftAction } from "../actions";
 
-export function DraftForm({ surveyId, title, questions }: { surveyId: string; title: string; questions: SurveyQuestionInput[] }) {
+export type DraftFormProps = { surveyId: string; title: string; questions: SurveyQuestionInput[] };
+
+/** `onDirtyChange(true)` fires on every edit; `onDirtyChange(false)` only when a save lands with no edit made since it began. */
+export function DraftForm({ surveyId, title, questions, onDirtyChange }: DraftFormProps & { onDirtyChange: (dirty: boolean) => void }) {
 	const [error, setError] = useState<string | null>(null);
 	const [saved, setSaved] = useState(false);
 	const [pending, startTransition] = useTransition();
+	// Counts edits, so a save that finishes after the admin kept typing does not mark newer text as saved.
+	const edits = useRef(0);
 
 	// Submitted by hand rather than as a form action: React resets a form once its action settles, which would
 	// wipe the admin's edits on a validation error.
@@ -20,22 +25,31 @@ export function DraftForm({ surveyId, title, questions }: { surveyId: string; ti
 		const data = new FormData(event.currentTarget);
 		setError(null);
 		setSaved(false);
+		const editsAtSubmit = edits.current;
 		startTransition(async () => {
 			const result = await saveDraftAction(data);
 			if ("error" in result) setError(result.error);
-			else setSaved(true);
+			else if (edits.current === editsAtSubmit) {
+				setSaved(true);
+				onDirtyChange(false);
+			}
 		});
 	}
 
-	// "Saved." must not outlive an edit: typing, or any button in the editor (add, remove, reorder, required).
-	const clearSaved = () => setSaved(false);
+	// An edit is typing, or any button in the editor (add, remove, reorder, required). It voids "Saved." and tells
+	// the send panel there is something the members would not see.
+	const markEdited = () => {
+		edits.current += 1;
+		setSaved(false);
+		onDirtyChange(true);
+	};
 
 	return (
 		<form
 			onSubmit={onSubmit}
-			onInput={clearSaved}
+			onInput={markEdited}
 			onClick={(event) => {
-				if ((event.target as HTMLElement).closest("button")) clearSaved();
+				if ((event.target as HTMLElement).closest("button")) markEdited();
 			}}
 			className="grid min-w-0 gap-6"
 		>

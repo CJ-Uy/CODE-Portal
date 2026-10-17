@@ -27,8 +27,9 @@ export type SendPanelProps = {
 
 const RADIO = "mt-1 size-4 shrink-0 accent-primary";
 
-export function SendPanel(props: SendPanelProps) {
-	const { surveyId, hasEvent, eligible, suggested, stillCheckingIn, closesAt, email, questionCount, estimate } = props;
+/** `unsaved`: the editor has changes that are not saved yet, so sending would send the old questions. */
+export function SendPanel(props: SendPanelProps & { unsaved: boolean }) {
+	const { unsaved, surveyId, hasEvent, eligible, suggested, stillCheckingIn, closesAt, email, questionCount, estimate } = props;
 	const [invite, setInvite] = useState<InviteMode>("suggested");
 	const [count, setCount] = useState(String(suggested));
 	const [confirming, setConfirming] = useState(false);
@@ -53,6 +54,7 @@ export function SendPanel(props: SendPanelProps) {
 			setConfirming(true);
 			return;
 		}
+		if (unsaved) return;
 		const data = new FormData(event.currentTarget);
 		setError(null);
 		startTransition(async () => {
@@ -183,8 +185,13 @@ export function SendPanel(props: SendPanelProps) {
 								They get a notice right away. Sending can&apos;t be undone, and the questions can&apos;t change afterward. The form has {questionCount}{" "}
 								{questionCount === 1 ? "question" : "questions"}. {estimate}.
 							</p>
+							{unsaved ? (
+								<p role="alert" className="min-w-0 text-sm font-medium text-destructive">
+									You have unsaved changes. Save the draft first.
+								</p>
+							) : null}
 							<div className="flex flex-wrap items-center gap-3">
-								<Button type="submit" disabled={pending}>
+								<Button type="submit" disabled={pending || unsaved}>
 									<Send />
 									{pending ? "Sending..." : "Send now"}
 								</Button>

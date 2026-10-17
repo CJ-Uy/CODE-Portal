@@ -30,14 +30,12 @@ export default async function AdminSurveysPage() {
 	const repositories = await getRepositories();
 	const now = new Date();
 	// surveys has no shared-dev internal proxy yet; degrade to empty lists instead of crashing.
-	const [listed, templates, events, terms] = await Promise.all([
+	const [surveys, templates, events, terms] = await Promise.all([
 		repositories.surveys.list(actor, { limit: 50 }).catch(() => []),
 		repositories.surveys.listTemplates(actor).catch(() => []),
 		loadEventList(repositories, actor).catch(() => []),
 		repositories.retention.listTermsAdmin(actor, now).catch(() => []),
 	]);
-	// The repository lists oldest first; an admin wants the newest form on top.
-	const surveys = [...listed].reverse();
 
 	const eventTitles = new Map(events.map((event) => [event.id, event.title]));
 	const formEventIds = surveys.flatMap((survey) => (survey.eventId ? [survey.eventId] : []));

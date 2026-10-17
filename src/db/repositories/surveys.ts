@@ -1,4 +1,4 @@
-import { and, asc, eq, getTableColumns, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, isNull, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import * as schema from "@/db/schema";
 import {
@@ -484,7 +484,8 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 
 		async list(actor, input) {
 			if (!can(actor, "survey:configure")) throw new Error("Not authorized to list surveys.");
-			return db.select().from(surveys).orderBy(asc(surveys.createdAt)).limit(pageLimit(input?.limit));
+			// Newest first: the cap is 50, so ascending order would hide the latest forms once there are more than that.
+			return db.select().from(surveys).orderBy(desc(surveys.createdAt)).limit(pageLimit(input?.limit));
 		},
 
 		async getById(actor, id) {

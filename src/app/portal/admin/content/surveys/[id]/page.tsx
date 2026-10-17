@@ -13,8 +13,7 @@ import { can } from "@/server/auth/permissions";
 import { emailDbFromEnv } from "@/server/email/db";
 import { isFeatureEnabled } from "@/server/features";
 import { feedbackEmailReady } from "@/server/feedback/email";
-import { DraftForm } from "./draft-form";
-import { SendPanel } from "./send-panel";
+import { DraftWorkspace } from "./draft-workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -98,20 +97,20 @@ export default async function AdminSurveyDetailPage({
 				) : null}
 
 				{isDraft ? (
-					<>
-						<DraftForm surveyId={detail.survey.id} title={detail.survey.title} questions={detail.questions.map(toEditorQuestion)} />
-						<SendPanel
-							surveyId={detail.survey.id}
-							hasEvent={Boolean(detail.survey.eventId)}
-							eligible={eligible}
-							suggested={suggestInviteCount(eligible)}
-							stillCheckingIn={event ? (event.endsAt ?? event.startsAt) > now : false}
-							closesAt={toLocalInput(sendDefaultClosesAt(event, now))}
-							email={email}
-							questionCount={detail.questions.length}
-							estimate={formatEstimate(estimateSeconds(detail.questions))}
-						/>
-					</>
+					<DraftWorkspace
+						draft={{ surveyId: detail.survey.id, title: detail.survey.title, questions: detail.questions.map(toEditorQuestion) }}
+						send={{
+							surveyId: detail.survey.id,
+							hasEvent: Boolean(detail.survey.eventId),
+							eligible,
+							suggested: suggestInviteCount(eligible),
+							stillCheckingIn: event ? (event.endsAt ?? event.startsAt) > now : false,
+							closesAt: toLocalInput(sendDefaultClosesAt(event, now)),
+							email,
+							questionCount: detail.questions.length,
+							estimate: formatEstimate(estimateSeconds(detail.questions)),
+						}}
+					/>
 				) : (
 					<Card>
 						<CardHeader>

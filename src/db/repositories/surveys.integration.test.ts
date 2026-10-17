@@ -154,6 +154,19 @@ describe("surveys repository on D1", () => {
 		await expect(repo.getById(member, "srv_x")).rejects.toThrow("Not authorized");
 	});
 
+	it("lists the newest forms first, so the cap cuts the oldest", async () => {
+		const { repo } = setup();
+		const draft = { questions: [{ type: "text" as const, prompt: "Q", required: false }] };
+		const older = await repo.create(admin, { title: "Older", ...draft });
+		const newer = await repo.create(admin, { title: "Newer", ...draft });
+		// Created in the same millisecond is possible, so pin the order the test relies on.
+		await env.DB.prepare("UPDATE surveys SET created_at = ? WHERE id = ?").bind(1_000, older.id).run();
+		await env.DB.prepare("UPDATE surveys SET created_at = ? WHERE id = ?").bind(2_000, newer.id).run();
+
+		expect((await repo.list(admin)).map((s) => s.title)).toEqual(["Newer", "Older"]);
+		expect((await repo.list(admin, { limit: 1 })).map((s) => s.title)).toEqual(["Newer"]);
+	});
+
 	it("lets an invited member answer once by session, with no token", async () => {
 		await seedMembers(3);
 		const { db, repo } = setup();
