@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, gte, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, isNull, lte, or, sql } from "drizzle-orm";
 import {
 	crsEvents,
 	linkDailyStats,
@@ -24,6 +24,8 @@ type Db = DrizzleD1Database<typeof schema>;
 export type OverviewSummary = {
 	retention: { points: number; retainedAt: number | null; termName: string | null };
 	pendingSurveys: number;
+	/** The member's oldest open invited form, so the home page can link straight to it. */
+	oldestPendingSurveyId: string | null;
 	upcomingEvents: number;
 	linkClicks: number;
 };
@@ -62,17 +64,21 @@ export function createOverviewRepository(db: Db): OverviewRepository {
 				points = quantizePoints(Number(row?.total ?? 0));
 			}
 
-			const [surveyRow] = await db
-				.select({ count: sql<number>`count(*)` })
+			// A member has only a handful of open forms, so one list gives both the count and the oldest.
+			const pending = await db
+				.select({ surveyId: surveyAssignments.surveyId })
 				.from(surveyAssignments)
 				.innerJoin(surveys, eq(surveys.id, surveyAssignments.surveyId))
 				.where(
 					and(
 						eq(surveyAssignments.memberId, actor.memberId),
+						eq(surveyAssignments.source, "invited"),
 						isNull(surveyAssignments.completedAt),
 						eq(surveys.status, "running"),
+						or(isNull(surveys.closesAt), gt(surveys.closesAt, now)),
 					),
-				);
+				)
+				.orderBy(asc(surveyAssignments.assignedAt), asc(surveyAssignments.surveyId));
 
 			const [eventRow] = await db
 				.select({ count: sql<number>`count(*)` })
@@ -91,7 +97,8 @@ export function createOverviewRepository(db: Db): OverviewRepository {
 					retainedAt: term?.retainedAt ?? null,
 					termName: term?.name ?? null,
 				},
-				pendingSurveys: Number(surveyRow?.count ?? 0),
+				pendingSurveys: pending.length,
+				oldestPendingSurveyId: pending[0]?.surveyId ?? null,
 				upcomingEvents: Number(eventRow?.count ?? 0),
 				linkClicks: Number(linkRow?.total ?? 0),
 			};

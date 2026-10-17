@@ -35,7 +35,21 @@ describe("STOPWORDS", () => {
 			"the", "and", "was", "were", "for", "with", "that", "this", "very", "too",
 			"ang", "ng", "sa", "na", "mga", "yung", "po", "lang", "naman", "kasi", "talaga",
 			"pero", "ako", "ko", "din", "rin", "nga", "siya", "kami", "tayo",
+			"didn", "wasn", "don", "isn", "couldn", "doesn", "won", "aren", "weren", "haven", "hasn", "shouldn", "wouldn",
+			"mas", "may", "kung", "sana", "namin", "natin", "nila", "nito", "dapat", "wala", "parang", "tapos", "kaso",
+			"medyo", "masyadong", "mag", "yun", "lahat", "sila", "ito", "iyan", "dito", "doon", "para", "pag", "kapag",
+			"sobrang", "ganun", "ganito",
+			"nag", "masyado", "nung", "kahit", "dun", "meron", "nasa",
 		];
 		for (const w of required) expect(STOPWORDS.has(w)).toBe(true);
+	});
+
+	it("drops contraction fragments and Taglish fillers but keeps content words", () => {
+		const terms = topTerms([
+			"Didn't like the venue, wasn't cold enough",
+			"Sana mas mahaba yung workshop, medyo mainit kasi",
+		]).map((t) => t.term);
+		for (const stop of ["didn", "wasn", "sana", "mas", "medyo"]) expect(terms).not.toContain(stop);
+		for (const word of ["venue", "cold", "mahaba", "workshop", "mainit"]) expect(terms).toContain(word);
 	});
 });

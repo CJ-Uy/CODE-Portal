@@ -22,6 +22,7 @@ import { colourClasses } from "@/lib/event-type-colours";
 import { cn } from "@/lib/utils";
 import { createEventAction } from "./actions";
 import { EventSignupFormEditor } from "./event-signup-form-editor";
+import { PlanningLink } from "./planning-link";
 
 const FIELD = "w-full rounded-lg border border-border bg-background p-2 text-sm";
 
@@ -36,11 +37,14 @@ export function CreateEventSheet({
 	allowedTypes,
 	typesUnavailable,
 	canSetReadOnly = false,
+	canViewArchive = false,
 }: {
 	allowedTypes: EventTypeRow[];
 	typesUnavailable: boolean;
 	/** event:moderate. The repository re-checks this; the prop only hides the control. */
 	canSetReadOnly?: boolean;
+	/** From canViewFeedbackArchive(). The archive page re-checks access; the prop only hides the link. */
+	canViewArchive?: boolean;
 }) {
 	const router = useRouter();
 	// The mobile "+" quick action links to /portal/calendar?create=1 to open this directly.
@@ -190,6 +194,8 @@ export function CreateEventSheet({
 							</div>
 						</div>
 					) : null}
+
+					{canViewArchive && selectedType ? <PlanningLink type={selectedType.type} label={selectedType.label} className="-mt-2" /> : null}
 
 					<label className="grid gap-1.5 text-sm">
 						<span className="font-medium">Place</span>

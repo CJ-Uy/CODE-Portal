@@ -63,6 +63,25 @@ describe("internal surveys handlers", () => {
 		await expect(response.json()).resolves.toEqual({ surveys: [] });
 	});
 
+	it("returns each question's required flag, help text and metric key", async () => {
+		await env.DB.prepare("INSERT INTO surveys (id, title, status, created_by) VALUES (?, ?, ?, ?)").bind("srv_1", "Feedback", "draft", "mem_admin").run();
+		await env.DB.prepare(
+			"INSERT INTO survey_questions (id, survey_id, position, type, prompt, options_json, required, help, metric_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		)
+			.bind("srvq_1", "srv_1", 1, "scale", "Overall?", JSON.stringify(["Bad", "Good"]), 1, "Think of the whole day.", "overall")
+			.run();
+
+		const response = await handlers().fetch(
+			new Request("https://dev.example.com/internal/surveys?op=get&id=srv_1", { headers: { Authorization: `Bearer ${ADMIN_TOKEN}` } }),
+		);
+
+		expect(response.status).toBe(200);
+		const body = (await response.json()) as { questions: unknown[] };
+		expect(body.questions).toEqual([
+			expect.objectContaining({ id: "srvq_1", required: true, help: "Think of the whole day.", metricKey: "overall" }),
+		]);
+	});
+
 	it("denies create in shared dev with 403 even for an admin token", async () => {
 		const response = await handlers().fetch(
 			new Request("https://dev.example.com/internal/surveys", {

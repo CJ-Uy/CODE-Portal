@@ -18,7 +18,7 @@ const ids = async (audience: Audience) => (await resolveAudience(db, audience, N
 
 describe("resolveAudience", () => {
 	beforeEach(async () => {
-		for (const table of ["crs_attendance", "event_rsvps", "crs_events", "term_member_roster", "terms", "member_roles", "members"]) {
+		for (const table of ["survey_assignments", "surveys", "crs_attendance", "event_rsvps", "crs_events", "term_member_roster", "terms", "member_roles", "members"]) {
 			await env.DB.prepare(`DELETE FROM ${table}`).run();
 		}
 		await member("mem_a", "2026");
@@ -59,6 +59,17 @@ describe("resolveAudience", () => {
 		] as const;
 		expect(await ids({ match: "any", include: [...rules], exclude: [] })).toEqual(["mem_a", "mem_b", "mem_c"]);
 		expect(await ids({ match: "all", include: [{ kind: "batch", batch: "2027" }, { kind: "roster", termId: "current" }], exclude: [] })).toEqual(["mem_b"]);
+	});
+
+	it("resolves survey_invitees to invited members only", async () => {
+		await env.DB.prepare("INSERT INTO surveys (id, title, created_by) VALUES ('svy_1', 'Feedback', 'mem_a'), ('svy_2', 'Other', 'mem_a')").run();
+		await env.DB.prepare(
+			"INSERT INTO survey_assignments (survey_id, member_id, source) VALUES ('svy_1', 'mem_b', 'invited'), ('svy_1', 'mem_c', 'invited'), ('svy_1', 'mem_a', 'walk_in'), ('svy_2', 'mem_a', 'invited')",
+		).run();
+		const rule = (surveyId: string) => ({ match: "any" as const, include: [{ kind: "survey_invitees" as const, surveyId }], exclude: [] });
+		expect(await ids(rule("svy_1"))).toEqual(["mem_b", "mem_c"]);
+		expect(await ids(rule("svy_2"))).toEqual(["mem_a"]);
+		expect(await ids(rule("svy_none"))).toEqual([]);
 	});
 
 	it("handles RSVP, attended, and no-show", async () => {

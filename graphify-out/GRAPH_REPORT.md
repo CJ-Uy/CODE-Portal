@@ -1,16 +1,16 @@
-# Graph Report - library-v2  (2026-10-16)
+# Graph Report - code nest  (2026-10-17)
 
 ## Corpus Check
-- 884 files · ~1,171,828 words
+- 1034 files · ~1,371,263 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 9353 nodes · 19041 edges · 583 communities (451 shown, 132 thin omitted)
-- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 435 edges (avg confidence: 0.81)
+- 10320 nodes · 20729 edges · 664 communities (490 shown, 174 thin omitted)
+- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 470 edges (avg confidence: 0.81)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `18c2c0dd`
+- Built from commit: `980e6edd`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -238,7 +238,6 @@
 - [[_COMMUNITY_Community 228|Community 228]]
 - [[_COMMUNITY_Community 229|Community 229]]
 - [[_COMMUNITY_Community 231|Community 231]]
-- [[_COMMUNITY_Community 232|Community 232]]
 - [[_COMMUNITY_Community 233|Community 233]]
 - [[_COMMUNITY_Community 234|Community 234]]
 - [[_COMMUNITY_Community 235|Community 235]]
@@ -344,7 +343,6 @@
 - [[_COMMUNITY_Community 335|Community 335]]
 - [[_COMMUNITY_Community 336|Community 336]]
 - [[_COMMUNITY_Community 337|Community 337]]
-- [[_COMMUNITY_Community 338|Community 338]]
 - [[_COMMUNITY_Community 339|Community 339]]
 - [[_COMMUNITY_Community 340|Community 340]]
 - [[_COMMUNITY_Community 341|Community 341]]
@@ -368,28 +366,65 @@
 - [[_COMMUNITY_Community 359|Community 359]]
 - [[_COMMUNITY_Community 360|Community 360]]
 - [[_COMMUNITY_Community 361|Community 361]]
+- [[_COMMUNITY_Community 362|Community 362]]
 - [[_COMMUNITY_Community 363|Community 363]]
+- [[_COMMUNITY_Community 364|Community 364]]
+- [[_COMMUNITY_Community 365|Community 365]]
+- [[_COMMUNITY_Community 366|Community 366]]
+- [[_COMMUNITY_Community 367|Community 367]]
 - [[_COMMUNITY_Community 368|Community 368]]
+- [[_COMMUNITY_Community 369|Community 369]]
+- [[_COMMUNITY_Community 370|Community 370]]
 - [[_COMMUNITY_Community 371|Community 371]]
 - [[_COMMUNITY_Community 372|Community 372]]
 - [[_COMMUNITY_Community 373|Community 373]]
 - [[_COMMUNITY_Community 374|Community 374]]
 - [[_COMMUNITY_Community 375|Community 375]]
+- [[_COMMUNITY_Community 376|Community 376]]
 - [[_COMMUNITY_Community 377|Community 377]]
+- [[_COMMUNITY_Community 378|Community 378]]
+- [[_COMMUNITY_Community 379|Community 379]]
+- [[_COMMUNITY_Community 380|Community 380]]
+- [[_COMMUNITY_Community 381|Community 381]]
+- [[_COMMUNITY_Community 382|Community 382]]
+- [[_COMMUNITY_Community 383|Community 383]]
+- [[_COMMUNITY_Community 385|Community 385]]
 - [[_COMMUNITY_Community 386|Community 386]]
 - [[_COMMUNITY_Community 387|Community 387]]
+- [[_COMMUNITY_Community 388|Community 388]]
+- [[_COMMUNITY_Community 389|Community 389]]
+- [[_COMMUNITY_Community 390|Community 390]]
+- [[_COMMUNITY_Community 391|Community 391]]
+- [[_COMMUNITY_Community 392|Community 392]]
 - [[_COMMUNITY_Community 393|Community 393]]
+- [[_COMMUNITY_Community 394|Community 394]]
+- [[_COMMUNITY_Community 395|Community 395]]
 - [[_COMMUNITY_Community 396|Community 396]]
 - [[_COMMUNITY_Community 397|Community 397]]
+- [[_COMMUNITY_Community 398|Community 398]]
+- [[_COMMUNITY_Community 399|Community 399]]
 - [[_COMMUNITY_Community 400|Community 400]]
 - [[_COMMUNITY_Community 401|Community 401]]
 - [[_COMMUNITY_Community 402|Community 402]]
+- [[_COMMUNITY_Community 403|Community 403]]
 - [[_COMMUNITY_Community 404|Community 404]]
 - [[_COMMUNITY_Community 405|Community 405]]
+- [[_COMMUNITY_Community 406|Community 406]]
+- [[_COMMUNITY_Community 407|Community 407]]
 - [[_COMMUNITY_Community 408|Community 408]]
 - [[_COMMUNITY_Community 409|Community 409]]
 - [[_COMMUNITY_Community 410|Community 410]]
+- [[_COMMUNITY_Community 411|Community 411]]
+- [[_COMMUNITY_Community 412|Community 412]]
+- [[_COMMUNITY_Community 413|Community 413]]
+- [[_COMMUNITY_Community 414|Community 414]]
+- [[_COMMUNITY_Community 415|Community 415]]
+- [[_COMMUNITY_Community 416|Community 416]]
+- [[_COMMUNITY_Community 417|Community 417]]
+- [[_COMMUNITY_Community 418|Community 418]]
+- [[_COMMUNITY_Community 419|Community 419]]
 - [[_COMMUNITY_Community 420|Community 420]]
+- [[_COMMUNITY_Community 421|Community 421]]
 - [[_COMMUNITY_Community 422|Community 422]]
 - [[_COMMUNITY_Community 423|Community 423]]
 - [[_COMMUNITY_Community 424|Community 424]]
@@ -403,6 +438,7 @@
 - [[_COMMUNITY_Community 432|Community 432]]
 - [[_COMMUNITY_Community 433|Community 433]]
 - [[_COMMUNITY_Community 434|Community 434]]
+- [[_COMMUNITY_Community 435|Community 435]]
 - [[_COMMUNITY_Community 436|Community 436]]
 - [[_COMMUNITY_Community 437|Community 437]]
 - [[_COMMUNITY_Community 438|Community 438]]
@@ -410,14 +446,17 @@
 - [[_COMMUNITY_Community 440|Community 440]]
 - [[_COMMUNITY_Community 441|Community 441]]
 - [[_COMMUNITY_Community 442|Community 442]]
+- [[_COMMUNITY_Community 443|Community 443]]
 - [[_COMMUNITY_Community 444|Community 444]]
 - [[_COMMUNITY_Community 445|Community 445]]
 - [[_COMMUNITY_Community 446|Community 446]]
 - [[_COMMUNITY_Community 447|Community 447]]
 - [[_COMMUNITY_Community 448|Community 448]]
+- [[_COMMUNITY_Community 449|Community 449]]
 - [[_COMMUNITY_Community 450|Community 450]]
 - [[_COMMUNITY_Community 453|Community 453]]
 - [[_COMMUNITY_Community 454|Community 454]]
+- [[_COMMUNITY_Community 455|Community 455]]
 - [[_COMMUNITY_Community 456|Community 456]]
 - [[_COMMUNITY_Community 457|Community 457]]
 - [[_COMMUNITY_Community 458|Community 458]]
@@ -437,6 +476,7 @@
 - [[_COMMUNITY_Community 473|Community 473]]
 - [[_COMMUNITY_Community 474|Community 474]]
 - [[_COMMUNITY_Community 475|Community 475]]
+- [[_COMMUNITY_Community 476|Community 476]]
 - [[_COMMUNITY_Community 477|Community 477]]
 - [[_COMMUNITY_Community 478|Community 478]]
 - [[_COMMUNITY_Community 479|Community 479]]
@@ -445,6 +485,7 @@
 - [[_COMMUNITY_Community 482|Community 482]]
 - [[_COMMUNITY_Community 483|Community 483]]
 - [[_COMMUNITY_Community 484|Community 484]]
+- [[_COMMUNITY_Community 485|Community 485]]
 - [[_COMMUNITY_Community 486|Community 486]]
 - [[_COMMUNITY_Community 487|Community 487]]
 - [[_COMMUNITY_Community 488|Community 488]]
@@ -463,11 +504,14 @@
 - [[_COMMUNITY_Community 501|Community 501]]
 - [[_COMMUNITY_Community 502|Community 502]]
 - [[_COMMUNITY_Community 503|Community 503]]
+- [[_COMMUNITY_Community 504|Community 504]]
 - [[_COMMUNITY_Community 505|Community 505]]
 - [[_COMMUNITY_Community 506|Community 506]]
 - [[_COMMUNITY_Community 507|Community 507]]
 - [[_COMMUNITY_Community 508|Community 508]]
 - [[_COMMUNITY_Community 509|Community 509]]
+- [[_COMMUNITY_Community 510|Community 510]]
+- [[_COMMUNITY_Community 511|Community 511]]
 - [[_COMMUNITY_Community 512|Community 512]]
 - [[_COMMUNITY_Community 513|Community 513]]
 - [[_COMMUNITY_Community 514|Community 514]]
@@ -492,6 +536,7 @@
 - [[_COMMUNITY_Community 533|Community 533]]
 - [[_COMMUNITY_Community 534|Community 534]]
 - [[_COMMUNITY_Community 535|Community 535]]
+- [[_COMMUNITY_Community 536|Community 536]]
 - [[_COMMUNITY_Community 537|Community 537]]
 - [[_COMMUNITY_Community 538|Community 538]]
 - [[_COMMUNITY_Community 539|Community 539]]
@@ -509,6 +554,7 @@
 - [[_COMMUNITY_Community 551|Community 551]]
 - [[_COMMUNITY_Community 552|Community 552]]
 - [[_COMMUNITY_Community 553|Community 553]]
+- [[_COMMUNITY_Community 554|Community 554]]
 - [[_COMMUNITY_Community 555|Community 555]]
 - [[_COMMUNITY_Community 556|Community 556]]
 - [[_COMMUNITY_Community 557|Community 557]]
@@ -521,9 +567,13 @@
 - [[_COMMUNITY_Community 565|Community 565]]
 - [[_COMMUNITY_Community 566|Community 566]]
 - [[_COMMUNITY_Community 567|Community 567]]
+- [[_COMMUNITY_Community 568|Community 568]]
 - [[_COMMUNITY_Community 571|Community 571]]
 - [[_COMMUNITY_Community 572|Community 572]]
 - [[_COMMUNITY_Community 573|Community 573]]
+- [[_COMMUNITY_Community 574|Community 574]]
+- [[_COMMUNITY_Community 575|Community 575]]
+- [[_COMMUNITY_Community 576|Community 576]]
 - [[_COMMUNITY_Community 577|Community 577]]
 - [[_COMMUNITY_Community 578|Community 578]]
 - [[_COMMUNITY_Community 579|Community 579]]
@@ -536,11 +586,15 @@
 - [[_COMMUNITY_Community 586|Community 586]]
 - [[_COMMUNITY_Community 587|Community 587]]
 - [[_COMMUNITY_Community 588|Community 588]]
+- [[_COMMUNITY_Community 589|Community 589]]
 - [[_COMMUNITY_Community 590|Community 590]]
 - [[_COMMUNITY_Community 591|Community 591]]
 - [[_COMMUNITY_Community 592|Community 592]]
+- [[_COMMUNITY_Community 593|Community 593]]
+- [[_COMMUNITY_Community 594|Community 594]]
 - [[_COMMUNITY_Community 595|Community 595]]
 - [[_COMMUNITY_Community 596|Community 596]]
+- [[_COMMUNITY_Community 597|Community 597]]
 - [[_COMMUNITY_Community 598|Community 598]]
 - [[_COMMUNITY_Community 599|Community 599]]
 - [[_COMMUNITY_Community 600|Community 600]]
@@ -548,11 +602,15 @@
 - [[_COMMUNITY_Community 602|Community 602]]
 - [[_COMMUNITY_Community 603|Community 603]]
 - [[_COMMUNITY_Community 604|Community 604]]
+- [[_COMMUNITY_Community 605|Community 605]]
+- [[_COMMUNITY_Community 606|Community 606]]
+- [[_COMMUNITY_Community 607|Community 607]]
 - [[_COMMUNITY_Community 608|Community 608]]
 - [[_COMMUNITY_Community 609|Community 609]]
 - [[_COMMUNITY_Community 610|Community 610]]
 - [[_COMMUNITY_Community 611|Community 611]]
 - [[_COMMUNITY_Community 612|Community 612]]
+- [[_COMMUNITY_Community 613|Community 613]]
 - [[_COMMUNITY_Community 614|Community 614]]
 - [[_COMMUNITY_Community 615|Community 615]]
 - [[_COMMUNITY_Community 616|Community 616]]
@@ -564,41 +622,58 @@
 - [[_COMMUNITY_Community 622|Community 622]]
 - [[_COMMUNITY_Community 623|Community 623]]
 - [[_COMMUNITY_Community 624|Community 624]]
+- [[_COMMUNITY_Community 625|Community 625]]
 - [[_COMMUNITY_Community 626|Community 626]]
 - [[_COMMUNITY_Community 627|Community 627]]
+- [[_COMMUNITY_Community 628|Community 628]]
+- [[_COMMUNITY_Community 629|Community 629]]
 - [[_COMMUNITY_Community 630|Community 630]]
 - [[_COMMUNITY_Community 631|Community 631]]
 - [[_COMMUNITY_Community 632|Community 632]]
 - [[_COMMUNITY_Community 633|Community 633]]
+- [[_COMMUNITY_Community 634|Community 634]]
 - [[_COMMUNITY_Community 635|Community 635]]
+- [[_COMMUNITY_Community 636|Community 636]]
 - [[_COMMUNITY_Community 637|Community 637]]
 - [[_COMMUNITY_Community 638|Community 638]]
+- [[_COMMUNITY_Community 639|Community 639]]
 - [[_COMMUNITY_Community 640|Community 640]]
 - [[_COMMUNITY_Community 641|Community 641]]
 - [[_COMMUNITY_Community 642|Community 642]]
 - [[_COMMUNITY_Community 643|Community 643]]
+- [[_COMMUNITY_Community 644|Community 644]]
 - [[_COMMUNITY_Community 645|Community 645]]
 - [[_COMMUNITY_Community 646|Community 646]]
+- [[_COMMUNITY_Community 647|Community 647]]
 - [[_COMMUNITY_Community 648|Community 648]]
 - [[_COMMUNITY_Community 649|Community 649]]
 - [[_COMMUNITY_Community 650|Community 650]]
 - [[_COMMUNITY_Community 651|Community 651]]
+- [[_COMMUNITY_Community 652|Community 652]]
+- [[_COMMUNITY_Community 653|Community 653]]
+- [[_COMMUNITY_Community 654|Community 654]]
+- [[_COMMUNITY_Community 655|Community 655]]
+- [[_COMMUNITY_Community 656|Community 656]]
+- [[_COMMUNITY_Community 657|Community 657]]
+- [[_COMMUNITY_Community 658|Community 658]]
+- [[_COMMUNITY_Community 659|Community 659]]
+- [[_COMMUNITY_Community 660|Community 660]]
+- [[_COMMUNITY_Community 661|Community 661]]
+- [[_COMMUNITY_Community 662|Community 662]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `getRepositories()` - 232 edges
-2. `requireActor()` - 162 edges
-3. `can()` - 111 edges
-4. `getAppConfig()` - 110 edges
-5. `cn()` - 107 edges
-6. `Button` - 76 edges
-7. `Actor` - 74 edges
-8. `getActor()` - 69 edges
-9. `isFeatureEnabled()` - 63 edges
-10. `_()` - 55 edges
+1. `getRepositories()` - 247 edges
+2. `requireActor()` - 173 edges
+3. `can()` - 121 edges
+4. `cn()` - 110 edges
+5. `getAppConfig()` - 108 edges
+6. `Button` - 91 edges
+7. `Actor` - 81 edges
+8. `isFeatureEnabled()` - 76 edges
+9. `getActor()` - 71 edges
+10. `createAuditRepository()` - 56 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `Shared dev Worker (code-nest-dev)` --rationale_for--> `SharedApiStorageAdapter`  [INFERRED]
-  AGENTS.md → src/storage/adapters/shared-api.ts
 - `Public and portal route boundary` --semantically_similar_to--> `Public routes`  [INFERRED] [semantically similar]
   docs/architecture/overview.md → design.md
 - `detectCli()` --calls--> `scanner`  [INFERRED]
@@ -607,9 +682,11 @@
   .github/skills/impeccable/scripts/live-browser.js → scripts/verify-preservation.ts
 - `loadSvelteCompiler()` --calls--> `req()`  [INFERRED]
   .github/skills/impeccable/scripts/live/svelte-ast.mjs → src/server/ratelimit/policies.test.ts
+- `GET()` --conceptually_related_to--> `package.json (code-nest project manifest)`  [AMBIGUOUS]
+  src/app/api/health/route.ts → package.json
 
 ## Import Cycles
-- None detected.
+- 1-file cycle: `src/server/feedback/email.ts -> src/server/feedback/email.ts`
 
 ## Hyperedges (group relationships)
 - **AdminModule view-routing across overview/roles/approval/survey/audit** — admin_module_adminmodule, admin_module_admindashboard, admin_roles_rolemanagement, admin_events_audit_eventapproval, admin_survey_surveyconfig, admin_events_audit_auditlog [EXTRACTED 1.00]
@@ -650,7 +727,7 @@
 - **Ateneo CODE White Identity Lockup** — public_code_logo_full_white_falcon_mark, public_code_logo_full_white_ateneo_code_wordmark, public_code_logo_full_white_organization_name [EXTRACTED 1.00]
 - **Next.js Visual Identity** — public_next_nextjs, public_next_next_lettering, public_next_js_suffix [EXTRACTED 1.00]
 
-## Communities (583 total, 132 thin omitted)
+## Communities (664 total, 174 thin omitted)
 
 ### Community 0 - "Community 0"
 Cohesion: 0.00
@@ -658,35 +735,35 @@ Nodes (938): AbortController, AgentMemoryGetSummaryOptions, AgentMemoryGetSummar
 
 ### Community 1 - "Community 1"
 Cohesion: 0.04
-Nodes (73): mentsPeople, mentsPments, createMentsInternalHandlers(), parseMentsPaste(), createAnnouncementsRepository(), createUnavailableAnnouncementsRepository(), createAuditRepository(), createUnavailableAuditRepository() (+65 more)
+Nodes (73): adminActor, createEventsInternalHandlers(), EventsInternalDependencies, createAnnouncementsRepository(), createUnavailableAnnouncementsRepository(), createAuditRepository(), createUnavailableAuditRepository(), createCalendarRepository() (+65 more)
 
 ### Community 2 - "Community 2"
 Cohesion: 0.08
-Nodes (24): ColumnSpec, compareSnapshots(), DbSnapshot, normalizeDefault(), applyMigrations(), Db, openScratch(), snapshot() (+16 more)
+Nodes (25): ColumnSpec, compareSnapshots(), DbSnapshot, normalizeDefault(), applyMigrations(), Db, openScratch(), snapshot() (+17 more)
 
 ### Community 3 - "Community 3"
-Cohesion: 0.21
-Nodes (13): operation, actorOutputSchema, authContract, InternalOperation, operation(), operationAuthSchema, sharedDevModeSchema, memberOutputSchema (+5 more)
+Cohesion: 0.13
+Nodes (21): operation, actorOutputSchema, authContract, InternalOperation, operation(), operationAuthSchema, sharedDevModeSchema, memberOutputSchema (+13 more)
 
 ### Community 4 - "Community 4"
 Cohesion: 0.03
-Nodes (114): applyGlobalBarLabelState(), applyPlaceholderSizingStyles(), averageRgb01(), bindEditBadgeProxy(), buildAnnotationsForCapture(), buildInsertPlaceholderSnapshotFromDom(), buildPickedAnchorSnapshot(), buildPinElement() (+106 more)
+Nodes (110): applyGlobalBarLabelState(), applyPlaceholderDimensions(), applyPlaceholderSizingStyles(), averageRgb01(), beginEditPin(), buildAnnotationsForCapture(), buildPinElement(), buildPlaceholderResizeHandles() (+102 more)
 
 ### Community 5 - "Community 5"
 Cohesion: 0.22
 Nodes (10): Focused adapter extension pattern, Adapters, Adding An Adapter, Database Interface, R2, local file, and shared API storage adapters, Storage Interface, Cloudflare context import boundary, Server, database, and storage infrastructure layers (+2 more)
 
 ### Community 6 - "Community 6"
-Cohesion: 0.12
-Nodes (31): AdminAnnouncementsPage(), AnnouncementsPage(), Home(), GET(), notFound(), redirect(), RouteContext, ContactPage() (+23 more)
+Cohesion: 0.05
+Nodes (58): SendSurveyInput, SurveyQuestionInput, UpdateRunningInput, updateRunningInputSchema, getSummarizer(), Draft, newDraft(), QuestionType (+50 more)
 
 ### Community 8 - "Community 8"
 Cohesion: 0.03
-Nodes (126): ANIMATION_VALUE_KEYWORDS, borderColorsFromStyle(), borderWidthsFromStyle(), buildHtmlPatternCorpora(), checkClippedOverflow(), checkEdgeFlushCardsDOM(), checkElementBlinkingCursorDOM(), checkElementClippedOverflow() (+118 more)
+Nodes (113): ANIMATION_VALUE_KEYWORDS, borderColorsFromStyle(), borderWidthsFromStyle(), checkClippedOverflow(), checkEdgeFlushCardsDOM(), checkElementBlinkingCursorDOM(), checkElementClippedOverflow(), checkElementClippedOverflowDOM() (+105 more)
 
 ### Community 9 - "Community 9"
-Cohesion: 0.08
-Nodes (36): PointsLeaderboard(), displayDate(), RetentionActivityHistory(), RetentionCategoryProgress(), ChartLine, CumulativeChart(), niceStep(), ProgressRing() (+28 more)
+Cohesion: 0.07
+Nodes (42): displayDate(), RetentionActivityHistory(), RetentionCategoryProgress(), ChartLine, CumulativeChart(), niceStep(), ProgressRing(), shortDate() (+34 more)
 
 ### Community 10 - "Community 10"
 Cohesion: 0.15
@@ -698,15 +775,15 @@ Nodes (8): Contact(), Landing(), Article(), ProductCenter(), Projects(), Service
 
 ### Community 12 - "Community 12"
 Cohesion: 0.05
-Nodes (60): emailCampaigns, emailCategories, emailOptouts, emailSenders, emailTemplates, emailContentSchema, Audience, EmailBlock (+52 more)
+Nodes (41): scripts, build, cf-typegen, cf-typegen:beta, cf-typegen:dev, cf-typegen:prod, cf-typegen:staged, check:shared-dev-note (+33 more)
 
 ### Community 13 - "Community 13"
 Cohesion: 0.07
 Nodes (5): CONF_META, LibDetail(), KIND_META, libItem(), NL_SUGGESTIONS
 
 ### Community 14 - "Community 14"
-Cohesion: 0.07
-Nodes (53): linkDailyStats, linkHourlyStats, reservedSlugs, insertChunks, crsEvents table, linkDailyStats table, memberRoles table, reservedSlugs table (+45 more)
+Cohesion: 0.04
+Nodes (82): migrate-local-sqlite script, insertChunks, main, seedLocal, crsEvents table, linkDailyStats table, memberRoles table, reservedSlugs table (+74 more)
 
 ### Community 15 - "Community 15"
 Cohesion: 0.07
@@ -729,16 +806,16 @@ Cohesion: 0.06
 Nodes (37): Public and portal route boundary, Admin workspace, CODE brand palette and typography, CODE Portal design, Current prototype, Design sheet script bundle, Unna and Source Sans 3 web fonts, Ateneo CODE design system page (+29 more)
 
 ### Community 20 - "Community 20"
-Cohesion: 0.03
-Nodes (81): RoleKey, AuditActorContext, AuditCategory, crsAttendance, crsEvents, eventInvites, eventMedia, eventPointAwards (+73 more)
+Cohesion: 0.02
+Nodes (108): AuditActorContext, AuditCategory, crsEvents, emailTemplates, eventInvites, eventMedia, eventPointAwards, eventRsvps (+100 more)
 
 ### Community 21 - "Community 21"
 Cohesion: 0.05
-Nodes (38): RetentionRecordSource, adminStaff, END, eventsAdmin, makeApprovedEvent(), makeRepos(), outsider, owner (+30 more)
+Nodes (37): RetentionRecordSource, adminStaff, END, eventsAdmin, makeApprovedEvent(), outsider, owner, retentionAdmin (+29 more)
 
 ### Community 22 - "Community 22"
-Cohesion: 0.13
-Nodes (29): metadata, Article, ARTICLE_CATS, ArticleComponent, ARTICLES, ArticleSection, COMPETENCIES, Competency (+21 more)
+Cohesion: 0.07
+Nodes (55): AnnouncementsPage(), Home(), notFound(), ContactPage(), metadata, Article, ARTICLE_CATS, ArticleComponent (+47 more)
 
 ### Community 23 - "Community 23"
 Cohesion: 0.10
@@ -749,52 +826,52 @@ Cohesion: 0.11
 Nodes (17): aliases, components, hooks, lib, ui, utils, iconLibrary, rsc (+9 more)
 
 ### Community 25 - "Community 25"
-Cohesion: 0.07
-Nodes (57): can(), normalizeRoleKey(), PermissionAction, roleKeyAliases, rolePermissions, actions, cases, DataGroupPage() (+49 more)
+Cohesion: 0.10
+Nodes (44): DataGroupPage(), querySchema, displayName(), firstParams(), formatDate(), formatDateTime(), formatTime(), Pager() (+36 more)
 
 ### Community 26 - "Community 26"
-Cohesion: 0.05
-Nodes (41): scripts, build, cf-typegen, cf-typegen:beta, cf-typegen:dev, cf-typegen:prod, cf-typegen:staged, check:shared-dev-note (+33 more)
+Cohesion: 0.08
+Nodes (24): dependencies, @auth/drizzle-adapter, @aws-sdk/client-s3, @aws-sdk/s3-request-presigner, better-sqlite3, class-variance-authority, clsx, drizzle-orm (+16 more)
 
 ### Community 27 - "Community 27"
-Cohesion: 0.09
-Nodes (25): eventForumPosts, getHandlers(), OPTIONS(), createEventsInternalHandlers(), EventsInternalDependencies, handlers(), createEventForumRepository(), Db (+17 more)
+Cohesion: 0.08
+Nodes (25): Commands run and output, Commands run and output, Commit, Commit, Commit, Concerns, Controller verification, Files created (+17 more)
 
 ### Community 28 - "Community 28"
-Cohesion: 0.08
-Nodes (15): LinkQr(), GRANULARITY_TABS, LinkDialog(), LinksWorkspace(), LinksWorkspaceProps, LinkView, ShortLinkCell(), SortHeader() (+7 more)
+Cohesion: 0.11
+Nodes (19): devDependencies, @cloudflare/vitest-pool-workers, drizzle-kit, eslint, eslint-config-next, @eslint/eslintrc, @playwright/test, tailwindcss (+11 more)
 
 ### Community 29 - "Community 29"
 Cohesion: 0.15
 Nodes (12): initOpenNextCloudflareForDev() call, nextConfig, defineCloudflareConfig (OpenNext Cloudflare config), package.json (code-nest project manifest), config, changedFiles(), deployNotePaths, files (+4 more)
 
 ### Community 30 - "Community 30"
-Cohesion: 0.06
-Nodes (42): addDays(), CreateLinkInput, DEFAULT_QR_STYLE, displaySourceBucket(), enrichLink(), ensurePage(), filledSeries(), LinkDb (+34 more)
+Cohesion: 0.07
+Nodes (37): addDays(), CreateLinkInput, DEFAULT_QR_STYLE, displaySourceBucket(), enrichLink(), filledSeries(), LinkDb, linkError() (+29 more)
 
 ### Community 31 - "Community 31"
 Cohesion: 0.06
 Nodes (35): 10. Security Considerations, 11. Explicitly Deferred (recorded so they resurface), 12. Phased Build Sequence, 13. Caching (OpenNext) — note, 14. Revision Log & Review Resolutions, 15. Shared Dev Worker Lifecycle & Ops Docs, 1. Product Scope & Route Map, 2.1 Two axes (resolves the prior "shared mode is muddled" defect) (+27 more)
 
 ### Community 32 - "Community 32"
-Cohesion: 0.06
-Nodes (66): appendAutonomyCounterDirective(), appendImageGenDirective(), appendImageToolsDirective(), appendSubagentAuthorizationDirective(), appendSurfaceBriefContext(), buildMissingTargetDirective(), buildResolvedContextDirective(), buildTargetSelectionDirective() (+58 more)
+Cohesion: 0.05
+Nodes (91): appendAutonomyCounterDirective(), appendDetectorFallback(), appendImageGenDirective(), appendImageToolsDirective(), appendSubagentAuthorizationDirective(), appendSurfaceBriefContext(), automaticHookMode(), buildMissingTargetDirective() (+83 more)
 
 ### Community 34 - "Community 34"
 Cohesion: 0.17
 Nodes (12): CloseEvent, CustomEvent, EmailEvent, ErrorEvent, Event, ExtendableEvent, FetchEvent, MessageEvent (+4 more)
 
 ### Community 35 - "Community 35"
-Cohesion: 0.12
-Nodes (18): code-nest-dev-db (D1 Shared/Dev), code-nest-dev-uploads (R2 Shared/Dev), Shared Dev Worker Lifecycle & Redeploy Obligations, Command Reference, deploy:dev Command, deploy:prod Command, pnpm dev (Local Next dev), pnpm dev:cf (Cloudflare preview dev) (+10 more)
+Cohesion: 0.14
+Nodes (16): code-nest-dev-db (D1 Shared/Dev), code-nest-dev-uploads (R2 Shared/Dev), Shared Dev Worker Lifecycle & Redeploy Obligations, Command Reference, deploy:dev Command, deploy:prod Command, pnpm dev (Local Next dev), pnpm dev:cf (Cloudflare preview dev) (+8 more)
 
 ### Community 36 - "Community 36"
 Cohesion: 0.24
 Nodes (11): ADMIN_METRICS (dashboard metric tiles), AUDIT_CATS (audit log category filters), AUDIT_LOG (admin action log entries), PENDING_EVENTS (events awaiting approval), AuditLog component, EventApproval component, ADMIN_NAV (admin module nav items), AdminDashboard component (+3 more)
 
 ### Community 37 - "Community 37"
-Cohesion: 0.29
-Nodes (7): AGENTS.md working rules, CLAUDE.md CODE Portal Rules, CODE Portal Master Design & Build Plan, Phased Build Sequence (Phase 0-10), Testing Strategy (Vitest + pool-workers), .remember/today-2026-06-18.md, Shared dev Worker (code-nest-dev)
+Cohesion: 0.15
+Nodes (10): CODE Portal Master Design & Build Plan, Phased Build Sequence (Phase 0-10), Testing Strategy (Vitest + pool-workers), 20:44 | beta, 20:47 | beta, 2026-10-16, Identity Candidates, Recent (+2 more)
 
 ### Community 38 - "Community 38"
 Cohesion: 0.18
@@ -813,8 +890,8 @@ Cohesion: 0.24
 Nodes (10): GuidedTour component (coachmarks), Line component, SettingsCard component, SettingsModule component, ToggleLine component, TOUR_MEMBER (member guided-tour steps), EmptyTab component (placeholder screens), LABELS (nav id-to-title map) (+2 more)
 
 ### Community 44 - "Community 44"
-Cohesion: 0.21
-Nodes (10): AdminLayout(), assertAdminScope(), hasAnyAdminScope(), linkAdmin, memberOnly, retentionAdmin, rosterAdmin, superAdmin (+2 more)
+Cohesion: 0.07
+Nodes (41): AdminGroup, adminGroups, adminHeading(), AdminPage, AdminPermission, crumbFor(), pageVisible(), allFlags (+33 more)
 
 ### Community 45 - "Community 45"
 Cohesion: 0.27
@@ -825,8 +902,8 @@ Cohesion: 0.29
 Nodes (7): Local Filesystem, Production storage binding lock, R2 Binding, R2 S3-compatible, Shared API, Storage, Storage adapter selection
 
 ### Community 47 - "Community 47"
-Cohesion: 0.11
-Nodes (23): getDatabaseAdapter(), environment schemas test suite, GET(), CloudflareRuntimeEnv, getOptionalCloudflareEnv(), hasCloudflareBinding(), runInBackground(), AppConfig (+15 more)
+Cohesion: 0.02
+Nodes (116): crsAttendance, eventDebriefs, eventStaff, MetricKey, surveyAnswers, SurveyQuestionType, surveyResponses, SurveySource (+108 more)
 
 ### Community 48 - "Community 48"
 Cohesion: 0.22
@@ -837,12 +914,12 @@ Cohesion: 0.33
 Nodes (9): ANN_TAG (announcement tag colors), AnnCard component, AnnCompose component (publishing-admin composer), AnnDetail component, ANNOUNCEMENTS_FULL (referenced full announcement dataset), AnnouncementsModule component, VIEWER_IS_PUBLISHING_ADMIN (referenced viewer flag), AnnouncementsDigest component (+1 more)
 
 ### Community 50 - "Community 50"
-Cohesion: 0.07
-Nodes (59): AnnouncementCard(), formatDate(), AdminAuditPage(), auditFilterHref(), CATEGORIES, FIELD_TYPES, EventScanPanel(), MemberCodeCard() (+51 more)
+Cohesion: 0.05
+Nodes (75): AnnouncementCard(), formatDate(), metadata, NotFound(), CATEGORIES, WEEKDAYS, EventScanPanel(), MemberCodeCard() (+67 more)
 
 ### Community 51 - "Community 51"
 Cohesion: 0.07
-Nodes (82): abortSvelteComponentInjection(), applySavedSessionMeta(), cancelEditing(), cancelEditingToPicking(), cancelInsertConfigure(), clampVariantIndex(), cleanup(), cleanupAcceptedSession() (+74 more)
+Nodes (81): abortSvelteComponentInjection(), buildInsertPlaceholderSnapshotFromDom(), buildPickedAnchorSnapshot(), cancelEditing(), cancelEditingToPicking(), cancelInsertConfigure(), captureAndEmit(), checkpointPayload() (+73 more)
 
 ### Community 52 - "Community 52"
 Cohesion: 0.25
@@ -869,8 +946,8 @@ Cohesion: 0.06
 Nodes (33): 10. Review history, 1. Event types, 2. `point_types` and `event_point_awards`, 3. `retention_records.point_type_id`, 4. The five totals and two projections, 5. `setPoints` → `setAwards`, 6. UI, 7. Testing (+25 more)
 
 ### Community 61 - "Community 61"
-Cohesion: 0.08
-Nodes (24): dependencies, @auth/drizzle-adapter, @aws-sdk/client-s3, @aws-sdk/s3-request-presigner, better-sqlite3, class-variance-authority, clsx, drizzle-orm (+16 more)
+Cohesion: 0.11
+Nodes (17): 01:16 | beta, 02:45 | beta, 05:17 | beta, 10:47-10:54 | beta, 13:30-Session end | beta, 13:33-13:59 | beta, 14:07-14:44 | beta, 14:59 | beta (+9 more)
 
 ### Community 62 - "Community 62"
 Cohesion: 0.29
@@ -909,8 +986,8 @@ Cohesion: 0.40
 Nodes (6): Cochran's sample-size formula (finite population correction), sampleSize() (Cochran's formula w/ FPC), SamplingExplainer component, SliderField component, SurveyConfig component, zForConfidence() helper
 
 ### Community 73 - "Community 73"
-Cohesion: 0.20
-Nodes (9): D1 Migration Issues, Missing Binding Errors, Missing Env Vars, Production Trying S3, R2 Credential Errors, Shared API Token Issues, Troubleshooting, Wrong APP_ENV (+1 more)
+Cohesion: 0.15
+Nodes (12): code-nest Project Slug / Worker, wrangler.jsonc, DEPLOY_ENV Axis (prod/dev), D1 Migration Issues, Missing Binding Errors, Missing Env Vars, Production Trying S3, R2 Credential Errors (+4 more)
 
 ### Community 75 - "Community 75"
 Cohesion: 0.33
@@ -933,8 +1010,8 @@ Cohesion: 0.33
 Nodes (6): Ateneo CODE Organization Identity, Light Ateneo CODE Full Details Form Cover, Organization Office and Email Contact Line, Ateneo CODE Organization Identity, Dark Ateneo CODE Full Details Form Cover, Organization Office and Email Contact Line
 
 ### Community 81 - "Community 81"
-Cohesion: 0.14
-Nodes (20): blockId(), blocksToPlainText(), blockToPlainText(), httpsUrl, id, imageKey, LibraryBlock, libraryBlocksSchema (+12 more)
+Cohesion: 0.50
+Nodes (3): name, private, version
 
 ### Community 82 - "Community 82"
 Cohesion: 0.33
@@ -1181,12 +1258,8 @@ Cohesion: 0.05
 Nodes (54): assembleLiveBrowserScript(), assertLiveBrowserScriptParts(), LIVE_BROWSER_SCRIPT_PARTS, readLiveBrowserScriptParts(), resolveLiveBrowserScriptParts(), selectAvailablePendingEvent(), removeAllSvelteComponentSessions(), sweepInactiveSvelteComponentSessions() (+46 more)
 
 ### Community 206 - "Community 206"
-Cohesion: 0.14
-Nodes (21): defaultFormat(), defaultPublicReadiness(), defaultSource(), ENGAGEMENT_TYPES, FORMAT_DETAILS, KIND_LABELS, LIBRARY_KINDS, LibraryAuthor (+13 more)
-
-### Community 232 - "Community 232"
-Cohesion: 0.11
-Nodes (11): canCreateInsert(), clampPlaceholderSize(), computeInsertPosition(), groupSiblingRows(), hitSiblingInsertGap(), horizontalOverlap(), insertCreateDisabledReason(), insertLineCoords() (+3 more)
+Cohesion: 0.17
+Nodes (11): Archive, Week of 2026-06-15, Week of 2026-06-22, Week of 2026-06-30, Week of 2026-07-20, Week of 2026-07-27, Week of 2026-08-03, Week of 2026-08-17 (+3 more)
 
 ### Community 235 - "Community 235"
 Cohesion: 0.12
@@ -1194,11 +1267,11 @@ Nodes (15): Global Constraints, Phase 8 — Admin, Reporting, Nav/Quick Links, R
 
 ### Community 236 - "Community 236"
 Cohesion: 0.07
-Nodes (66): addClampEndpoints(), addColorObject(), addDesignColor(), addFontSizeStep(), addRoundedScale(), addRoundedToken(), addSidecarColors(), addSidecarRadii() (+58 more)
+Nodes (65): addClampEndpoints(), addColorObject(), addDesignColor(), addFontSizeStep(), addRoundedScale(), addRoundedToken(), addSidecarColors(), addSidecarRadii() (+57 more)
 
 ### Community 237 - "Community 237"
-Cohesion: 0.13
-Nodes (38): POST(), GET(), getActor(), getSharedActor(), bodySchema, GET(), POST(), assertSameOrigin() (+30 more)
+Cohesion: 0.08
+Nodes (62): POST(), GET(), getActor(), getSharedActor(), getDatabaseAdapter(), environment schemas test suite, bodySchema, GET() (+54 more)
 
 ### Community 238 - "Community 238"
 Cohesion: 0.12
@@ -1229,8 +1302,8 @@ Cohesion: 0.14
 Nodes (13): Global Constraints, Phase 9 Hardening Implementation Plan, Self-review notes (for the implementer, not a step to execute), Sequencing & Dependency Gate, Task 1: Rate-limit core — D1 fixed-window counter + interface, Task 2: Rate-limit the auth routes, Task 3: Rate-limit link creation and scan submission, Task 4: Playwright harness + mocked-OAuth sign-in E2E (Phase 1) (+5 more)
 
 ### Community 245 - "Community 245"
-Cohesion: 0.05
-Nodes (87): normalizeRoleKeys(), GET(), handle(), OPTIONS(), GET(), getHandlers(), OPTIONS(), getD1Db (+79 more)
+Cohesion: 0.03
+Nodes (102): normalizeRoleKeys(), GET(), handle(), OPTIONS(), GET(), getHandlers(), OPTIONS(), getD1Db() (+94 more)
 
 ### Community 246 - "Community 246"
 Cohesion: 0.17
@@ -1242,15 +1315,15 @@ Nodes (27): Beta to Staging Release Design, Boss-ready release report, Branch in
 
 ### Community 248 - "Community 248"
 Cohesion: 0.05
-Nodes (53): browserHasDirectText(), browserPrimaryFont(), browserRadiusTokens(), browserSampleText(), buildSelectorSegment(), checkBrowserDesignSystemSources(), checkClippedOverflow(), checkElementClippedOverflow() (+45 more)
+Nodes (55): addBrowserFindings(), addVisualContrastFindings(), addVisualContrastResult(), browserHasDirectText(), browserPrimaryFont(), browserRadiusTokens(), browserSampleText(), checkBrowserDesignSystemSources() (+47 more)
 
 ### Community 249 - "Community 249"
-Cohesion: 0.19
-Nodes (18): collectAllSelectors(), collectSelectorsFromNodes(), collectUnusedSelectors(), escapeRegExp(), formatBody(), isToggleOn(), normalizeSelector(), normalizeToggleForVar() (+10 more)
+Cohesion: 0.21
+Nodes (14): collectAllSelectors(), collectSelectorsFromNodes(), collectUnusedSelectors(), escapeRegExp(), formatBody(), isToggleOn(), normalizeSelector(), normalizeToggleForVar() (+6 more)
 
 ### Community 250 - "Community 250"
-Cohesion: 0.15
-Nodes (16): productStampLine(), readProductSchemaVersion(), stampProductSchema(), parseTargetOptions(), parseTargetPath(), TargetArgError, parseCliOptions(), applyFixes() (+8 more)
+Cohesion: 0.20
+Nodes (9): Cloudflare, CODE Portal prototype, Deploy, Design, Develop, Next build phases, Preview, Shared dev backend (+1 more)
 
 ### Community 251 - "Community 251"
 Cohesion: 0.05
@@ -1261,20 +1334,20 @@ Cohesion: 0.25
 Nodes (7): Apply Local D1, Apply Local SQLite, Apply Production D1, Apply Shared/Dev D1, Generate, Migrations, Phase 0 Clean Reset Decision
 
 ### Community 253 - "Community 253"
-Cohesion: 0.19
-Nodes (18): PRODUCT_DEPRECATED_SECTIONS, PRODUCT_V4_SECTIONS, readSidecarSchemaVersion(), checkConfig(), checkDesignSidecar(), checkProduct(), checkProjectRoots(), checkSurfaceBriefs() (+10 more)
+Cohesion: 0.25
+Nodes (7): 04:30 | feat/code-portal-phase-0, 12:31 | feat/code-portal-phase-1, 13:35 | beta, 15:46-17:00 | beta, 15:49-16:31 | beta, 17:02 | main, 18:41 | feat/code-portal-phase-0
 
 ### Community 254 - "Community 254"
-Cohesion: 0.13
-Nodes (21): appendDetectorFallback(), automaticHookMode(), directChildDirs(), discoverRootsForPattern(), discoverTargetCandidates(), expandSimplePattern(), hookEnabledAt(), isIgnoredWorkspaceDiscoveryDir() (+13 more)
+Cohesion: 0.25
+Nodes (7): Agent notes, Cloudflare environments, graphify, Product priorities, Shared dev Worker, Verification, Working style
 
 ### Community 255 - "Community 255"
 Cohesion: 0.29
 Nodes (6): Common Mistakes, Install, Local Development, Reset Local State, Run With Cloudflare Preview, Run With Next
 
 ### Community 256 - "Community 256"
-Cohesion: 0.05
-Nodes (65): cursorBlockMessage(), ACK_EXTS, ADVISORY_RULES, applyPatchText(), canonicalPath(), canonicalPathCache, clampByte(), clampGroupedToBudget() (+57 more)
+Cohesion: 0.06
+Nodes (60): cursorBlockMessage(), ACK_EXTS, ADVISORY_RULES, applyPatchText(), canonicalPath(), canonicalPathCache, clampByte(), clampGroupedToBudget() (+52 more)
 
 ### Community 257 - "Community 257"
 Cohesion: 0.22
@@ -1308,21 +1381,17 @@ Nodes (3): Rules, Secret Files, Security
 Cohesion: 0.50
 Nodes (3): Runtime Shape, Setup Overview, Stack
 
-### Community 266 - "Community 266"
-Cohesion: 0.21
-Nodes (11): emailConfigFromEnv(), emailDbFromEnv(), emailQueueFromEnv(), sendingDepsFromEnv(), EmailPreview(), DATE, getCloudflareEnv(), unsubscribeAction() (+3 more)
-
 ### Community 267 - "Community 267"
 Cohesion: 0.25
 Nodes (7): Admin workspace, Pments and email personalization, Beta Ments Tree, Phase 3 short links, Phase 9 hardening, Retention category views and activity history, Shared Dev Deploy Note, Staged Ments and email activation
 
 ### Community 271 - "Community 271"
-Cohesion: 0.16
-Nodes (20): checkNativePlatformEvidence(), checkDesignCoverage(), checkDesignDrift(), checkDetectorIgnores(), checkHookInstallation(), checkLegacyLiveState(), checkWorkspaces(), collectHookCommands() (+12 more)
+Cohesion: 0.08
+Nodes (51): PRODUCT_DEPRECATED_SECTIONS, PRODUCT_V4_SECTIONS, productStampLine(), readProductSchemaVersion(), readSidecarSchemaVersion(), stampProductSchema(), checkConfig(), checkDesignSidecar() (+43 more)
 
 ### Community 272 - "Community 272"
-Cohesion: 0.16
-Nodes (22): dailyTrendSeries(), DateRange, DateRangePreset, daysInRange(), formatIsoDay(), HourlyStatsPoint, hourlyTrendSeries(), hourPointMap() (+14 more)
+Cohesion: 0.07
+Nodes (45): HitZone, hitZones(), stepIndex(), Bucket, BucketBars(), clickLabel(), ClicksOverTime(), DONUT_PALETTE (+37 more)
 
 ### Community 273 - "Community 273"
 Cohesion: 0.27
@@ -1345,8 +1414,8 @@ Cohesion: 0.14
 Nodes (32): confirm(), clearStoredManualApplyState(), copyToClipboard(), dismissToast(), handleManualEditActivity(), hidePendingApplyDock(), manualApplyLoadingText(), manualApplyStateKey() (+24 more)
 
 ### Community 278 - "Community 278"
-Cohesion: 0.11
-Nodes (19): devDependencies, @cloudflare/vitest-pool-workers, drizzle-kit, eslint, eslint-config-next, @eslint/eslintrc, @playwright/test, tailwindcss (+11 more)
+Cohesion: 0.10
+Nodes (20): Change, Commit, Commit, Concerns, Controller verification, Files created or modified, Finding, Fix round 1 (+12 more)
 
 ### Community 279 - "Community 279"
 Cohesion: 0.50
@@ -1365,8 +1434,8 @@ Cohesion: 0.40
 Nodes (5): Clean reset path for empty D1 databases, Remote D1 schema inventory, Wrangler command approval gate, Local and remote migration approval gates, V5 migration verification suite
 
 ### Community 289 - "Community 289"
-Cohesion: 0.16
-Nodes (14): CampaignRow(), MANILA, SendProgress(), LABELS, Status, StatusPill(), TONES, AudienceRule (+6 more)
+Cohesion: 0.15
+Nodes (12): 01:20 | beta, 01:24 | beta, 01:38 | beta, 02:06 | beta, 02:35 | beta, 02:43 | beta, 15:03 | beta, 17:51 | beta (+4 more)
 
 ### Community 290 - "Community 290"
 Cohesion: 0.67
@@ -1389,24 +1458,24 @@ Cohesion: 0.50
 Nodes (3): E2E tests, Mocked auth, Run
 
 ### Community 295 - "Community 295"
-Cohesion: 0.08
-Nodes (26): AuthAccessPolicy, getGoogleAuthorizationParams(), getGoogleProviderOptions(), getRosterDeniedRedirect(), GoogleSignInProfile, isGoogleSignInAllowed(), splitAuthList(), policy (+18 more)
+Cohesion: 0.06
+Nodes (41): AuthAccessPolicy, getGoogleAuthorizationParams(), getGoogleProviderOptions(), getRosterDeniedRedirect(), GoogleSignInProfile, isGoogleSignInAllowed(), splitAuthList(), policy (+33 more)
 
 ### Community 297 - "Community 297"
-Cohesion: 0.18
-Nodes (13): HitZone, hitZones(), stepIndex(), Bucket, BucketBars(), clickLabel(), ClicksOverTime(), DONUT_PALETTE (+5 more)
+Cohesion: 0.25
+Nodes (7): 04:39 | beta, 05:10 | beta, 12:38 | beta, 14:30 | beta, 18:45 | beta, 20:42-23:48 | beta, 23:16 | beta
 
 ### Community 299 - "Community 299"
 Cohesion: 0.25
 Nodes (7): Bootstrap Role, Bootstrap Super Admin Authentication, Configuration, Goal, Local Environment, Sign-In Rules, Verification
 
 ### Community 301 - "Community 301"
-Cohesion: 0.08
-Nodes (37): blankCssComments(), BLOCK_BRACE_PREFIX_KEYWORDS, CSS_IN_JS_EXTENSIONS, detectText(), extFromFilePath(), extractCSSinJS(), extractStyleBlocks(), findCSSinJSTemplates() (+29 more)
+Cohesion: 0.07
+Nodes (33): blankCssComments(), BLOCK_BRACE_PREFIX_KEYWORDS, CSS_IN_JS_EXTENSIONS, extractCSSinJS(), extractStyleBlocks(), findCSSinJSTemplates(), findQuotedStringEnd(), findRegexLiteralEnd() (+25 more)
 
 ### Community 303 - "Community 303"
-Cohesion: 0.13
-Nodes (18): buildPropsScriptV2(), loadSvelteCompiler(), buildInsertVariantStub(), buildPropsScript(), buildVariantStub(), buildVariantStubV2(), bumpSvelteComponentPreviewRevision(), compileCheckVariants() (+10 more)
+Cohesion: 0.05
+Nodes (36): An unrelated slip during manual QA (found and fixed, not a code bug), Behavior check, Behavior check (unaffected by either bug), Cleanup, Cleanup, Cleanup, Concerns carried forward, Desktop two-column layout check (concern from the `min-w-0` additions) (+28 more)
 
 ### Community 304 - "Community 304"
 Cohesion: 0.12
@@ -1414,7 +1483,7 @@ Nodes (16): 10. Open questions (resolved by adversarial review 2026-07-05), 11. 
 
 ### Community 305 - "Community 305"
 Cohesion: 0.15
-Nodes (10): createHandlers(), handleObject(), createUploadHandlers(), createHandlers(), HandlerOptions, memberActor, MemoryStorage, DELETE() (+2 more)
+Nodes (12): Commit, Commit, Concerns, Concerns, Files Changed, Files Changed, Fix Round 1, Status (+4 more)
 
 ### Community 306 - "Community 306"
 Cohesion: 0.11
@@ -1445,52 +1514,44 @@ Cohesion: 0.14
 Nodes (13): Deployment (product owner runs these), Events Attendance Finalization Implementation Plan, Global Constraints, Post-implementation follow-ups, Self-Review Notes, Task 1: Directory-driven local migration runner, Task 2: Migration 0010, schema, and the `event:create_restricted` permission, Task 3: Enrich `recordScan` and fix the fabricated timestamp (+5 more)
 
 ### Community 313 - "Community 313"
-Cohesion: 0.19
-Nodes (12): safeSessionId(), applyEvent(), baseSnapshot(), COMPLETED_PHASES, deriveRenderState(), GENERATION_FENCED_PHASES, getJournalPath(), getSnapshotPath() (+4 more)
+Cohesion: 0.11
+Nodes (18): Code Changes, Commit, Commit Attempt, Commit SHA, Concerns, Controller Verification, Expected Failing Test Run, Files Changed (+10 more)
 
 ### Community 314 - "Community 314"
-Cohesion: 0.21
-Nodes (11): nullableText(), parsePoints(), recordRetentionAction(), RecordRetentionResult, EventOption, EventPicker(), MemberChecklist(), MemberOption (+3 more)
+Cohesion: 0.25
+Nodes (7): Commit, Concerns, Files Changed, Round 1 Fix Verification, Status, Task 2 Report, Tests And Commands
 
 ### Community 315 - "Community 315"
-Cohesion: 0.18
-Nodes (13): checkKickerAboveHeading(), checkKickerAboveHeadingDOM(), checkNumberedSectionLabels(), checkNumberedSectionLabelsDOM(), checkNumberedSectionLabelsFromDoc(), cleanInlineText(), collectKickerCandidates(), collectNumberedSectionLabelCandidates() (+5 more)
+Cohesion: 0.22
+Nodes (8): 00:26 | beta, 02:38 | beta, 03:01-03:28 | beta, 03:04 | beta, 03:30 | beta, 10:27 | beta, 13:11 | beta, 16:51 | beta
 
 ### Community 316 - "Community 316"
 Cohesion: 0.07
 Nodes (40): COMPOSITION_GRAMMAR_PREFIXES, COMPOSITION_SURFACES, compositionContentHash(), readCompositionCatalog(), validateCompositionCatalog(), validateCompositionEntry(), approvedPoolRevision(), CONCEPT_BREADTHS (+32 more)
-
-### Community 317 - "Community 317"
-Cohesion: 0.29
-Nodes (8): ACTIVITY, creditSeconds(), formatHours(), showSaveCount(), createReadingTracker(), active(), TrackerEvent, utc8Day()
 
 ### Community 318 - "Community 318"
 Cohesion: 0.14
 Nodes (13): A. Functionality gaps (bugs / dead features), B. UX gaps, C. UI / brand, CODE Portal — Improvement Audit & Plan (2026-07-03, rev 2), D. SEO / metadata, Deferred (revisit after P4), E. Code health / quality, ✅ P0 — shipped this session (+5 more)
 
 ### Community 319 - "Community 319"
-Cohesion: 0.18
-Nodes (10): Concerns / decisions where the brief was silent, Covering tests (`src/lib/library/inline.test.ts`), Evidence, Files changed, Fix round 1: combined emphasis (inline.ts), Self-review findings, Task 1 report: Block model and inline markup, TDD evidence (+2 more)
+Cohesion: 0.13
+Nodes (14): Commands And Outputs, Commit, Commit verification, Concerns, Files Changed, `graphify query "Plan A Task 4 event type key schema z enum contracts calendar actions admin input"`, `graphify update .`, `pnpm lint` (+6 more)
 
 ### Community 320 - "Community 320"
-Cohesion: 0.22
-Nodes (7): notifications, Db, actor, NotificationKind, NotificationsRepository, notify(), NotifyInput
-
-### Community 321 - "Community 321"
-Cohesion: 0.20
-Nodes (9): Cloudflare, CODE Portal prototype, Deploy, Design, Develop, Next build phases, Preview, Shared dev backend (+1 more)
+Cohesion: 0.17
+Nodes (11): 17:05 | beta, 17:16 | beta, 18:21 | beta, 18:23 | beta, 18:41-18:47 | beta, 19:22 | beta, 19:29-19:32 | beta, 19:44 | beta (+3 more)
 
 ### Community 322 - "Community 322"
-Cohesion: 0.27
-Nodes (10): deviceFilterLabel(), formatAverage(), formatChange(), formatRange(), formatShortDate(), formatWhole(), historyLabel(), sourceFilterLabel() (+2 more)
+Cohesion: 0.29
+Nodes (6): Commands And Results, Commit, Concerns, Files Changed, Status, Task 6 Report
 
 ### Community 323 - "Community 323"
 Cohesion: 0.11
-Nodes (28): ActionResult, runAction(), assignThreadAction(), cancelCampaignAction(), duplicateCampaignAction(), duplicateTemplateAction(), idSchema, moveCategoryAction() (+20 more)
+Nodes (30): ActionResult, runAction(), assignThreadAction(), cancelCampaignAction(), duplicateCampaignAction(), duplicateTemplateAction(), idSchema, moveCategoryAction() (+22 more)
 
 ### Community 324 - "Community 324"
 Cohesion: 0.09
-Nodes (50): allEntryIds(), argVal(), buildRepairBatch(), candidatesForEntry(), changedFilesSinceSnapshot(), clearAppliedEntries(), collectApplyOwnedFiles(), collectRollbackFiles() (+42 more)
+Nodes (49): allEntryIds(), argVal(), buildRepairBatch(), candidatesForEntry(), changedFilesSinceSnapshot(), clearAppliedEntries(), collectApplyOwnedFiles(), collectRollbackFiles() (+41 more)
 
 ### Community 325 - "Community 325"
 Cohesion: 0.15
@@ -1517,8 +1578,8 @@ Cohesion: 0.10
 Nodes (43): checkBorders(), checkColors(), checkCreamPalette(), checkElementAIPaletteDOM(), checkElementBorders(), checkElementBordersDOM(), checkElementColors(), checkElementColorsDOM() (+35 more)
 
 ### Community 331 - "Community 331"
-Cohesion: 0.27
-Nodes (10): appendSanitizedCssRule(), escapeRegExp(), formatCssRule(), parseCssRules(), rewriteAcceptedSvelteSelector(), rewriteAcceptedSvelteSelectorPart(), rewriteParamSelectors(), sanitizeAcceptedSvelteCss() (+2 more)
+Cohesion: 0.22
+Nodes (8): 00:52 | beta, 02:45 | beta, 12:23 | beta, 12:25 | beta, 19:01 | beta, 19:25 | beta, 19:45 | beta, 20:36 | beta
 
 ### Community 332 - "Community 332"
 Cohesion: 0.50
@@ -1528,37 +1589,21 @@ Nodes (3): Event Taxonomy and Multi-Type Points Review Log - Round 3, Findings, 
 Cohesion: 0.14
 Nodes (13): Codex Handoff — Event Taxonomy & Multi-Type Points, Definition of done, Mission, Non-negotiable constraints, Phase 1 — implement Plan A, Phase 2 — write Plans B1, B2, B3, Phase 3 — implement B1, then B2, then B3, Read these first, in this order (+5 more)
 
-### Community 334 - "Community 334"
-Cohesion: 0.25
-Nodes (6): CELLS, CreateEventSkeleton(), EventsListSkeleton(), MonthGridSkeleton(), ROWS, WEEKDAYS
-
 ### Community 335 - "Community 335"
-Cohesion: 0.28
-Nodes (6): calendarContract, calendarItemSchema, eventDetailSchema, getMonthInputSchema, eventSignupAnswersSchema, eventTypeKeySchema
-
-### Community 336 - "Community 336"
-Cohesion: 0.33
-Nodes (4): EmailPricing(), getPhpRate(), parsePhpRate(), rateSchema
+Cohesion: 0.25
+Nodes (7): Commands And Results, Commit, Concerns, Files Changed, Status, Task 7 Report, Test Output
 
 ### Community 337 - "Community 337"
 Cohesion: 0.17
 Nodes (11): Deployment, Global Constraints, Plan A — Event Types as Data — Implementation Plan, Self-Review Notes, Task 1: Palette, schema columns, and migration 0011, Task 2: Event type repository — types as data, failing closed, Task 3: Enforce the runtime type in create and update, Task 4: Contracts and server actions — enum to validated key (+3 more)
 
-### Community 338 - "Community 338"
-Cohesion: 0.25
-Nodes (7): Agent notes, Cloudflare environments, graphify, Product priorities, Shared dev Worker, Verification, Working style
-
-### Community 339 - "Community 339"
-Cohesion: 0.25
-Nodes (7): surveyOutputSchema, surveyQuestionOutputSchema, surveyResultsSchema, surveysContract, createSurveyInputSchema, sampleSurveyInputSchema, submitSurveyResponseInputSchema
-
 ### Community 340 - "Community 340"
-Cohesion: 0.29
-Nodes (6): Concerns, Fix round 1: synthetic fixtures (commit `2e6c473` test(library): synthetic author fixtures), Self-review, Task 2 report: Taxonomy and seed normalizers, TDD evidence, What was implemented
+Cohesion: 0.11
+Nodes (18): Commit, Concerns, Controller verification, Create-path check, Files modified, Fixes applied, Focused tests, Full suite (+10 more)
 
 ### Community 341 - "Community 341"
-Cohesion: 0.29
-Nodes (6): Concerns (non-blocking), Files changed, Implemented, Self-review, Task 3 report: Activity math and reading tracker, TDD evidence
+Cohesion: 0.07
+Nodes (26): 1. git status --porcelain, 2. Focused Workers Vitest run, 3. pnpm lint and pnpm typecheck, 4. Leftover-reference check, 5. Fixes applied, 6. Commit, Ancestor chain traced, and why each level needed the change, Commands run, with real output (+18 more)
 
 ### Community 342 - "Community 342"
 Cohesion: 0.83
@@ -1566,55 +1611,63 @@ Nodes (3): ensureDirectoryLink(), targetFor(), walkSource()
 
 ### Community 343 - "Community 343"
 Cohesion: 0.40
-Nodes (4): Pre-flight scan, SDD ledger — plan: docs/superpowers/plans/2026-10-16-library-v2.md, Task 0, Tasks
+Nodes (4): 00:35 | beta, 00:51 | beta, 01:08 | beta, 16:30 | beta
 
 ### Community 344 - "Community 344"
-Cohesion: 0.40
-Nodes (5): Drizzle ORM and Drizzle Kit, Next.js App Router, @opennextjs/cloudflare, CODE Nest Setup Overview, Zod Environment Validation
+Cohesion: 0.12
+Nodes (16): Commit, Concerns, Controller verification, Exact Files Modified, Fixes applied, `git status --porcelain` (before commit, graphify-out/ noise excluded), `pnpm exec vitest run "src/db/repositories/events.integration.test.ts"` (verbose), `pnpm lint` (+8 more)
 
 ### Community 345 - "Community 345"
 Cohesion: 0.50
-Nodes (3): name, private, version
+Nodes (3): Deployment, Self-Review Notes, Task 7: Type badges and the remaining hardcoded unions
 
 ### Community 346 - "Community 346"
-Cohesion: 0.09
-Nodes (23): metadata, NotFound(), PointMilestone, pointMilestoneSchema, pointMilestonesSchema, keySchema, labelSchema, milestoneDraftsSchema (+15 more)
+Cohesion: 0.14
+Nodes (15): PointMilestone, pointMilestoneSchema, pointMilestonesSchema, keySchema, labelSchema, milestoneDraftsSchema, optionalIdSchema, parseMilestones() (+7 more)
 
 ### Community 347 - "Community 347"
 Cohesion: 0.13
 Nodes (14): Beta to Staging Release Implementation Plan, Global Constraints, Task 10: Build the isolated staging integration branch, Task 11: Approved staged D1 migration and Worker deployment, Task 12: Staging acceptance, cleanup, and boss-ready report, Task 1: Runtime feature flags and environment configuration, Task 2: Feature-aware member and admin navigation, Task 3: Remove deferred dashboard reads and suppress notification writes (+6 more)
 
-### Community 348 - "Community 348"
-Cohesion: 0.67
-Nodes (4): postSerializedFindings(), renderBrowserFindings(), scanResultMeta(), serializeFindings()
-
 ### Community 349 - "Community 349"
-Cohesion: 0.07
-Nodes (37): searchMembersAction(), AudiencePicker(), DATE, emailSchema, PasteList(), RELATION, ruleLabel(), Suggestion (+29 more)
+Cohesion: 0.11
+Nodes (19): searchMembersAction(), AudiencePicker(), DATE, emailSchema, PasteList(), RELATION, ruleLabel(), Suggestion (+11 more)
 
 ### Community 350 - "Community 350"
-Cohesion: 0.50
-Nodes (4): LinkAnalyticsPage(), readQrStyle(), formatBucket(), StatsBlock()
+Cohesion: 0.29
+Nodes (6): Checks, Commit, Concerns, Files Changed, Status, Task 1 Report
 
 ### Community 351 - "Community 351"
-Cohesion: 0.67
-Nodes (3): Avatar(), AvatarProps, initials()
+Cohesion: 0.29
+Nodes (6): Commit, Concerns, Files Changed, Summary, Task 5 Report, Verification
+
+### Community 352 - "Community 352"
+Cohesion: 0.29
+Nodes (6): Commit, Concerns, Files Changed, Summary, Task 6 Report, Verification
 
 ### Community 353 - "Community 353"
 Cohesion: 0.03
-Nodes (93): AdminGroupIndex(), AdminGroup, adminGroups, adminHeading(), AdminPage, AdminPermission, crumbFor(), pageVisible() (+85 more)
+Nodes (76): CreateEventSheet(), PlanningLink(), CategoryLabel(), ManualRecordSheet(), ColourPicker(), EventTypeEditor(), LinkAnalyticsPage(), readQrStyle() (+68 more)
 
-### Community 356 - "Community 356"
-Cohesion: 0.67
-Nodes (3): migrate-local-sqlite script, main, seedLocal
+### Community 357 - "Community 357"
+Cohesion: 0.14
+Nodes (13): Admin Leaderboard Scope, Commands run, Commit, Concerns, Controller verification, Files Created, Files Modified, Fix round 1 (+5 more)
 
 ### Community 359 - "Community 359"
 Cohesion: 0.29
 Nodes (6): Commit Hash Or Range, Concerns, Files Changed, Summary, Task 4 Report, Verification
 
 ### Community 360 - "Community 360"
-Cohesion: 0.12
-Nodes (17): analyticsDateSchema, createLinkInputSchema, linkListItemSchema, linkOutputSchema, linkOwnerSchema, linksContract, linkStatsInputFromUrl(), linkStatsInputSchema (+9 more)
+Cohesion: 0.11
+Nodes (21): analyticsDateSchema, createLinkInputSchema, linkListItemSchema, linkOutputSchema, linkOwnerSchema, linksContract, linkStatsInputFromUrl(), linkStatsInputSchema (+13 more)
+
+### Community 361 - "Community 361"
+Cohesion: 0.29
+Nodes (6): Commit, Concerns, Files Changed, Plan A Task 3 Report, Status, Tests And Commands
+
+### Community 365 - "Community 365"
+Cohesion: 0.25
+Nodes (7): Commit, Plan B1 Task 4 Local Verification, Required graph query, Scope, Step 1: Fresh local database, Step 2: Existing local database, Step 3: Focused and project verification
 
 ### Community 368 - "Community 368"
 Cohesion: 0.50
@@ -1625,8 +1678,8 @@ Cohesion: 0.29
 Nodes (6): Commit Hash/Range, Concerns, Files Changed, Summary, Task 3 Report, Verification
 
 ### Community 372 - "Community 372"
-Cohesion: 0.10
-Nodes (30): addManualContextText(), applyEditing(), buildLocatorForLeaf(), canRestoreManualEditElement(), contextElementForManualEdit(), copyEditContainerContext(), copyEditLeafContext(), directMixedTextRestoreNodes() (+22 more)
+Cohesion: 0.09
+Nodes (32): addManualContextText(), applyEditing(), buildLocatorForLeaf(), canRestoreManualEditElement(), collectManualContextPieces(), contextElementForManualEdit(), copyEditContainerContext(), copyEditLeafContext() (+24 more)
 
 ### Community 373 - "Community 373"
 Cohesion: 0.04
@@ -1637,12 +1690,20 @@ Cohesion: 0.18
 Nodes (10): B1 Boundary Check, Execution Handoff, File Structure, Global Constraints, Plan B1 Additive Points Schema Implementation Plan, Self-Review, Task 1: Add and Prove the D1 Additive Migration, Task 2: Mirror the Schema and Add Baseline Seeds (+2 more)
 
 ### Community 375 - "Community 375"
-Cohesion: 0.16
-Nodes (29): matchConfiguredExtension(), main(), appendDesignSystemNote(), bumpEditCount(), dedupeAgainstCache(), depthIsSet(), designSystemOptions(), ensureFile() (+21 more)
+Cohesion: 0.13
+Nodes (34): matchConfiguredExtension(), main(), appendDesignSystemNote(), bumpEditCount(), coLocatedStylesheets(), dedupeAgainstCache(), depthIsSet(), designSystemOptions() (+26 more)
+
+### Community 376 - "Community 376"
+Cohesion: 0.40
+Nodes (4): B1 Boundary Check, Execution Handoff, Self-Review, Task 4: Verify Local Migration States and Run the Full Local Check
 
 ### Community 377 - "Community 377"
 Cohesion: 0.10
 Nodes (46): applyDetectionConfigSource(), clampByte(), cleanIgnoreValueDisplay(), cloneDetectionConfig(), cloneRawDetectionConfig(), colorIgnoreKey(), DEFAULT_DETECTION_CONFIG, DETECTOR_CONFIG_KEYS (+38 more)
+
+### Community 379 - "Community 379"
+Cohesion: 0.07
+Nodes (28): QrCanvas(), EventDebrief, saveDebriefAction(), SaveDebriefResult, { save, revalidatePath }, SignupResponseRow, EventShareBar(), EventSignupPanel() (+20 more)
 
 ### Community 386 - "Community 386"
 Cohesion: 0.17
@@ -1650,15 +1711,19 @@ Nodes (11): Accessibility & Inclusion, Brand Commitments, Capabilities and Const
 
 ### Community 387 - "Community 387"
 Cohesion: 0.09
-Nodes (41): matchesTemplateExtension(), findSourceFile(), NEVER_SOURCE_DIRS, SOURCE_SEARCH_DIRS, walk(), acceptCli(), acceptReceiptPath(), argVal() (+33 more)
+Nodes (42): isLiveServerPidReachable(), clearStaleLock(), readLock(), releaseOwnLock(), sleepSync(), sourceLockPath(), withSourceLockSync(), acceptCli() (+34 more)
 
 ### Community 393 - "Community 393"
 Cohesion: 0.04
-Nodes (111): AdminDashboardPage(), announcementSchema, createAnnouncementAction(), deleteAnnouncementAction(), markAnnouncementReadAction(), parse(), revalidate(), updateAnnouncementAction() (+103 more)
+Nodes (121): AdminLayout(), AdminDashboardPage(), announcementSchema, createAnnouncementAction(), deleteAnnouncementAction(), markAnnouncementReadAction(), parse(), revalidate() (+113 more)
 
 ### Community 396 - "Community 396"
 Cohesion: 0.14
 Nodes (16): Filter, Folder, MessageBody(), ReplyBox(), ThreadControls(), setOptOutAction(), PreferencesList(), Switch() (+8 more)
+
+### Community 399 - "Community 399"
+Cohesion: 0.12
+Nodes (15): 01:15 | beta, 01:46 | beta, 01:53 | beta, 01:55 | beta, 02:08 | beta, 02:16 | beta, 08:48 | beta, 08:50 | beta (+7 more)
 
 ### Community 400 - "Community 400"
 Cohesion: 0.29
@@ -1672,6 +1737,10 @@ Nodes (44): ACTIONS, addIgnoreFile(), addIgnoreRule(), addIgnoreValue(), DETECTO
 Cohesion: 0.20
 Nodes (10): §7 — Interface design, Boundaries, Move 1 — Exception-first status. On time is silent., Move 2 — One question per route, Move 3 — Density correction, Move 4 — The scanner panel is the one loud moment, Move 5 — Numbers, not adjectives, Move 6 — Empty states that teach (+2 more)
 
+### Community 403 - "Community 403"
+Cohesion: 0.50
+Nodes (3): Deployment Note, Self-Review Checklist, Task 8: Verify B3 End to End
+
 ### Community 404 - "Community 404"
 Cohesion: 0.09
 Nodes (47): actionLabel(), applyConfigureBarChrome(), bindConfigureCountPillTooltip(), bindConfigureInlineControlHover(), buildConfigureActionControl(), buildConfigureCountControl(), buildConfigureRow(), buildConfigureSubmitButton() (+39 more)
@@ -1680,25 +1749,33 @@ Nodes (47): actionLabel(), applyConfigureBarChrome(), bindConfigureCountPillTool
 Cohesion: 0.22
 Nodes (9): §1 — Retention de-specialization, Callers to update beyond the repositories, Constants, Migration risk, Migration shape, Permanence, Repository changes, Shared mode and the leaderboard (+1 more)
 
+### Community 406 - "Community 406"
+Cohesion: 0.29
+Nodes (6): Commit, Concerns, Files Changed, Summary, Task 7 Report, Verification
+
 ### Community 408 - "Community 408"
 Cohesion: 0.07
 Nodes (41): agentHasWorkInFlight(), agentStatusText(), attachSteerFocusDebug(), attachSteerFocusGuard(), barPaletteForTheme(), brandMarkSvg(), buildParamsPanel(), connectSSE() (+33 more)
 
 ### Community 409 - "Community 409"
-Cohesion: 0.08
-Nodes (35): addOpToManualApplyChunk(), APPLY_EVENT_HARD_TIMEOUT_MS, APPLY_EVENT_SOFT_DEADLINE_MS, buildManualApplyAgentAction(), clearManualApplyTransaction(), collectManualApplyFiles(), compactManualApplyBatch(), compactManualApplyCandidates() (+27 more)
+Cohesion: 0.07
+Nodes (36): addOpToManualApplyChunk(), APPLY_EVENT_HARD_TIMEOUT_MS, APPLY_EVENT_SOFT_DEADLINE_MS, buildManualApplyAgentAction(), clearManualApplyTransaction(), collectManualApplyFiles(), compactManualApplyBatch(), compactManualApplyCandidates() (+28 more)
 
 ### Community 410 - "Community 410"
-Cohesion: 0.13
-Nodes (23): bodySchema, POST(), getArticle(), rateLimitCounters, bodySchema, POST(), fail(), LinksHandlerDependencies (+15 more)
+Cohesion: 0.16
+Nodes (19): bodySchema, POST(), rateLimitCounters, bodySchema, POST(), POST(), Db, enforceRateLimit() (+11 more)
 
 ### Community 420 - "Community 420"
-Cohesion: 0.19
-Nodes (18): acceptInstructions(), bootInstructions(), deferredWrapperInstructions(), generateInstructions(), insertScaffoldInstructions(), instructionsForEvent(), pollCmd(), replyCmd() (+10 more)
+Cohesion: 0.20
+Nodes (13): parseTargetOptions(), parseTargetPath(), TargetArgError, __dirname, ensureServerRunning(), resolveFiles(), liveCli(), relOrNull() (+5 more)
+
+### Community 421 - "Community 421"
+Cohesion: 0.25
+Nodes (7): Final review fix wave — B3 typed points, Finding 1 (Important) — profile Retention row mixed three populations, Finding 2 (Important) — member leaderboard "Retention" ranked by one type, Finding 3 (Minor) — overflow neighbour, Scope notes, Tests, Verification evidence
 
 ### Community 422 - "Community 422"
-Cohesion: 0.10
-Nodes (29): getActor, getSharedActor, requireActor, createAuthInternalHandlers, CloudflareRuntimeEnv type, getCloudflareEnv, getOptionalCloudflareEnv, hasCloudflareBinding (+21 more)
+Cohesion: 0.20
+Nodes (16): getSharedActor, createAuthInternalHandlers, getInternalCorsHeaders, memoryStorage, updateMemberProfileInputSchema, shared-dev destructive-operation gate pattern, createMembersInternalHandlers, Actor type (+8 more)
 
 ### Community 423 - "Community 423"
 Cohesion: 0.38
@@ -1713,12 +1790,12 @@ Cohesion: 0.29
 Nodes (7): §4 — Admin information architecture, Event roster (`data/events/[id]`), Events list, Members list, Ledger, Navigation, Overview, Routes, Scan log (`data/scans`) — sourced from `audit_logs`
 
 ### Community 426 - "Community 426"
-Cohesion: 0.15
-Nodes (23): blockText(), EMAIL_COLORS, escapeHtml(), footerLink(), paragraphs(), pillResolver(), renderBlockHtml(), RenderedEmail (+15 more)
+Cohesion: 0.11
+Nodes (32): BlockEditor(), EventOption, PALETTE, PreviewPerson, Props, MergeValues, replaceTags(), blockText() (+24 more)
 
 ### Community 427 - "Community 427"
-Cohesion: 0.15
-Nodes (18): applyPlaceholderDimensions(), beginEditPin(), cancelEditingPin(), clampPlaceholderSize(), finalizeEditingPin(), localCoords(), materializePlaceholderWidth(), onAnnotDown() (+10 more)
+Cohesion: 0.05
+Nodes (40): 10. AI comment summary, 11.1 Organizer view, 11. Event archive, 12. Permissions and visibility, 13. Environments, flags, migrations, tests, 14. Questions to take to OSG, 15. Left to the builder, 1. Intent (+32 more)
 
 ### Community 428 - "Community 428"
 Cohesion: 0.50
@@ -1737,8 +1814,8 @@ Cohesion: 0.33
 Nodes (6): §6 — Scanner activation and scan-system fixes, Multiple concurrent events, Placement, Shared development mode, Tests, Undo
 
 ### Community 432 - "Community 432"
-Cohesion: 0.17
-Nodes (21): readLiveServerInfo(), FORBIDDEN, verifyAcceptedFile(), createLiveSessionStore(), completeCli(), completeThroughServer(), parseArgs(), readServerInfo() (+13 more)
+Cohesion: 0.07
+Nodes (52): firstExisting(), getDesignSidecarCandidates(), getDesignSidecarPath(), getImpeccableDir(), getLegacyLiveAnnotationsDir(), getLegacyLiveConfigPath(), getLegacyLiveServerPath(), getLegacyLiveSessionsDir() (+44 more)
 
 ### Community 433 - "Community 433"
 Cohesion: 0.12
@@ -1748,17 +1825,21 @@ Nodes (39): assessCoverage(), buildColor(), CANONICAL_SECTIONS, collectBullets()
 Cohesion: 0.40
 Nodes (5): Changes made in revision 2 beyond the review, Design brief, Review log, Round 1 — Codex adversarial review (partial), Round 2 — Codex bounded review (complete)
 
+### Community 435 - "Community 435"
+Cohesion: 0.50
+Nodes (3): 02:05 | beta, 02:10 | beta, 02:17 | beta
+
 ### Community 436 - "Community 436"
 Cohesion: 0.05
 Nodes (37): 10. Screens, 11. Error handling, 12. Security, 13. Testing, 14. Rollout, 15. Dependencies, 16. Planning amendments (2026-10-02), 17. Typed and outside recipients (2026-10-05) (+29 more)
 
 ### Community 437 - "Community 437"
-Cohesion: 0.09
-Nodes (40): detectCli(), dim(), fileUrlToLocalPath(), formatAdvisorySection(), formatFindings(), formatFindingsBody(), formatFindingSummary(), handleStdin() (+32 more)
+Cohesion: 0.08
+Nodes (44): detectCli(), dim(), fileUrlToLocalPath(), formatAdvisorySection(), formatFindings(), formatFindingsBody(), formatFindingSummary(), handleStdin() (+36 more)
 
 ### Community 438 - "Community 438"
-Cohesion: 0.15
-Nodes (27): completionAckForAcceptResult(), completionTypeForAcceptResult(), PREVIEW_MODES_WITHOUT_SOURCE_MARKERS, augmentEventWithAcceptHandling(), buildAcceptScriptArgs(), buildPollReplyPayload(), completeAcceptHandling(), EVENT_TYPES_NEEDING_AGENT_REPLY (+19 more)
+Cohesion: 0.11
+Nodes (36): completionAckForAcceptResult(), completionTypeForAcceptResult(), PREVIEW_MODES_WITHOUT_SOURCE_MARKERS, acceptInstructions(), bootInstructions(), deferredWrapperInstructions(), generateInstructions(), insertScaffoldInstructions() (+28 more)
 
 ### Community 439 - "Community 439"
 Cohesion: 0.67
@@ -1769,36 +1850,44 @@ Cohesion: 0.13
 Nodes (28): bumpCursorDenial(), detectProposedHtml(), escapeRegExp(), findingSignature(), firstMatch(), firstString(), hasFragmentEditContent(), projectedEditContent() (+20 more)
 
 ### Community 441 - "Community 441"
-Cohesion: 0.08
-Nodes (40): buildHtmlPatternCorpora(), checkColors(), checkElementAIPaletteDOM(), checkElementGlow(), checkElementHeroEyebrow(), checkGlow(), checkHtmlPatterns(), checkRadialSpotlight() (+32 more)
+Cohesion: 0.09
+Nodes (37): buildHtmlPatternCorpora(), checkColors(), checkElementAIPaletteDOM(), checkElementGlow(), checkGlow(), checkHoverContrast(), checkHtmlPatterns(), collectCssCustomProps() (+29 more)
 
 ### Community 442 - "Community 442"
 Cohesion: 0.36
 Nodes (9): addRules(), applyInlineIgnores(), getSet(), hasDirectives(), isInlineIgnored(), normalizeRule(), parseInlineIgnores(), parseRuleList() (+1 more)
 
+### Community 443 - "Community 443"
+Cohesion: 0.29
+Nodes (6): 02:36 | beta, 02:58 | beta, 03:16 | beta, 04:54 | beta, 05:04-06:15 | beta, 12:47 | beta
+
 ### Community 444 - "Community 444"
 Cohesion: 0.12
-Nodes (35): checkBorders(), checkElementBorders(), checkElementBordersDOM(), checkElementColors(), checkElementColorsDOM(), checkElementGlowDOM(), checkElementHoverContrast(), checkElementIconTile() (+27 more)
+Nodes (34): checkBorders(), checkCreamPalette(), checkElementBorders(), checkElementBordersDOM(), checkElementColors(), checkElementColorsDOM(), checkElementGlowDOM(), checkElementHoverContrast() (+26 more)
 
 ### Community 445 - "Community 445"
-Cohesion: 0.12
-Nodes (26): bakeParamValues(), verifyAcceptedSource(), appendCssToSvelteStyle(), applyDeferredSvelteComponentAccepts(), deferredAcceptsPath(), findLastStyleCloseLine(), findLostSelectors(), indentCssBlock() (+18 more)
+Cohesion: 0.07
+Nodes (58): bakeParamValues(), parseStylesheet(), reconcileCss(), serializeNodes(), verifyAcceptedSource(), buildPropsScriptV2(), loadSvelteCompiler(), appendCssToSvelteStyle() (+50 more)
 
 ### Community 446 - "Community 446"
-Cohesion: 0.11
-Nodes (22): CameraFacingMode, CameraScanner(), CameraScannerControls, DetectedBarcode, Detector, Window, BANNER_ICON, BANNER_STYLE (+14 more)
+Cohesion: 0.12
+Nodes (20): CameraFacingMode, CameraScannerControls, DetectedBarcode, Detector, Window, BANNER_ICON, BANNER_STYLE, BannerState (+12 more)
 
 ### Community 447 - "Community 447"
 Cohesion: 0.12
 Nodes (35): activeElementDeep(), armPageChatForTyping(), buildSteerProcessingDots(), buildSteerQueueHint(), clearSteerAwaitTimer(), collapsePageChat(), expandPageChat(), focusConfigureInput() (+27 more)
 
 ### Community 448 - "Community 448"
-Cohesion: 0.11
-Nodes (25): CSS_NAMED_COLORS, applyStaticDeclaration(), buildBorderOverrideMap(), compareStaticPriority(), cssPropToCamel(), expandStaticBoxValues(), expandStaticDeclaration(), extractStaticColor() (+17 more)
+Cohesion: 0.10
+Nodes (26): CSS_NAMED_COLORS, applyStaticDeclaration(), buildBorderOverrideMap(), compareStaticPriority(), cssPropToCamel(), expandStaticBoxValues(), expandStaticDeclaration(), extractStaticColor() (+18 more)
+
+### Community 449 - "Community 449"
+Cohesion: 0.14
+Nodes (26): buildHtmlPatternCorpora(), checkHtmlPatterns(), collectCssCustomProps(), collectMarqueeKeyframes(), collectPulseKeyframes(), cssLengthToPx(), cssTextHasDarkRootBg(), extractShadowLengths() (+18 more)
 
 ### Community 450 - "Community 450"
-Cohesion: 0.10
-Nodes (28): applyParamDefaults(), applyParamValue(), closedClipPath(), closeTunePopover(), completeParameterPublication(), getMountedSvelteComponentAnchor(), getVisibleVariantEl(), hideParamsPanel() (+20 more)
+Cohesion: 0.16
+Nodes (19): applyParamDefaults(), applyParamValue(), closedClipPath(), closeTunePopover(), getVisibleVariantEl(), hideParamsPanel(), openTunePopover(), parseVariantParams() (+11 more)
 
 ### Community 453 - "Community 453"
 Cohesion: 0.06
@@ -1808,13 +1897,17 @@ Nodes (31): 1. Read the screenshot (if present), 2. Wrap the element, 3. Load th
 Cohesion: 0.13
 Nodes (30): applyMockWrites(), buildCopyEditBatchPrompt(), checkFrameworkSourceSyntax(), chooseCopyEditAgent(), COMMAND_AUTH_CACHE, commandAuthed(), commandExists(), compactBatchForPrompt() (+22 more)
 
+### Community 455 - "Community 455"
+Cohesion: 0.21
+Nodes (12): getActor, requireActor, getOptionalCloudflareEnv, hasCloudflareBinding, runInBackground, APP_ENV/DEPLOY_ENV validation invariants, getAppConfig, getPublicEnvStatus (+4 more)
+
 ### Community 456 - "Community 456"
 Cohesion: 0.13
 Nodes (24): AGENT_PHASE_SET, FORBIDDEN_MANUAL_EDIT_TEXT_CHARS, INSERT_POSITIONS, isValidId(), isValidMountVariant(), isValidVariantId(), validateAnnotationFields(), validateEvent() (+16 more)
 
 ### Community 457 - "Community 457"
 Cohesion: 0.13
-Nodes (25): CANDIDATE_SCAN_IGNORED, consumeTargetArg(), CONTEXT_FALLBACK_DIRS, DESIGN_NAMES, DEV_CONFIG_MARKERS, discoverAppCandidates(), enterLiveRoot(), exists() (+17 more)
+Nodes (26): CANDIDATE_SCAN_IGNORED, consumeTargetArg(), CONTEXT_FALLBACK_DIRS, DESIGN_NAMES, DEV_CONFIG_MARKERS, discoverAppCandidates(), enterLiveRoot(), exists() (+18 more)
 
 ### Community 458 - "Community 458"
 Cohesion: 0.17
@@ -1822,27 +1915,27 @@ Nodes (19): getCritiqueDir(), getSurfaceBriefDir(), listSurfaceBriefs(), normali
 
 ### Community 459 - "Community 459"
 Cohesion: 0.10
-Nodes (29): abandonForeignSession(), acceptedDomAlreadyClean(), applyOriginalAttrsToSvelteAnchor(), checkpointPayload(), commitAcceptedSvelteComponentToDom(), componentModuleCandidates(), describeMountFailure(), detectDevServerBase() (+21 more)
+Nodes (29): abandonForeignSession(), acceptedDomAlreadyClean(), applyOriginalAttrsToSvelteAnchor(), commitAcceptedSvelteComponentToDom(), componentModuleCandidates(), describeMountFailure(), detectDevServerBase(), discardOrphanedSession() (+21 more)
 
 ### Community 460 - "Community 460"
 Cohesion: 0.14
 Nodes (13): Goal, Live consequences, Locked decisions, Measured drift, Measured environment state, 2026-08-07, Migration Lineage Unification, Out of scope, Problem (+5 more)
 
 ### Community 462 - "Community 462"
-Cohesion: 0.09
-Nodes (30): browserDesignSystemConfig(), browserFindingsFromMap(), checkCreamPalette(), checkEdgeFlushCardsDOM(), checkElementBlinkingCursorDOM(), checkElementTextOverflowDOM(), checkFirstViewportColumnOverflowDOM(), checkHeadingRhythmDOM() (+22 more)
+Cohesion: 0.07
+Nodes (34): browserDesignSystemConfig(), browserFindingsFromMap(), checkClippedOverflow(), checkElementBlinkingCursorDOM(), checkElementClippedOverflow(), checkElementClippedOverflowDOM(), checkElementTextOverflowDOM(), checkFirstViewportColumnOverflowDOM() (+26 more)
 
 ### Community 463 - "Community 463"
-Cohesion: 0.16
-Nodes (22): summarizeManualApplyFailures(), summarizeManualDiagnostics(), createManualEditRoutes(), sendJson(), summarizePendingManualEditBatch(), countByPage(), getBufferPath(), readBuffer() (+14 more)
+Cohesion: 0.18
+Nodes (20): summarizeManualDiagnostics(), createManualEditRoutes(), sendJson(), summarizePendingManualEditBatch(), countByPage(), getBufferPath(), readBuffer(), readBufferInternal() (+12 more)
 
 ### Community 464 - "Community 464"
 Cohesion: 0.08
 Nodes (25): Assess Adaptation Challenge, Breakpoints: Content-Driven, Content Adaptation, Desktop Adaptation (Mobile → Desktop), Detect Input Method, Not Just Screen Size, Email Adaptation (Web → Email), Implement Adaptations, Layout Adaptation Patterns (+17 more)
 
 ### Community 465 - "Community 465"
-Cohesion: 0.15
-Nodes (23): analyzeSourceHint(), buildCandidatesForOp(), buildContextHintsByRef(), collectSearchFiles(), escapeRegExp(), findContextMatches(), findLiteralMatches(), findLocatorMatches() (+15 more)
+Cohesion: 0.14
+Nodes (24): analyzeSourceHint(), buildCandidatesForOp(), buildContextHintsByRef(), collectSearchFiles(), countOps(), escapeRegExp(), findContextMatches(), findLiteralMatches() (+16 more)
 
 ### Community 466 - "Community 466"
 Cohesion: 0.17
@@ -1861,7 +1954,7 @@ Cohesion: 0.08
 Nodes (23): Component translation rules, Narrative mapping, Pitfalls, Scan mode (approach C: auto-extract, then confirm descriptive language), Schema, Seed mode, Step 1: Find the design assets, Step 1: Route through new-work's workshop (+15 more)
 
 ### Community 470 - "Community 470"
-Cohesion: 0.10
+Cohesion: 0.11
 Nodes (34): createBrowserDetector(), detectUrl(), launchBrowser(), runVisualContrastFallback(), serializeDesignSystemForBrowser(), mergeDesignSystemFindings(), finding(), getAP() (+26 more)
 
 ### Community 471 - "Community 471"
@@ -1869,36 +1962,40 @@ Cohesion: 0.09
 Nodes (22): Assess Onboarding Needs, Context Over Ceremony, Contextual Help, Design Onboarding Experiences, Documentation & Help, Empty State Design, Feature Discovery & Adoption, Guided Tours & Walkthroughs (+14 more)
 
 ### Community 472 - "Community 472"
-Cohesion: 0.03
-Nodes (76): Actor, roleKeys, announcementReads, announcements, articleFeedback, auditLogs, contactSubmissions, navPins (+68 more)
+Cohesion: 0.02
+Nodes (119): assertAdminScope(), linkAdmin, memberOnly, retentionAdmin, rosterAdmin, superAdmin, Actor, normalizeRoleKey() (+111 more)
 
 ### Community 473 - "Community 473"
 Cohesion: 0.10
 Nodes (20): Animate complex properties, Assess What "Extraordinary" Means Here, For data-heavy interfaces, For functional UI, For performance-critical UI, For visual/marketing surfaces, Implement with Discipline, Interact with the device (+12 more)
 
 ### Community 474 - "Community 474"
-Cohesion: 0.05
-Nodes (50): D1DatabaseAdapter, LocalDatabase, LocalSqliteDatabaseAdapter, deserializeMember(), SharedApiDatabaseAdapter, DatabaseAdapter interface, members, surveyAnswers (+42 more)
+Cohesion: 0.08
+Nodes (32): nullableText, updateProfileAction, D1DatabaseAdapter, LocalDatabase, LocalSqliteDatabaseAdapter, deserializeMember(), SharedApiDatabaseAdapter, Lowercased-email Drizzle adapter override (+24 more)
 
 ### Community 475 - "Community 475"
 Cohesion: 0.07
 Nodes (26): Email System Implementation Plan, File Map, Global Constraints, Review Focus, Spec deviations (decided during planning), Task 10: Inbound mail, sanitizer, inbox repository, Task 11: Member archive, preferences, and token opt-out, Task 12: Custom Worker entry and beta wrangler config (+18 more)
 
+### Community 476 - "Community 476"
+Cohesion: 0.13
+Nodes (25): SurveyResults, CommentsPanel(), ChoiceQuestion, ResultsHeader(), ScaleQuestion, ScaleResult(), baselineLine(), chipSteps() (+17 more)
+
 ### Community 477 - "Community 477"
-Cohesion: 0.11
-Nodes (19): createHandlers() (uploads [key] route), DELETE (single upload object route), DELETE (internal upload object route), GET (single upload object route), GET (internal upload object route), handle(request, context) (internal upload object route), handleObject(request, context), OPTIONS (internal upload object route) (+11 more)
+Cohesion: 0.12
+Nodes (17): createHandlers() (uploads [key] route), DELETE (single upload object route), DELETE (internal upload object route), GET (single upload object route), GET (internal upload object route), handle(request, context) (internal upload object route), handleObject(request, context), OPTIONS (internal upload object route) (+9 more)
 
 ### Community 478 - "Community 478"
-Cohesion: 0.18
-Nodes (13): escapeHtml(), isCrawlerUserAgent(), renderPreviewHtml(), deviceBucket(), isValidDestinationUrl(), isValidSlugFormat(), normalizeSlug(), RESERVED_SLUG_DEFAULTS (+5 more)
+Cohesion: 0.27
+Nodes (8): escapeHtml(), isCrawlerUserAgent(), renderPreviewHtml(), buildRedirectResponse(), isQrScan(), RedirectDependencies, link, ResolvedLink
 
 ### Community 479 - "Community 479"
-Cohesion: 0.14
-Nodes (17): checkElementHeroEyebrowDOM(), checkHeroEyebrow(), checkKickerAboveHeading(), checkKickerAboveHeadingDOM(), checkKickerAboveHeadingFromDoc(), checkNumberedSectionLabels(), checkNumberedSectionLabelsDOM(), checkNumberedSectionLabelsFromDoc() (+9 more)
+Cohesion: 0.12
+Nodes (19): checkElementHeroEyebrow(), checkElementHeroEyebrowDOM(), checkHeroEyebrow(), checkKickerAboveHeading(), checkKickerAboveHeadingDOM(), checkKickerAboveHeadingFromDoc(), checkNumberedSectionLabels(), checkNumberedSectionLabelsDOM() (+11 more)
 
 ### Community 480 - "Community 480"
-Cohesion: 0.18
-Nodes (14): extractPlatform(), hasVisualImplementation(), loadContext(), safeRead(), cli(), COMMON_DEV_PORTS, devServerSignals(), gatherSignals() (+6 more)
+Cohesion: 0.22
+Nodes (10): cli(), COMMON_DEV_PORTS, devServerSignals(), gatherSignals(), gitSignals(), hasCode(), latestCritique(), SCANNABLE_EXT (+2 more)
 
 ### Community 481 - "Community 481"
 Cohesion: 0.33
@@ -1909,12 +2006,16 @@ Cohesion: 0.24
 Nodes (16): applySvelteKitLiveAdapter(), buildSvelteLiveRootComponent(), defaultSvelteLayout(), detectSvelteKitProject(), ensureSvelteLiveRootComponent(), escapeRegExp(), fileIncludes(), findSvelteKitAppHtml() (+8 more)
 
 ### Community 483 - "Community 483"
-Cohesion: 0.14
-Nodes (16): nullableText, updateProfileAction, Lowercased-email Drizzle adapter override, createUser event handler, NextAuth configuration (handlers, auth, signIn, signOut), session callback, signIn callback, Button component (+8 more)
+Cohesion: 0.11
+Nodes (11): canCreateInsert(), clampPlaceholderSize(), computeInsertPosition(), groupSiblingRows(), hitSiblingInsertGap(), horizontalOverlap(), insertCreateDisabledReason(), insertLineCoords() (+3 more)
 
 ### Community 484 - "Community 484"
 Cohesion: 0.22
 Nodes (15): applyTanStackLiveAdapter(), buildTanStackLiveRootComponent(), detectTanStackStartProject(), escapeRegExp(), findRootRouteFile(), insertAfterLastImport(), isManagedComponent(), packageHasTanStackStart() (+7 more)
+
+### Community 485 - "Community 485"
+Cohesion: 0.17
+Nodes (11): 1. Rule type, 2. Resolver (`src/db/repositories/email-audience.ts`), 3. Migration 0008 (Drizzle), 4. Dispatch (`src/server/email/dispatch.ts`), 5. Renderer footer (`src/lib/email/render.ts`), 6. Preview and report data, 7. UI, 8. Spec amendment (+3 more)
 
 ### Community 486 - "Community 486"
 Cohesion: 0.09
@@ -1925,16 +2026,16 @@ Cohesion: 0.23
 Nodes (15): appendOriginToDirective(), buildTagBlock(), commentClose(), commentOpen(), detectLineEnding(), findCspMetaTags(), getAttr(), insertTag() (+7 more)
 
 ### Community 488 - "Community 488"
-Cohesion: 0.14
-Nodes (26): firstExisting(), getDesignSidecarCandidates(), getDesignSidecarPath(), getImpeccableDir(), getLegacyLiveAnnotationsDir(), getLegacyLiveConfigPath(), getLegacyLiveServerPath(), getLegacyLiveSessionsDir() (+18 more)
+Cohesion: 0.09
+Nodes (22): Event Feedback, Interpretation, and Event Archive Implementation Plan, Global Constraints, Review Focus, Task 10: Feedback email (narrow path and `survey_invitees` audience), Task 11: Reminder cron, Task 12: AI summary wiring, Task 13: Member form and event-page card, Task 14: Question editor and templates admin (+14 more)
 
 ### Community 489 - "Community 489"
-Cohesion: 0.13
-Nodes (24): blobDataUrl(), canvasBlob(), logoBadge(), QrArtifacts, rasterize(), renderQrArtifacts(), throwIfAborted(), isSelfContainedQrSvg() (+16 more)
+Cohesion: 0.18
+Nodes (14): normalizeQrStyle(), ORG_QR_STYLE, QR_EXPORT_SIZES, QR_LOGO_SIZES, qrBackgroundMode, qrColorContrast(), qrTrackingUrl(), validHex() (+6 more)
 
 ### Community 490 - "Community 490"
-Cohesion: 0.17
-Nodes (19): EditEmailPage(), loadComposerData(), canonicalTag(), findUnknownTags(), firstWord(), isMergeTag(), MergeMember, mergeValuesFor() (+11 more)
+Cohesion: 0.09
+Nodes (25): CampaignRow(), formatManila(), MANILA, emailConfigFromEnv(), emailDbFromEnv(), emailQueueFromEnv(), sendingDepsFromEnv(), EmailPreview() (+17 more)
 
 ### Community 491 - "Community 491"
 Cohesion: 0.13
@@ -1961,8 +2062,8 @@ Cohesion: 0.19
 Nodes (11): crc32(), hash32(), hslToRgb(), out, palette(), pngChunk(), pngFake(), promptFile (+3 more)
 
 ### Community 497 - "Community 497"
-Cohesion: 0.16
-Nodes (18): MentsAdminPerson, mentsAdminPersonSchema, MentsInput, mentsInputSchema, MentsPerson, mentsPersonSchema, PmentReport, pmentReportSchema (+10 more)
+Cohesion: 0.13
+Nodes (24): MentsAdminPerson, mentsAdminPersonSchema, mentsContract, MentsInput, mentsInputSchema, MentsPerson, mentsPersonSchema, PmentReport (+16 more)
 
 ### Community 498 - "Community 498"
 Cohesion: 0.27
@@ -1973,8 +2074,8 @@ Cohesion: 0.14
 Nodes (13): Animation Performance, Assess Performance Issues, Core Web Vitals Optimization, Cumulative Layout Shift (CLS < 0.1), Interaction to Next Paint (INP < 200ms), Largest Contentful Paint (LCP < 2.5s), Loading Performance, Network Optimization (+5 more)
 
 ### Community 500 - "Community 500"
-Cohesion: 0.15
-Nodes (20): analyzeVisualContrastCandidate(), blendRgba(), checkHoverContrast(), clampByte(), contrastRatio(), firstCssUrl(), getLayerValue(), loadVisualContrastImage() (+12 more)
+Cohesion: 0.24
+Nodes (13): firstCssUrl(), getLayerValue(), loadVisualContrastImage(), parseObjectPosition(), parsePositionPair(), parsePositionToken(), pointToImageSource(), resolveObjectImageRect() (+5 more)
 
 ### Community 501 - "Community 501"
 Cohesion: 0.15
@@ -1988,13 +2089,17 @@ Nodes (12): PATCH_UNDOERS, clearInjectJournal(), healArtifact(), healInjectJourn
 Cohesion: 0.18
 Nodes (10): Admin console, CODE Portal, Update 1, Events and the calendar, Fixes worth calling out, Link shortener, Not in this update, Points, Profile (+2 more)
 
+### Community 504 - "Community 504"
+Cohesion: 0.18
+Nodes (14): analyzeVisualContrast(), analyzeVisualContrastCandidate(), blendRgba(), buildSelectorSegment(), checkEdgeFlushCardsDOM(), clampByte(), collectVisualContrastCandidates(), collectVisualContrastReasons() (+6 more)
+
 ### Community 505 - "Community 505"
 Cohesion: 0.22
 Nodes (11): CODEX_HARNESSES, commandPrefixForSkillsDir(), __dirname, findHarnessDirs(), generatePinnedSkill(), HARNESS_DIRS, loadCommandMetadata(), pin() (+3 more)
 
 ### Community 506 - "Community 506"
-Cohesion: 0.14
-Nodes (16): BUCKET Binding, code-nest-prod-db (D1 Production), DB Binding, code-nest-prod-uploads (R2 Production), Dev/Prod Resource Isolation Safety, pnpm build, upload:prod Command, Production Storage Lock to BUCKET (+8 more)
+Cohesion: 0.17
+Nodes (13): code-nest-prod-db (D1 Production), DB Binding, Dev/Prod Resource Isolation Safety, pnpm build, upload:prod Command, db:migrate:prod Command, Production Migration Discipline, Build Command Cleanup (avoid duplicate exports) (+5 more)
 
 ### Community 507 - "Community 507"
 Cohesion: 0.17
@@ -2007,6 +2112,14 @@ Nodes (11): Accessibility Resilience, Assess Hardening Needs, Edge Cases & Bound
 ### Community 509 - "Community 509"
 Cohesion: 0.17
 Nodes (11): 1. Decide what is already true, 2. Ask what will change the work, 3. Choose the right amount of invention, 4. Commit the world, 5. Record the decision, 6. Build with full commitment, 7. Inspect and finish, Create a whole surface inside an established world (+3 more)
+
+### Community 510 - "Community 510"
+Cohesion: 0.17
+Nodes (13): SurveyQuestion, KNOWN_ERRORS, parseFeedbackForm(), parseOptions(), safeFeedbackError(), scaleLabels(), submitResponseAction(), ChoiceOptions() (+5 more)
+
+### Community 511 - "Community 511"
+Cohesion: 0.10
+Nodes (27): mergeOverridesSchema, tagged(), canonicalTag(), findUnknownTags(), firstWord(), isMergeTag(), MERGE_TAG_LABELS, MERGE_TAGS (+19 more)
 
 ### Community 512 - "Community 512"
 Cohesion: 0.30
@@ -2049,8 +2162,8 @@ Cohesion: 0.24
 Nodes (7): args, buildWeights(), hashUnit(), pickSeed(), seed, SEEDS, weightedPick()
 
 ### Community 522 - "Community 522"
-Cohesion: 0.33
-Nodes (10): designSidecarCandidatesFor(), buildStalenessDirective(), cachePath(), filterFreshFindings(), pruneCache(), readCache(), readJson(), stalenessCheckDisabled() (+2 more)
+Cohesion: 0.38
+Nodes (9): buildStalenessDirective(), cachePath(), filterFreshFindings(), pruneCache(), readCache(), readJson(), stalenessCheckDisabled(), writeCache() (+1 more)
 
 ### Community 523 - "Community 523"
 Cohesion: 0.20
@@ -2093,16 +2206,20 @@ Cohesion: 0.25
 Nodes (7): Core Rule, Decision Sketches, Impeccable Asset Producer, Input Contract, Output Contract, Prompt Pattern, Workflow
 
 ### Community 533 - "Community 533"
-Cohesion: 0.48
-Nodes (7): createAuditRepository, createMembersRepository, members repository D1 integration tests, AuditRecordInput, auditLogs table, members table, pageLimit
+Cohesion: 0.39
+Nodes (8): createAuditRepository, createMembersRepository, members repository D1 integration tests, AuditRecordInput, MembersRepository, auditLogs table, members table, pageLimit
 
 ### Community 534 - "Community 534"
 Cohesion: 0.25
 Nodes (7): Core Rule, Decision Sketches, Impeccable Asset Producer, Input Contract, Output Contract, Prompt Pattern, Workflow
 
 ### Community 535 - "Community 535"
-Cohesion: 0.67
-Nodes (4): checkElementRadialSpotlight(), checkElementRadialSpotlightDOM(), elementGradientValue(), spotlightLabel()
+Cohesion: 0.32
+Nodes (8): checkElementRadialSpotlight(), checkElementRadialSpotlightDOM(), checkRadialSpotlight(), elementGradientValue(), parseColorMix(), parseRadialGradientStops(), splitTopLevelCommas(), spotlightLabel()
+
+### Community 536 - "Community 536"
+Cohesion: 0.16
+Nodes (9): AdminGroupIndex(), visibleGroups(), hasAnyAdminScope(), signOutAction(), AdminTab, AdminTabs(), initialsFrom(), PortalLayout() (+1 more)
 
 ### Community 537 - "Community 537"
 Cohesion: 0.25
@@ -2173,8 +2290,8 @@ Cohesion: 0.29
 Nodes (6): Apply, Live-mode signature params, Set the system, Two isolated assessments, Verify, Visitor mode
 
 ### Community 555 - "Community 555"
-Cohesion: 0.16
-Nodes (14): code-nest Project Slug / Worker, wrangler.jsonc, DEPLOY_ENV Axis (prod/dev), Two Orthogonal Environment Axes, APP_ENV, SHARED_API_BASE_URL, SHARED_API_TOKEN, APP_ENV Modes (local/shared/production) (+6 more)
+Cohesion: 0.19
+Nodes (12): Two Orthogonal Environment Axes, APP_ENV, SHARED_API_BASE_URL, SHARED_API_TOKEN, APP_ENV Modes (local/shared/production), .env.local, Shared Dev Token Rotation, Backend freshness (+4 more)
 
 ### Community 556 - "Community 556"
 Cohesion: 0.33
@@ -2189,8 +2306,8 @@ Cohesion: 0.40
 Nodes (4): Impeccable Documenter, Input Contract, Output Contract, Workflow
 
 ### Community 559 - "Community 559"
-Cohesion: 0.40
-Nodes (5): Upload Hardening (server-assigned keys), ALLOW_PRODUCTION_STORAGE_MODE_OVERRIDE, R2 S3 Credentials (R2_*), STORAGE_MODE, Production Storage Adapter (r2-binding)
+Cohesion: 0.22
+Nodes (9): BUCKET Binding, code-nest-prod-uploads (R2 Production), Upload Hardening (server-assigned keys), ALLOW_PRODUCTION_STORAGE_MODE_OVERRIDE, R2 S3 Credentials (R2_*), STORAGE_MODE, Production Storage Lock to BUCKET, STORAGE_MODE Modes (local/api/r2-s3/binding) (+1 more)
 
 ### Community 560 - "Community 560"
 Cohesion: 0.40
@@ -2212,6 +2329,10 @@ Nodes (4): Heuristics Scoring Guide, Issue Severity (P0–P3), Reference Materia
 Cohesion: 0.50
 Nodes (3): candidates, detectorPath, __dirname
 
+### Community 568 - "Community 568"
+Cohesion: 0.22
+Nodes (8): 16:14 | beta, 16:36 | beta, 17:07 | feat/email-system, 18:14 | feat/email-system, 18:48 | feat/email-system, 19:16 | feat/email-system, 20:16 | feat/email-system, 20:42 | feat/email-system
+
 ### Community 571 - "Community 571"
 Cohesion: 0.22
 Nodes (6): aliases, mentors, output, pairs, source, values
@@ -2221,8 +2342,20 @@ Cohesion: 0.33
 Nodes (5): Adding a change, Checks, Migrations, Resetting a remote database, Tables that are present but unused
 
 ### Community 573 - "Community 573"
-Cohesion: 0.21
-Nodes (13): configureVoiceContext(), finishVoiceSession(), isEmbeddedPreviewBrowser(), releaseVoiceEngine(), startVoice(), steerSpeechRecognitionCtor(), steerVoiceContext(), steerVoiceErrorMessage() (+5 more)
+Cohesion: 0.18
+Nodes (11): displayName(), initialsFrom(), PodiumSpot(), PointsLeaderboard(), competitionRanks(), MemberAvatar(), MemberAvatarProps, RetentionHistoryPage() (+3 more)
+
+### Community 574 - "Community 574"
+Cohesion: 0.50
+Nodes (3): 23:29-01:06 | beta, 23:37 | beta, 23:50 | beta
+
+### Community 575 - "Community 575"
+Cohesion: 0.27
+Nodes (10): Disposition, Later bounded verdict pass, Limitations, Material findings, Original full review, remaining, Request/contract coverage, Retention finish review (+2 more)
+
+### Community 576 - "Community 576"
+Cohesion: 0.25
+Nodes (7): Comparison evidence, Data and scope, Evidence limits and preservation, Outcome, Pre-existing documentation drift, Recheck after key correction, Retention design documentation
 
 ### Community 577 - "Community 577"
 Cohesion: 0.33
@@ -2233,12 +2366,12 @@ Cohesion: 0.11
 Nodes (19): Token to Seeded Actor Model, audit_logs Table, Auth.js v5 + Drizzle Adapter, D1 Query Budget, D1 FK Choreography (defer_foreign_keys), getActor() Unified Actor Accessor, getDb() Driver Selector, members Table (Auth.js user) (+11 more)
 
 ### Community 579 - "Community 579"
-Cohesion: 0.22
-Nodes (8): eventRosterRowOutputSchema, leaderboardRowOutputSchema, myHistorySummaryOutputSchema, retentionContract, retentionRecordOutputSchema, retentionSummaryOutputSchema, termMasterRowOutputSchema, termOptionOutputSchema
+Cohesion: 0.17
+Nodes (10): eventRosterRowOutputSchema, leaderboardRowOutputSchema, myHistorySummaryOutputSchema, retentionContract, retentionRecordOutputSchema, retentionSummaryOutputSchema, termMasterRowOutputSchema, termOptionOutputSchema (+2 more)
 
 ### Community 580 - "Community 580"
-Cohesion: 0.20
-Nodes (11): addBrowserFindings(), addVisualContrastFindings(), addVisualContrastResult(), analyzeVisualContrast(), clearOverlays(), detachOverlay(), disconnectLazyVisualContrastObserver(), scheduleLazyVisualContrast() (+3 more)
+Cohesion: 0.17
+Nodes (18): buildSvelteExpressionTextMap(), buildSveltePropValuesFromLiveElement(), buildSveltePropValuesV2(), cloneWithoutElements(), collectTextNodes(), cssEscapeIdent(), elementMatchesOriginalMarkup(), escapeRegExp() (+10 more)
 
 ### Community 581 - "Community 581"
 Cohesion: 0.25
@@ -2272,6 +2405,10 @@ Nodes (6): Acceptance checks, Evidence, Human Gate 4, Rollback boundary, Scope, 
 Cohesion: 0.33
 Nodes (5): 2026-09-28, Human Gate 2, 2026-09-28, Human Gate 3, 2026-09-28, Human Gate 3 candidates, 2026-09-28, Human Gate 4, Calendar list decisions
 
+### Community 589 - "Community 589"
+Cohesion: 0.40
+Nodes (4): Assessment, Issues, Spec Compliance (✅/❌ + ⚠️), Strengths
+
 ### Community 590 - "Community 590"
 Cohesion: 0.33
 Nodes (5): 2026-09-28, Human Gate 2, 2026-09-28, Human Gate 3, 2026-09-28, Human Gate 3 candidates, 2026-09-28, Human Gate 4, Member links decisions
@@ -2284,6 +2421,14 @@ Nodes (5): Decision, Findings, Implementation recommendation, Protected contract
 Cohesion: 0.33
 Nodes (5): Approved direction, Deviations, Evidence status, Human comments, Shortlinks QR and Analytics Decision Log
 
+### Community 593 - "Community 593"
+Cohesion: 0.12
+Nodes (16): 14:28-14:47 | beta, 14:47-15:13 | beta, 15:06 | beta, 15:13-15:46 | beta, 15:13 | beta, 15:20 | beta, 15:22 | beta, 15:46 | beta (+8 more)
+
+### Community 594 - "Community 594"
+Cohesion: 0.50
+Nodes (3): Admin workspace, Direction contract, Research
+
 ### Community 595 - "Community 595"
 Cohesion: 0.50
 Nodes (3): Admin workspace, Direction contract, Research
@@ -2293,24 +2438,24 @@ Cohesion: 0.39
 Nodes (7): allow(), deny(), done(), isStopEvent(), writeAuditLog(), main(), readStdin()
 
 ### Community 608 - "Community 608"
-Cohesion: 0.15
-Nodes (12): addMediaInputSchema, attendanceOutputSchema, createEventInputSchema, eventOutputSchema, eventsContract, eventStaffOutputSchema, forumAuthorOutputSchema, forumPostOutputSchema (+4 more)
+Cohesion: 0.09
+Nodes (23): calendarContract, calendarItemSchema, eventDetailSchema, getMonthInputSchema, addMediaInputSchema, attendanceOutputSchema, createEventInputSchema, eventOutputSchema (+15 more)
 
 ### Community 610 - "Community 610"
-Cohesion: 0.20
-Nodes (10): createId, createObjectKey, can, rolePermissions map, permissions test suite, createUploadHandlers, isSafeSegment, parseNamespace (+2 more)
+Cohesion: 0.25
+Nodes (8): createId, createObjectKey, can, rolePermissions map, permissions test suite, createUploadHandlers, isSafeSegment, parseNamespace
 
 ### Community 612 - "Community 612"
-Cohesion: 0.04
-Nodes (73): permissionActions, defaultStart(), EventListItem, EventsList(), groupEventsByTime(), MONTHS, ROLE_LABEL, Row() (+65 more)
+Cohesion: 0.05
+Nodes (65): createSchema, defaultStart(), EventListItem, EventsList(), groupEventsByTime(), MONTHS, ROLE_LABEL, Row() (+57 more)
 
 ### Community 614 - "Community 614"
-Cohesion: 0.20
-Nodes (12): audienceSchema, blockId(), blockSchema, blocksSchema, httpsUrl, id, linkUrl, mergeOverridesSchema (+4 more)
+Cohesion: 0.15
+Nodes (15): audienceSchema, blockId(), blockSchema, blocksSchema, emailContentSchema, httpsUrl, id, linkUrl (+7 more)
 
 ### Community 615 - "Community 615"
-Cohesion: 0.06
-Nodes (49): email(), Env, queue(), scheduled(), emailDeliveries, emailMessages, emailThreads, EmailConfig (+41 more)
+Cohesion: 0.05
+Nodes (63): email(), Env, queue(), scheduled(), emailCampaigns, emailDeliveries, emailMessages, emailThreads (+55 more)
 
 ### Community 620 - "Community 620"
 Cohesion: 0.29
@@ -2332,17 +2477,25 @@ Nodes (6): assertSameOrigin CSRF Guard, getRepositories(), Shared-Dev Internal A
 Cohesion: 0.40
 Nodes (4): Evidence and completion, Incumbent comparison, Preservation and drift, QR simplification documentation
 
+### Community 625 - "Community 625"
+Cohesion: 0.31
+Nodes (9): bindEditBadgeProxy(), editBadgeProxyTargets(), initEditBadge(), initEditBadgeHitProxies(), positionEditBadge(), setImportantStyle(), styleEditBadgeProxy(), syncEditBadgeHitProxies() (+1 more)
+
 ### Community 626 - "Community 626"
 Cohesion: 0.25
 Nodes (9): actorDisplay(), AuditPhraseInput, describeAudit(), memberAt(), PhraseBuilder, PHRASES, ACTIONS, input (+1 more)
 
 ### Community 627 - "Community 627"
-Cohesion: 0.12
-Nodes (15): LocalFileStorageAdapter, R2BindingStorageAdapter, R2S3StorageAdapter, SharedApiStorageAdapter, arrayBufferToStream, bodyToArrayBuffer, getStorageAdapter, arrayBufferToStream() (+7 more)
+Cohesion: 0.36
+Nodes (4): LocalFileStorageAdapter, arrayBufferToStream, arrayBufferToStream(), bodyToArrayBuffer()
+
+### Community 628 - "Community 628"
+Cohesion: 0.43
+Nodes (3): R2BindingStorageAdapter, CloudflareRuntimeEnv type, getCloudflareEnv
 
 ### Community 630 - "Community 630"
 Cohesion: 0.05
-Nodes (56): EventSignupFormEditor(), addStaffAction(), BulkCheckinResult, inviteAction(), markPresentAction(), markPresentBulkAction(), removeRetiredAwardAction(), removeStaffAction() (+48 more)
+Nodes (51): EventSignupFormEditor(), FIELD_TYPES, CameraScanner(), EventScanOverlay(), addStaffAction(), BulkCheckinResult, inviteAction(), markPresentAction() (+43 more)
 
 ### Community 631 - "Community 631"
 Cohesion: 0.29
@@ -2356,6 +2509,14 @@ Nodes (7): 5.1 Formats, 5.2 Types (stored in `kind`), 5.3 Source, 5.4 Facets (fi
 Cohesion: 0.29
 Nodes (7): 9.1 Saving, 9.2 Lists page `/portal/library/lists` and list page `/portal/library/lists/[id]`, 9.3 Roles and sharing, 9.4 Uploading from a list, 9.5 Collections, 9.6 Built to grow into Engagement Planning Pages, 9. Lists
 
+### Community 634 - "Community 634"
+Cohesion: 0.38
+Nodes (6): matchesTemplateExtension(), findSourceFile(), NEVER_SOURCE_DIRS, SOURCE_SEARCH_DIRS, walk(), findSessionFile()
+
+### Community 636 - "Community 636"
+Cohesion: 0.21
+Nodes (14): surveyAssignments, admin, asMember(), assignedIds(), eventForm(), in72h, member, NOW (+6 more)
+
 ### Community 637 - "Community 637"
 Cohesion: 0.33
 Nodes (6): 13.1 `library_items` (alter), 13.2 New tables, 13.3 `library_lists` (alter), 13.4 `library_list_items` (alter), 13.5 `library_favorites` (drop), 13. Data model
@@ -2363,6 +2524,10 @@ Nodes (6): 13.1 `library_items` (alter), 13.2 New tables, 13.3 `library_lists` (
 ### Community 638 - "Community 638"
 Cohesion: 0.50
 Nodes (3): Direction contract, Member retention, Research
+
+### Community 639 - "Community 639"
+Cohesion: 0.28
+Nodes (4): SharedApiStorageAdapter, AGENTS.md working rules, CLAUDE.md CODE Portal Rules, Shared dev Worker (code-nest-dev)
 
 ### Community 642 - "Community 642"
 Cohesion: 0.40
@@ -2372,6 +2537,10 @@ Nodes (5): 10.1 What is measured, 10.2 How it reaches the server, 10.3 Storage, 
 Cohesion: 0.40
 Nodes (5): 7.1 Library home `/portal/library`, 7.2 Search (plain), 7.3 Tags, 7.4 Related shelf, 7. Discovery
 
+### Community 644 - "Community 644"
+Cohesion: 0.50
+Nodes (3): 17:09 | beta, 21:26-21:32 | beta, 22:09 | beta
+
 ### Community 645 - "Community 645"
 Cohesion: 0.50
 Nodes (4): 3. Goals, non-goals, anti-goals, Anti-goals (failure even if it technically works), Goals, Non-goals (this release)
@@ -2379,6 +2548,10 @@ Nodes (4): 3. Goals, non-goals, anti-goals, Anti-goals (failure even if it techn
 ### Community 646 - "Community 646"
 Cohesion: 0.50
 Nodes (4): 6.1 Statuses, 6.2 Reports, 6.3 Deletion and editing (decision 18), 6. Publishing flow
+
+### Community 647 - "Community 647"
+Cohesion: 0.17
+Nodes (16): applySavedSessionMeta(), clampVariantIndex(), findActiveSessionSummary(), findAdoptableServerSession(), injectVariantsFromSource(), isFrameworkComponentPreviewMode(), isSessionHandled(), isSvelteComponentManifestPath() (+8 more)
 
 ### Community 648 - "Community 648"
 Cohesion: 0.67
@@ -2396,6 +2569,50 @@ Nodes (3): 2.1 What exists and is reused, 2.2 What is broken or missing, 2. Curr
 Cohesion: 0.67
 Nodes (3): 4.1 Decided by CJ, 4.2 Calls made by Claude (flagged so CJ can override), 4. Decisions
 
+### Community 652 - "Community 652"
+Cohesion: 0.27
+Nodes (10): loadComposerData(), mergeValuesFor(), button(), divider, emailStarters(), heading(), text(), EMPTY_AUDIENCE (+2 more)
+
+### Community 653 - "Community 653"
+Cohesion: 0.21
+Nodes (10): LABELS, Status, TONES, AudienceRule, EmailBlock, EmailCampaignStatus, EmailDeliveryStatus, feedbackEmailContent() (+2 more)
+
+### Community 654 - "Community 654"
+Cohesion: 0.23
+Nodes (8): R2S3StorageAdapter, bodyToArrayBuffer, UploadHandlerDependencies, StorageAdapter interface, StorageBody type, createHandlers (test helper), imageForm (test helper), MemoryStorage (test double)
+
+### Community 655 - "Community 655"
+Cohesion: 0.20
+Nodes (8): notifications, Db, FeedItem, actor, NotificationKind, NotificationsRepository, notify(), NotifyInput
+
+### Community 656 - "Community 656"
+Cohesion: 0.29
+Nodes (10): blobDataUrl(), canvasBlob(), logoBadge(), QrArtifacts, rasterize(), renderQrArtifacts(), throwIfAborted(), isSelfContainedQrSvg() (+2 more)
+
+### Community 657 - "Community 657"
+Cohesion: 0.18
+Nodes (10): 17:20 | beta, 17:46-18:15 | beta, 17:49 | beta, 17:51 | beta, 18:01 | beta, 18:22-18:31 | beta, 18:33 | beta, 18:49-19:20 | beta (+2 more)
+
+### Community 658 - "Community 658"
+Cohesion: 0.25
+Nodes (6): CELLS, CreateEventSkeleton(), EventsListSkeleton(), MonthGridSkeleton(), ROWS, WEEKDAYS
+
+### Community 659 - "Community 659"
+Cohesion: 0.52
+Nodes (5): deviceBucket(), isValidDestinationUrl(), isValidSlugFormat(), normalizeSlug(), RESERVED_SLUG_DEFAULTS
+
+### Community 660 - "Community 660"
+Cohesion: 0.53
+Nodes (4): hashSeed(), mulberry32(), seededSample(), ITEMS
+
+### Community 661 - "Community 661"
+Cohesion: 0.33
+Nodes (5): ensurePage(), pageLimit(), PageRequest, PageResult, RepositoryContext
+
+### Community 662 - "Community 662"
+Cohesion: 0.40
+Nodes (5): Drizzle ORM and Drizzle Kit, Next.js App Router, @opennextjs/cloudflare, CODE Nest Setup Overview, Zod Environment Validation
+
 ## Ambiguous Edges - Review These
 - `check-shared-dev-note.mjs` → `handle()`  [AMBIGUOUS]
   src/app/internal/auth/route.ts · relation: conceptually_related_to
@@ -2403,9 +2620,9 @@ Nodes (3): 4.1 Decided by CJ, 4.2 Calls made by Claude (flagged so CJ can overri
   src/app/api/health/route.ts · relation: conceptually_related_to
 
 ## Knowledge Gaps
-- **3714 isolated node(s):** `here`, `API_BASE`, `API_TIMEOUT_MS`, `localStates`, `SEED_MODES` (+3709 more)
+- **4285 isolated node(s):** `here`, `API_BASE`, `API_TIMEOUT_MS`, `localStates`, `SEED_MODES` (+4280 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **132 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **174 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
@@ -2414,13 +2631,13 @@ _Questions this graph is uniquely positioned to answer:_
   _Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low._
 - **What is the exact relationship between `GET()` and `package.json (code-nest project manifest)`?**
   _Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low._
-- **Why does `detectCli()` connect `Community 437` to `Community 236`, `Community 301`, `Community 277`, `Community 470`, `Community 21`, `Community 377`?**
-  _High betweenness centrality (0.104) - this node is a cross-community bridge._
+- **Why does `detectCli()` connect `Community 437` to `Community 377`, `Community 21`, `Community 277`, `Community 470`?**
+  _High betweenness centrality (0.097) - this node is a cross-community bridge._
 - **Why does `scanner` connect `Community 21` to `Community 437`?**
-  _High betweenness centrality (0.101) - this node is a cross-community bridge._
+  _High betweenness centrality (0.095) - this node is a cross-community bridge._
 - **Why does `parse()` connect `Community 393` to `Community 65`, `Community 468`?**
-  _High betweenness centrality (0.090) - this node is a cross-community bridge._
-- **Are the 38 inferred relationships involving `getRepositories()` (e.g. with `createAnnouncementAction()` and `deleteAnnouncementAction()`) actually correct?**
-  _`getRepositories()` has 38 INFERRED edges - model-reasoned connections that need verification._
+  _High betweenness centrality (0.081) - this node is a cross-community bridge._
+- **Are the 41 inferred relationships involving `getRepositories()` (e.g. with `createAnnouncementAction()` and `deleteAnnouncementAction()`) actually correct?**
+  _`getRepositories()` has 41 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 28 inferred relationships involving `requireActor()` (e.g. with `createAnnouncementAction()` and `deleteAnnouncementAction()`) actually correct?**
   _`requireActor()` has 28 INFERRED edges - model-reasoned connections that need verification._

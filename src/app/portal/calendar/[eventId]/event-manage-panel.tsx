@@ -29,6 +29,7 @@ import { formatUtc8Time, fromLocalInput, toLocalInput } from "@/lib/date-slots";
 import { answerLabel, type EventSignupAnswers, type EventSignupField } from "@/lib/event-signup-form";
 import { parseEmailColumn } from "@/lib/roster-emails";
 import { cn } from "@/lib/utils";
+import { PlanningLink } from "../planning-link";
 import {
 	addStaffAction,
 	deleteEventAction,
@@ -116,6 +117,7 @@ export function EventManagePanel({
 	typesUnavailable,
 	awardRows,
 	awardsUnavailable,
+	canViewArchive = false,
 }: {
 	event: ManageEvent;
 	staff: StaffMember[];
@@ -128,6 +130,8 @@ export function EventManagePanel({
 	typesUnavailable: boolean;
 	awardRows: AwardEditorRow[];
 	awardsUnavailable: boolean;
+	/** From canViewFeedbackArchive(). The archive page re-checks access; the prop only hides the link. */
+	canViewArchive?: boolean;
 }) {
 	const isOwner = event.myRole === "owner";
 	const canManage = isOwner || event.myRole === "admin" || event.canModerate;
@@ -192,6 +196,7 @@ export function EventManagePanel({
 						allowedEventTypes={allowedEventTypes}
 						typeRows={typeRows}
 						typesUnavailable={typesUnavailable}
+						canViewArchive={canViewArchive}
 					/>
 				) : null}
 				{section === "points" ? (
@@ -816,11 +821,13 @@ function DetailsSection({
 	allowedEventTypes,
 	typeRows,
 	typesUnavailable,
+	canViewArchive,
 }: {
 	event: ManageEvent;
 	allowedEventTypes: EventTypeRow[];
 	typeRows: EventTypeRow[];
 	typesUnavailable: boolean;
+	canViewArchive: boolean;
 }) {
 	const router = useRouter();
 	// A plain flag, not useTransition: router.refresh() inside a transition keeps isPending
@@ -957,17 +964,22 @@ function DetailsSection({
 				<input className={FIELD} value={title} onChange={(e) => setTitle(e.target.value)} />
 			</label>
 			<div className="grid gap-3 sm:grid-cols-2">
-				<label className="grid gap-1.5 text-sm">
-					<span className="font-medium">Type</span>
-					<select className={FIELD} value={type} onChange={(e) => setType(e.target.value)} disabled={typesUnavailable}>
-						{typeOptions.map((option) => (
-							<option key={option.type} value={option.type}>
-								{option.label}
-							</option>
-						))}
-					</select>
-					{typesUnavailable ? <p className="text-sm text-destructive">Event types are unavailable right now. Try again shortly.</p> : null}
-				</label>
+				<div className="grid content-start gap-1.5">
+					<label className="grid gap-1.5 text-sm">
+						<span className="font-medium">Type</span>
+						<select className={FIELD} value={type} onChange={(e) => setType(e.target.value)} disabled={typesUnavailable}>
+							{typeOptions.map((option) => (
+								<option key={option.type} value={option.type}>
+									{option.label}
+								</option>
+							))}
+						</select>
+						{typesUnavailable ? <p className="text-sm text-destructive">Event types are unavailable right now. Try again shortly.</p> : null}
+					</label>
+					{canViewArchive && type ? (
+						<PlanningLink type={type} label={typeOptions.find((option) => option.type === type)?.label ?? type} />
+					) : null}
+				</div>
 				<label className="grid gap-1.5 text-sm">
 					<span className="font-medium">Capacity</span>
 					<input

@@ -24,11 +24,12 @@ export const SUMMARY_SYSTEM_PROMPT = [
 	"- label: a short name, at most 60 characters.",
 	"- description: one plain sentence, at most 200 characters, with no praise or blame beyond what the comments say.",
 	'- share: "most", "several", or "a few", for how many comments raise it.',
-	"- quotes: 1 or 2 verbatim quotes copied character for character from the comments. Never paraphrase, translate, or invent a quote.",
+	"- quotes: 1 or 2 verbatim quotes copied character for character from the comments, each quote at least 3 and at most 25 words. Never paraphrase, translate, or invent a quote.",
 	"If the comments are too sparse for 3 themes, write fewer.",
 ].join("\n");
 
 const squash = (s: string) => s.replace(/\s+/g, " ").trim();
+const trimTail = (s: string) => s.replace(/[\s.,;:!?]+$/, "");
 
 /**
  * Builds the model input. Over the cap, it keeps an evenly spaced subset of answers
@@ -77,20 +78,28 @@ export function buildSummaryInput(
 }
 
 const SHARES = new Set(["most", "several", "a few"]);
+const MIN_QUOTE_WORDS = 3;
 
-/** Keeps only themes whose quotes appear verbatim (case-insensitive) in the real answers. */
-export function parseSummary(raw: string, answers: string[]): SummaryTheme[] {
+/** Tries a fenced or bare body, then the text between the first `{` and the last `}`. A truncated reply fails both. */
+function parseJson(raw: string): unknown {
 	const body = raw.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1] ?? raw;
-	let parsed: unknown;
-	try {
-		parsed = JSON.parse(body);
-	} catch {
-		return [];
+	for (const candidate of [body, raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)]) {
+		try {
+			return JSON.parse(candidate);
+		} catch {
+			// try the next candidate
+		}
 	}
-	const themes = (parsed as { themes?: unknown } | null)?.themes;
+	return null;
+}
+
+/** Keeps only themes whose quotes all appear verbatim (case-insensitive) in the real answers. */
+export function parseSummary(raw: string, answers: string[]): SummaryTheme[] {
+	const themes = (parseJson(raw) as { themes?: unknown } | null)?.themes;
 	if (!Array.isArray(themes)) return [];
 
 	const haystack = answers.map((a) => squash(a).toLowerCase());
+	const wholeAnswers = new Set(haystack.map(trimTail));
 	const out: SummaryTheme[] = [];
 	for (const t of themes) {
 		if (typeof t !== "object" || t === null) continue;
@@ -100,7 +109,14 @@ export function parseSummary(raw: string, answers: string[]): SummaryTheme[] {
 		if (!label.trim() || !SHARES.has(shareKey)) continue;
 		if (!Array.isArray(quotes) || quotes.length < 1 || quotes.length > 2) continue;
 		const cleaned = quotes.map((q) => (typeof q === "string" ? squash(q) : ""));
-		if (!cleaned.every((q) => q && haystack.some((a) => a.includes(q.toLowerCase())))) continue;
+		// Under three words only counts when it is a whole answer, so a short fragment cannot pass as a quote.
+		const grounded = (q: string) => {
+			const lower = q.toLowerCase();
+			if (q.split(" ").length >= MIN_QUOTE_WORDS) return haystack.some((a) => a.includes(lower));
+			const whole = trimTail(lower);
+			return whole !== "" && wholeAnswers.has(whole);
+		};
+		if (!cleaned.every(grounded)) continue;
 		out.push({
 			label: label.trim().slice(0, 60),
 			description: description.trim().slice(0, 200),
@@ -119,7 +135,7 @@ export function workersAiSummarizer(ai: Ai, model: string): Summarizer {
 				{ role: "user", content: user },
 			],
 			// Workers AI text models default to 256 output tokens, too few for six themes.
-			max_tokens: 1024,
+			max_tokens: 2048,
 		});
 		const response = out.response;
 		return typeof response === "string" ? response : JSON.stringify(response ?? "");

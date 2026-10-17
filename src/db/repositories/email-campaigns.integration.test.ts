@@ -156,6 +156,33 @@ describe("email campaigns", () => {
 		expect((await repos.campaigns.get(admin, draft.id))?.status).toBe("sent");
 	});
 
+	it("creates a scheduled feedback campaign only when the category has a sender", async () => {
+		const ids = await setup();
+		const at = new Date(NOW.getTime() + 2 * 60_000);
+		const input = { surveyId: "svy_1", createdBy: "mem_admin", subject: "How was GA?", preheader: "p", blocks: [{ id: "t", type: "text" as const, props: { text: "Hi" } }], at };
+		// The feedback category is wiped by setup(); re-create it without a default sender, as migration 0012 seeds it.
+		await env.DB.prepare("INSERT INTO email_categories (id, name, description, required, sort_order) VALUES ('ecat_feedback', 'Feedback requests', '', 0, 90)").run();
+		expect(await repos.campaigns.createFeedbackCampaign(input)).toBeNull();
+
+		await env.DB.prepare("UPDATE email_categories SET default_sender_id=? WHERE id='ecat_feedback'").bind(ids.sender.id).run();
+		const row = await repos.campaigns.createFeedbackCampaign(input);
+		expect(row).toMatchObject({ status: "scheduled", categoryId: "ecat_feedback", senderId: ids.sender.id, subject: "How was GA?", createdBy: "mem_admin" });
+		expect(row?.scheduledAt?.getTime()).toBe(at.getTime());
+		expect(row?.audience).toEqual({ match: "any", include: [{ kind: "survey_invitees", surveyId: "svy_1" }], exclude: [] });
+		expect((await repos.campaigns.get(admin, row!.id))?.status).toBe("scheduled");
+
+		await env.DB.prepare("UPDATE email_senders SET archived_at=? WHERE id=?").bind(Date.now(), ids.sender.id).run();
+		expect(await repos.campaigns.createFeedbackCampaign(input)).toBeNull();
+		await env.DB.prepare("UPDATE email_senders SET archived_at=NULL WHERE id=?").bind(ids.sender.id).run();
+		await env.DB.prepare("UPDATE email_categories SET archived_at=? WHERE id='ecat_feedback'").bind(Date.now()).run();
+		expect(await repos.campaigns.createFeedbackCampaign(input)).toBeNull();
+	});
+
+	it("returns null when the feedback category does not exist", async () => {
+		await setup();
+		expect(await repos.campaigns.createFeedbackCampaign({ surveyId: "svy_1", createdBy: "mem_admin", subject: "s", preheader: "", blocks: [], at: NOW })).toBeNull();
+	});
+
 	it("rejects a draft pointing at a missing category with a readable error", async () => {
 		const ids = await setup();
 		await expect(repos.campaigns.saveDraft(admin, { ...draftInput(ids), categoryId: "ecat_missing" })).rejects.toThrow(

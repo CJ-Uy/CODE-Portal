@@ -2,6 +2,7 @@ import { createAnnouncementsRepository, createUnavailableAnnouncementsRepository
 import { createAuditRepository, createUnavailableAuditRepository } from "./audit";
 import { createCalendarRepository, type CalendarRepository } from "./calendar";
 import { createEmailRepositories, createUnavailableEmailRepositories } from "./email";
+import { createEventDebriefsRepository, createUnavailableEventDebriefsRepository } from "./event-debriefs";
 import { createEventForumRepository } from "./event-forum";
 import { createEventMediaRepository } from "./event-media";
 import { createEventsRepository } from "./events";
@@ -25,6 +26,7 @@ import { createRolesRepository } from "./roles";
 import { createRosterRepository } from "./roster";
 import { createSessionsRepository } from "./sessions";
 import { createSubmissionsRepository, createUnavailableSubmissionsRepository } from "./submissions";
+import { createSurveyResultsRepository, createUnavailableSurveyResultsRepository } from "./survey-results";
 import { createSurveysRepository, createUnavailableSurveysRepository } from "./surveys";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type { MemberDb } from "./members";
@@ -77,6 +79,8 @@ export function createDrizzleRepositories(db: DrizzleDb) {
 		roster: createRosterRepository(db, audit),
 		roles: createRolesRepository(d1),
 		surveys: createSurveysRepository(d1, audit),
+		surveyResults: createSurveyResultsRepository(d1, audit),
+		eventDebriefs: createEventDebriefsRepository(d1, audit),
 		notifications: createNotificationsRepository(d1),
 		overview: createOverviewRepository(d1),
 		calendar: createCalendarRepository(d1),
@@ -158,6 +162,8 @@ export function createSharedRepositories(adapter: DatabaseAdapter): Repositories
 		roster: new Proxy({}, { get: () => unavailable }) as ReturnType<typeof createRosterRepository>,
 		roles: new Proxy({}, { get: () => unavailable }) as ReturnType<typeof createRolesRepository>,
 		surveys: createUnavailableSurveysRepository(),
+		surveyResults: createUnavailableSurveyResultsRepository(),
+		eventDebriefs: createUnavailableEventDebriefsRepository(),
 		notifications: createUnavailableNotificationsRepository(),
 		overview: createUnavailableOverviewRepository(),
 		calendar: createUnavailableCalendarRepository(),

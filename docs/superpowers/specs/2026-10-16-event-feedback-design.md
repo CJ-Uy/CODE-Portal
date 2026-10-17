@@ -330,7 +330,7 @@ All charts are hand-built SVG/CSS, following `retention-charts.tsx`. User-contro
 
 This lives on the member event page, `/portal/calendar/[eventId]`, next to the existing staff tools. Admin pages stay admin-only, because `src/app/portal/admin/layout.tsx` blocks non-admins.
 
-- **Who sees it:** the owner and staff admins of that event, and only when the form has closed or has at least 3 responses, and `share_with_organizers` is on.
+- **Who sees it:** the owner and staff admins of that event, and only when the form has at least 3 responses and `share_with_organizers` is on.
 - **What it shows:**
   - The same results components as the admin view, minus the AI panel and minus comments hidden from organizers.
   - Response rate, distributions, cross-event context lines, and the word cloud and comment list.

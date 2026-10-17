@@ -33,6 +33,8 @@ export function ruleLabel(rule: AudienceRule, options: AudienceOptions, memberLa
 			return memberLabels[rule.memberId] ?? "A member";
 		case "emails":
 			return rule.emails.length === 1 ? rule.emails[0] : `${rule.emails.length} pasted addresses`;
+		case "survey_invitees":
+			return "Feedback invitees";
 	}
 }
 
