@@ -12,6 +12,7 @@ const ALL_ON: FeatureFlags = {
 	leaderboard: true,
 	email: true,
 	ments: true,
+	librarySmartSearch: true,
 };
 
 // Mirrors the real nav shape without pulling lucide icons into the Workers pool.
@@ -71,6 +72,7 @@ describe("portal nav visibility", () => {
 			leaderboard: false,
 			email: false,
 			ments: false,
+			librarySmartSearch: false,
 		};
 		const primary = withFallback(PRIMARY, LINKS, off);
 		expect(ids(primary)).not.toContain("retention");

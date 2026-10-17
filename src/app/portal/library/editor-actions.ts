@@ -7,6 +7,7 @@ import { getRepositories } from "@/db";
 import type { LibraryStatus } from "@/lib/library/taxonomy";
 import { requireActor } from "@/server/auth/actor";
 import { assertFeatureEnabled } from "@/server/features";
+import { scheduleLibraryIndex } from "@/server/library/indexer";
 import {
 	attachFileInputSchema,
 	createDraftInputSchema,
@@ -97,6 +98,8 @@ export async function saveItemAction(input: SaveItemInput): Promise<Result> {
 		}
 		if (Object.keys(fields).length > 0) await repositories.library.updateItem(actor, itemId, fields);
 		if (tagIds) await repositories.libraryTags.setItemTags(actor, itemId, tagIds);
+		// A published item is re-read for smart search; the indexer leaves drafts alone.
+		scheduleLibraryIndex(itemId, "index");
 		return { ok: true };
 	} catch (error) {
 		return { ok: false, error: friendly(error) };
@@ -114,6 +117,7 @@ export async function attachFileAction(input: { itemId: string; key: string; nam
 	if (!item?.canEdit) throw new Error("Library item not found.");
 	if (item.format !== "file") throw new Error("This item is not a file.");
 	await repositories.library.setFile(actor, itemId, { key, name, type, bytes });
+	scheduleLibraryIndex(itemId, "index");
 	revalidateItem(itemId);
 }
 
@@ -128,6 +132,7 @@ export async function publishAction(input: { itemId: string; containsClientData:
 	const [problem] = publishProblems({ format: item.format, title: item.title, fileKey: item.fileKey, url: item.url, blocks: item.blocksJson });
 	if (problem) throw new Error(problem);
 	const status = await repositories.library.publish(actor, itemId, { containsClientData });
+	if (status === "published") scheduleLibraryIndex(itemId, "index");
 	revalidateItem(itemId);
 	return { status };
 }

@@ -6,6 +6,7 @@ import type { ZodError } from "zod";
 import { getRepositories } from "@/db";
 import { requireActor } from "@/server/auth/actor";
 import { assertFeatureEnabled } from "@/server/features";
+import { scheduleLibraryIndex } from "@/server/library/indexer";
 import { getStorageAdapter } from "@/storage";
 import {
 	confidentialityInputSchema,
@@ -70,8 +71,11 @@ export async function moderateItemAction(input: { itemId: string; action: "appro
 	const { actor, repositories } = await guard();
 	const parsed = moderateInputSchema.safeParse(input);
 	if (!parsed.success) throw new Error(firstIssue(parsed.error));
-	await repositories.library.moderate(actor, parsed.data.itemId, parsed.data.action, parsed.data.reason);
-	revalidateItem(parsed.data.itemId);
+	const { itemId, action } = parsed.data;
+	await repositories.library.moderate(actor, itemId, action, parsed.data.reason);
+	if (action === "approve" || action === "restore") scheduleLibraryIndex(itemId, "index");
+	if (action === "take_down") scheduleLibraryIndex(itemId, "deindex");
+	revalidateItem(itemId);
 	revalidatePath("/portal/admin/content/library");
 }
 
@@ -90,6 +94,8 @@ export async function setConfidentialityAction(input: { itemId: string; value: "
 	const parsed = confidentialityInputSchema.safeParse(input);
 	if (!parsed.success) throw new Error(firstIssue(parsed.error));
 	await repositories.library.setConfidentiality(actor, parsed.data.itemId, parsed.data.value);
+	// Confidential items never sit in the vector index; back to members, the item is embedded again.
+	scheduleLibraryIndex(parsed.data.itemId, parsed.data.value === "confidential" ? "deindex" : "index");
 	revalidateItem(parsed.data.itemId);
 }
 
@@ -108,6 +114,7 @@ export async function deleteItemAction(input: { itemId: string; confirmTitle: st
 	if (confirmTitle.trim() !== item.title.trim()) throw new Error("Type the title exactly to delete this item.");
 
 	const { fileKeys } = await repositories.library.deleteItem(actor, itemId);
+	scheduleLibraryIndex(itemId, "deindex");
 	const keys = keysUnderItem(itemId, fileKeys);
 	if (keys.length > 0) {
 		const storage = await getStorageAdapter();

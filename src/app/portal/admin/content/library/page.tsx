@@ -9,9 +9,11 @@ import { cn } from "@/lib/utils";
 import { getActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
 import { isFeatureEnabled } from "@/server/features";
+import { getLibraryAi } from "@/server/library/ai";
 import { noticeText, parseTab, TABS } from "./input";
 import type { TabKey } from "./input";
 import { PendingItemRow, ReportCard, TakenDownItemRow, TakenDownListRow } from "./queue";
+import { RebuildIndexButton } from "./rebuild-index";
 import { groupTags, toItemRow, toListRow, toReportRow } from "./rows";
 import { TagManager } from "./tag-manager";
 
@@ -46,6 +48,9 @@ export default async function AdminLibraryModerationPage({ searchParams }: { sea
 		tab === "tags" ? repositories.libraryTags.listTagsForModeration(actor).then(groupTags) : null,
 		tab === "search-index" ? repositories.library.unindexedCount(actor) : null,
 	]);
+
+	// The flag and the AI + VECTORIZE bindings: without both there is no index to rebuild.
+	const smartSearchOn = tab === "search-index" && getLibraryAi() !== null;
 
 	const counts: Partial<Record<TabKey, number>> = {
 		waiting: queue.pending.length,
@@ -159,8 +164,18 @@ export default async function AdminLibraryModerationPage({ searchParams }: { sea
 									{unindexed === 0 ? "Every published item has been read into the search index." : `${plural(unindexed, "published item has", "published items have")} not been read into the search index yet.`}
 								</p>
 							</div>
-							<p className="text-sm text-muted-foreground">The button to rebuild the index arrives with smart search.</p>
-							{/* Task 17: render the "Rebuild search index" button here (rebuildLibraryIndexAction) only when the smart-search flag is on. */}
+							{!smartSearchOn ? (
+								<p className="text-sm text-muted-foreground">Smart search is off here, so nothing is read into the index.</p>
+							) : can(actor, "library:manage") ? (
+								<>
+									<p className="max-w-2xl text-sm text-muted-foreground">
+										New and edited items are read on their own shortly after they change. Rebuild reads anything that was missed, such as items added by an import, 10 at a time until none are left.
+									</p>
+									<RebuildIndexButton remaining={unindexed} />
+								</>
+							) : (
+								<p className="text-sm text-muted-foreground">New and edited items are read on their own. A library manager can rebuild the index to catch up on anything missed.</p>
+							)}
 						</div>
 					) : null}
 				</section>

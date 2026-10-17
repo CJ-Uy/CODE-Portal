@@ -1,12 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { createContext, useContext, useEffect, useOptimistic, useRef, useTransition } from "react";
+import { createContext, useContext, useEffect, useId, useOptimistic, useRef, useState, useTransition } from "react";
 import { ChevronDown, Search, SlidersHorizontal } from "lucide-react";
+import { setSmartSearchAction } from "@/app/portal/library/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
 import type { LibrarySearchInput } from "@/db/repositories/library";
 import { applySearchChange, effectiveSort, facetsFor, SORT_LABELS, SORTS, toggleValue, toLibrarySearchParams } from "@/lib/library/search-params";
 import type { ParsedLibrarySearch } from "@/lib/library/search-params";
@@ -15,7 +17,7 @@ import { cn } from "@/lib/utils";
 
 export type FilterTag = { id: string; name: string; groupName: string };
 
-type Patch = Partial<LibrarySearchInput> | ((now: ParsedLibrarySearch) => Partial<LibrarySearchInput>);
+type Patch = Partial<ParsedLibrarySearch> | ((now: ParsedLibrarySearch) => Partial<ParsedLibrarySearch>);
 type Change = (patch: Patch, how?: "replace" | "push") => void;
 type SearchState = { query: ParsedLibrarySearch; pending: boolean; change: Change };
 
@@ -103,7 +105,49 @@ function activeFilterCount(value: LibrarySearchInput): number {
 	return (value.kinds?.length ?? 0) + (value.sources?.length ?? 0) + (value.tagIds?.length ?? 0) + [value.subtype, value.formatDetail, value.engagementType].filter(Boolean).length;
 }
 
-function FilterFields({ tags }: { tags: FilterTag[] }) {
+/**
+ * The member's remembered choice. Flipping it saves the preference and drops any ?smart= override, so what the switch
+ * shows is what the next search does.
+ */
+function SmartSearchSwitch({ on }: { on: boolean }) {
+	const { change } = useSearch();
+	const id = useId();
+	const [checked, setChecked] = useOptimistic(on);
+	const [failed, setFailed] = useState(false);
+	const [pending, startTransition] = useTransition();
+	const flip = (next: boolean) =>
+		startTransition(async () => {
+			setChecked(next);
+			setFailed(false);
+			try {
+				await setSmartSearchAction(next);
+				change({ smart: null });
+			} catch {
+				setFailed(true);
+			}
+		});
+
+	return (
+		<div className="flex min-w-0 items-start justify-between gap-3 border-b border-border pb-4">
+			<div className="grid min-w-0 gap-0.5">
+				<p id={`${id}-label`} className="text-sm font-medium">
+					Smart search
+				</p>
+				<p id={`${id}-hint`} className="text-xs text-muted-foreground">
+					Suggests keywords and finds items by meaning, not only by matching words.
+				</p>
+				{failed ? (
+					<p role="alert" className="text-xs text-destructive">
+						Could not save that. Try again.
+					</p>
+				) : null}
+			</div>
+			<Switch checked={checked} disabled={pending} onChange={flip} labelledBy={`${id}-label`} describedBy={`${id}-hint`} />
+		</div>
+	);
+}
+
+function FilterFields({ tags, smart }: { tags: FilterTag[]; smart: boolean | null }) {
 	const { query, change } = useSearch();
 	const facets = facetsFor(query);
 	const grouped = new Map<string, FilterTag[]>();
@@ -112,6 +156,8 @@ function FilterFields({ tags }: { tags: FilterTag[] }) {
 
 	return (
 		<div className="grid min-w-0 gap-5">
+			{smart !== null ? <SmartSearchSwitch on={smart} /> : null}
+
 			<Group title="Type">
 				{LIBRARY_KINDS.map((kind) => (
 					<Chip key={kind} pressed={Boolean(query.kinds?.includes(kind))} onClick={() => change((now) => ({ kinds: toggleValue(now.kinds, kind) }))}>
@@ -187,7 +233,8 @@ export function SearchBar() {
 			onSubmit={(event) => {
 				event.preventDefault();
 				const q = new FormData(event.currentTarget).get("q");
-				change({ q: typeof q === "string" && q.trim() ? q.trim() : undefined }, "push");
+				// A new search gets new chips, so the ones removed from the last search come back into play.
+				change({ q: typeof q === "string" && q.trim() ? q.trim() : undefined, without: undefined }, "push");
 			}}
 		>
 			<div className="relative min-w-0 flex-1">
@@ -202,8 +249,11 @@ export function SearchBar() {
 	);
 }
 
-/** Filters: a panel beside the results on a wide screen, a sheet behind one button on a phone. */
-export function FilterPanel({ tags, total }: { tags: FilterTag[]; total: number | null }) {
+/**
+ * Filters: a panel beside the results on a wide screen, a sheet behind one button on a phone. `smart` is whether smart
+ * search is on for this member, or null when it is not available at all (then there is no switch).
+ */
+export function FilterPanel({ tags, total, smart = null }: { tags: FilterTag[]; total: number | null; smart?: boolean | null }) {
 	const { query, pending } = useSearch();
 	const count = activeFilterCount(query);
 
@@ -233,7 +283,7 @@ export function FilterPanel({ tags, total }: { tags: FilterTag[]; total: number 
 							<SheetDescription className="sr-only">Narrow the library by type, source and tag.</SheetDescription>
 						</SheetHeader>
 						<div className={cn("min-h-0 flex-1 overflow-y-auto p-4", pending && "opacity-60")}>
-							<FilterFields tags={tags} />
+							<FilterFields tags={tags} smart={smart} />
 						</div>
 						<SheetFooter className="border-t border-border">
 							<SheetClose asChild>
@@ -246,7 +296,7 @@ export function FilterPanel({ tags, total }: { tags: FilterTag[]; total: number 
 				</Sheet>
 			</div>
 			<div className={cn("hidden min-w-0 rounded-xl border border-border bg-card p-4 lg:block", pending && "opacity-60")}>
-				<FilterFields tags={tags} />
+				<FilterFields tags={tags} smart={smart} />
 			</div>
 		</>
 	);

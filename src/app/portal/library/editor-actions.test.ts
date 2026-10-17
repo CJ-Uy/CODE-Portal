@@ -19,6 +19,7 @@ vi.mock("@/server/auth/actor", () => ({ requireActor: async () => ({ memberId: "
 vi.mock("@/server/features", () => ({ assertFeatureEnabled: () => undefined }));
 vi.mock("next/cache", () => ({ revalidatePath: () => undefined }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
+vi.mock("@/server/library/indexer", () => ({ scheduleLibraryIndex: () => undefined }));
 
 import { createDraftAction, saveItemAction } from "./editor-actions";
 

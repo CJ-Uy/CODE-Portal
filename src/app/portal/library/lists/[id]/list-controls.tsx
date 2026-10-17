@@ -4,33 +4,12 @@ import { useEffect, useOptimistic, useRef, useState, useTransition } from "react
 import { Check, Copy, LogOut, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
-import { cn } from "@/lib/utils";
 import { actionErrorMessage } from "../../editor-input";
 import { deleteListAction, removeEditorAction, setSharedAction, updateListAction } from "../../list-actions";
 import { LIST_DESCRIPTION_MAX, LIST_NAME_MAX } from "../../list-input";
-
-function Switch({ checked, disabled, onChange, labelledBy, describedBy }: { checked: boolean; disabled?: boolean; onChange: (next: boolean) => void; labelledBy: string; describedBy?: string }) {
-	return (
-		<button
-			type="button"
-			role="switch"
-			aria-checked={checked}
-			aria-labelledby={labelledBy}
-			aria-describedby={describedBy}
-			disabled={disabled}
-			onClick={() => onChange(!checked)}
-			className={cn(
-				"relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed",
-				checked ? "bg-primary" : "bg-[#AAAFB5]",
-				disabled && "opacity-60",
-			)}
-		>
-			<span className={cn("inline-block size-5 rounded-full bg-white shadow transition-transform duration-200 motion-reduce:transition-none", checked ? "translate-x-5" : "translate-x-0.5")} />
-		</button>
-	);
-}
 
 /** For an inline confirm that replaces its trigger: Cancel hands focus back to the trigger once it is rendered again. */
 function useReturnFocus(confirming: boolean) {

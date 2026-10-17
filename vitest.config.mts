@@ -35,6 +35,7 @@ export default defineConfig({
 					FEATURE_PUBLIC_SITE: "true",
 					FEATURE_EMAIL: "true",
 					FEATURE_MENTS: "true",
+					FEATURE_LIBRARY_SMART_SEARCH: "true",
 					EMAIL_INBOX_ADDRESS: "beta-inbox@ateneocode.org",
 					EMAIL_PUBLIC_BASE_URL: "https://beta.ateneocode.org",
 					EMAIL_UNSUBSCRIBE_SECRET: "test-unsubscribe-secret-0123456789",

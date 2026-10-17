@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
 	addItem: vi.fn(async () => undefined),
 	removeItem: vi.fn(async () => undefined),
 	deleteObject: vi.fn<(key: string) => Promise<void>>(async () => undefined),
+	scheduleLibraryIndex: vi.fn(),
 	redirect: vi.fn((url: string) => {
 		throw new Error(`REDIRECT ${url}`);
 	}),
@@ -25,6 +26,7 @@ vi.mock("@/server/auth/actor", () => ({ requireActor: async () => ({ memberId: "
 vi.mock("@/server/features", () => ({ assertFeatureEnabled: () => undefined }));
 vi.mock("next/cache", () => ({ revalidatePath: () => undefined }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
+vi.mock("@/server/library/indexer", () => ({ scheduleLibraryIndex: mocks.scheduleLibraryIndex }));
 
 import { deleteItemAction, moderateItemAction, reportAction, toggleSaveAction } from "./item-actions";
 
@@ -40,6 +42,7 @@ describe("deleteItemAction", () => {
 		});
 		await expect(deleteItemAction({ itemId: "lib_1", confirmTitle: "Org Design Basics" })).rejects.toThrow("REDIRECT /portal/library");
 		expect(mocks.deleteObject.mock.calls.map(([key]) => key)).toEqual(["library/lib_1/mem_2/file.pdf", "library/lib_1/mem_2/figure.png"]);
+		expect(mocks.scheduleLibraryIndex).toHaveBeenCalledWith("lib_1", "deindex");
 	});
 
 	it("needs the title typed exactly (surrounding spaces aside) and deletes nothing otherwise", async () => {
@@ -113,5 +116,15 @@ describe("reportAction and moderateItemAction", () => {
 		expect(mocks.moderate).not.toHaveBeenCalled();
 		await moderateItemAction({ itemId: "lib_1", action: "take_down", reason: " Names a client. " });
 		expect(mocks.moderate).toHaveBeenCalledWith(expect.anything(), "lib_1", "take_down", "Names a client.");
+	});
+
+	it("drops a taken-down item from the smart-search index and re-reads a restored one", async () => {
+		await moderateItemAction({ itemId: "lib_1", action: "take_down", reason: "Names a client." });
+		await moderateItemAction({ itemId: "lib_2", action: "restore" });
+		await moderateItemAction({ itemId: "lib_3", action: "send_back", reason: "Needs a summary." });
+		expect(mocks.scheduleLibraryIndex.mock.calls).toEqual([
+			["lib_1", "deindex"],
+			["lib_2", "index"],
+		]);
 	});
 });

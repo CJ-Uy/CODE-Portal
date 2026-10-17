@@ -29,6 +29,16 @@ export async function setCommentHiddenAction(formData: FormData): Promise<void> 
 	revalidatePath(`/portal/library/${itemId}`);
 }
 
+/** The member's "Smart search" switch in the library filters. Remembered on their member row; ?smart=1|0 still wins per request. */
+export async function setSmartSearchAction(on: boolean): Promise<void> {
+	assertFeatureEnabled("library");
+	const actor = await requireActor();
+	const librarySmartSearch = z.boolean().parse(on);
+	const repositories = await getRepositories();
+	await repositories.members.updateProfile(actor, actor.memberId, { librarySmartSearch });
+	revalidatePath("/portal/library", "layout");
+}
+
 export async function requestAccessAction(formData: FormData): Promise<void> {
 	assertFeatureEnabled("library");
 	const actor = await requireActor();

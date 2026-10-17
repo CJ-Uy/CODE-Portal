@@ -14,6 +14,9 @@ import { hasActiveSearch, PAGE_SIZE, pageInfo, parseLibrarySearchParams, toLibra
 import type { ParsedLibrarySearch } from "@/lib/library/search-params";
 import { getActor } from "@/server/auth/actor";
 import { isFeatureEnabled } from "@/server/features";
+import { getLibraryAi } from "@/server/library/ai";
+import { searchLibrary, smartSearchPreference } from "@/server/library/smart-search";
+import type { SmartChip } from "@/server/library/smart-search";
 
 export const dynamic = "force-dynamic";
 
@@ -75,6 +78,33 @@ function CollectionsShelf({ lists }: { lists: LibraryListSummary[] }) {
 				</li>
 			))}
 		</ul>
+	);
+}
+
+/** Smart search's keywords: plain pills, each a link to the same search without it. */
+function KeywordChips({ search, chips }: { search: ParsedLibrarySearch; chips: SmartChip[] }) {
+	return (
+		<div className="flex min-w-0 flex-wrap items-center gap-1.5">
+			<span className="text-xs text-muted-foreground">Also searching for</span>
+			<ul className="contents">
+				{chips.map((chip) => {
+					const without = [...(search.without ?? []), chip.label.toLowerCase()];
+					return (
+						<li key={chip.label} className="min-w-0">
+							<Link
+								href={`/portal/library?${toLibrarySearchParams({ ...search, offset: 0, without })}`}
+								aria-label={`Remove ${chip.label}`}
+								title="Remove"
+								scroll={false}
+								className="inline-flex min-h-8 min-w-0 max-w-full items-center break-all rounded-full border border-border bg-secondary/60 px-3 py-1 text-xs font-medium text-secondary-foreground transition-colors hover:border-accent hover:line-through focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+							>
+								{chip.label}
+							</Link>
+						</li>
+					);
+				})}
+			</ul>
+		</div>
 	);
 }
 
@@ -151,10 +181,14 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
 	const search = parseLibrarySearchParams(await searchParams);
 	const searching = hasActiveSearch(search);
 
-	const { library, libraryTags, libraryLists, libraryActivity } = await getRepositories();
+	const repositories = await getRepositories();
+	const { library, libraryTags, libraryLists, libraryActivity } = repositories;
+	// Null when the flag is off or the bindings are missing: then no switch, no chips, and plain search.
+	const smart = getLibraryAi();
+	const preference = smart ? await smartSearchPreference(repositories.members, actor) : false;
 	// Each read falls back to empty, like the dashboard, so one repository being unavailable never takes the whole page down.
 	const tags = libraryTags.listTags().catch(() => []);
-	const results = searching ? await library.search(actor, search).catch(() => NO_CARDS) : null;
+	const results = searching ? await searchLibrary(actor, search, { smart, preference, repos: repositories }).catch(() => ({ ...NO_CARDS, chips: [] })) : null;
 	const home = searching
 		? null
 		: await Promise.all([
@@ -201,11 +235,14 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
 			<PitchBanner />
 
 			<SearchProvider value={search}>
-				<SearchBar />
+				<div className="grid min-w-0 gap-2">
+					<SearchBar />
+					{results?.chips.length ? <KeywordChips search={search} chips={results.chips} /> : null}
+				</div>
 
 				<div className="grid min-w-0 items-start gap-6 lg:grid-cols-[17rem_minmax(0,1fr)]">
 					<aside aria-label="Filters" className="min-w-0">
-						<FilterPanel tags={filterTags} total={results?.total ?? null} />
+						<FilterPanel tags={filterTags} total={results?.total ?? null} smart={smart ? (search.smart ?? preference) : null} />
 					</aside>
 
 					<div className="grid min-w-0 gap-8">

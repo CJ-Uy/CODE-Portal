@@ -17,9 +17,13 @@ const Q_MAX = 200;
 const TAG_ID = /^ltg_[A-Za-z0-9_-]{1,60}$/;
 const TAGS_MAX = 20;
 const PAGE_MAX = 10_000;
+// Smart-search chips the member removed: up to the 8 a search can show, each as long as a chip label can be.
+const WITHOUT_MAX = 8;
+const CHIP_MAX = 60;
 
 type RawParams = Record<string, string | string[] | undefined>;
-export type ParsedLibrarySearch = LibrarySearchInput & { smart: boolean | null };
+/** `smart`: ?smart=1|0, which beats the member's switch for this request. `without`: removed chip labels, lowercase. */
+export type ParsedLibrarySearch = LibrarySearchInput & { smart: boolean | null; without?: string[] };
 
 const many = (value: string | string[] | undefined): string[] => (value === undefined ? [] : Array.isArray(value) ? value : [value]);
 
@@ -41,6 +45,7 @@ export function parseLibrarySearchParams(params: RawParams): ParsedLibrarySearch
 	const rawPage = many(params.page)[0] ?? "";
 	const page = /^\d{1,5}$/.test(rawPage) && Number(rawPage) >= 1 && Number(rawPage) <= PAGE_MAX ? Number(rawPage) : 1;
 	const smart = many(params.smart)[0];
+	const without = [...new Set(many(params.without).map((label) => label.trim().toLowerCase()))].filter((label) => label && label.length <= CHIP_MAX).slice(0, WITHOUT_MAX);
 
 	return {
 		...(q ? { q } : {}),
@@ -54,11 +59,12 @@ export function parseLibrarySearchParams(params: RawParams): ParsedLibrarySearch
 		limit: PAGE_SIZE,
 		offset: (page - 1) * PAGE_SIZE,
 		smart: smart === "1" ? true : smart === "0" ? false : null,
+		...(without.length ? { without } : {}),
 	};
 }
 
 /** The URL form of a search, in a fixed key order. The page is written only past the first. */
-export function toLibrarySearchParams(input: LibrarySearchInput & { smart?: boolean | null }): URLSearchParams {
+export function toLibrarySearchParams(input: LibrarySearchInput & { smart?: boolean | null; without?: string[] }): URLSearchParams {
 	const params = new URLSearchParams();
 	if (input.q) params.set("q", input.q);
 	for (const kind of input.kinds ?? []) params.append("type", kind);
@@ -72,6 +78,7 @@ export function toLibrarySearchParams(input: LibrarySearchInput & { smart?: bool
 	if (page > 1) params.set("page", String(page));
 	if (input.smart === true) params.set("smart", "1");
 	if (input.smart === false) params.set("smart", "0");
+	for (const label of input.without ?? []) params.append("without", label);
 	return params;
 }
 
@@ -122,7 +129,7 @@ export function toggleValue<T extends string>(list: readonly T[] | undefined, it
 }
 
 /** A filter or sort change on top of the search as it stands now: back to the first page, stale facets dropped. */
-export function applySearchChange<T extends LibrarySearchInput>(current: T, patch: Partial<LibrarySearchInput>): T {
+export function applySearchChange<T extends LibrarySearchInput>(current: T, patch: Partial<T>): T {
 	return { ...dropStaleFacets({ ...current, ...patch }), offset: 0 } as T;
 }
 

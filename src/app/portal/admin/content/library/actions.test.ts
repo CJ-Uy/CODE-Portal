@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => ({
 	mergeTags: vi.fn(async () => undefined),
 	deleteTag: vi.fn(async () => undefined),
 	revalidatePath: vi.fn(),
+	scheduleLibraryIndex: vi.fn(),
+	rebuildIndexBatch: vi.fn(async () => ({ indexed: 10, remaining: 3 })),
+	smartOn: true,
 }));
 
 vi.mock("@/db", () => ({
@@ -28,6 +31,12 @@ vi.mock("@/server/features", () => ({
 	},
 }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
+vi.mock("@/server/library/ai", () => ({ getLibraryAi: () => (mocks.smartOn ? { ai: {}, vectorize: {} } : null) }));
+vi.mock("@/server/library/indexer", () => ({
+	scheduleLibraryIndex: mocks.scheduleLibraryIndex,
+	rebuildIndexBatch: mocks.rebuildIndexBatch,
+	indexDeps: async () => ({}),
+}));
 
 import {
 	approveItemAction,
@@ -35,6 +44,7 @@ import {
 	deleteTagAction,
 	dismissReportAction,
 	mergeTagsAction,
+	rebuildLibraryIndexAction,
 	regroupTagAction,
 	renameTagAction,
 	restoreItemAction,
@@ -50,6 +60,7 @@ beforeEach(() => {
 	vi.clearAllMocks();
 	mocks.roles = ["publishing"];
 	mocks.featureOn = true;
+	mocks.smartOn = true;
 	mocks.moderationQueue.mockResolvedValue({
 		pending: [],
 		takenDown: [],
@@ -179,5 +190,33 @@ describe("tag actions", () => {
 		await expect(mergeTagsAction({ fromId: "ltg_1", intoId: "ltg_1" })).rejects.toThrow("Pick two different tags");
 		await expect(deleteTagAction({ tagId: "" })).rejects.toThrow();
 		for (const mock of [mocks.renameTag, mocks.mergeTags, mocks.deleteTag]) expect(mock).not.toHaveBeenCalled();
+	});
+});
+
+describe("smart-search index", () => {
+	it("re-reads an approved or restored item and drops one a report took down", async () => {
+		await approveItemAction({ itemId: "lib_1" });
+		await restoreItemAction({ itemId: "lib_2" });
+		await takeDownReportAction({ reportId: "lrp_item", reason: "Names a client." });
+		await dismissReportAction({ reportId: "lrp_item" });
+		expect(mocks.scheduleLibraryIndex.mock.calls).toEqual([
+			["lib_1", "index"],
+			["lib_2", "index"],
+			["lib_9", "deindex"],
+		]);
+	});
+
+	it("rebuilds one batch for a library manager and refreshes the page", async () => {
+		expect(await rebuildLibraryIndexAction()).toEqual({ indexed: 10, remaining: 3 });
+		expect(paths()).toEqual([PAGE]);
+	});
+
+	it("checks library:manage itself, and refuses when smart search is off", async () => {
+		mocks.roles = ["member"];
+		await expect(rebuildLibraryIndexAction()).rejects.toThrow("Not authorized to manage the library.");
+		mocks.roles = ["publishing"];
+		mocks.smartOn = false;
+		await expect(rebuildLibraryIndexAction()).rejects.toThrow("Smart search is off here.");
+		expect(mocks.rebuildIndexBatch).not.toHaveBeenCalled();
 	});
 });

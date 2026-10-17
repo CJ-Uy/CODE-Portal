@@ -47,6 +47,7 @@ const rawEnvSchema = z.object({
 	FEATURE_PUBLIC_SITE: featureFlagSchema,
 	FEATURE_EMAIL: featureFlagSchema,
 	FEATURE_MENTS: featureFlagSchema,
+	FEATURE_LIBRARY_SMART_SEARCH: featureFlagSchema,
 });
 
 export type AppConfig = z.infer<typeof rawEnvSchema>;
@@ -99,6 +100,7 @@ export function getAppConfig(): AppConfig {
 		FEATURE_PUBLIC_SITE: runtimeEnvValue("FEATURE_PUBLIC_SITE"),
 		FEATURE_EMAIL: runtimeEnvValue("FEATURE_EMAIL"),
 		FEATURE_MENTS: runtimeEnvValue("FEATURE_MENTS"),
+		FEATURE_LIBRARY_SMART_SEARCH: runtimeEnvValue("FEATURE_LIBRARY_SMART_SEARCH"),
 	});
 
 	const issues: string[] = [];

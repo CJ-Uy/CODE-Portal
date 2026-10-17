@@ -6,6 +6,8 @@ import { getRepositories } from "@/db";
 import { requireActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
 import { assertFeatureEnabled } from "@/server/features";
+import { getLibraryAi } from "@/server/library/ai";
+import { indexDeps, rebuildIndexBatch, scheduleLibraryIndex } from "@/server/library/indexer";
 import {
 	deleteTagInputSchema,
 	itemInputSchema,
@@ -57,6 +59,7 @@ function revalidateTags() {
 export async function approveItemAction(input: { itemId: string }): Promise<void> {
 	const { actor, repositories, input: data } = await guard(itemInputSchema, input);
 	await repositories.library.moderate(actor, data.itemId, "approve");
+	scheduleLibraryIndex(data.itemId, "index");
 	revalidateItem(data.itemId);
 }
 
@@ -70,6 +73,7 @@ export async function sendBackItemAction(input: { itemId: string; reason: string
 export async function restoreItemAction(input: { itemId: string }): Promise<void> {
 	const { actor, repositories, input: data } = await guard(itemInputSchema, input);
 	await repositories.library.moderate(actor, data.itemId, "restore");
+	scheduleLibraryIndex(data.itemId, "index");
 	revalidateItem(data.itemId);
 }
 
@@ -91,6 +95,7 @@ async function resolve({ actor, repositories }: Pick<Guarded, "actor" | "reposit
 	const report = reports.find((candidate) => candidate.id === reportId);
 	if (!report) throw new Error("This report was already resolved.");
 	await repositories.library.resolveReport(actor, report.id, resolution, reason);
+	if (report.itemId && resolution === "taken_down") scheduleLibraryIndex(report.itemId, "deindex");
 	if (report.itemId) revalidateItem(report.itemId);
 	if (report.listId) revalidateList(report.listId);
 }
@@ -134,6 +139,21 @@ export async function mergeTagsAction(input: { fromId: string; intoId: string })
 	const { actor, repositories, input: data } = await guard(mergeTagsInputSchema, input);
 	await repositories.libraryTags.mergeTags(actor, data.fromId, data.intoId);
 	revalidateTags();
+}
+
+/**
+ * library:manage, checked here because the page only needs library:moderate. Reads the next 10 unindexed published items
+ * into the smart-search index; the button calls it again until nothing is left.
+ */
+export async function rebuildLibraryIndexAction(): Promise<{ indexed: number; remaining: number }> {
+	assertFeatureEnabled("library");
+	const actor = await requireActor();
+	if (!can(actor, "library:manage")) throw new Error("Not authorized to manage the library.");
+	const bindings = getLibraryAi();
+	if (!bindings) throw new Error("Smart search is off here.");
+	const result = await rebuildIndexBatch(await indexDeps(bindings));
+	revalidatePath(PAGE);
+	return result;
 }
 
 /** The tag comes off every item that carries it. */

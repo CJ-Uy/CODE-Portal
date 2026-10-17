@@ -21,6 +21,7 @@ function configWith(flags: Partial<Record<string, boolean>>) {
 		FEATURE_LEADERBOARD: false,
 		FEATURE_EMAIL: false,
 		FEATURE_MENTS: false,
+		FEATURE_LIBRARY_SMART_SEARCH: false,
 		...flags,
 	} as Parameters<typeof featureFlagsFromConfig>[0];
 }
@@ -49,6 +50,9 @@ describe("release feature flags", () => {
 		// leaderboard is independent of retention in config; the points page is what pairs them.
 		expect(featureFlagsFromConfig(configWith({ FEATURE_MENTS: true })).ments).toBe(true);
 		expect(featureFlagsFromConfig(configWith({ FEATURE_LEADERBOARD: true })).retention).toBe(false);
+		// Smart search is its own switch: the library being on does not turn it on.
+		expect(featureFlagsFromConfig(configWith({ FEATURE_LIBRARY_SMART_SEARCH: true })).librarySmartSearch).toBe(true);
+		expect(featureFlagsFromConfig(configWith({ FEATURE_LIBRARY: true })).librarySmartSearch).toBe(false);
 	});
 
 	it("names the offending surface when a guard rejects", () => {

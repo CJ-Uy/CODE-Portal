@@ -72,6 +72,11 @@ describe("parseLibrarySearchParams", () => {
 		expect(parseLibrarySearchParams({ smart: "yes" }).smart).toBeNull();
 		expect(parseLibrarySearchParams({}).smart).toBeNull();
 	});
+
+	it("reads removed chips lowercase, once each, dropping blank and overlong ones", () => {
+		expect(parseLibrarySearchParams({ without: ["Motivation", " motivation ", "", "x".repeat(61), "show up"] }).without).toEqual(["motivation", "show up"]);
+		expect(parseLibrarySearchParams({}).without).toBeUndefined();
+	});
 });
 
 describe("toLibrarySearchParams", () => {
@@ -99,6 +104,10 @@ describe("toLibrarySearchParams", () => {
 	it("keeps an explicit smart choice", () => {
 		expect(toLibrarySearchParams({ smart: false }).toString()).toBe("smart=0");
 		expect(toLibrarySearchParams({ smart: true }).toString()).toBe("smart=1");
+	});
+
+	it("keeps the removed chips, so a later page or filter does not bring them back", () => {
+		expect(toLibrarySearchParams({ q: "x", without: ["motivation", "show up"] }).toString()).toBe("q=x&without=motivation&without=show+up");
 	});
 
 	it("parses back what it wrote", () => {

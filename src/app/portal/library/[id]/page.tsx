@@ -19,6 +19,8 @@ import { getActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
 import type { Actor } from "@/server/auth/permissions";
 import { isFeatureEnabled } from "@/server/features";
+import { getLibraryAi } from "@/server/library/ai";
+import { smartRelated, smartSearchPreference } from "@/server/library/smart-search";
 import { setCommentHiddenAction } from "../actions";
 import { CommentForm } from "./comment-form";
 import { FlagClientDataButton } from "./flag-button";
@@ -45,6 +47,15 @@ async function loadEmbeds(actor: Actor, repositories: Repositories, item: Librar
 	return new Map(ids.map((id) => [id, found.get(id) ?? null]));
 }
 
+/** Similar by meaning when smart search is on for this member and the item is indexed; otherwise (or on any failure) the shared-tags shelf. */
+async function loadRelated(actor: Actor, repositories: Repositories, id: string): Promise<LibraryCard[]> {
+	const smart = getLibraryAi();
+	const ids = smart && (await smartSearchPreference(repositories.members, actor)) ? await smartRelated(actor, id, { ...smart, repos: repositories }) : null;
+	if (ids?.length) return repositories.library.search(actor, { onlyIds: ids, sort: "relevance", limit: ids.length }).then(({ cards }) => cards, () => []);
+	if (ids) return [];
+	return repositories.library.related(actor, id, 6).catch((): LibraryCard[] => []);
+}
+
 export default async function LibraryItemPage({ params }: { params: Promise<{ id: string }> }) {
 	if (!isFeatureEnabled("library")) notFound();
 	const actor = await getActor();
@@ -67,7 +78,7 @@ export default async function LibraryItemPage({ params }: { params: Promise<{ id
 		live ? repositories.libraryActivity.statsFor([id]).then((all) => all.get(id) ?? null).catch(() => null) : Promise.resolve(null),
 		repositories.libraryLists.myLists(actor).catch(() => ({ owned: [], editable: [] })),
 		repositories.libraryLists.savedIn(actor, id).catch((): string[] => []),
-		repositories.library.related(actor, id, 6).catch((): LibraryCard[] => []),
+		loadRelated(actor, repositories, id),
 		loadEmbeds(actor, repositories, item),
 	]);
 
