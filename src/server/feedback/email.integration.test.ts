@@ -48,4 +48,23 @@ describe("queueFeedbackEmail", () => {
 		expect(calls[0][0]).toEqual({ campaignId: campaign.id });
 		expect(calls[0][1].delaySeconds).toBe(120);
 	});
+
+	it("keeps the campaign scheduled and reports queued when the queue send throws", async () => {
+		await env.DB.prepare("UPDATE email_categories SET default_sender_id='esnd_1' WHERE id='ecat_feedback'").run();
+		const send = vi.fn(async () => {
+			throw new Error("queue down");
+		});
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		try {
+			expect(await queueFeedbackEmail(db, { send } as unknown as Queue<EmailJob>, { ...input, kind: "invite" })).toBe("queued");
+			const rows = await db.select().from(emailCampaigns);
+			expect(rows).toHaveLength(1);
+			expect(rows[0].status).toBe("scheduled");
+			expect(send).toHaveBeenCalledTimes(1);
+			expect(error).toHaveBeenCalledTimes(1);
+			expect(String(error.mock.calls[0][0])).toContain(rows[0].id);
+		} finally {
+			error.mockRestore();
+		}
+	});
 });
