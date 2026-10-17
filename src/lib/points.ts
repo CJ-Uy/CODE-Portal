@@ -23,6 +23,11 @@ export function formatPoints(value: number): string {
 	return String(quantizePoints(value));
 }
 
+/** "1 Feedback point", "1.5 Feedback points". */
+export function pointsPhrase(value: number, label: string): string {
+	return `${formatPoints(value)} ${label} ${value === 1 ? "point" : "points"}`;
+}
+
 /** True when a parsed number is usable as a point value at all. */
 export function isValidPoints(value: number): boolean {
 	return Number.isFinite(value);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatPoints, quantizePoints } from "./points";
+import { formatPoints, pointsPhrase, quantizePoints } from "./points";
 
 describe("quantizePoints", () => {
 	it("leaves a whole number alone", () => {
@@ -33,5 +33,13 @@ describe("formatPoints", () => {
 
 	it("never renders float dust", () => {
 		expect(formatPoints(0.1 + 0.2)).toBe("0.3");
+	});
+});
+
+describe("pointsPhrase", () => {
+	it("names the point type and counts one point as singular", () => {
+		expect(pointsPhrase(1, "Feedback")).toBe("1 Feedback point");
+		expect(pointsPhrase(1.5, "Feedback")).toBe("1.5 Feedback points");
+		expect(pointsPhrase(0.1 + 0.2, "Retention")).toBe("0.3 Retention points");
 	});
 });

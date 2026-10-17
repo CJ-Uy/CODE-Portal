@@ -10,7 +10,7 @@ import type { MyHistoryRecord } from "@/db/repositories/retention";
 import { toLocalDate } from "@/lib/date-slots";
 import { colourClasses, colourValue } from "@/lib/event-type-colours";
 import { formatPoints } from "@/lib/points";
-import { buildCategoryTimeline, recordCategory, type RetentionCategory } from "@/lib/retention-categories";
+import { buildCategoryTimeline, recordCategory, sourceLabel, type RetentionCategory } from "@/lib/retention-categories";
 import { cn } from "@/lib/utils";
 
 const VIEWS = [
@@ -140,7 +140,7 @@ export function RetentionCategoryProgress({ records, total, goal }: {
 						<div className="h-3 overflow-hidden rounded-sm bg-muted/50"><div className={cn("h-full rounded-sm", colourClasses(row.colour).dot, view === "race" && "motion-safe:transition-[width] motion-safe:duration-500 motion-safe:ease-out")} style={{ width: `${Math.max(0, row[metric]) / scale * 100}%` }} /></div>
 					</li>)}
 				</ol>
-				<p className="text-xs text-muted-foreground">{view === "race" ? "Cumulative progress by recording date. Drag the timeline or replay it." : metric === "activities" ? "Each attended event counts once. Manual records do not count as attendance." : "Points earned in each category. The term target applies to your total."}</p>
+				<p className="text-xs text-muted-foreground">{view === "race" ? "Cumulative progress by recording date. Drag the timeline or replay it." : metric === "activities" ? "Each attended event counts once. Manual records and feedback forms do not count as attendance." : "Points earned in each category. The term target applies to your total."}</p>
 			</div>}
 			{hasNegative ? <p className="text-xs text-muted-foreground">Chart sizes show positive category totals. Negative adjustments remain in your total and activity history.</p> : null}
 		</CardContent>
@@ -167,7 +167,7 @@ export function RetentionActivityHistory({ records, typeLabel }: { records: MyHi
 				<tbody className="block divide-y divide-border/50 md:table-row-group" role="rowgroup">
 					{visible.map((record) => <tr key={record.id} role="row" className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 px-4 py-4 md:table-row">
 						<td role="cell" className="col-span-2 text-xs text-muted-foreground md:px-4 md:py-4"><time dateTime={record.recordedAt.toISOString()}>{displayDate(toLocalDate(record.recordedAt))}</time></td>
-						<td role="cell" className="min-w-0 md:px-4 md:py-4"><p className="break-words font-medium">{record.eventTitle || record.reason}</p><p className="mt-0.5 break-words text-xs text-muted-foreground">{record.source === "manual" ? "Manual record" : "Event attendance"}{record.eventTitle && record.reason !== record.eventTitle ? ` · ${record.reason}` : ""}</p></td>
+						<td role="cell" className="min-w-0 md:px-4 md:py-4"><p className="break-words font-medium">{record.eventTitle || record.reason}</p><p className="mt-0.5 break-words text-xs text-muted-foreground">{sourceLabel(record.source)}{record.eventTitle && record.reason !== record.eventTitle ? ` · ${record.reason}` : ""}</p></td>
 						<td role="cell" className="col-span-2 min-w-0 md:px-4 md:py-4"><CategoryLabel category={recordCategory(record)} /></td>
 						<td role="cell" className="col-start-2 row-start-2 text-right font-semibold tabular-nums md:px-4 md:py-4">{record.points === null ? <span className="text-xs font-normal text-muted-foreground">No points</span> : `${record.points > 0 ? "+" : ""}${formatPoints(record.points)}`}</td>
 					</tr>)}

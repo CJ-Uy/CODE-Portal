@@ -1,6 +1,6 @@
 import { TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
-import type { ResultsQuestion, SurveyResults } from "@/db/types";
+import type { ResultsQuestion, ResultsRespondents, SurveyResults } from "@/db/types";
 import {
 	BELOW_THRESHOLD_NOTE,
 	baselineLine,
@@ -9,6 +9,7 @@ import {
 	isLowResponseRate,
 	LOW_RESPONSE_NOTE,
 	percentOf,
+	respondentRow,
 	responsesLabel,
 	segmentLabel,
 	walkInsLabel,
@@ -146,14 +147,38 @@ function QuestionCard({ prompt, help, children }: { prompt: string; help?: strin
 	);
 }
 
+/** CRS only: who answered, newest first, folded away until asked for. */
+export function RespondentList({ respondents }: { respondents: ResultsRespondents["respondents"] }) {
+	if (respondents.length === 0) return null;
+	return (
+		<details className="min-w-0 rounded-xl border border-border/60 bg-card p-4">
+			<summary className="cursor-pointer text-sm font-semibold text-primary">Who responded ({respondents.length})</summary>
+			<ul className="mt-3 grid min-w-0 gap-1.5 text-sm">
+				{respondents.map((respondent, index) => {
+					const row = respondentRow(respondent);
+					return (
+						<li key={index} className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
+							<span className={`${PROSE} ${respondent.name ? "font-medium" : "text-muted-foreground"}`}>{row.name}</span>
+							<span className="shrink-0 text-xs tabular-nums text-muted-foreground">{row.when}</span>
+						</li>
+					);
+				})}
+			</ul>
+		</details>
+	);
+}
+
 /**
- * The whole results view. `mode` is who is looking: admins can hide comments from organizers, organizers cannot (and the
- * repository has already dropped hidden comments from what they get).
+ * The whole results view. `mode` is who is looking: admins (CRS) see who answered and can hide comments from organizers.
+ * Organizers get results without names, and the repository has already dropped hidden comments from what they get.
  */
-export function ResultsList({ results, mode }: { results: SurveyResults; mode: "admin" | "organizer" }) {
+export function ResultsList(props: { results: SurveyResults & ResultsRespondents; mode: "admin" } | { results: SurveyResults; mode: "organizer" }) {
+	const { results, mode } = props;
+	const names = props.mode === "admin" ? props.results : null;
 	return (
 		<div className="grid min-w-0 gap-5">
 			<ResultsHeader results={results} />
+			{names ? <RespondentList respondents={names.respondents} /> : null}
 			{results.belowThreshold ? (
 				<p className="min-w-0 rounded-lg border border-border bg-secondary p-3 text-sm text-secondary-foreground">{BELOW_THRESHOLD_NOTE}</p>
 			) : (
@@ -164,7 +189,7 @@ export function ResultsList({ results, mode }: { results: SurveyResults; mode: "
 						) : question.kind === "choice" ? (
 							<ChoiceResult question={question} />
 						) : (
-							<CommentsPanel answers={question.answers} terms={question.terms} canModerate={mode === "admin"} />
+							<CommentsPanel answers={question.answers} terms={question.terms} canModerate={mode === "admin"} names={names?.answerNames} />
 						)}
 					</QuestionCard>
 				))

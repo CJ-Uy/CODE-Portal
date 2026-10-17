@@ -4,6 +4,8 @@ import * as schema from "@/db/schema";
 import {
 	crsAttendance,
 	crsEvents,
+	pointTypes,
+	retentionRecords,
 	surveyAnswers,
 	surveyAssignments,
 	surveyQuestions,
@@ -25,10 +27,11 @@ import type {
 	UpdateDraftInput,
 	UpdateRunningInput,
 } from "@/db/types";
-import { startOfUtc8Day } from "@/lib/date-slots";
 import { errorLabel } from "@/lib/feedback/safe-log";
 import { effectiveStatus, reminderAtFor, suggestInviteCount } from "@/lib/feedback/stats";
 import { createId } from "@/lib/ids";
+import { FEEDBACK_POINT_TYPE_ID } from "@/lib/point-types";
+import { pointsPhrase } from "@/lib/points";
 import { seededSample } from "@/lib/sample";
 import type { Actor } from "@/server/auth/permissions";
 import { can } from "@/server/auth/permissions";
@@ -36,6 +39,7 @@ import { runAtomic } from "./atomic";
 import type { AuditRepository } from "./audit";
 import { chunk } from "./email-audience";
 import { notify } from "./notifications";
+import { getCurrentTermId } from "./retention";
 import { eligibleMemberIds, eventRole } from "./survey-access";
 import { pageLimit } from "./types";
 
@@ -142,11 +146,66 @@ function validateAnswers(questions: SurveyQuestion[], answers: SubmitSurveyRespo
 	}
 }
 
-// The only writer of survey_responses. submittedAt is always the Manila day, so a response cannot be matched
-// to its assignment's exact completedAt. Callers put these in a runAtomic with the assignment write.
+// New drafts award 1 Feedback point for answering, while that point type is there to award.
+async function draftPointDefaults(db: SurveyDb): Promise<{ pointsAward: number; pointTypeId: string | null }> {
+	const [feedback] = await db
+		.select({ id: pointTypes.id })
+		.from(pointTypes)
+		.where(and(eq(pointTypes.id, FEEDBACK_POINT_TYPE_ID), eq(pointTypes.active, true)))
+		.limit(1);
+	return feedback ? { pointsAward: 1, pointTypeId: feedback.id } : { pointsAward: 0, pointTypeId: null };
+}
+
+/**
+ * The points-for-answering record, for the same atomic write as the response, or nothing when the form awards none.
+ * It never looks at the answers. The term is the one the member's attendance points for the event use: the term holding
+ * their check-in, resolved the way attendance resolves it. A form with no event, or a respondent with no check-in, uses
+ * the time they answered. With no such term, or a point type retired since sending, there is nothing to award.
+ */
+async function answerAward(db: SurveyDb, survey: Survey, memberId: string, eventTitle: string | null, now: Date) {
+	if (survey.pointsAward <= 0 || !survey.pointTypeId) return [];
+	const [type] = await db
+		.select({ id: pointTypes.id })
+		.from(pointTypes)
+		.where(and(eq(pointTypes.id, survey.pointTypeId), eq(pointTypes.active, true)))
+		.limit(1);
+	if (!type) return [];
+	const [scan] = survey.eventId
+		? await db
+				.select({ scannedAt: crsAttendance.scannedAt })
+				.from(crsAttendance)
+				.where(and(eq(crsAttendance.eventId, survey.eventId), eq(crsAttendance.memberId, memberId)))
+				.limit(1)
+		: [];
+	const termId = await getCurrentTermId(db, scan?.scannedAt ?? now);
+	if (!termId) return [];
+	return [
+		db
+			.insert(retentionRecords)
+			.values({
+				id: createId("ret"),
+				memberId,
+				termId,
+				eventId: survey.eventId,
+				pointTypeId: type.id,
+				points: survey.pointsAward,
+				reason: `Answered the feedback form for ${eventTitle ?? survey.title}`,
+				source: "survey_response",
+				recordedBy: survey.createdBy,
+				recordedAt: now,
+			})
+			// Hitting the partial unique index on (event, member, type) for survey_response means this member already has
+			// feedback points for the event (say, from a form deleted and made again): skip the award, keep the answer.
+			.onConflictDoNothing(),
+	];
+}
+
+// The only writer of survey_responses. A response carries its member and the real time, so CRS can follow up.
+// Callers put these in a runAtomic with the assignment write and the answer award.
 function responseInserts(
 	db: SurveyDb,
 	surveyId: string,
+	memberId: string,
 	source: SurveySource,
 	answers: SubmitSurveyResponseInput["answers"],
 	now: Date,
@@ -159,7 +218,7 @@ function responseInserts(
 		value: answer.value,
 	}));
 	return [
-		db.insert(surveyResponses).values({ id: responseId, surveyId, source, submittedAt: startOfUtc8Day(now) }),
+		db.insert(surveyResponses).values({ id: responseId, surveyId, memberId, source, submittedAt: now }),
 		...chunk(answerRows, ANSWER_ROWS_PER_INSERT).map((part) => db.insert(surveyAnswers).values(part)),
 	] as const;
 }
@@ -206,6 +265,7 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 					eventId: input.eventId ?? null,
 					status: "draft",
 					createdBy: actor.memberId,
+					...(await draftPointDefaults(db)),
 				})
 				.returning();
 
@@ -316,6 +376,7 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 			}
 
 			const surveyId = createId("srv");
+			const points = await draftPointDefaults(db);
 			// One atomic write, so a failed question insert cannot leave an empty draft behind.
 			await runAtomic(db, [
 				db.insert(surveys).values({
@@ -325,6 +386,7 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 					templateId: template.id,
 					status: "draft",
 					createdBy: actor.memberId,
+					...points,
 				}),
 				...questionInserts(db, surveyId, template.questionsJson),
 			]);
@@ -375,6 +437,16 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 			if (!survey) throw new Error("Survey not found.");
 			if (survey.status !== "draft") throw new Error("This form has already been sent.");
 			if (input.closesAt <= now) throw new Error("Pick a closing time in the future.");
+			let pointType: { label: string } | undefined;
+			if (input.pointsAward > 0) {
+				[pointType] = await db
+					.select({ label: pointTypes.label })
+					.from(pointTypes)
+					.where(and(eq(pointTypes.id, input.pointTypeId ?? ""), eq(pointTypes.active, true)))
+					.limit(1);
+				if (!pointType) throw new Error("Pick an active point type for answering.");
+			}
+			const pointsLine = pointType ? `You'll get ${pointsPhrase(input.pointsAward, pointType.label)} for answering.` : null;
 
 			const eligibleIds = await eligibleMemberIds(db, survey);
 			if (eligibleIds.length === 0) throw new Error("No one is eligible for this form yet.");
@@ -409,6 +481,8 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 						shareWithOrganizers: input.shareWithOrganizers,
 						emailInvitees: input.emailInvitees,
 						sampleSize: drawn.length,
+						pointsAward: pointType ? input.pointsAward : 0,
+						pointTypeId: pointType ? input.pointTypeId : null,
 					})
 					.where(and(eq(surveys.id, input.surveyId), eq(surveys.status, "draft"))),
 				...chunk(assignmentRows, ASSIGNMENT_ROWS_PER_INSERT).map((part) => db.insert(surveyAssignments).values(part)),
@@ -419,7 +493,7 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 				targetType: "survey",
 				targetId: input.surveyId,
 				category: "survey",
-				detail: `Invited ${drawn.length} of ${eligibleIds.length} eligible.`,
+				detail: `Invited ${drawn.length} of ${eligibleIds.length} eligible.${pointType ? ` ${pointsPhrase(input.pointsAward, pointType.label)} for answering.` : ""}`,
 			});
 			// ponytail: one notify() call per invitee; batch them if "all" on a very large event nears the subrequest cap.
 			// The send has committed, so a failed notice is logged and skipped: it must not fail the send or stop the email step.
@@ -431,7 +505,7 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 						memberId,
 						kind: "survey_assigned",
 						title: eventTitle ? `How was ${eventTitle}?` : survey.title,
-						body: "Share quick feedback. Your name isn't attached to your answers.",
+						body: pointsLine ? `Share quick feedback. ${pointsLine}` : "Share quick feedback.",
 						href: `/portal/surveys/${input.surveyId}`,
 					});
 				} catch (error) {
@@ -532,18 +606,20 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 		async submitResponse(actor, input, now = new Date()) {
 			const [survey] = await db.select().from(surveys).where(eq(surveys.id, input.surveyId)).limit(1);
 			if (!survey) throw new Error(RESPONDENT_STATE_MESSAGES.ineligible);
-			const { state, invited } = await respondentState(db, actor, survey, now);
+			const { state, invited, eventTitle } = await respondentState(db, actor, survey, now);
 			if (state !== "open") throw new Error(RESPONDENT_STATE_MESSAGES[state]);
 
 			validateAnswers(await orderedQuestions(db, survey.id), input.answers);
+			const award = await answerAward(db, survey, actor.memberId, eventTitle, now);
 
 			if (!invited) {
-				// A walk-in's assignment, response and answers land in one atomic write. A second submit hits the
+				// A walk-in's assignment, response, answers and points land in one atomic write. A second submit hits the
 				// (survey, member) primary key, which rolls the whole write back.
 				try {
 					await runAtomic(db, [
 						db.insert(surveyAssignments).values({ surveyId: survey.id, memberId: actor.memberId, source: "walk_in", completedAt: now }),
-						...responseInserts(db, survey.id, "walk_in", input.answers, now),
+						...responseInserts(db, survey.id, actor.memberId, "walk_in", input.answers, now),
+						...award,
 					]);
 				} catch (error) {
 					if (isPrimaryKeyConflict(error)) throw new Error(RESPONDENT_STATE_MESSAGES.answered);
@@ -565,10 +641,10 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 				.returning({ source: surveyAssignments.source });
 			if (!claimed) throw new Error(RESPONDENT_STATE_MESSAGES.answered);
 
-			// One atomic write, so the response and every answer chunk land together or not at all.
+			// One atomic write, so the response, every answer chunk and the points land together or not at all.
 			// ponytail: a Worker dying between the claim and this write still loses the slot; use a transactional DB if that matters.
 			try {
-				await runAtomic(db, [...responseInserts(db, survey.id, claimed.source, input.answers, now)]);
+				await runAtomic(db, [...responseInserts(db, survey.id, actor.memberId, claimed.source, input.answers, now), ...award]);
 			} catch (error) {
 				// Best effort: release the claim so a retry can answer, instead of reading "already answered" with nothing stored.
 				try {

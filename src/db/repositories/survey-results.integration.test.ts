@@ -75,10 +75,10 @@ async function seedSurvey(input: {
 }
 
 let seq = 0;
-/** One anonymous response; returns the answer ids keyed by question id. */
-async function respond(surveyId: string, source: SurveySource, answers: Record<string, string>) {
+/** One response, anonymous unless a member is given (as before migration 0014); returns the answer ids keyed by question id. */
+async function respond(surveyId: string, source: SurveySource, answers: Record<string, string>, memberId: string | null = null) {
 	const responseId = `srvr_${++seq}`;
-	await db.insert(schema.surveyResponses).values({ id: responseId, surveyId, source, submittedAt: past });
+	await db.insert(schema.surveyResponses).values({ id: responseId, surveyId, source, submittedAt: past, memberId });
 	const ids: Record<string, string> = {};
 	for (const [questionId, value] of Object.entries(answers)) {
 		ids[questionId] = `srva_${++seq}`;
@@ -133,6 +133,27 @@ describe("survey results on D1", () => {
 		const view = await results.getResults(admin, "srv_1", { filter: "all" }, NOW);
 
 		expect(view).toMatchObject({ responseCount: 2, belowThreshold: true, questions: [], summary: null });
+	});
+
+	it("names respondents for CRS and never for organizers", async () => {
+		await db.insert(schema.members).values({ id: "mem_named", email: "named@example.com", fullName: "Named Person", status: "active" });
+		await seedSurvey({ id: "srv_1", eventId: "evt_1", questions: [{ id: "q1", type: "text" }, { id: "q2", type: "scale" }] });
+		const named = await respond("srv_1", "invited", { q1: "Loved it", q2: "5" }, "mem_named");
+		const unrecorded = await respond("srv_1", "invited", { q1: "Fine", q2: "4" });
+		const byEmail = await respond("srv_1", "walk_in", { q1: "Long day", q2: "3" }, "mem_att");
+
+		const view = await results.getResults(crs, "srv_1", { filter: "all" }, NOW);
+		// Only written answers carry a name; the scale answers are not in the map.
+		expect(view.answerNames).toEqual({ [named.q1]: "Named Person", [unrecorded.q1]: null, [byEmail.q1]: "mem_att@example.com" });
+		expect(view.respondents.map((respondent) => respondent.name)).toEqual(expect.arrayContaining(["Named Person", null, "mem_att@example.com"]));
+		expect(view.respondents).toHaveLength(3);
+
+		const organizer = await results.getOrganizerResults(owner, "evt_1", NOW);
+		expect(organizer?.state).toBe("ready");
+		const sent = JSON.stringify(organizer);
+		for (const leak of ["Named Person", "mem_named", "named@example.com", "mem_att", "respondents", "answerNames"]) {
+			expect(sent).not.toContain(leak);
+		}
 	});
 
 	it("rejects a member without survey:configure", async () => {

@@ -29,6 +29,9 @@ export function parseSendForm(formData: FormData): SendSurveyInput {
 		emailInvitees: checked(formData, "emailInvitees"),
 		remind: checked(formData, "remind"),
 		closesAt,
+		// A blank box reads as 0, which turns points off.
+		pointsAward: Number(formData.get("pointsAward") ?? 0),
+		pointTypeId: String(formData.get("pointTypeId") ?? "").trim() || null,
 	});
 }
 

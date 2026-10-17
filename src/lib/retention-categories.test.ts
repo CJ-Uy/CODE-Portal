@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MyHistoryRecord } from "@/db/repositories/retention";
-import { buildCategoryTimeline, recordCategory } from "./retention-categories";
+import { buildCategoryTimeline, recordCategory, sourceLabel } from "./retention-categories";
 
 function record(id: string, overrides: Partial<MyHistoryRecord> = {}): MyHistoryRecord {
 	return { id, memberId: "member", termId: "term", pointTypeId: "pt_retention", pointTypeLabel: "Retention", eventId: "event", eventType: "project", eventTypeLabel: "Project Team", eventColour: "rose", eventTitle: "Project night", points: 0.1, reason: "Attended", source: "event_attendance", recordedBy: "admin", recordedAt: new Date("2026-08-12T16:30:00Z"), ...overrides };
@@ -26,5 +26,23 @@ describe("category progress", () => {
 		expect(buildCategoryTimeline([record("award", { source: "manual", points: 5 })]).at(-1)?.categories[0]).toMatchObject({ key: "project", points: 5, activities: 0 });
 		expect(recordCategory(record("missing", { eventType: null, eventId: null }))).toMatchObject({ key: "source:other", label: "Other activities" });
 		expect(buildCategoryTimeline([])).toEqual([{ date: null, categories: [] }]);
+	});
+});
+
+describe("feedback form points", () => {
+	it("label the source and the category Feedback forms, apart from the event they came from", () => {
+		expect(sourceLabel("survey_response")).toBe("Feedback forms");
+		expect(sourceLabel("manual")).toBe("Manual record");
+		expect(sourceLabel("event_attendance")).toBe("Event attendance");
+		const answered = record("answered", { source: "survey_response", points: 1, reason: "Answered the feedback form for Project night" });
+		expect(recordCategory(answered)).toEqual({ key: "source:survey_response", label: "Feedback forms", colour: "accent" });
+	});
+
+	it("add points without counting as attendance", () => {
+		const frames = buildCategoryTimeline([record("attended"), record("answered", { source: "survey_response", points: 1 })]);
+		expect(frames.at(-1)?.categories).toEqual([
+			{ key: "project", label: "Project Team", colour: "rose", points: 0.1, activities: 1 },
+			{ key: "source:survey_response", label: "Feedback forms", colour: "accent", points: 1, activities: 0 },
+		]);
 	});
 });

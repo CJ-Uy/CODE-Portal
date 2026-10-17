@@ -12,6 +12,7 @@ import {
 	invitedLine,
 	isLowResponseRate,
 	percentOf,
+	respondentRow,
 	segmentLabel,
 	summaryView,
 } from "./results-view";
@@ -236,5 +237,15 @@ describe("summaryView", () => {
 		expect(summaryView({}, 8, 15)).toBeNull();
 		expect(summaryView({ themes: "oops" }, 8, 15)).toBeNull();
 		expect(summaryView({ themes: [] }, 8, 15)).toBeNull();
+	});
+});
+
+describe("respondentRow", () => {
+	it("shows the name with the time it was sent", () => {
+		expect(respondentRow({ name: "Ana", submittedAt: new Date("2026-10-16T05:30:00Z") })).toEqual({ name: "Ana", when: "Oct 16, 2026, 1:30 PM" });
+	});
+
+	it("shows an answer from before names were recorded by its day only", () => {
+		expect(respondentRow({ name: null, submittedAt: new Date("2026-10-15T16:00:00Z") })).toEqual({ name: "Name not recorded", when: "Oct 16, 2026" });
 	});
 });

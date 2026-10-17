@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { parseOptions, safeFeedbackError, scaleLabels } from "@/lib/feedback/form";
+import { pointsPhrase } from "@/lib/points";
 import { getActor } from "@/server/auth/actor";
 import { can, type Actor } from "@/server/auth/permissions";
 import { isFeatureEnabled } from "@/server/features";
@@ -41,6 +42,12 @@ export default async function MemberSurveyPage({
 
 	const { survey, questions, eventTitle, state } = detail;
 	const backHref = isPreview ? `/portal/admin/content/surveys/${survey.id}` : survey.eventId ? `/portal/calendar/${survey.eventId}` : "/portal";
+	// Points are only promised while their point type is active, which is also when answering awards them.
+	const pointType =
+		survey.pointsAward > 0
+			? (await repositories.pointTypes.list().catch(() => [])).find((type) => type.id === survey.pointTypeId && type.active)
+			: undefined;
+	const points = pointType ? pointsPhrase(survey.pointsAward, pointType.label) : null;
 
 	return (
 		<div className="mx-auto grid w-full min-w-0 max-w-2xl gap-6">
@@ -48,8 +55,10 @@ export default async function MemberSurveyPage({
 				<p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Feedback</p>
 				<h1 className="min-w-0 font-heading text-3xl leading-tight [overflow-wrap:anywhere]">{eventTitle ?? survey.title}</h1>
 				<p className="text-sm text-muted-foreground">
-					Your name isn&apos;t attached to your answers. Used only to evaluate this project (RA 10173).
+					CRS can see your name with your answers so they can follow up. Organizers see the answers without names. Used only to
+					evaluate this project (RA 10173).
 				</p>
+				{points && state === "open" ? <p className="min-w-0 text-sm font-medium [overflow-wrap:anywhere]">You&apos;ll get {points} for answering.</p> : null}
 			</header>
 
 			{isPreview ? (
@@ -81,7 +90,9 @@ export default async function MemberSurveyPage({
 				</form>
 			) : (
 				<StateCard
-					message={done && state === "answered" ? "Thanks, feedback sent." : RESPONDENT_STATE_MESSAGES[state]}
+					message={
+						done && state === "answered" ? `Thanks, feedback sent.${points ? ` You got ${points}.` : ""}` : RESPONDENT_STATE_MESSAGES[state]
+					}
 					thanked={state === "answered"}
 					backHref={backHref}
 				/>
@@ -131,7 +142,7 @@ function StateCard({ message, thanked, backHref }: { message: string; thanked: b
 			<CardContent className="grid justify-items-start gap-4 p-5">
 				<p className="flex min-w-0 items-center gap-2 text-base font-medium">
 					{thanked ? <CheckCircle2 className="size-5 shrink-0 text-accent" /> : null}
-					{message}
+					<span className="min-w-0 [overflow-wrap:anywhere]">{message}</span>
 				</p>
 				<Button asChild variant="outline">
 					<Link href={backHref}>{backHref === "/portal" ? "Back to portal" : "Back to event"}</Link>
