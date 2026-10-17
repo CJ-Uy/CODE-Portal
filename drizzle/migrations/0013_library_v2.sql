@@ -105,6 +105,7 @@ CREATE INDEX `library_items_created_by_idx` ON `library_items` (`created_by`);--
 ALTER TABLE `library_list_items` ADD `note` text DEFAULT '' NOT NULL;--> statement-breakpoint
 ALTER TABLE `library_list_items` ADD `added_by` text REFERENCES `members`(`id`) ON UPDATE no action ON DELETE set null;--> statement-breakpoint
 ALTER TABLE `library_list_items` ADD `position` integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+CREATE INDEX `library_list_items_library_item_id_idx` ON `library_list_items` (`library_item_id`);--> statement-breakpoint
 ALTER TABLE `library_lists` ADD `description` text DEFAULT '' NOT NULL;--> statement-breakpoint
 ALTER TABLE `library_lists` ADD `shared` integer DEFAULT false NOT NULL;--> statement-breakpoint
 ALTER TABLE `library_lists` ADD `is_default` integer DEFAULT false NOT NULL;--> statement-breakpoint
@@ -118,6 +119,8 @@ ALTER TABLE `members` ADD `library_smart_search` integer DEFAULT true NOT NULL;-
 -- Saved lists BEFORE library_favorites is dropped, and the demo items go after the copy.
 -- library_lists.updated_at is nullable because SQLite forbids a non-constant ADD COLUMN default. Backfill it from created_at.
 UPDATE `library_lists` SET `updated_at` = `created_at`;--> statement-breakpoint
+-- Legacy list rows predate added_by: the list's owner added them.
+UPDATE `library_list_items` SET `added_by` = (SELECT `member_id` FROM `library_lists` `l` WHERE `l`.`id` = `library_list_items`.`list_id`) WHERE `added_by` IS NULL;--> statement-breakpoint
 INSERT INTO `library_lists` (`id`, `member_id`, `name`, `color`, `is_default`, `created_at`, `updated_at`)
 SELECT 'lst_saved_' || `member_id`, `member_id`, 'Saved', '#0c315c', 1, MIN(`created_at`), MIN(`created_at`)
 FROM `library_favorites` GROUP BY `member_id`;--> statement-breakpoint

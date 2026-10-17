@@ -3475,7 +3475,15 @@
           "default": "(unixepoch() * 1000)"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "library_list_items_library_item_id_idx": {
+          "name": "library_list_items_library_item_id_idx",
+          "columns": [
+            "library_item_id"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
         "library_list_items_list_id_library_lists_id_fk": {
           "name": "library_list_items_list_id_library_lists_id_fk",

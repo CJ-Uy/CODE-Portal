@@ -892,7 +892,8 @@ export const libraryListItems = sqliteTable(
 		// "Added at".
 		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
 	},
-	(table) => [primaryKey({ columns: [table.listId, table.libraryItemId] })],
+	// The primary key leads with list_id, so "how many lists hold this item" (save counts) needs its own index.
+	(table) => [primaryKey({ columns: [table.listId, table.libraryItemId] }), index("library_list_items_library_item_id_idx").on(table.libraryItemId)],
 );
 
 export const libraryListMembers = sqliteTable(
