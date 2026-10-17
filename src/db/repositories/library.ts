@@ -16,7 +16,7 @@ import {
 	type LibraryReportReason,
 } from "@/db/schema";
 import { createId } from "@/lib/ids";
-import { blocksToPlainText, readMinutes } from "@/lib/library/blocks";
+import { blocksToPlainText, buildSearchText, readMinutes } from "@/lib/library/blocks";
 import type { LibraryBlock } from "@/lib/library/blocks";
 import { allowedFormats, defaultFormat, defaultPublicReadiness, defaultSource, REPORT_REASONS } from "@/lib/library/taxonomy";
 import type {
@@ -167,7 +167,6 @@ export type LibraryRepository = {
 const DEFAULT_LIMIT = 24;
 const MAX_LIMIT = 100;
 const MAX_WORDS = 8;
-const EXTRACTED_TEXT_INDEX_CAP = 200_000;
 // D1 rejects LIKE patterns longer than 50 bytes ("pattern too complex").
 const LIKE_PATTERN_MAX_BYTES = 50;
 const LIKE_ESCAPE = sql.raw("ESCAPE '\\'");
@@ -222,22 +221,6 @@ function storageKeys(item: Pick<LibraryItem, "fileKey" | "blocksJson">): string[
 	if (item.fileKey) keys.add(item.fileKey);
 	for (const block of item.blocksJson) if (block.type === "image" && block.props.key) keys.add(block.props.key);
 	return [...keys];
-}
-
-/** searchText = lower(title, summary, file code, authors, tags, block text, extracted text up to 200k chars). */
-function buildSearchText(item: LibraryItem, tagNames: string[]): string {
-	return [
-		item.title,
-		item.dek,
-		item.fileCode,
-		...item.authorsJson.map((author) => author.name),
-		...tagNames,
-		blocksToPlainText(item.blocksJson),
-		item.extractedText.slice(0, EXTRACTED_TEXT_INDEX_CAP),
-	]
-		.filter(Boolean)
-		.join("\n")
-		.toLowerCase();
 }
 
 // Each chunk binds one id per item; D1 allows 100 bound parameters per statement.

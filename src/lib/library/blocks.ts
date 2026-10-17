@@ -117,6 +117,34 @@ export function blocksToPlainText(blocks: LibraryBlock[]): string {
 	return blocks.map(blockToPlainText).filter(Boolean).join("\n\n");
 }
 
+const EXTRACTED_TEXT_INDEX_CAP = 200_000;
+
+/** searchText = lower(title, summary, file code, authors, tags, block text, extracted text up to 200k chars). The seed import uses it too. */
+export function buildSearchText(
+	item: {
+		title: string;
+		dek: string;
+		fileCode: string | null;
+		authorsJson: { name: string }[];
+		blocksJson: LibraryBlock[];
+		extractedText: string;
+	},
+	tagNames: string[],
+): string {
+	return [
+		item.title,
+		item.dek,
+		item.fileCode,
+		...item.authorsJson.map((author) => author.name),
+		...tagNames,
+		blocksToPlainText(item.blocksJson),
+		item.extractedText.slice(0, EXTRACTED_TEXT_INDEX_CAP),
+	]
+		.filter(Boolean)
+		.join("\n")
+		.toLowerCase();
+}
+
 /** Reading time at 200 words a minute, never less than one. */
 export function readMinutes(text: string): number {
 	const words = text.split(/\s+/).filter(Boolean).length;
