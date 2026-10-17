@@ -55,6 +55,10 @@ function getPageHeading(pathname: string): { section: string; title: string } {
 	if (cleanPath === "/portal/admin") return { section: "Admin", title: "Console" };
 
 	if (cleanPath.startsWith("/portal/admin/")) {
+		// Feedback templates are not survey details; their own breadcrumbs carry the title.
+		if (cleanPath.startsWith("/portal/admin/content/surveys/templates")) {
+			return adminHeading(cleanPath) ?? { section: "Admin", title: "Console" };
+		}
 		// dynamic detail pages (e.g. content/surveys/[id]) use the generic detail title.
 		for (const [prefix, title] of Object.entries(detailTitles)) {
 			if (cleanPath.startsWith(`${prefix}/`)) {

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AdminIntro } from "@/components/portal/admin-intro";
 import { notFound, redirect } from "next/navigation";
-import { Plus } from "lucide-react";
+import { ListChecks, Plus } from "lucide-react";
 import { getRepositories } from "@/db";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,14 @@ export default async function AdminSurveysPage() {
 		<div>
 			<div className="grid gap-6">
 				<AdminIntro title="Surveys" whoFor="Create a survey, then draw a random sample to collect responses" />
+				<div>
+					<Button asChild variant="outline">
+						<Link href="/portal/admin/content/surveys/templates">
+							<ListChecks />
+							Feedback templates
+						</Link>
+					</Button>
+				</div>
 				<details className="rounded-xl border border-border/60 bg-card">
 					<summary className="cursor-pointer rounded-xl px-5 py-4 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">New survey</summary>
 					<div className="border-t border-border/50 p-5">

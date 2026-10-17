@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getRepositories } from "@/db";
-import { createSurveyInputSchema, sendSurveyInputSchema } from "@/db/types";
+import { createSurveyInputSchema, saveTemplateInputSchema, sendSurveyInputSchema } from "@/db/types";
+import { parseQuestionsField, QUESTIONS_ERROR } from "@/lib/feedback/editor-input";
 import { defaultClosesAt } from "@/lib/feedback/stats";
 import { requireActor } from "@/server/auth/actor";
 import { assertFeatureEnabled } from "@/server/features";
@@ -61,6 +62,50 @@ export async function sendSurveyAction(formData: FormData) {
 	});
 	await repositories.surveys.send(actor, input);
 	revalidatePath(`/portal/admin/content/surveys/${input.surveyId}`);
+}
+
+const TEMPLATES_PATH = "/portal/admin/content/surveys/templates";
+
+export type SaveTemplateResult = { error: string };
+
+// Returns only on failure: success redirects to the list, so a caller sees no result. Errors come back as
+// text instead of throwing so the editor keeps what the admin typed.
+export async function saveTemplateAction(formData: FormData): Promise<SaveTemplateResult | undefined> {
+	assertFeatureEnabled("surveys");
+	const actor = await requireActor();
+
+	let questions;
+	try {
+		questions = parseQuestionsField(formData.get("questions"));
+	} catch {
+		return { error: QUESTIONS_ERROR };
+	}
+	const parsed = saveTemplateInputSchema.safeParse({
+		id: nullableText(formData.get("id")) ?? undefined,
+		name: formData.get("name"),
+		description: formData.get("description") ?? "",
+		questions,
+	});
+	if (!parsed.success) return { error: "Give the template a name (up to 120 characters) and keep the description under 300." };
+
+	const repositories = await getRepositories();
+	try {
+		await repositories.surveys.saveTemplate(actor, parsed.data);
+	} catch (error) {
+		const gone = error instanceof Error && error.message === "Template not found.";
+		return { error: gone ? "This template was archived or no longer exists." : "Couldn't save the template. Try again." };
+	}
+	revalidatePath(TEMPLATES_PATH);
+	redirect(TEMPLATES_PATH);
+}
+
+export async function archiveTemplateAction(formData: FormData) {
+	assertFeatureEnabled("surveys");
+	const actor = await requireActor();
+	const repositories = await getRepositories();
+	await repositories.surveys.archiveTemplate(actor, String(formData.get("id") ?? ""));
+	revalidatePath(TEMPLATES_PATH);
+	redirect(TEMPLATES_PATH);
 }
 
 function nullableText(value: FormDataEntryValue | null): string | null {
