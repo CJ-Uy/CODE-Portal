@@ -7,6 +7,7 @@ import { createEventMediaRepository } from "./event-media";
 import { createEventsRepository } from "./events";
 import { createEventTypeRulesRepository } from "./eventTypeRules";
 import { createLibraryRepository, createUnavailableLibraryRepository } from "./library";
+import { createLibraryTagsRepository, createUnavailableLibraryTagsRepository } from "./library-tags";
 import { createLinksRepository, createUnavailableLinksRepository, type LinkDb } from "./links";
 import { createMembersRepository } from "./members";
 import { createMentsRepository } from "./ments";
@@ -62,6 +63,7 @@ export function createDrizzleRepositories(db: DrizzleDb) {
 		calendar: createCalendarRepository(d1),
 		announcements: createAnnouncementsRepository(d1, audit),
 		library: createLibraryRepository(d1, audit),
+		libraryTags: createLibraryTagsRepository(d1, audit),
 		submissions: createSubmissionsRepository(d1),
 		email: createEmailRepositories(d1, audit),
 		audit,
@@ -140,6 +142,7 @@ export function createSharedRepositories(adapter: DatabaseAdapter): Repositories
 		calendar: createUnavailableCalendarRepository(),
 		announcements: createUnavailableAnnouncementsRepository(),
 		library: createUnavailableLibraryRepository(),
+		libraryTags: createUnavailableLibraryTagsRepository(),
 		submissions: createUnavailableSubmissionsRepository(),
 		email: createUnavailableEmailRepositories(),
 		audit,
