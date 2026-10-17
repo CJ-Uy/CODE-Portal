@@ -588,6 +588,8 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 
 		async setFile(actor, id, file) {
 			await requireEditable(actor, id);
+			// Only this item's own uploads: another item's object or an avatar must not become (and later be deleted as) this item's file.
+			if (!file.key.startsWith(`library/${id}/`) || file.key.includes("..")) throw new Error("Invalid file key.");
 			// A new file makes the old extracted text (and its index entry) wrong, so it goes until the indexer re-reads.
 			await db
 				.update(libraryItems)

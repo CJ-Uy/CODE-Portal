@@ -22,29 +22,39 @@ const libraryFileTypes = new Map([
 	["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"],
 ]);
 
-type UploadRule = { label: "Image" | "File"; types: Map<string, string>; maxBytes: number };
-const imageRule = (maxBytes: number): UploadRule => ({ label: "Image", types: imageTypes, maxBytes });
+// A declared type is only a claim. Library uploads must also start with the bytes of their format.
+// The other image purposes are served with their stored type and are not sniffed.
+type Magic = { at: number; bytes: number[] }[];
+const ascii = (text: string) => [...text].map((char) => char.charCodeAt(0));
+const ZIP_MAGIC: Magic = [{ at: 0, bytes: [0x50, 0x4b, 0x03, 0x04] }];
+
+const documentMagic = new Map<string, Magic>([
+	["pdf", [{ at: 0, bytes: ascii("%PDF-") }]],
+	["docx", ZIP_MAGIC],
+	["pptx", ZIP_MAGIC],
+	["xlsx", ZIP_MAGIC],
+]);
+
+const imageMagic = new Map<string, Magic>([
+	["gif", [{ at: 0, bytes: ascii("GIF8") }]],
+	["jpg", [{ at: 0, bytes: [0xff, 0xd8, 0xff] }]],
+	["png", [{ at: 0, bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] }]],
+	["webp", [{ at: 0, bytes: ascii("RIFF") }, { at: 8, bytes: ascii("WEBP") }]],
+]);
+
+type UploadRule = { label: "Image" | "File"; types: Map<string, string>; maxBytes: number; magic?: Map<string, Magic> };
+const imageRule = (maxBytes: number, magic?: Map<string, Magic>): UploadRule => ({ label: "Image", types: imageTypes, maxBytes, magic });
 
 const uploadRules = new Map<string, UploadRule>([
 	["avatar", imageRule(MAX_UPLOAD_BYTES)],
 	["event_media", imageRule(MAX_UPLOAD_BYTES)],
 	["link_preview", imageRule(MAX_UPLOAD_BYTES)],
 	["email_image", imageRule(MAX_UPLOAD_BYTES)],
-	["library_image", imageRule(10 * MB)],
-	["library_file", { label: "File", types: libraryFileTypes, maxBytes: 50 * MB }],
+	["library_image", imageRule(10 * MB, imageMagic)],
+	["library_file", { label: "File", types: libraryFileTypes, maxBytes: 50 * MB, magic: documentMagic }],
 ]);
 
 const MAX_MULTIPART_BYTES = Math.max(...[...uploadRules.values()].map((rule) => rule.maxBytes)) + MULTIPART_OVERHEAD_BYTES;
-
-// A declared type is only a claim. Library documents must also start with the bytes of their format;
-// images are served with their stored type and are not sniffed.
-const ZIP_SIGNATURE = [0x50, 0x4b, 0x03, 0x04];
-const fileSignatures = new Map<string, number[]>([
-	["pdf", [0x25, 0x50, 0x44, 0x46, 0x2d]], // %PDF-
-	["docx", ZIP_SIGNATURE],
-	["pptx", ZIP_SIGNATURE],
-	["xlsx", ZIP_SIGNATURE],
-]);
 
 // PDFs and images open in the browser; everything else downloads.
 const inlineExtensions = new Set([...imageTypes.values(), "pdf"]);
@@ -77,6 +87,8 @@ export function createUploadHandlers(dependencies: UploadHandlerDependencies) {
 				return Response.json({ error: "Expected a multipart upload." }, { status: 400 });
 			}
 
+			// ponytail: formData() buffers the whole body (50 MB library files; the isolate limit is about 128 MB).
+			// Past that, switch to presigned direct-to-R2 uploads.
 			const form = await request.formData();
 			if (form.has("key")) {
 				return Response.json({ error: "Upload keys are assigned by the server." }, { status: 400 });
@@ -98,7 +110,7 @@ export function createUploadHandlers(dependencies: UploadHandlerDependencies) {
 			if (file.size > rule.maxBytes) {
 				return Response.json({ error: `${rule.label} exceeds the ${rule.maxBytes / MB} MB limit.` }, { status: 413 });
 			}
-			if (!(await startsWithSignature(file, fileSignatures.get(extension)))) {
+			if (!(await matchesMagic(file, rule.magic?.get(extension)))) {
 				return Response.json({ error: "The file content does not match its type." }, { status: 415 });
 			}
 
@@ -128,8 +140,8 @@ export function createUploadHandlers(dependencies: UploadHandlerDependencies) {
 					return Response.json({ error: "Not authorized to upload email images." }, { status: 403 });
 				}
 				key = `email-images/${actor.memberId}/${createId("image")}.${extension}`;
-			} else {
-				// library_file or library_image: the item's file_key is set by the server from this result, never by the client.
+			} else if (purpose === "library_file" || purpose === "library_image") {
+				// The item's file_key is set by the server from this result, never by the client.
 				const itemId = form.get("itemId");
 				if (typeof itemId !== "string" || !isSafeSegment(itemId)) {
 					return Response.json({ error: "A valid library item is required." }, { status: 400 });
@@ -139,6 +151,8 @@ export function createUploadHandlers(dependencies: UploadHandlerDependencies) {
 				}
 				// ponytail: abandoned drafts leave their files in R2; sweep unreferenced `library/` keys with a cleanup job later.
 				key = `library/${itemId}/${actor.memberId}/${createId(purpose === "library_file" ? "lfile" : "limg")}.${extension}`;
+			} else {
+				return Response.json({ error: "Unknown upload purpose." }, { status: 400 });
 			}
 
 			const result = await dependencies.storage.putObject({ key, body: file, contentType: file.type });
@@ -160,11 +174,14 @@ export function createUploadHandlers(dependencies: UploadHandlerDependencies) {
 				}
 				const object = await dependencies.storage.getObject(key);
 				if (!object.body) return Response.json({ error: "Object not found." }, { status: 404 });
-				const headers = new Headers({ "Content-Type": object.contentType ?? "application/octet-stream" });
+				const headers = new Headers({
+					"Content-Type": object.contentType ?? "application/octet-stream",
+					"X-Content-Type-Options": "nosniff",
+				});
 				if (object.contentLength !== undefined) headers.set("Content-Length", String(object.contentLength));
 				if (namespace.libraryItemId) {
 					headers.set("Content-Disposition", libraryDisposition(new URL(request.url).searchParams, key));
-					headers.set("X-Content-Type-Options", "nosniff");
+					headers.set("Cache-Control", "private, no-store");
 				}
 				return new Response(object.body, { headers });
 			}
@@ -193,22 +210,30 @@ export function createUploadHandlers(dependencies: UploadHandlerDependencies) {
 	};
 }
 
-async function startsWithSignature(file: File, signature: number[] | undefined): Promise<boolean> {
-	if (!signature) return true;
-	const head = new Uint8Array(await file.slice(0, signature.length).arrayBuffer());
-	return signature.every((byte, index) => head[index] === byte);
+async function matchesMagic(file: File, magic: Magic | undefined): Promise<boolean> {
+	if (!magic) return true;
+	const head = new Uint8Array(await file.slice(0, Math.max(...magic.map(({ at, bytes }) => at + bytes.length))).arrayBuffer());
+	return magic.every(({ at, bytes }) => bytes.every((byte, index) => head[at + index] === byte));
 }
 
-/** `inline` for PDFs and images, `attachment` for the rest or on `?download=1`. The name is the `name` query value, kept to plain ASCII. */
+/**
+ * `inline` for PDFs and images, `attachment` for the rest or on `?download=1`.
+ * The name is the `name` query value kept to plain ASCII, and it always ends with the key's own extension:
+ * a caller cannot pick what a download is called on this origin (`name=Setup.exe` on a `.png` key serves `Setup.png`).
+ */
 function libraryDisposition(params: URLSearchParams, key: string): string {
 	const basename = key.slice(key.lastIndexOf("/") + 1);
-	const inline = inlineExtensions.has(basename.slice(basename.lastIndexOf(".") + 1)) && params.get("download") !== "1";
-	const name = (params.get("name") ?? "")
+	const dot = basename.lastIndexOf(".");
+	const extension = dot < 0 ? "" : basename.slice(dot);
+	const inline = inlineExtensions.has(extension.slice(1)) && params.get("download") !== "1";
+	const stem = (params.get("name") ?? "")
 		.replace(/["\\]/g, "")
 		.replace(/[^\x20-\x7e]/gu, "_")
 		.trim()
-		.slice(0, 200);
-	return `${inline ? "inline" : "attachment"}; filename="${name || basename}"`;
+		.slice(0, 200)
+		.replace(/\.[^.]*$/, "")
+		.trim();
+	return `${inline ? "inline" : "attachment"}; filename="${stem ? stem + extension : basename}"`;
 }
 
 function parseNamespace(key: string): { ownerMemberId: string; public: boolean; linkId?: string; libraryItemId?: string } | null {

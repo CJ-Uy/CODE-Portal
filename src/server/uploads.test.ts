@@ -187,7 +187,15 @@ const pdfKey = "library/lib_1/m1/lfile_x.pdf";
 
 const pdfFile = () => new File([new TextEncoder().encode("%PDF-1.7 test")], "a.pdf", { type: "application/pdf" });
 const zipFile = (type: string, name: string) => new File([new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14])], name, { type });
-const pngFile = (bytes = 8) => new File([new Uint8Array(bytes)], "a.png", { type: "image/png" });
+const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const asciiBytes = (text: string) => [...text].map((char) => char.charCodeAt(0));
+/** `magic` at the front, zero-padded to `size` bytes. */
+const withMagic = (magic: number[], size = magic.length) => {
+	const bytes = new Uint8Array(Math.max(size, magic.length));
+	bytes.set(magic);
+	return bytes;
+};
+const pngFile = (size = 8) => new File([withMagic(PNG_MAGIC, size)], "a.png", { type: "image/png" });
 
 function upload(
 	fields: Record<string, string | File>,
@@ -255,6 +263,36 @@ describe("library uploads", () => {
 		expect((await upload({ purpose: "library_file", itemId: "lib_1", file: pngFile() })).status).toBe(415);
 		const text = new File(["hello"], "a.txt", { type: "text/plain" });
 		expect((await upload({ purpose: "library_file", itemId: "lib_1", file: text })).status).toBe(415);
+	});
+
+	it.each([
+		["image/gif", "gif", asciiBytes("GIF89a")],
+		["image/jpeg", "jpg", [0xff, 0xd8, 0xff, 0xe0]],
+		["image/png", "png", PNG_MAGIC],
+		["image/webp", "webp", [...asciiBytes("RIFF"), 0x10, 0, 0, 0, ...asciiBytes("WEBPVP8 ")]],
+	])("accepts a library %s with its magic bytes and rejects other content", async (type, extension, magic) => {
+		const ok = await upload({ purpose: "library_image", itemId: "lib_1", file: new File([withMagic(magic)], `a.${extension}`, { type }) });
+		expect(ok.status).toBe(201);
+		expect((await ok.json() as { key: string }).key).toMatch(new RegExp(`^library/lib_1/m1/limg_[a-z0-9]+\\.${extension}$`));
+
+		const storage = new MemoryStorage();
+		const exe = new File([new Uint8Array([0x4d, 0x5a, 0x90, 0x00, 0x03, 0, 0, 0, 0, 0, 0, 0])], `a.${extension}`, { type });
+		expect((await upload({ purpose: "library_image", itemId: "lib_1", file: exe }, { storage })).status).toBe(415);
+		const text = new File([new TextEncoder().encode("<html><script>alert(1)</script></html>")], `a.${extension}`, { type });
+		expect((await upload({ purpose: "library_image", itemId: "lib_1", file: text }, { storage })).status).toBe(415);
+		expect(storage.keys()).toEqual([]);
+	});
+
+	it("rejects a WebP that has the RIFF header but is not WebP, and an image whose bytes are another image type", async () => {
+		const wav = new File([withMagic([...asciiBytes("RIFF"), 0x10, 0, 0, 0, ...asciiBytes("WAVEfmt ")])], "a.webp", { type: "image/webp" });
+		expect((await upload({ purpose: "library_image", itemId: "lib_1", file: wav })).status).toBe(415);
+		const pngAsJpeg = new File([withMagic(PNG_MAGIC)], "a.jpg", { type: "image/jpeg" });
+		expect((await upload({ purpose: "library_image", itemId: "lib_1", file: pngAsJpeg })).status).toBe(415);
+	});
+
+	it("leaves the existing image purposes unsniffed, as before", async () => {
+		const text = new File(["not really an image"], "a.png", { type: "image/png" });
+		expect((await upload({ purpose: "avatar", file: text })).status).toBe(201);
 	});
 
 	it("rejects library uploads over 50 MB and images over 10 MB", async () => {
@@ -350,6 +388,37 @@ describe("library file access", () => {
 		expect((await handlers.object(get(png), png)).headers.get("content-disposition")).toBe('inline; filename="limg_x.png"');
 		expect((await handlers.object(get(docx), docx)).headers.get("content-disposition")).toBe('attachment; filename="lfile_y.docx"');
 		expect((await handlers.object(get(`${docx}?name=Brief.docx&download=1`), docx)).headers.get("content-disposition")).toBe('attachment; filename="Brief.docx"');
+	});
+
+	it("pins the served extension to the key's: a caller cannot name a download Setup.exe", async () => {
+		const png = "library/lib_1/m1/limg_x.png";
+		const docx = "library/lib_1/m1/lfile_y.docx";
+		const storage = new MemoryStorage();
+		await storage.putObject({ key: png, body: "png", contentType: "image/png" });
+		await storage.putObject({ key: docx, body: "PK", contentType: DOCX });
+		await storage.putObject({ key: pdfKey, body: "%PDF-1.7 test", contentType: "application/pdf" });
+		const handlers = createHandlers(libraryMember, storage);
+		const disposition = async (key: string, query: string) =>
+			(await handlers.object(get(`${key}?${query}`), key)).headers.get("content-disposition");
+
+		expect(await disposition(png, "download=1&name=Setup.exe")).toBe('attachment; filename="Setup.png"');
+		expect(await disposition(docx, "download=1&name=Report.jar")).toBe('attachment; filename="Report.docx"');
+		expect(await disposition(png, "name=Setup.exe.")).toBe('inline; filename="Setup.exe.png"'); // the last extension is always the key's
+		expect(await disposition(png, "name=a.b.exe")).toBe('inline; filename="a.b.png"');
+		expect(await disposition(pdfKey, "name=Module%201.pdf")).toBe('inline; filename="Module 1.pdf"');
+		expect(await disposition(pdfKey, "name=Module%201")).toBe('inline; filename="Module 1.pdf"');
+		expect(await disposition(pdfKey, "name=.exe")).toBe('inline; filename="lfile_x.pdf"');
+		expect(await disposition(pdfKey, "")).toBe('inline; filename="lfile_x.pdf"');
+	});
+
+	it("marks every GET nosniff and keeps library files out of shared caches", async () => {
+		const storage = await seededStorage();
+		await storage.putObject({ key: "avatars/other/avatar.png", body: "image", contentType: "image/png" });
+		const library = await createHandlers(libraryMember, storage).object(get(pdfKey), pdfKey);
+		expect(library.headers.get("x-content-type-options")).toBe("nosniff");
+		expect(library.headers.get("cache-control")).toBe("private, no-store");
+		const avatar = await createHandlers(libraryMember, storage).object(get("avatars/other/avatar.png"), "avatars/other/avatar.png");
+		expect(avatar.headers.get("x-content-type-options")).toBe("nosniff");
 	});
 
 	it("sanitizes the filename: quotes, backslashes, control characters and non-ASCII", async () => {

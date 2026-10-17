@@ -239,12 +239,30 @@ describe("library repository: drafts and edits", () => {
 
 	it("setFile records the file for the owner, clears stale extracted text, and refuses others", async () => {
 		const id = await insertItem({ createdBy: "owner", extractedText: "stalecontent" });
-		const file = { key: "library/x/owner/new.pdf", name: "new.pdf", type: "application/pdf", bytes: 10 };
+		const file = { key: `library/${id}/owner/new.pdf`, name: "new.pdf", type: "application/pdf", bytes: 10 };
 		await expect(repo.setFile(actors.other, id, file)).rejects.toThrow();
 		await repo.setFile(actors.owner, id, file);
 		const [row] = await db.select().from(libraryItems).where(eq(libraryItems.id, id));
 		expect(row).toMatchObject({ fileKey: file.key, fileName: "new.pdf", fileType: "application/pdf", fileBytes: 10, extractedText: "" });
 		expect(row.searchText).not.toContain("stalecontent");
+	});
+
+	it("setFile refuses a key outside the item's own library/<id>/ prefix", async () => {
+		const id = await insertItem({ createdBy: "owner", fileKey: "library/keep/owner/old.pdf" });
+		const file = (key: string) => ({ key, name: "x.pdf", type: "application/pdf", bytes: 10 });
+		for (const key of [
+			"library/other_item/owner/x.pdf", // another item's object
+			"avatars/owner/avatar.png", // a non-library object
+			`library/${id}x/owner/x.pdf`, // a prefix lookalike
+			`library/${id}/../other_item/owner/x.pdf`, // traversal back out
+			`library/${id}`, // no object under the prefix
+			"",
+		]) {
+			await expect(repo.setFile(actors.owner, id, file(key))).rejects.toThrow("Invalid file key.");
+		}
+		const [row] = await db.select().from(libraryItems).where(eq(libraryItems.id, id));
+		expect(row.fileKey).toBe("library/keep/owner/old.pdf");
+		await expect(repo.setFile(actors.owner, id, file(`library/${id}/owner/x.pdf`))).resolves.toBeUndefined();
 	});
 
 	it("lists every status of the actor's own items", async () => {
