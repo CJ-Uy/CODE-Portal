@@ -37,7 +37,7 @@ import { notify } from "./notifications";
 import { eligibleMemberIds, eventRole } from "./survey-access";
 import { pageLimit } from "./types";
 
-type SurveyDb = DrizzleD1Database<typeof schema>;
+export type SurveyDb = DrizzleD1Database<typeof schema>;
 
 // D1 binds at most 100 parameters per statement, and drizzle can bind one per column per row.
 const D1_MAX_PARAMS = 100;
