@@ -4,6 +4,7 @@ import * as schema from "@/db/schema";
 import { crsEvents } from "@/db/schema";
 import { uploadsContract } from "@/db/contract/uploads";
 import { createAuditRepository } from "@/db/repositories/audit";
+import { createLibraryObjectAccess } from "@/db/repositories/library-access";
 import { createLinksRepository } from "@/db/repositories/links";
 import type { DeployEnv } from "@/server/env";
 import type { StorageAdapter } from "@/storage/types";
@@ -39,6 +40,7 @@ export function createUploadsInternalHandlers({
 		canEditLink: async (actor, linkId) => {
 			return linksRepository.canEditLink(actor, linkId);
 		},
+		...createLibraryObjectAccess(db),
 	});
 
 	return {

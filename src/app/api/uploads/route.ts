@@ -1,6 +1,8 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { getRepositories } from "@/db";
 import { crsEvents } from "@/db/schema";
+import { createLibraryObjectAccess } from "@/db/repositories/library-access";
+import type { Db } from "@/db/repositories/library";
 import { getDb } from "@/db/client";
 import { getActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
@@ -41,6 +43,7 @@ async function createHandlers() {
 			const { links } = await getRepositories();
 			return links.canEditLink(actor, linkId);
 		},
+		...createLibraryObjectAccess(getDb() as unknown as Db),
 	});
 }
 

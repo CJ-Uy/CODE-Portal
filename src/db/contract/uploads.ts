@@ -4,7 +4,7 @@ import { operation } from "./common";
 export const uploadsContract = {
 	put: operation({
 		input: z.object({
-			purpose: z.enum(["avatar", "event_media", "link_preview", "email_image"]),
+			purpose: z.enum(["avatar", "event_media", "link_preview", "email_image", "library_file", "library_image"]),
 			contentType: z.string(),
 			size: z.number().int().positive(),
 		}),

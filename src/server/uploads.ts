@@ -2,21 +2,70 @@ import { createId } from "@/lib/ids";
 import { can, type Actor } from "@/server/auth/permissions";
 import type { StorageAdapter } from "@/storage/types";
 
-export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
-const MAX_MULTIPART_BYTES = MAX_UPLOAD_BYTES + 1024 * 1024;
+const MB = 1024 * 1024;
+export const MAX_UPLOAD_BYTES = 5 * MB;
+// The purpose travels in the multipart body, so the pre-parse size gate can only use the largest limit.
+// The slack covers multipart boundaries and the small text fields around the file.
+const MULTIPART_OVERHEAD_BYTES = 64 * 1024;
 
-const allowedContentTypes = new Map([
+const imageTypes = new Map([
 	["image/gif", "gif"],
 	["image/jpeg", "jpg"],
 	["image/png", "png"],
 	["image/webp", "webp"],
 ]);
 
+const libraryFileTypes = new Map([
+	["application/pdf", "pdf"],
+	["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx"],
+	["application/vnd.openxmlformats-officedocument.presentationml.presentation", "pptx"],
+	["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"],
+]);
+
+// A declared type is only a claim. Library uploads must also start with the bytes of their format.
+// The other image purposes are served with their stored type and are not sniffed.
+type Magic = { at: number; bytes: number[] }[];
+const ascii = (text: string) => [...text].map((char) => char.charCodeAt(0));
+const ZIP_MAGIC: Magic = [{ at: 0, bytes: [0x50, 0x4b, 0x03, 0x04] }];
+
+const documentMagic = new Map<string, Magic>([
+	["pdf", [{ at: 0, bytes: ascii("%PDF-") }]],
+	["docx", ZIP_MAGIC],
+	["pptx", ZIP_MAGIC],
+	["xlsx", ZIP_MAGIC],
+]);
+
+const imageMagic = new Map<string, Magic>([
+	["gif", [{ at: 0, bytes: ascii("GIF8") }]],
+	["jpg", [{ at: 0, bytes: [0xff, 0xd8, 0xff] }]],
+	["png", [{ at: 0, bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] }]],
+	["webp", [{ at: 0, bytes: ascii("RIFF") }, { at: 8, bytes: ascii("WEBP") }]],
+]);
+
+type UploadRule = { label: "Image" | "File"; types: Map<string, string>; maxBytes: number; magic?: Map<string, Magic> };
+const imageRule = (maxBytes: number, magic?: Map<string, Magic>): UploadRule => ({ label: "Image", types: imageTypes, maxBytes, magic });
+
+const uploadRules = new Map<string, UploadRule>([
+	["avatar", imageRule(MAX_UPLOAD_BYTES)],
+	["event_media", imageRule(MAX_UPLOAD_BYTES)],
+	["link_preview", imageRule(MAX_UPLOAD_BYTES)],
+	["email_image", imageRule(MAX_UPLOAD_BYTES)],
+	["library_image", imageRule(10 * MB, imageMagic)],
+	["library_file", { label: "File", types: libraryFileTypes, maxBytes: 50 * MB, magic: documentMagic }],
+]);
+
+const MAX_MULTIPART_BYTES = Math.max(...[...uploadRules.values()].map((rule) => rule.maxBytes)) + MULTIPART_OVERHEAD_BYTES;
+
+// PDFs and images open in the browser; everything else downloads.
+const inlineExtensions = new Set([...imageTypes.values(), "pdf"]);
+
 type UploadHandlerDependencies = {
 	getActor(request: Request): Promise<Actor | null>;
 	storage: StorageAdapter;
 	canPostEvent(actor: Actor, eventId: string): Promise<boolean>;
 	canEditLink(actor: Actor, linkId: string): Promise<boolean>;
+	canEditLibraryItem(actor: Actor, itemId: string): Promise<boolean>;
+	canReadLibraryObject(actor: Actor, itemId: string): Promise<boolean>;
 };
 
 export function createUploadHandlers(dependencies: UploadHandlerDependencies) {
@@ -30,14 +79,16 @@ export function createUploadHandlers(dependencies: UploadHandlerDependencies) {
 			}
 			const contentLength = Number(request.headers.get("content-length"));
 			if (Number.isFinite(contentLength) && contentLength > MAX_MULTIPART_BYTES) {
-				return Response.json({ error: "Image exceeds the 5 MB limit." }, { status: 413 });
+				return Response.json({ error: "Upload exceeds the size limit." }, { status: 413 });
 			}
 
 			const contentType = request.headers.get("content-type") ?? "";
 			if (!contentType.includes("multipart/form-data")) {
-				return Response.json({ error: "Expected a multipart image upload." }, { status: 400 });
+				return Response.json({ error: "Expected a multipart upload." }, { status: 400 });
 			}
 
+			// ponytail: formData() buffers the whole body (50 MB library files; the isolate limit is about 128 MB).
+			// Past that, switch to presigned direct-to-R2 uploads.
 			const form = await request.formData();
 			if (form.has("key")) {
 				return Response.json({ error: "Upload keys are assigned by the server." }, { status: 400 });
@@ -47,15 +98,22 @@ export function createUploadHandlers(dependencies: UploadHandlerDependencies) {
 				return Response.json({ error: "Expected multipart field named file." }, { status: 400 });
 			}
 
-			const extension = allowedContentTypes.get(file.type);
-			if (!extension) {
-				return Response.json({ error: "Unsupported image type." }, { status: 415 });
+			const purpose = form.get("purpose");
+			const rule = typeof purpose === "string" ? uploadRules.get(purpose) : undefined;
+			if (!rule) {
+				return Response.json({ error: "Unknown upload purpose." }, { status: 400 });
 			}
-			if (file.size > MAX_UPLOAD_BYTES) {
-				return Response.json({ error: "Image exceeds the 5 MB limit." }, { status: 413 });
+			const extension = rule.types.get(file.type);
+			if (!extension) {
+				return Response.json({ error: `Unsupported ${rule.label.toLowerCase()} type.` }, { status: 415 });
+			}
+			if (file.size > rule.maxBytes) {
+				return Response.json({ error: `${rule.label} exceeds the ${rule.maxBytes / MB} MB limit.` }, { status: 413 });
+			}
+			if (!(await matchesMagic(file, rule.magic?.get(extension)))) {
+				return Response.json({ error: "The file content does not match its type." }, { status: 415 });
 			}
 
-			const purpose = form.get("purpose");
 			let key: string;
 			if (purpose === "avatar") {
 				key = `avatars/${actor.memberId}/${createId("avatar")}.${extension}`;
@@ -82,6 +140,17 @@ export function createUploadHandlers(dependencies: UploadHandlerDependencies) {
 					return Response.json({ error: "Not authorized to upload email images." }, { status: 403 });
 				}
 				key = `email-images/${actor.memberId}/${createId("image")}.${extension}`;
+			} else if (purpose === "library_file" || purpose === "library_image") {
+				// The item's file_key is set by the server from this result, never by the client.
+				const itemId = form.get("itemId");
+				if (typeof itemId !== "string" || !isSafeSegment(itemId)) {
+					return Response.json({ error: "A valid library item is required." }, { status: 400 });
+				}
+				if (!(await dependencies.canEditLibraryItem(actor, itemId))) {
+					return Response.json({ error: "Not authorized to upload to this library item." }, { status: 403 });
+				}
+				// ponytail: abandoned drafts leave their files in R2; sweep unreferenced `library/` keys with a cleanup job later.
+				key = `library/${itemId}/${actor.memberId}/${createId(purpose === "library_file" ? "lfile" : "limg")}.${extension}`;
 			} else {
 				return Response.json({ error: "Unknown upload purpose." }, { status: 400 });
 			}
@@ -98,21 +167,37 @@ export function createUploadHandlers(dependencies: UploadHandlerDependencies) {
 				if (!namespace.public) {
 					const actor = await dependencies.getActor(request);
 					if (!actor) return Response.json({ error: "Authentication required." }, { status: 401 });
+					// 404, not 403: a member who cannot read the item learns nothing about its files.
+					if (namespace.libraryItemId && !(await dependencies.canReadLibraryObject(actor, namespace.libraryItemId))) {
+						return Response.json({ error: "Object not found." }, { status: 404 });
+					}
 				}
 				const object = await dependencies.storage.getObject(key);
 				if (!object.body) return Response.json({ error: "Object not found." }, { status: 404 });
-				return new Response(object.body, {
-					headers: { "Content-Type": object.contentType ?? "application/octet-stream" },
+				const headers = new Headers({
+					"Content-Type": object.contentType ?? "application/octet-stream",
+					"X-Content-Type-Options": "nosniff",
 				});
+				if (object.contentLength !== undefined) headers.set("Content-Length", String(object.contentLength));
+				if (namespace.libraryItemId) {
+					headers.set("Content-Disposition", libraryDisposition(new URL(request.url).searchParams, key));
+					headers.set("Cache-Control", "private, no-store");
+				}
+				return new Response(object.body, { headers });
 			}
 
 			const actor = await dependencies.getActor(request);
 			if (!actor) return Response.json({ error: "Authentication required." }, { status: 401 });
 
 			if (request.method === "DELETE") {
-				const authorized = namespace.linkId
-					? can(actor, "link:moderate") || await dependencies.canEditLink(actor, namespace.linkId)
-					: namespace.ownerMemberId === actor.memberId || can(actor, "member:manage");
+				let authorized: boolean;
+				if (namespace.libraryItemId) {
+					authorized = can(actor, "library:manage");
+				} else if (namespace.linkId) {
+					authorized = can(actor, "link:moderate") || await dependencies.canEditLink(actor, namespace.linkId);
+				} else {
+					authorized = namespace.ownerMemberId === actor.memberId || can(actor, "member:manage");
+				}
 				if (!authorized) {
 					return Response.json({ error: "Not authorized to delete this object." }, { status: 403 });
 				}
@@ -125,7 +210,33 @@ export function createUploadHandlers(dependencies: UploadHandlerDependencies) {
 	};
 }
 
-function parseNamespace(key: string): { ownerMemberId: string; public: boolean; linkId?: string } | null {
+async function matchesMagic(file: File, magic: Magic | undefined): Promise<boolean> {
+	if (!magic) return true;
+	const head = new Uint8Array(await file.slice(0, Math.max(...magic.map(({ at, bytes }) => at + bytes.length))).arrayBuffer());
+	return magic.every(({ at, bytes }) => bytes.every((byte, index) => head[at + index] === byte));
+}
+
+/**
+ * `inline` for PDFs and images, `attachment` for the rest or on `?download=1`.
+ * The name is the `name` query value kept to plain ASCII, and it always ends with the key's own extension:
+ * a caller cannot pick what a download is called on this origin (`name=Setup.exe` on a `.png` key serves `Setup.png`).
+ */
+function libraryDisposition(params: URLSearchParams, key: string): string {
+	const basename = key.slice(key.lastIndexOf("/") + 1);
+	const dot = basename.lastIndexOf(".");
+	const extension = dot < 0 ? "" : basename.slice(dot);
+	const inline = inlineExtensions.has(extension.slice(1)) && params.get("download") !== "1";
+	const stem = (params.get("name") ?? "")
+		.replace(/["\\]/g, "")
+		.replace(/[^\x20-\x7e]/gu, "_")
+		.trim()
+		.slice(0, 200)
+		.replace(/\.[^.]*$/, "")
+		.trim();
+	return `${inline ? "inline" : "attachment"}; filename="${stem ? stem + extension : basename}"`;
+}
+
+function parseNamespace(key: string): { ownerMemberId: string; public: boolean; linkId?: string; libraryItemId?: string } | null {
 	if (key.includes("..") || key.startsWith("/")) return null;
 	const parts = key.split("/");
 	if (parts[0] === "avatars" && parts.length === 3 && parts.every(isSafeSegment)) {
@@ -139,6 +250,9 @@ function parseNamespace(key: string): { ownerMemberId: string; public: boolean; 
 	}
 	if (parts[0] === "email-images" && parts.length === 3 && parts.every(isSafeSegment)) {
 		return { ownerMemberId: parts[1], public: true };
+	}
+	if (parts[0] === "library" && parts.length === 4 && parts.every(isSafeSegment)) {
+		return { ownerMemberId: parts[2], public: false, libraryItemId: parts[1] };
 	}
 	return null;
 }

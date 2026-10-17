@@ -27,7 +27,7 @@ export class LocalFileStorageAdapter implements StorageAdapter {
 		return { key: input.key };
 	}
 
-	async getObject(key: string): Promise<{ body: ReadableStream | null; contentType?: string }> {
+	async getObject(key: string): ReturnType<StorageAdapter["getObject"]> {
 		const fs = await import("node:fs/promises");
 		const path = await this.pathForKey(key);
 		try {
@@ -35,7 +35,7 @@ export class LocalFileStorageAdapter implements StorageAdapter {
 				fs.readFile(path),
 				fs.readFile(`${path}.content-type`, "utf8").catch(() => undefined),
 			]);
-			return { body: arrayBufferToStream(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)), contentType };
+			return { body: arrayBufferToStream(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)), contentType, contentLength: buffer.byteLength };
 		} catch {
 			return { body: null };
 		}

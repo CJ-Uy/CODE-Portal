@@ -17,6 +17,7 @@ export const FEATURE_KEYS = [
 	"leaderboard",
 	"email",
 	"ments",
+	"librarySmartSearch",
 ] as const;
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
@@ -34,6 +35,7 @@ export function featureFlagsFromConfig(config: AppConfig): FeatureFlags {
 		leaderboard: config.FEATURE_LEADERBOARD,
 		email: config.FEATURE_EMAIL,
 		ments: config.FEATURE_MENTS,
+		librarySmartSearch: config.FEATURE_LIBRARY_SMART_SEARCH,
 	};
 }
 

@@ -37,6 +37,7 @@ export const updateMemberProfileInputSchema = z.object({
 	batch: z.string().trim().max(20).nullable().optional(),
 	birthday: z.iso.date().nullable().optional(),
 	birthdayPrivate: z.boolean().optional(),
+	librarySmartSearch: z.boolean().optional(),
 });
 
 export type UpdateMemberProfileInput = z.infer<typeof updateMemberProfileInputSchema>;

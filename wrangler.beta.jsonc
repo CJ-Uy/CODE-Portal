@@ -25,6 +25,8 @@
 	"ai": {
 		"binding": "AI"
 	},
+	// Smart search (library). Create the index before deploying: 1024 dims (bge-m3), cosine.
+	"vectorize": [{ "binding": "VECTORIZE", "index_name": "code-portal-beta-library" }],
 	"services": [
 		{
 			"binding": "WORKER_SELF_REFERENCE",

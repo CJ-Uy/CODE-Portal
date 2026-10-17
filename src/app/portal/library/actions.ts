@@ -6,16 +6,6 @@ import { getRepositories } from "@/db";
 import { requireActor } from "@/server/auth/actor";
 import { assertFeatureEnabled } from "@/server/features";
 
-export async function toggleFavoriteAction(formData: FormData): Promise<void> {
-	assertFeatureEnabled("library");
-	const actor = await requireActor();
-	const itemId = z.string().min(1).parse(formData.get("itemId"));
-	const repositories = await getRepositories();
-	await repositories.library.toggleFavorite(actor, itemId);
-	revalidatePath(`/portal/library/${itemId}`);
-	revalidatePath("/portal/library/lists");
-}
-
 export async function addCommentAction(formData: FormData): Promise<void> {
 	assertFeatureEnabled("library");
 	const actor = await requireActor();
@@ -39,6 +29,16 @@ export async function setCommentHiddenAction(formData: FormData): Promise<void> 
 	revalidatePath(`/portal/library/${itemId}`);
 }
 
+/** The member's "Smart search" switch in the library filters. Remembered on their member row; ?smart=1|0 still wins per request. */
+export async function setSmartSearchAction(on: boolean): Promise<void> {
+	assertFeatureEnabled("library");
+	const actor = await requireActor();
+	const librarySmartSearch = z.boolean().parse(on);
+	const repositories = await getRepositories();
+	await repositories.members.updateProfile(actor, actor.memberId, { librarySmartSearch });
+	revalidatePath("/portal/library", "layout");
+}
+
 export async function requestAccessAction(formData: FormData): Promise<void> {
 	assertFeatureEnabled("library");
 	const actor = await requireActor();
@@ -46,34 +46,4 @@ export async function requestAccessAction(formData: FormData): Promise<void> {
 	const repositories = await getRepositories();
 	await repositories.library.requestAccess(actor, itemId);
 	revalidatePath("/portal/library");
-}
-
-export async function createListAction(formData: FormData): Promise<void> {
-	assertFeatureEnabled("library");
-	const actor = await requireActor();
-	const name = z.string().trim().min(1).max(60).parse(formData.get("name"));
-	const color = z.string().trim().min(1).max(20).parse(formData.get("color") || "#0c315c");
-	const repositories = await getRepositories();
-	await repositories.library.createList(actor, { name, color });
-	revalidatePath("/portal/library/lists");
-}
-
-export async function addToListAction(formData: FormData): Promise<void> {
-	assertFeatureEnabled("library");
-	const actor = await requireActor();
-	const listId = z.string().min(1).parse(formData.get("listId"));
-	const itemId = z.string().min(1).parse(formData.get("itemId"));
-	const repositories = await getRepositories();
-	await repositories.library.addToList(actor, { listId, itemId });
-	revalidatePath("/portal/library/lists");
-}
-
-export async function removeFromListAction(formData: FormData): Promise<void> {
-	assertFeatureEnabled("library");
-	const actor = await requireActor();
-	const listId = z.string().min(1).parse(formData.get("listId"));
-	const itemId = z.string().min(1).parse(formData.get("itemId"));
-	const repositories = await getRepositories();
-	await repositories.library.removeFromList(actor, { listId, itemId });
-	revalidatePath("/portal/library/lists");
 }

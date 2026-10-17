@@ -6,6 +6,7 @@ import {
 	eventDebriefs,
 	eventForumPosts,
 	libraryItems,
+	libraryTags,
 	linkDailyStats,
 	linkHourlyStats,
 	members,
@@ -27,6 +28,7 @@ import {
 	termMemberRoster,
 	terms,
 } from "@/db/schema";
+import { TAG_GROUPS } from "@/lib/library/taxonomy";
 import { RESERVED_SLUG_DEFAULTS } from "@/lib/links";
 
 const now = new Date("2026-06-18T00:00:00.000Z");
@@ -48,64 +50,74 @@ export const seedPointTypes: InferInsertModel<typeof pointTypes>[] = [
 	{ id: "pt_project_lead", key: "project_lead", label: "Project Lead", active: true, position: 2 },
 ];
 
+// Synthetic content only: made-up titles and text, one item per format. Never paste real
+// member work or client material into this repository.
 export const seedLibraryItems: InferInsertModel<typeof libraryItems>[] = [
 	{
-		id: "lib_onboarding",
-		kind: "article",
-		confidentiality: "public",
-		category: "Onboarding",
-		title: "What CODE retention actually measures",
-		dek: "A plain-language guide to points, retained status, and why events matter.",
-		readMinutes: 6,
-		abstract: "Retention is how CODE keeps track of active membership across a term.\n\nThis piece explains the moving parts without the jargon.",
-		sectionsJson: [
-			{ heading: "Points", body: "You earn points by attending approved events and through manual records logged by retention admins." },
-			{ heading: "Retained status", body: "Crossing the term threshold marks you retained for that term." },
-		],
-		componentsJson: [
-			{ name: "Term", definition: "A scoped period retention is measured against.", example: "AY 2026 Sem 1" },
-		],
-		questionsJson: ["What happens if I miss the threshold?", "Do casual events count?"],
-		referencesJson: ["CODE member handbook, section 4"],
-		topicsJson: ["retention", "onboarding", "points"],
-		createdBy: "mem_demo_admin",
-	},
-	{
-		id: "lib_events_playbook",
-		kind: "case_study",
+		id: "lib_seed_page",
+		kind: "guide",
+		format: "page",
+		source: "code",
+		status: "published",
 		confidentiality: "members",
-		category: "Operations",
-		title: "Running a smooth event check-in",
-		dek: "How organizers cut check-in lines using QR codes.",
-		readMinutes: 4,
-		abstract: "A short retro on the QR check-in flow and what made queues move faster.",
-		sectionsJson: [
-			{ heading: "Before", body: "Paper sign-in sheets created bottlenecks at the door." },
-			{ heading: "After", body: "Members show a short-lived QR; organizers scan and move on." },
+		title: "Running a first workshop warm-up",
+		dek: "A short, made-up guide to opening a session so people start talking.",
+		readMinutes: 2,
+		authorsJson: [{ name: "Demo Admin", memberId: "mem_demo_admin" }],
+		blocksJson: [
+			{ id: "blk_seed_p1", type: "heading", props: { text: "Why warm up", level: 2 } },
+			{ id: "blk_seed_p2", type: "text", props: { text: "A good warm-up lowers the cost of the first answer. Keep it under five minutes." } },
+			{
+				id: "blk_seed_p3",
+				type: "list",
+				props: { ordered: true, items: ["Ask one easy question", "Let pairs compare answers", "Invite two volunteers to share"] },
+			},
+			{ id: "blk_seed_p4", type: "callout", props: { tone: "tip", text: "Reuse the same warm-up for a whole term so the group knows what to expect." } },
 		],
-		componentsJson: [],
-		questionsJson: ["How do we handle members without phones?"],
-		referencesJson: [],
-		topicsJson: ["events", "operations", "qr"],
 		createdBy: "mem_demo_admin",
 	},
 	{
-		id: "lib_internal_notes",
-		kind: "article",
-		confidentiality: "confidential",
-		category: "Internal",
-		title: "Officer transition notes",
-		dek: "Confidential handover details for incoming officers.",
-		readMinutes: 8,
-		abstract: "Internal-only context for the officer transition. Visible to publishers and super admins.",
-		sectionsJson: [{ heading: "Accounts", body: "Where shared credentials live and how access is rotated." }],
-		componentsJson: [],
-		questionsJson: [],
-		referencesJson: [],
-		topicsJson: ["internal", "officers"],
+		id: "lib_seed_file",
+		kind: "template",
+		format: "file",
+		source: "code",
+		status: "published",
+		confidentiality: "members",
+		title: "Sample session agenda template",
+		dek: "A made-up one-page agenda template with time boxes.",
+		readMinutes: 1,
+		authorsJson: [{ name: "Demo Admin", memberId: "mem_demo_admin" }],
+		fileKey: "library/lib_seed_file/mem_demo_admin/sample-session-agenda.pdf",
+		fileName: "sample-session-agenda.pdf",
+		fileType: "application/pdf",
+		fileBytes: 48213,
+		year: 2026,
+		createdBy: "mem_demo_admin",
+	},
+	{
+		id: "lib_seed_link",
+		kind: "website",
+		format: "link",
+		source: "outside",
+		status: "published",
+		confidentiality: "members",
+		title: "Example youth organization handbook",
+		dek: "A made-up outside website about running a student organization.",
+		readMinutes: 1,
+		authorsJson: [{ name: "Example Author" }],
+		url: "https://example.com/youth-org-handbook",
+		publicReadiness: "not_eligible",
 		createdBy: "mem_demo_admin",
 	},
 ];
+
+/** The starting tag vocabulary: one row per name in TAG_GROUPS. The id is a readable key, the slug is the lookup key. */
+export const seedLibraryTags: InferInsertModel<typeof libraryTags>[] = TAG_GROUPS.flatMap(({ group, tags }) =>
+	tags.map((name) => {
+		const slug = name.toLowerCase().replace(/\s+/g, " ").trim();
+		return { id: `ltg_${slug.replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")}`, name, slug, groupName: group };
+	}),
+);
 
 export const seedMembers: InferInsertModel<typeof members>[] = [
 	{ id: "mem_demo_admin", email: "admin@example.com", name: "Demo Admin", fullName: "Demo Admin", batch: "2026", status: "active" },

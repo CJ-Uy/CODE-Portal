@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowRight, BookOpen, CalendarDays, ClipboardCheck, Link2, Megaphone, MessageSquare } from "lucide-react";
 import { getRepositories } from "@/db";
 import { EventScanPanel } from "@/components/event-scan-panel";
+import { LibraryItemCard } from "@/components/library/library-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,7 +36,12 @@ export default async function PortalOverviewPage() {
 	const [summary, announcements, libraryItems, scanEvents, terms] = await Promise.all([
 		repositories.overview.getSummary(actor).catch(() => EMPTY_SUMMARY),
 		flags.announcements ? repositories.announcements.listForMember(actor, { limit: 3 }).catch(() => []) : Promise.resolve([]),
-		flags.library ? repositories.library.listItems(actor, { limit: 3 }).catch(() => []) : Promise.resolve([]),
+		flags.library
+			? repositories.library
+					.search(actor, { sort: "newest", limit: 3 })
+					.then((result) => result.cards)
+					.catch(() => [])
+			: Promise.resolve([]),
 		repositories.events.listPublished(actor, { limit: 100 }).catch(() => []),
 		repositories.retention.listTerms(actor).catch(() => []),
 	]);
@@ -190,16 +196,7 @@ export default async function PortalOverviewPage() {
 						{libraryItems.length === 0 ? (
 							<p className="text-sm text-muted-foreground">No library items yet.</p>
 						) : (
-							libraryItems.map((item) => (
-								<Link
-									key={item.id}
-									href={`/portal/library/${item.id}`}
-									className="group grid gap-1 rounded-lg border border-border p-3 transition-colors hover:border-accent"
-								>
-									<span className="text-xs text-muted-foreground">{item.category}</span>
-									<span className="text-sm font-medium leading-snug group-hover:text-accent">{item.title}</span>
-								</Link>
-							))
+							libraryItems.map((item) => <LibraryItemCard key={item.id} card={item} compact />)
 						)}
 					</CardContent>
 				</Card>
