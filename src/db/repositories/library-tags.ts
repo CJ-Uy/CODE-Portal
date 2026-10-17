@@ -14,6 +14,8 @@ export type LibraryTag = { id: string; name: string; groupName: string; itemCoun
 export type LibraryTagsRepository = {
 	/** Ordered by group, then name. itemCount only counts items every member can browse (published, not confidential). */
 	listTags(): Promise<LibraryTag[]>;
+	/** library:moderate. Same order as listTags, but itemCount counts every item carrying the tag (any status, any confidentiality), so a moderator sees whether a tag is still in use before deleting it. */
+	listTagsForModeration(actor: Actor): Promise<LibraryTag[]>;
 	/** Any member. A name that slugs to an existing tag returns that tag. New tags start in "Ungrouped". */
 	createTag(actor: Actor, name: string): Promise<LibraryTag>;
 	/** Owner or moderator of the item. Replaces the item's tags and refreshes its search text. */
@@ -33,6 +35,9 @@ const DEFAULT_GROUP = "Ungrouped";
 // Plain SQL for the same reason as library.ts: drizzle strips table prefixes from columns in a single-table select list.
 const itemCountOf = sql<number>`(SELECT COUNT(*) FROM library_item_tags it INNER JOIN library_items i ON i.id = it.item_id WHERE it.tag_id = library_tags.id AND i.status = 'published' AND i.confidentiality <> 'confidential')`.mapWith(Number);
 
+// Moderators weigh a delete or a merge by every item that carries the tag, drafts and confidential ones included.
+const allItemsCountOf = sql<number>`(SELECT COUNT(*) FROM library_item_tags it WHERE it.tag_id = library_tags.id)`.mapWith(Number);
+
 /** Trimmed, inner whitespace collapsed. Case is kept for display; the slug lowercases it. */
 function cleanName(name: string): string {
 	const clean = name.trim().replace(/\s+/g, " ");
@@ -48,9 +53,9 @@ function requireModerator(actor: Actor): void {
 }
 
 export function createLibraryTagsRepository(db: Db, audit: AuditRepository): LibraryTagsRepository {
-	async function selectTags(where?: SQL): Promise<LibraryTag[]> {
+	async function selectTags(where?: SQL, itemCount: SQL<number> = itemCountOf): Promise<LibraryTag[]> {
 		return db
-			.select({ id: libraryTags.id, name: libraryTags.name, groupName: libraryTags.groupName, itemCount: itemCountOf })
+			.select({ id: libraryTags.id, name: libraryTags.name, groupName: libraryTags.groupName, itemCount })
 			.from(libraryTags)
 			.where(where)
 			.orderBy(asc(sql`lower(${libraryTags.groupName})`), asc(sql`lower(${libraryTags.name})`), asc(libraryTags.id));
@@ -74,6 +79,11 @@ export function createLibraryTagsRepository(db: Db, audit: AuditRepository): Lib
 	return {
 		async listTags() {
 			return selectTags();
+		},
+
+		async listTagsForModeration(actor) {
+			requireModerator(actor);
+			return selectTags(undefined, allItemsCountOf);
 		},
 
 		async createTag(actor, name) {
@@ -179,6 +189,7 @@ export function createUnavailableLibraryTagsRepository(): LibraryTagsRepository 
 	};
 	return {
 		listTags: unavailable,
+		listTagsForModeration: unavailable,
 		createTag: unavailable,
 		setItemTags: unavailable,
 		renameTag: unavailable,

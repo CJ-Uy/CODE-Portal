@@ -148,9 +148,9 @@ describe("list actions: what reaches the repository", () => {
 });
 
 describe("list actions: a moderator restoring a list they do not belong to", () => {
-	it("is sent to the lists page with a notice, because the restored list is closed to them again", async () => {
+	it("is sent to the moderation page's Taken down tab with a notice, because the restored list is closed to them again", async () => {
 		mocks.getList.mockResolvedValueOnce({ role: "viewer" });
-		await expect(restoreListAction({ listId: "lst_1" })).rejects.toThrow("REDIRECT /portal/library/lists?notice=restored");
+		await expect(restoreListAction({ listId: "lst_1" })).rejects.toThrow("REDIRECT /portal/admin/content/library?tab=taken-down&notice=list-restored");
 		expect(mocks.restore).toHaveBeenCalledWith(actor, "lst_1");
 		// The pages are refreshed before leaving.
 		expect(paths()).toEqual(["/portal/library/lists", "/portal/library/lists/lst_1"]);

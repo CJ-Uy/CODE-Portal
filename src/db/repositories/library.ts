@@ -147,6 +147,8 @@ export type LibraryRepository = {
 		takenDownLists: LibraryList[];
 		reports: (LibraryReport & { targetTitle: string })[];
 	}>;
+	/** library:moderate. Published items the search index has not read yet (indexedAt is null), whatever their confidentiality. */
+	unindexedCount(actor: Actor): Promise<number>;
 	setPublicReadiness(actor: Actor, id: string, value: LibraryPublicReadiness | null): Promise<void>;
 	setConfidentiality(actor: Actor, id: string, value: Exclude<LibraryConfidentiality, "public">): Promise<void>;
 	deleteItem(actor: Actor, id: string): Promise<{ fileKeys: string[] }>;
@@ -738,6 +740,15 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 			};
 		},
 
+		async unindexedCount(actor) {
+			if (!can(actor, "library:moderate")) throw new Error("Not authorized to moderate the library.");
+			const [row] = await db
+				.select({ n: sql<number>`COUNT(*)`.mapWith(Number) })
+				.from(libraryItems)
+				.where(and(eq(libraryItems.status, "published"), isNull(libraryItems.indexedAt)));
+			return row?.n ?? 0;
+		},
+
 		async setPublicReadiness(actor, id, value) {
 			const row = await requireModeratable(actor, id);
 			await db.update(libraryItems).set({ publicReadiness: value, updatedAt: new Date() }).where(eq(libraryItems.id, id));
@@ -932,6 +943,7 @@ export function createUnavailableLibraryRepository(): LibraryRepository {
 		report: unavailable,
 		resolveReport: unavailable,
 		moderationQueue: unavailable,
+		unindexedCount: unavailable,
 		setPublicReadiness: unavailable,
 		setConfidentiality: unavailable,
 		deleteItem: unavailable,

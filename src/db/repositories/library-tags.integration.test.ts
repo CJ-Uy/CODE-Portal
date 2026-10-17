@@ -39,6 +39,20 @@ describe("library tags repository", () => {
 		expect((await tags.listTags()).length).toBe(1);
 	});
 
+	it("lists tags for moderators with every item counted, whatever its status or confidentiality", async () => {
+		const alpha = await tags.createTag(actors.other, "Alpha");
+		const beta = await tags.createTag(actors.other, "Beta");
+		const shown = await insertItem({});
+		const draft = await insertItem({ status: "draft", createdBy: "owner" });
+		const secret = await insertItem({ confidentiality: "confidential" });
+		for (const id of [shown, draft, secret]) await tags.setItemTags(actors.moderator, id, [alpha.id]);
+		// Members see one item on the tag; a moderator deciding whether it can go sees all three.
+		expect((await tags.listTags()).map((t) => `${t.name}:${t.itemCount}`)).toEqual(["Alpha:1", "Beta:0"]);
+		expect((await tags.listTagsForModeration(actors.moderator)).map((t) => `${t.name}:${t.itemCount}`)).toEqual(["Alpha:3", "Beta:0"]);
+		expect((await tags.listTagsForModeration(actors.moderator)).map((t) => t.id)).toEqual([alpha.id, beta.id]);
+		await expect(tags.listTagsForModeration(actors.other)).rejects.toThrow("Not authorized");
+	});
+
 	it("collapses inner whitespace and rejects empty or oversized names", async () => {
 		const a = await tags.createTag(actors.other, "Team   Building");
 		expect(a.name).toBe("Team Building");

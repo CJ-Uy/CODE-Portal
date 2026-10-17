@@ -199,6 +199,17 @@ describe("library reports and the moderation queue", () => {
 		]);
 	});
 
+	it("unindexedCount counts published items the index has not read, and only for moderators", async () => {
+		await expect(repo.unindexedCount(actors.other)).rejects.toThrow("Not authorized");
+		expect(await repo.unindexedCount(actors.moderator)).toBe(0);
+		await insertItem({ title: "Waiting for the indexer" });
+		await insertItem({ title: "Secret", confidentiality: "confidential" });
+		await insertItem({ title: "Indexed", indexedAt: new Date() });
+		await insertItem({ title: "Draft", status: "draft", createdBy: "owner" });
+		await insertItem({ title: "Down", status: "taken_down", createdBy: "owner" });
+		expect(await repo.unindexedCount(actors.moderator)).toBe(2);
+	});
+
 	it("dismissing a report leaves the target up and writes an audit row", async () => {
 		const id = await insertItem({ createdBy: "owner" });
 		await repo.report(actors.other, { itemId: id, reason: "other" });

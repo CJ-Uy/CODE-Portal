@@ -21,10 +21,8 @@ import {
 	updateListInputSchema,
 } from "./list-input";
 
-// Where a moderator who is not a member of a list lands after restoring it. The moderation page (/portal/admin/content/library) is
-// still a stub with nowhere to show a confirmation, and nothing above the library pages shows toasts, so the lists page carries a fixed-code notice.
-// ponytail: point this at the moderation queue (with its own flash) once Task 16 builds it.
-const AFTER_RESTORE = "/portal/library/lists?notice=restored";
+// Where a moderator who is not a member of a list lands after restoring it: the moderation page, with a fixed-code flash.
+const AFTER_RESTORE = "/portal/admin/content/library?tab=taken-down&notice=list-restored";
 
 // These throw on failure (the client shows the message through actionErrorMessage); a rejected input names its first problem.
 const firstIssue = (error: ZodError) => error.issues[0]?.message ?? "Check what you entered and try again.";
