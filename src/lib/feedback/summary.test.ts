@@ -45,8 +45,32 @@ describe("parseSummary", () => {
 		const raw = (quotes: string[]) => JSON.stringify({ themes: [theme({ quotes })] });
 		expect(parseSummary(raw([]), answers)).toEqual([]);
 		expect(parseSummary(raw([""]), answers)).toEqual([]);
-		expect(parseSummary(raw(["venue", "talks", "aircon"]), answers)).toEqual([]);
-		expect(parseSummary(raw(["venue", "talks"]), answers)).toHaveLength(1);
+		expect(parseSummary(raw(["venue too hot", "loved the talks", "aircon in the"]), answers)).toEqual([]);
+		expect(parseSummary(raw(["venue too hot", "loved the talks"]), answers)).toHaveLength(1);
+	});
+
+	it("drops a theme when any one of its quotes is invented", () => {
+		const raw = JSON.stringify({ themes: [theme({ quotes: ["venue too hot", "the food was cold"] })] });
+		expect(parseSummary(raw, answers)).toEqual([]);
+	});
+
+	it("rejects quotes under three words, even when they match", () => {
+		const raw = (quotes: string[]) => JSON.stringify({ themes: [theme({ quotes })] });
+		expect(parseSummary(raw(["venue"]), answers)).toEqual([]);
+		expect(parseSummary(raw(["the venue"]), answers)).toEqual([]);
+		expect(parseSummary(raw(["the  venue   was"]), ["The venue was fine"])).toHaveLength(1);
+	});
+
+	it("reads JSON after a line of prose", () => {
+		const raw = `Here is the summary you asked for:\n${JSON.stringify({ themes: [theme()] })}\nHope it helps.`;
+		expect(parseSummary(raw, answers)).toHaveLength(1);
+	});
+
+	it("fails closed on a truncated reply", () => {
+		const full = JSON.stringify({ themes: [theme(), theme({ label: "Talks", quotes: ["loved the talks"] })] });
+		const truncated = full.slice(0, full.lastIndexOf("loved"));
+		expect(parseSummary(truncated, answers)).toEqual([]);
+		expect(parseSummary(`Sure! ${truncated}`, answers)).toEqual([]);
 	});
 
 	it("truncates text and keeps at most six themes", () => {
@@ -89,5 +113,6 @@ describe("SUMMARY_SYSTEM_PROMPT", () => {
 		expect(SUMMARY_SYSTEM_PROMPT).toContain('{"themes"');
 		expect(SUMMARY_SYSTEM_PROMPT).toMatch(/verbatim/i);
 		expect(SUMMARY_SYSTEM_PROMPT).toMatch(/ignore/i);
+		expect(SUMMARY_SYSTEM_PROMPT).toContain("at most 25 words");
 	});
 });

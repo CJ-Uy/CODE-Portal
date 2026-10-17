@@ -7,9 +7,12 @@ export const STOPWORDS: ReadonlySet<string> = new Set(
 		"just me more most my no not of on one only or other our out over really she should so some such than that " +
 		"the their them then there these they this those through to too up us very was we were what when where " +
 		"which while who why will with would you your " +
+		// Contraction fragments: "didn't" splits into "didn" + "t".
+		"aren couldn didn doesn don hasn haven isn shouldn wasn weren won wouldn " +
 		"akin akong ako amin ang at ay baka bakit dahil din dito doon gaya hindi iba ito kami kanila kapag kasi " +
 		"kaya ko lang lahat mga mo na naman nang nga niya niyo ng pa pala para pati pero po rin sa sila siya " +
-		"sobra sobrang tayo yan yang yun yung talaga"
+		"sobra sobrang tayo yan yang yun yung talaga " +
+		"dapat ganito ganun iyan kaso kung mag mas masyadong may medyo namin natin nila nito pag parang sana tapos wala"
 	).split(/\s+/),
 );
 
