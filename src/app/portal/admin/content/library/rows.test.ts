@@ -26,8 +26,13 @@ describe("toItemRow", () => {
 			when: "Oct 3, 2026",
 			clientData: true,
 			reason: null,
+			hasOwner: true,
 		});
 		expect(JSON.stringify(row)).not.toContain("mem_secret");
+	});
+
+	it("says when nobody owns it, so Send back is not offered", () => {
+		expect(toItemRow({ ...item, createdBy: null } as LibraryItem).hasOwner).toBe(false);
 	});
 
 	it("shows a taken-down item's last change and the reason the owner reads", () => {

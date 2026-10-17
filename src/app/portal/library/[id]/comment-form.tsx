@@ -1,7 +1,10 @@
 "use client";
 
+import { useState, useTransition } from "react";
 import { CommentBox } from "@/components/library/comment-box";
-import { addCommentAction } from "../actions";
+import { Button } from "@/components/ui/button";
+import { actionErrorMessage } from "../editor-input";
+import { addCommentAction, setCommentHiddenAction } from "../actions";
 
 const COMMENT_MAX = 4000;
 
@@ -22,5 +25,43 @@ export function CommentForm({ itemId, parentId, label, placeholder }: { itemId: 
 				await addCommentAction(data);
 			}}
 		/>
+	);
+}
+
+/** Moderator Hide/Unhide for one comment. A refused change shows its reason under the button instead of crashing the page. */
+export function HideCommentButton({ commentId, itemId, hidden }: { commentId: string; itemId: string; hidden: boolean }) {
+	const [error, setError] = useState("");
+	const [pending, startTransition] = useTransition();
+	return (
+		<>
+			<Button
+				type="button"
+				variant="ghost"
+				size="sm"
+				className="h-7 px-2 text-xs"
+				disabled={pending}
+				onClick={() => {
+					setError("");
+					startTransition(async () => {
+						try {
+							const data = new FormData();
+							data.set("commentId", commentId);
+							data.set("itemId", itemId);
+							data.set("hidden", hidden ? "false" : "true");
+							await setCommentHiddenAction(data);
+						} catch (e) {
+							setError(actionErrorMessage(e, "Could not change that comment. Try again."));
+						}
+					});
+				}}
+			>
+				{hidden ? "Unhide" : "Hide"}
+			</Button>
+			{error ? (
+				<p role="alert" className="min-w-0 basis-full text-sm text-destructive [overflow-wrap:anywhere]">
+					{error}
+				</p>
+			) : null}
+		</>
 	);
 }

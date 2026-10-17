@@ -21,8 +21,7 @@ import type { Actor } from "@/server/auth/permissions";
 import { isFeatureEnabled } from "@/server/features";
 import { getLibraryAi } from "@/server/library/ai";
 import { smartRelated, smartSearchPreference } from "@/server/library/smart-search";
-import { setCommentHiddenAction } from "../actions";
-import { CommentForm } from "./comment-form";
+import { CommentForm, HideCommentButton } from "./comment-form";
 import { FlagClientDataButton } from "./flag-button";
 import { ModeratorPanel } from "./moderator-panel";
 
@@ -196,6 +195,7 @@ export default async function LibraryItemPage({ params }: { params: Promise<{ id
 					publicReadiness={item.publicReadiness}
 					confidentiality={item.confidentiality}
 					canManage={canManage}
+					hasOwner={item.createdBy !== null}
 				/>
 			) : null}
 
@@ -348,16 +348,7 @@ function CommentRow({ comment, itemId, canModerate }: { comment: LibraryCommentV
 					{comment.hidden ? <span className="ml-2 text-xs text-destructive">hidden</span> : null}
 					<span className="ml-2 text-xs text-muted-foreground">{WHEN.format(comment.createdAt)}</span>
 				</div>
-				{canModerate ? (
-					<form action={setCommentHiddenAction}>
-						<input type="hidden" name="commentId" value={comment.id} />
-						<input type="hidden" name="itemId" value={itemId} />
-						<input type="hidden" name="hidden" value={comment.hidden ? "false" : "true"} />
-						<Button type="submit" variant="ghost" size="sm" className="h-7 px-2 text-xs">
-							{comment.hidden ? "Unhide" : "Hide"}
-						</Button>
-					</form>
-				) : null}
+				{canModerate ? <HideCommentButton commentId={comment.id} itemId={itemId} hidden={comment.hidden} /> : null}
 			</div>
 			<p className="mt-1 min-w-0 whitespace-pre-line text-sm text-foreground/90 [overflow-wrap:anywhere]">{comment.body}</p>
 		</div>

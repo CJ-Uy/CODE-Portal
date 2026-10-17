@@ -39,10 +39,12 @@ type Props = {
 	confidentiality: "public" | "members" | "confidential";
 	/** library:manage: confidentiality and delete. */
 	canManage: boolean;
+	/** An item with no owner cannot be sent back, so that option is not offered. */
+	hasOwner: boolean;
 };
 
 /** Moderator controls for one item. Every control is checked again on the server; hiding the others is only for the eye. */
-export function ModeratorPanel({ itemId, title, status, publicReadiness, confidentiality, canManage }: Props) {
+export function ModeratorPanel({ itemId, title, status, publicReadiness, confidentiality, canManage, hasOwner }: Props) {
 	const toast = useToast();
 	const [asking, setAsking] = useState<Action | null>(null);
 	const [reason, setReason] = useState("");
@@ -53,6 +55,7 @@ export function ModeratorPanel({ itemId, title, status, publicReadiness, confide
 	const [readiness, setReadiness] = useState<LibraryPublicReadiness | "">(publicReadiness ?? "");
 	const [visibleTo, setVisibleTo] = useState(confidentiality);
 	const [pending, startTransition] = useTransition();
+	const buttons = BUTTONS[status].filter(({ action }) => hasOwner || action !== "send_back");
 
 	const run = (task: () => Promise<void>, done?: string, fallback = "Could not do that. Reload the page and try again.", undo?: () => void) =>
 		startTransition(async () => {
@@ -87,10 +90,10 @@ export function ModeratorPanel({ itemId, title, status, publicReadiness, confide
 				Moderator controls
 			</h2>
 
-			{BUTTONS[status].length > 0 ? (
+			{buttons.length > 0 ? (
 				<div className="grid gap-3">
 					<div className="flex flex-wrap gap-2">
-						{BUTTONS[status].map(({ action, label, needsReason }) => (
+						{buttons.map(({ action, label, needsReason }) => (
 							<Button
 								key={action}
 								type="button"
@@ -111,7 +114,7 @@ export function ModeratorPanel({ itemId, title, status, publicReadiness, confide
 							</label>
 							<div className="flex flex-wrap gap-2">
 								<Button type="button" disabled={pending || !reason.trim()} onClick={() => moderate(asking, reason)}>
-									{pending ? "Working..." : `Confirm: ${BUTTONS[status].find((button) => button.action === asking)?.label.toLowerCase()}`}
+									{pending ? "Working..." : `Confirm: ${buttons.find((button) => button.action === asking)?.label.toLowerCase()}`}
 								</Button>
 								<Button type="button" variant="ghost" disabled={pending} onClick={() => setAsking(null)}>
 									Cancel

@@ -21,6 +21,8 @@ export type ItemRow = {
 	clientData: boolean;
 	/** Why it was taken down, as the owner sees it. */
 	reason: string | null;
+	/** Whether anyone owns it. Only the fact, never the id: an ownerless item cannot be sent back. */
+	hasOwner: boolean;
 };
 
 export function toItemRow(item: LibraryItem): ItemRow {
@@ -32,6 +34,7 @@ export function toItemRow(item: LibraryItem): ItemRow {
 		when: item.status === "pending_review" ? when(item.publishedAt) : when(item.updatedAt),
 		clientData: item.containsClientData === true,
 		reason: item.moderationReason,
+		hasOwner: item.createdBy !== null,
 	};
 }
 

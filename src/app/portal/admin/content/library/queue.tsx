@@ -48,9 +48,11 @@ export function PendingItemRow({ item }: { item: ItemRow }) {
 				<Button type="button" disabled={pending} onClick={() => run(() => approveItemAction({ itemId: item.id }), "Approved. It is live.")}>
 					Approve
 				</Button>
-				<Button type="button" variant={asking ? "default" : "outline"} disabled={pending} onClick={() => setAsking(!asking)}>
-					Send back
-				</Button>
+				{item.hasOwner ? (
+					<Button type="button" variant={asking ? "default" : "outline"} disabled={pending} onClick={() => setAsking(!asking)}>
+						Send back
+					</Button>
+				) : null}
 			</div>
 			{asking ? (
 				<ReasonForm
