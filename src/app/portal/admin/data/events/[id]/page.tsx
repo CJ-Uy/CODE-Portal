@@ -9,12 +9,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { getDb } from "@/db/client";
 import * as schema from "@/db/schema";
+import { getRepositories } from "@/db";
 import { createAttendanceReports } from "@/db/repositories/attendance-reports";
 import { crsEvents, eventStaff, retentionRecords } from "@/db/schema";
 import { requireActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
+import { isFeatureEnabled } from "@/server/features";
 import { displayName, formatDateTime, formatTime, sectionTitle } from "../../shared";
 import { formatPoints, quantizePoints } from "@/lib/points";
+import { EventFeedbackSections, loadEventFeedback } from "./event-feedback-sections";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +30,9 @@ export default async function EventRosterPage({ params }: { params: Promise<{ id
 	const db = getDb() as unknown as DrizzleD1Database<typeof schema>;
 	const [event] = await db.select().from(crsEvents).where(eq(crsEvents.id, id)).limit(1);
 	if (!event) notFound();
-	const [roster, scannerRows, pointRows] = await Promise.all([
+	// The roster stays on retention:record; the feedback and debrief sections need survey:configure as well.
+	const showFeedback = isFeatureEnabled("surveys") && can(actor, "survey:configure");
+	const [roster, scannerRows, pointRows, feedbackLoad] = await Promise.all([
 		createAttendanceReports(db).eventRoster(actor, id),
 		db.select({ count: sql<number>`count(*)` }).from(eventStaff).where(eq(eventStaff.eventId, id)),
 		db
@@ -35,6 +40,7 @@ export default async function EventRosterPage({ params }: { params: Promise<{ id
 			.from(retentionRecords)
 			.where(eq(retentionRecords.eventId, id))
 			.groupBy(retentionRecords.memberId),
+		showFeedback ? getRepositories().then((repositories) => loadEventFeedback(repositories, actor, id)) : Promise.resolve(null),
 	]);
 	const pointsByMember = new Map(pointRows.map((row) => [row.memberId, quantizePoints(Number(row.points))]));
 	const attendees = roster.filter((row) => row.scannedAt);
@@ -56,6 +62,8 @@ export default async function EventRosterPage({ params }: { params: Promise<{ id
 					<span className="tabular-nums">{absents.length} absent</span>
 				</div>
 			</header>
+
+			{feedbackLoad ? <EventFeedbackSections eventId={id} load={feedbackLoad} /> : null}
 
 			{attendees.length === 0 ? (
 				<Card>
