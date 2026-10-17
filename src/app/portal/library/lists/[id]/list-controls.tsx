@@ -1,6 +1,6 @@
 "use client";
 
-import { useOptimistic, useState, useTransition } from "react";
+import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 import { Check, Copy, LogOut, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,13 +11,14 @@ import { actionErrorMessage } from "../../editor-input";
 import { deleteListAction, removeEditorAction, setSharedAction, updateListAction } from "../../list-actions";
 import { LIST_DESCRIPTION_MAX, LIST_NAME_MAX } from "../../list-input";
 
-function Switch({ checked, disabled, onChange, labelledBy }: { checked: boolean; disabled?: boolean; onChange: (next: boolean) => void; labelledBy: string }) {
+function Switch({ checked, disabled, onChange, labelledBy, describedBy }: { checked: boolean; disabled?: boolean; onChange: (next: boolean) => void; labelledBy: string; describedBy?: string }) {
 	return (
 		<button
 			type="button"
 			role="switch"
 			aria-checked={checked}
 			aria-labelledby={labelledBy}
+			aria-describedby={describedBy}
 			disabled={disabled}
 			onClick={() => onChange(!checked)}
 			className={cn(
@@ -29,6 +30,24 @@ function Switch({ checked, disabled, onChange, labelledBy }: { checked: boolean;
 			<span className={cn("inline-block size-5 rounded-full bg-white shadow transition-transform duration-200 motion-reduce:transition-none", checked ? "translate-x-5" : "translate-x-0.5")} />
 		</button>
 	);
+}
+
+/** For an inline confirm that replaces its trigger: Cancel hands focus back to the trigger once it is rendered again. */
+function useReturnFocus(confirming: boolean) {
+	const trigger = useRef<HTMLButtonElement>(null);
+	const back = useRef(false);
+	useEffect(() => {
+		if (!confirming && back.current) {
+			back.current = false;
+			trigger.current?.focus();
+		}
+	}, [confirming]);
+	return {
+		trigger,
+		returnFocus: () => {
+			back.current = true;
+		},
+	};
 }
 
 /** Copies the list's address. If the browser will not let the page use the clipboard, the address is shown to copy by hand. */
@@ -82,12 +101,12 @@ export function ShareControl({ listId, shared, takenDown }: { listId: string; sh
 	return (
 		<div className="grid min-w-0 gap-2 rounded-xl border border-border bg-card p-4">
 			<div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3">
-				<Switch checked={optimistic} disabled={takenDown || pending} onChange={change} labelledBy={`share-${listId}`} />
+				<Switch checked={optimistic} disabled={takenDown || pending} onChange={change} labelledBy={`share-${listId}`} describedBy={`share-note-${listId}`} />
 				<div className="grid min-w-0 flex-1 gap-0.5">
 					<p id={`share-${listId}`} className="font-medium">
 						Share with members
 					</p>
-					<p className="min-w-0 text-sm text-muted-foreground [overflow-wrap:anywhere]">
+					<p id={`share-note-${listId}`} className="min-w-0 text-sm text-muted-foreground [overflow-wrap:anywhere]">
 						{takenDown
 							? "A library moderator took this list down, so it cannot be shared until they restore it."
 							: optimistic
@@ -169,6 +188,7 @@ export function DeleteListButton({ listId, isDefault }: { listId: string; isDefa
 	const [confirming, setConfirming] = useState(false);
 	const [error, setError] = useState("");
 	const [pending, startTransition] = useTransition();
+	const { trigger, returnFocus } = useReturnFocus(confirming);
 
 	if (isDefault) return <p className="text-sm text-muted-foreground">The Saved list can be renamed, but it cannot be deleted.</p>;
 
@@ -179,6 +199,7 @@ export function DeleteListButton({ listId, isDefault }: { listId: string; isDefa
 					<span className="min-w-0 text-sm [overflow-wrap:anywhere]">Delete this list, its notes and its comments? The items stay in the library.</span>
 					<Button
 						type="button"
+						autoFocus
 						disabled={pending}
 						onClick={() => {
 							setError("");
@@ -193,13 +214,21 @@ export function DeleteListButton({ listId, isDefault }: { listId: string; isDefa
 					>
 						{pending ? "Deleting..." : "Delete list"}
 					</Button>
-					<Button type="button" variant="ghost" disabled={pending} onClick={() => setConfirming(false)}>
+					<Button
+						type="button"
+						variant="ghost"
+						disabled={pending}
+						onClick={() => {
+							returnFocus();
+							setConfirming(false);
+						}}
+					>
 						Keep it
 					</Button>
 				</div>
 			) : (
 				<div>
-					<Button type="button" variant="outline" onClick={() => setConfirming(true)}>
+					<Button ref={trigger} type="button" variant="outline" onClick={() => setConfirming(true)}>
 						<Trash2 aria-hidden />
 						Delete list
 					</Button>
@@ -219,10 +248,11 @@ export function LeaveListButton({ listId, memberId }: { listId: string; memberId
 	const [confirming, setConfirming] = useState(false);
 	const [error, setError] = useState("");
 	const [pending, startTransition] = useTransition();
+	const { trigger, returnFocus } = useReturnFocus(confirming);
 
 	if (!confirming) {
 		return (
-			<Button type="button" variant="ghost" onClick={() => setConfirming(true)}>
+			<Button ref={trigger} type="button" variant="ghost" onClick={() => setConfirming(true)}>
 				<LogOut aria-hidden />
 				Leave list
 			</Button>
@@ -234,6 +264,7 @@ export function LeaveListButton({ listId, memberId }: { listId: string; memberId
 			<Button
 				type="button"
 				size="sm"
+				autoFocus
 				disabled={pending}
 				onClick={() => {
 					setError("");
@@ -248,7 +279,16 @@ export function LeaveListButton({ listId, memberId }: { listId: string; memberId
 			>
 				{pending ? "Leaving..." : "Leave"}
 			</Button>
-			<Button type="button" size="sm" variant="ghost" disabled={pending} onClick={() => setConfirming(false)}>
+			<Button
+				type="button"
+				size="sm"
+				variant="ghost"
+				disabled={pending}
+				onClick={() => {
+					returnFocus();
+					setConfirming(false);
+				}}
+			>
 				Stay
 			</Button>
 			{error ? (

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { moveItem, relativeAge } from "./list-view";
+import { fullStopFor, moveItem, relativeAge } from "./list-view";
 
 describe("moveItem", () => {
 	const order = ["a", "b", "c", "d"];
@@ -50,5 +50,15 @@ describe("relativeAge", () => {
 
 	it("reads a date in the future as just now", () => {
 		expect(ago(-5 * MIN)).toBe("just now");
+	});
+});
+
+describe("fullStopFor", () => {
+	it("adds a full stop only where the text does not already end in punctuation", () => {
+		expect(fullStopFor("Names a client")).toBe(".");
+		expect(fullStopFor("Names a client.")).toBe("");
+		expect(fullStopFor("Is this allowed?")).toBe("");
+		expect(fullStopFor("Stop!  ")).toBe("");
+		expect(fullStopFor("ends with a comma,")).toBe(".");
 	});
 });

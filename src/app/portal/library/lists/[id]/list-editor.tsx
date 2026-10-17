@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { moveItem } from "@/lib/library/list-view";
 import { actionErrorMessage } from "../../editor-input";
-import { NOTE_MAX } from "../../list-input";
+import { NOTE_MAX, REORDER_MAX } from "../../list-input";
 import { removeListItemAction, reorderAction, setNoteAction } from "../../list-actions";
 
 /** What the page hands over for one row. A placeholder carries only its id: nothing about the item leaks to a reader who cannot open it. */
@@ -114,7 +114,7 @@ export function ListEditor({ listId, rows, canEdit }: { listId: string; rows: Li
 	const [saving, startSave] = useTransition();
 	const [removing, startRemove] = useTransition();
 	const root = useRef<HTMLOListElement>(null);
-	const refocus = useRef<{ id: string; dir: "up" | "down" } | null>(null);
+	const refocus = useRef<{ id: string; dir: "up" | "down" | "remove" } | null>(null);
 
 	// The server's list is the truth: when it changes (a removal, another editor, our own save coming back) the editor follows it.
 	if (serverKey !== seenKey) {
@@ -126,16 +126,20 @@ export function ListEditor({ listId, rows, canEdit }: { listId: string; rows: Li
 	const byId = new Map(rows.map((row) => [row.id, row]));
 	const shown = order.map((id) => byId.get(id)).filter((row): row is ListRow => Boolean(row));
 	const titleOf = (row: ListRow) => (row.available ? row.title : "that item");
+	// One reorder rewrites every row in a single request, which the server caps; a longer list can still be edited, just not reordered here.
+	const canReorder = canEdit && rows.length <= REORDER_MAX;
 
-	// A moved row keeps keyboard focus on the button that moved it, or on the other one once it hits the end.
+	// A moved row keeps keyboard focus on the button that moved it, or on the other one once it hits the end. Backing out of the
+	// remove confirm puts focus back on the Remove button it replaced.
 	useEffect(() => {
 		const target = refocus.current;
 		refocus.current = null;
 		if (!target || !root.current) return;
 		const find = (dir: string) => root.current?.querySelector<HTMLButtonElement>(`[data-move="${dir}"][data-row="${CSS.escape(target.id)}"]`);
 		const wanted = find(target.dir);
-		(wanted && !wanted.disabled ? wanted : find(target.dir === "up" ? "down" : "up"))?.focus();
-	}, [order]);
+		const other = target.dir === "up" ? "down" : target.dir === "down" ? "up" : null;
+		(wanted && !wanted.disabled ? wanted : other ? find(other) : null)?.focus();
+	}, [order, confirming]);
 
 	const commit = (next: readonly string[], message: string) => {
 		const previous = order;
@@ -205,6 +209,9 @@ export function ListEditor({ listId, rows, canEdit }: { listId: string; rows: Li
 					<p className="text-muted-foreground">Order saved</p>
 				) : null}
 			</div>
+			{canEdit && !canReorder ? (
+				<p className="min-w-0 text-sm text-muted-foreground [overflow-wrap:anywhere]">This list has more than {REORDER_MAX} items, which is too many to reorder here. You can still add notes and remove items.</p>
+			) : null}
 			<p className="sr-only" role="status">
 				{announcement}
 			</p>
@@ -231,10 +238,8 @@ export function ListEditor({ listId, rows, canEdit }: { listId: string; rows: Li
 						>
 							<div className="flex min-w-0 gap-3">
 								<div className="flex w-6 shrink-0 flex-col items-center gap-1 pt-1 text-muted-foreground">
-									<span className="text-sm tabular-nums" aria-label={`Position ${index + 1}`}>
-										{index + 1}
-									</span>
-									{canEdit ? (
+									<span className="text-sm tabular-nums">{index + 1}</span>
+									{canReorder ? (
 										// A pointer-only handle: keyboard and touch use the Up and Down buttons below.
 										<span
 											draggable={!saving}
@@ -278,48 +283,71 @@ export function ListEditor({ listId, rows, canEdit }: { listId: string; rows: Li
 
 									{canEdit ? (
 										<div className="flex flex-wrap items-center gap-2">
-											<Button
-												type="button"
-												size="sm"
-												variant="outline"
-												className="h-9"
-												data-move="up"
-												data-row={row.id}
-												disabled={index === 0}
-												aria-disabled={saving || undefined}
-												aria-label={`Move ${titleOf(row)} up`}
-												onClick={() => move(row, index - 1, "up")}
-											>
-												<ArrowUp aria-hidden />
-												Up
-											</Button>
-											<Button
-												type="button"
-												size="sm"
-												variant="outline"
-												className="h-9"
-												data-move="down"
-												data-row={row.id}
-												disabled={index === shown.length - 1}
-												aria-disabled={saving || undefined}
-												aria-label={`Move ${titleOf(row)} down`}
-												onClick={() => move(row, index + 1, "down")}
-											>
-												<ArrowDown aria-hidden />
-												Down
-											</Button>
+											{canReorder ? (
+												<>
+													<Button
+														type="button"
+														size="sm"
+														variant="outline"
+														className="h-9"
+														data-move="up"
+														data-row={row.id}
+														disabled={index === 0}
+														aria-disabled={saving || undefined}
+														aria-label={`Move ${titleOf(row)} up`}
+														onClick={() => move(row, index - 1, "up")}
+													>
+														<ArrowUp aria-hidden />
+														Up
+													</Button>
+													<Button
+														type="button"
+														size="sm"
+														variant="outline"
+														className="h-9"
+														data-move="down"
+														data-row={row.id}
+														disabled={index === shown.length - 1}
+														aria-disabled={saving || undefined}
+														aria-label={`Move ${titleOf(row)} down`}
+														onClick={() => move(row, index + 1, "down")}
+													>
+														<ArrowDown aria-hidden />
+														Down
+													</Button>
+												</>
+											) : null}
 											{confirming === row.id ? (
 												<>
 													<span className="text-sm">Remove from list?</span>
-													<Button type="button" size="sm" variant="default" className="h-9" disabled={removing} onClick={() => remove(row)}>
+													<Button type="button" size="sm" variant="default" className="h-9" autoFocus disabled={removing} onClick={() => remove(row)}>
 														{removing ? "Removing..." : "Remove"}
 													</Button>
-													<Button type="button" size="sm" variant="ghost" className="h-9" disabled={removing} onClick={() => setConfirming(null)}>
+													<Button
+														type="button"
+														size="sm"
+														variant="ghost"
+														className="h-9"
+														disabled={removing}
+														onClick={() => {
+															refocus.current = { id: row.id, dir: "remove" };
+															setConfirming(null);
+														}}
+													>
 														Keep
 													</Button>
 												</>
 											) : (
-												<Button type="button" size="sm" variant="ghost" className="ml-auto h-9" aria-label={`Remove ${titleOf(row)} from this list`} onClick={() => setConfirming(row.id)}>
+												<Button
+													type="button"
+													size="sm"
+													variant="ghost"
+													className="ml-auto h-9"
+													data-move="remove"
+													data-row={row.id}
+													aria-label={`Remove ${titleOf(row)} from this list`}
+													onClick={() => setConfirming(row.id)}
+												>
 													<Trash2 aria-hidden />
 													Remove
 												</Button>

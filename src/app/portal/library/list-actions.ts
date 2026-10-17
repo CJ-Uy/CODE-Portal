@@ -21,6 +21,11 @@ import {
 	updateListInputSchema,
 } from "./list-input";
 
+// Where a moderator who is not a member of a list lands after restoring it. The moderation page (/portal/admin/content/library) is
+// still a stub with nowhere to show a confirmation, and nothing above the library pages shows toasts, so the lists page carries a fixed-code notice.
+// ponytail: point this at the moderation queue (with its own flash) once Task 16 builds it.
+const AFTER_RESTORE = "/portal/library/lists?notice=restored";
+
 // These throw on failure (the client shows the message through actionErrorMessage); a rejected input names its first problem.
 const firstIssue = (error: ZodError) => error.issues[0]?.message ?? "Check what you entered and try again.";
 
@@ -110,9 +115,11 @@ export async function addListCommentAction(input: { listId: string; parentId?: s
 	revalidateList(data.listId);
 }
 
-/** library:moderate. */
+/** library:moderate. The comment must belong to this list: the page to refresh comes from the request, so it is checked before anything is written. */
 export async function setListCommentHiddenAction(input: { listId: string; commentId: string; hidden: boolean }): Promise<void> {
 	const { actor, repositories, input: data } = await guard(setCommentHiddenInputSchema, input);
+	const thread = await repositories.libraryLists.listComments(actor, data.listId);
+	if (!thread.some((comment) => comment.id === data.commentId)) throw new Error("Comment not found.");
 	await repositories.libraryLists.setCommentHidden(actor, data.commentId, data.hidden);
 	revalidateList(data.listId);
 }
@@ -131,9 +138,15 @@ export async function takeDownListAction(input: { listId: string; reason: string
 	revalidateList(data.listId);
 }
 
-/** library:moderate. The list stays unshared; its owner chooses whether to share it again. */
+/**
+ * library:moderate. The list stays unshared (its owner chooses whether to share it again), so a moderator who is neither its
+ * owner nor an editor can no longer open it unless a report is still open: they are sent away with a notice instead of a 404.
+ * The role is read before the restore, while the list is still readable to them.
+ */
 export async function restoreListAction(input: { listId: string }): Promise<void> {
 	const { actor, repositories, input: data } = await guard(listIdInputSchema, input);
+	const before = await repositories.libraryLists.getList(actor, data.listId);
 	await repositories.libraryLists.restore(actor, data.listId);
 	revalidateList(data.listId);
+	if (before?.role === "viewer") redirect(AFTER_RESTORE);
 }

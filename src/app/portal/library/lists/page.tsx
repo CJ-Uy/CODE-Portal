@@ -35,10 +35,17 @@ function ListRow({ list }: { list: LibraryListSummary }) {
 	);
 }
 
-export default async function LibraryListsPage() {
+// ?notice= comes back from list actions. Only these codes become words, so a crafted link cannot put its own message on the page.
+const NOTICES: Record<string, string> = {
+	restored: "The list was restored. It stays unshared until its owner shares it again.",
+};
+
+export default async function LibraryListsPage({ searchParams }: { searchParams: Promise<{ notice?: string }> }) {
 	if (!isFeatureEnabled("library")) notFound();
 	const actor = await getActor();
 	if (!actor) redirect("/signin");
+	const { notice } = await searchParams;
+	const noticeText = notice && Object.hasOwn(NOTICES, notice) ? NOTICES[notice] : null;
 
 	const repositories = await getRepositories();
 	const [{ owned, editable }, collections] = await Promise.all([
@@ -50,6 +57,12 @@ export default async function LibraryListsPage() {
 
 	return (
 		<div className="mx-auto grid min-w-0 max-w-4xl gap-8">
+			{noticeText ? (
+				<p role="status" className="min-w-0 rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm [overflow-wrap:anywhere]">
+					{noticeText}
+				</p>
+			) : null}
+
 			<div className="grid min-w-0 gap-1">
 				<Link href="/portal/library" className="w-fit text-sm text-muted-foreground hover:text-foreground">
 					&larr; Library

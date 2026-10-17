@@ -8,7 +8,7 @@ import { ReportButton } from "@/components/library/report-button";
 import { EmptyState } from "@/components/portal/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { relativeAge } from "@/lib/library/list-view";
+import { fullStopFor, relativeAge } from "@/lib/library/list-view";
 import { KIND_LABELS } from "@/lib/library/taxonomy";
 import { getActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
@@ -67,8 +67,16 @@ export default async function LibraryListPage({ params }: { params: Promise<{ id
 			</Link>
 
 			{takenDown ? (
-				<p role="status" className={`min-w-0 rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm ${list.moderationReason ? "break-all" : "[overflow-wrap:anywhere]"}`}>
-					A library moderator took this list down{list.moderationReason ? `: ${list.moderationReason}` : "."}
+				<p role="status" className="min-w-0 rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm [overflow-wrap:anywhere]">
+					A library moderator took this list down
+					{list.moderationReason ? (
+						<>
+							: <span className="break-all">{list.moderationReason}</span>
+							{fullStopFor(list.moderationReason)}
+						</>
+					) : (
+						"."
+					)}
 					{canEdit ? " It is not shared with members, and it stays that way until a moderator restores it." : ""}
 				</p>
 			) : null}
@@ -173,7 +181,17 @@ export default async function LibraryListPage({ params }: { params: Promise<{ id
 				)}
 			</section>
 
-			{canModerate ? <ListModeration listId={list.id} shared={list.shared} pinned={list.pinned} pinOrder={list.pinOrder} takenDown={takenDown} /> : null}
+			{canModerate ? (
+				<ListModeration
+					listId={list.id}
+					shared={list.shared}
+					pinned={list.pinned}
+					pinOrder={list.pinOrder}
+					takenDown={takenDown}
+					// Taking a list down only works on a shared list or one with an open report. A moderator who is not a member can open an unshared list only for that reason.
+					canTakeDown={list.shared || list.role === "viewer"}
+				/>
+			) : null}
 
 			<ListComments listId={list.id} comments={comments} canComment={canComment} canModerate={canModerate} />
 		</div>

@@ -22,3 +22,8 @@ export function relativeAge(date: Date, now: Date): string {
 	if (days < 365) return `${Math.floor(days / 30)}mo ago`;
 	return `${Math.floor(days / 365)}y ago`;
 }
+
+/** What closes a sentence that ends with free text: nothing when it already ends in punctuation, otherwise a full stop. */
+export function fullStopFor(text: string): string {
+	return /[.!?]$/.test(text.trim()) ? "" : ".";
+}

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
 	createList: vi.fn(async () => "lst_new"),
@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
 	setPinned: vi.fn(async () => undefined),
 	takeDown: vi.fn(async () => undefined),
 	restore: vi.fn(async () => undefined),
+	getList: vi.fn<(actor: unknown, listId: string) => Promise<{ role: string } | null>>(async () => ({ role: "owner" })),
+	listComments: vi.fn<(actor: unknown, listId: string) => Promise<{ id: string }[]>>(async () => [{ id: "llc_1" }, { id: "llc_2" }]),
 	revalidatePath: vi.fn(),
 	assertFeatureEnabled: vi.fn(),
 	redirect: vi.fn((url: string) => {
@@ -39,6 +41,8 @@ vi.mock("@/db", () => ({
 			setPinned: mocks.setPinned,
 			takeDown: mocks.takeDown,
 			restore: mocks.restore,
+			getList: mocks.getList,
+			listComments: mocks.listComments,
 		},
 	}),
 }));
@@ -69,6 +73,11 @@ const paths = () => mocks.revalidatePath.mock.calls.map(([path]) => path);
 
 beforeEach(() => {
 	vi.clearAllMocks();
+});
+
+// A test that makes the feature flag throw must not leave it throwing for the next one, even when it fails halfway.
+afterEach(() => {
+	mocks.assertFeatureEnabled.mockReset();
 });
 
 describe("list actions: what reaches the repository", () => {
@@ -112,6 +121,16 @@ describe("list actions: what reaches the repository", () => {
 		expect(mocks.setCommentHidden).toHaveBeenCalledWith(actor, "llc_2", true);
 	});
 
+	it("restoreListAction by the list's owner or an editor stays on the page", async () => {
+		for (const role of ["owner", "editor"]) {
+			mocks.getList.mockResolvedValueOnce({ role });
+			await restoreListAction({ listId: "lst_1" });
+		}
+		expect(mocks.restore).toHaveBeenCalledTimes(2);
+		expect(mocks.redirect).not.toHaveBeenCalled();
+		expect(paths()).toContain("/portal/library/lists/lst_1");
+	});
+
 	it("the moderation actions pass their arguments straight through", async () => {
 		await setPinnedAction({ listId: "lst_1", pinned: true, pinOrder: 2 });
 		expect(mocks.setPinned).toHaveBeenCalledWith(actor, "lst_1", true, 2);
@@ -125,6 +144,65 @@ describe("list actions: what reaches the repository", () => {
 		expect(mocks.setShared).toHaveBeenCalledWith(actor, "lst_1", true);
 		await addEditorAction({ listId: "lst_1", memberId: "mem_2" });
 		expect(mocks.addEditor).toHaveBeenCalledWith(actor, "lst_1", "mem_2");
+	});
+});
+
+describe("list actions: a moderator restoring a list they do not belong to", () => {
+	it("is sent to the lists page with a notice, because the restored list is closed to them again", async () => {
+		mocks.getList.mockResolvedValueOnce({ role: "viewer" });
+		await expect(restoreListAction({ listId: "lst_1" })).rejects.toThrow("REDIRECT /portal/library/lists?notice=restored");
+		expect(mocks.restore).toHaveBeenCalledWith(actor, "lst_1");
+		// The pages are refreshed before leaving.
+		expect(paths()).toEqual(["/portal/library/lists", "/portal/library/lists/lst_1"]);
+	});
+
+	it("reads the role before the restore, while the list is still readable to them", async () => {
+		const calls: string[] = [];
+		mocks.getList.mockImplementationOnce(async () => {
+			calls.push("getList");
+			return { role: "viewer" };
+		});
+		mocks.restore.mockImplementationOnce(async () => {
+			calls.push("restore");
+		});
+		await expect(restoreListAction({ listId: "lst_1" })).rejects.toThrow("REDIRECT");
+		expect(calls).toEqual(["getList", "restore"]);
+	});
+
+	it("does not leave the page when the restore is refused", async () => {
+		mocks.getList.mockResolvedValueOnce({ role: "viewer" });
+		mocks.restore.mockRejectedValueOnce(new Error("This list is not taken down."));
+		await expect(restoreListAction({ listId: "lst_1" })).rejects.toThrow("not taken down");
+		expect(mocks.redirect).not.toHaveBeenCalled();
+		expect(mocks.revalidatePath).not.toHaveBeenCalled();
+	});
+
+	it("still hands the decision to the repository when the list cannot be read", async () => {
+		mocks.getList.mockResolvedValueOnce(null);
+		await restoreListAction({ listId: "lst_1" });
+		expect(mocks.restore).toHaveBeenCalledWith(actor, "lst_1");
+		expect(mocks.redirect).not.toHaveBeenCalled();
+	});
+});
+
+describe("list actions: hiding a comment", () => {
+	it("only touches a comment of the list it was sent with, and refreshes that list", async () => {
+		await setListCommentHiddenAction({ listId: "lst_1", commentId: "llc_1", hidden: true });
+		expect(mocks.listComments).toHaveBeenCalledWith(actor, "lst_1");
+		expect(mocks.setCommentHidden).toHaveBeenCalledWith(actor, "llc_1", true);
+		expect(paths()).toEqual(["/portal/library/lists", "/portal/library/lists/lst_1"]);
+	});
+
+	it("refuses a comment from another list before writing or refreshing anything", async () => {
+		await expect(setListCommentHiddenAction({ listId: "lst_other", commentId: "llc_9", hidden: true })).rejects.toThrow("Comment not found.");
+		expect(mocks.setCommentHidden).not.toHaveBeenCalled();
+		expect(mocks.revalidatePath).not.toHaveBeenCalled();
+	});
+
+	it("refuses when the list cannot be read at all (no thread comes back)", async () => {
+		mocks.listComments.mockResolvedValueOnce([]);
+		await expect(setListCommentHiddenAction({ listId: "lst_1", commentId: "llc_1", hidden: false })).rejects.toThrow("Comment not found.");
+		expect(mocks.setCommentHidden).not.toHaveBeenCalled();
 	});
 });
 
@@ -181,7 +259,6 @@ describe("list actions: input that must not get through", () => {
 		expect(mocks.createList).not.toHaveBeenCalled();
 		expect(mocks.reorder).not.toHaveBeenCalled();
 		expect(mocks.takeDown).not.toHaveBeenCalled();
-		mocks.assertFeatureEnabled.mockReset();
 	});
 
 	it("a repository refusal reaches the caller untouched and skips the refresh", async () => {

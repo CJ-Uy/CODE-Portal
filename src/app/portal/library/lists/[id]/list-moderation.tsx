@@ -10,10 +10,10 @@ import { actionErrorMessage } from "../../editor-input";
 import { restoreListAction, setPinnedAction, takeDownListAction } from "../../list-actions";
 import { REASON_MAX } from "../../list-input";
 
-type Props = { listId: string; shared: boolean; pinned: boolean; pinOrder: number; takenDown: boolean };
+type Props = { listId: string; shared: boolean; pinned: boolean; pinOrder: number; takenDown: boolean; canTakeDown: boolean };
 
 /** Library moderators: pin a shared list as a collection, set where it sits, take it down with a reason, or restore it. Every control is checked again on the server. */
-export function ListModeration({ listId, shared, pinned, pinOrder, takenDown }: Props) {
+export function ListModeration({ listId, shared, pinned, pinOrder, takenDown, canTakeDown }: Props) {
 	const toast = useToast();
 	const [asking, setAsking] = useState(false);
 	const [reason, setReason] = useState("");
@@ -108,7 +108,7 @@ export function ListModeration({ listId, shared, pinned, pinOrder, takenDown }: 
 					</Button>
 					<p className="min-w-0 text-sm text-muted-foreground">The list stays unshared until its owner shares it again.</p>
 				</div>
-			) : (
+			) : canTakeDown ? (
 				<div className="grid min-w-0 gap-3">
 					<div>
 						<Button type="button" variant={asking ? "default" : "outline"} disabled={pending} onClick={() => setAsking(!asking)}>
@@ -146,7 +146,7 @@ export function ListModeration({ listId, shared, pinned, pinOrder, takenDown }: 
 						</div>
 					) : null}
 				</div>
-			)}
+			) : null}
 
 			{error ? (
 				<p role="alert" className="min-w-0 text-sm text-destructive [overflow-wrap:anywhere]">
