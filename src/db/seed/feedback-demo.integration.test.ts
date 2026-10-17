@@ -11,6 +11,7 @@ import type { Actor } from "@/server/auth/permissions";
 import {
 	seedFeedbackDemoAnswers,
 	seedFeedbackDemoAssignments,
+	seedFeedbackDemoAttendance,
 	seedFeedbackDemoDebriefs,
 	seedFeedbackDemoEvents,
 	seedFeedbackDemoMembers,
@@ -31,6 +32,7 @@ const textQuestions = (questions: ResultsQuestion[]) => questions.filter((questi
 const TABLES = [
 	"survey_answers",
 	"survey_responses",
+	"crs_attendance",
 	"survey_assignments",
 	"survey_questions",
 	"surveys",
@@ -55,6 +57,7 @@ describe("feedback demo seed on D1", () => {
 		await clear();
 		await load(schema.members, [...seedMembers, ...seedFeedbackDemoMembers]);
 		await load(schema.crsEvents, seedFeedbackDemoEvents);
+		await load(schema.crsAttendance, seedFeedbackDemoAttendance);
 		await load(schema.eventDebriefs, seedFeedbackDemoDebriefs);
 		await load(schema.surveys, seedFeedbackDemoSurveys);
 		await load(schema.surveyQuestions, seedFeedbackDemoQuestions);
@@ -71,13 +74,16 @@ describe("feedback demo seed on D1", () => {
 			status: "running",
 			responseCount: 8,
 			invitedCount: 24,
-			invitedResponded: 6,
-			walkInCount: 2,
+			invitedResponded: 5,
+			walkInCount: 3,
 			belowThreshold: false,
 			shareWithOrganizers: true,
 			eventType: "official",
 		});
 		expect(all.questions).toHaveLength(7);
+		// Everyone invited or walked in also checked in, so attendee counts are real.
+		const attended = await env.DB.prepare("SELECT COUNT(*) AS n FROM crs_attendance WHERE event_id = ?").bind("evt_demo_past").first<{ n: number }>();
+		expect(attended?.n).toBe(27);
 
 		const overall = all.questions[0];
 		expect(overall.kind === "scale" && overall.summary).toMatchObject({ n: 8, topTwoPct: 75, mean: 4 });
@@ -87,8 +93,8 @@ describe("feedback demo seed on D1", () => {
 
 	it("narrows to the invited sample", async () => {
 		const invited = await results.getResults(admin, "srv_demo_past", { filter: "invited" }, NOW);
-		expect(invited.responseCount).toBe(6);
-		expect(invited.walkInCount).toBe(2);
+		expect(invited.responseCount).toBe(5);
+		expect(invited.walkInCount).toBe(3);
 	});
 
 	it("gives admins the hidden comment, marked, and gives organizers neither it nor a summary", async () => {

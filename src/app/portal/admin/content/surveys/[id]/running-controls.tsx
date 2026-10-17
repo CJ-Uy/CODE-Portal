@@ -13,18 +13,16 @@ export type RunningControlsProps = {
 	timeClosed: boolean;
 	/** `closed` means a reminder would have no one to remind. */
 	reminder: "ready" | "sent" | "closed";
-	/** Only forms for an event have organizers to share with. */
-	hasEvent: boolean;
-	shared: boolean;
 };
 
 type Confirming = "close" | "remind";
 
 /**
- * Everything an admin can change on a running form. Each control is its own small form that names its `intent`, so one
- * press changes one thing. The two that can't be taken back, closing and reminding, ask once first.
+ * What an admin can change on a running form, apart from sharing (which has its own toggle because it also works once the
+ * form has closed). Each control is its own small form that names its `intent`, so one press changes one thing. The two
+ * that can't be taken back, closing and reminding, ask once first.
  */
-export function RunningControls({ surveyId, closesAt, timeClosed, reminder, hasEvent, shared }: RunningControlsProps) {
+export function RunningControls({ surveyId, closesAt, timeClosed, reminder }: RunningControlsProps) {
 	const [result, formAction, pending] = useActionState<RunningResult, FormData>(updateRunningAction, null);
 	// Remembers which result the question was opened under, so it closes by itself when the next result arrives.
 	const [asking, setAsking] = useState<{ kind: Confirming; under: RunningResult } | null>(null);
@@ -61,17 +59,6 @@ export function RunningControls({ surveyId, closesAt, timeClosed, reminder, hasE
 				</Button>
 			</form>
 
-			{hasEvent ? (
-				<form action={formAction} className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
-					{hidden("share")}
-					<input type="hidden" name="shareWithOrganizers" value={shared ? "0" : "1"} />
-					<p className="min-w-0 text-sm">{shared ? "Organizers can see these results." : "Organizers can't see these results."}</p>
-					<Button type="submit" variant="outline" size="sm" disabled={pending}>
-						{shared ? "Stop sharing" : "Share with organizers"}
-					</Button>
-				</form>
-			) : null}
-
 			<div className="flex min-w-0 flex-wrap items-center gap-3">
 				{reminder === "ready" ? (
 					<Button type="button" variant="outline" disabled={pending} onClick={() => ask("remind")}>
@@ -94,12 +81,12 @@ export function RunningControls({ surveyId, closesAt, timeClosed, reminder, hasE
 				>
 					{hidden(confirming)}
 					<p id="manage-confirm" className="min-w-0 text-sm font-medium">
-						{confirming === "close" ? "Close this form now?" : "Remind everyone who hasn't answered?"}
+						{confirming === "close" ? "Close this form now?" : "Send the reminder now?"}
 					</p>
 					<p className="min-w-0 text-sm text-muted-foreground">
 						{confirming === "close"
 							? "No one can answer after this, and it can't be opened again."
-							: "They get one notice, and it can only be sent once."}
+							: "Members who haven't answered get a portal notice. If email invites are on, everyone invited gets a short reminder email (it thanks those who already answered). It goes out the next time the reminder job runs, and it can only be sent once."}
 					</p>
 					<div className="flex flex-wrap items-center gap-3">
 						<Button type="submit" disabled={pending}>

@@ -438,7 +438,9 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 
 			const [survey] = await db.select().from(surveys).where(eq(surveys.id, input.surveyId)).limit(1);
 			if (!survey) throw new Error("Survey not found.");
-			if (survey.status !== "running") throw new Error("Only a running form can be edited.");
+			// Who can see the results is the one thing an admin may change on a form that has closed. Anything else needs it running.
+			const sharingOnly = input.shareWithOrganizers !== undefined && !input.closesAt && !input.close && !input.remindNow;
+			if (survey.status !== "running" && !(sharingOnly && survey.status === "closed")) throw new Error("Only a running form can be edited.");
 			if (input.closesAt && input.closesAt <= now) throw new Error("Pick a closing time in the future.");
 			// Closing wins over a reminder asked for in the same call.
 			const remindNow = input.remindNow && !input.close;
@@ -452,8 +454,10 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 			if (input.close) {
 				patch.status = "closed";
 				changes.push("closed");
-			}
-			if (input.closesAt) {
+				// Closing before the planned time moves the closing time to now, so the results read "Closed <when it closed>".
+				// A form that had already run past its time keeps the time it really stopped taking answers.
+				if (!survey.closesAt || survey.closesAt > now) patch.closesAt = now;
+			} else if (input.closesAt) {
 				patch.closesAt = input.closesAt;
 				// A reminder that was turned off or already sent stays that way; a pending one follows the new close.
 				if (survey.reminderAt && !survey.reminderSentAt) patch.reminderAt = reminderAtFor(input.closesAt, now);
@@ -473,7 +477,7 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 			const [updated] = await db
 				.update(surveys)
 				.set(patch)
-				.where(and(eq(surveys.id, input.surveyId), eq(surveys.status, "running")))
+				.where(and(eq(surveys.id, input.surveyId), eq(surveys.status, survey.status)))
 				.returning({ id: surveys.id });
 			if (!updated) throw new Error("Only a running form can be edited.");
 

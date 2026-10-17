@@ -3,6 +3,7 @@ import type { ResultsQuestion } from "@/db/types";
 import {
 	baselineLine,
 	canDraftSummary,
+	canFilterInvited,
 	chipSteps,
 	CHIP_STEPS,
 	closingLine,
@@ -44,6 +45,19 @@ describe("response rate", () => {
 	it("does not round a 29.6% rate up to a pass", () => {
 		expect(invitedLine(37, 125)).toBe("37 of 125 invited (30%)");
 		expect(isLowResponseRate(37, 125)).toBe(true);
+	});
+});
+
+describe("canFilterInvited", () => {
+	it("offers the invited-only view with no walk-ins or enough of them to hide among", () => {
+		expect(canFilterInvited(0)).toBe(true);
+		expect(canFilterInvited(3)).toBe(true);
+		expect(canFilterInvited(12)).toBe(true);
+	});
+
+	it("withholds it when 1 or 2 walk-ins could be isolated by comparing the two views", () => {
+		expect(canFilterInvited(1)).toBe(false);
+		expect(canFilterInvited(2)).toBe(false);
 	});
 });
 

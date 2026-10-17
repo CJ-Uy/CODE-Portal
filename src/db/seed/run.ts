@@ -11,6 +11,7 @@ import {
 	seedEvents,
 	seedFeedbackDemoAnswers,
 	seedFeedbackDemoAssignments,
+	seedFeedbackDemoAttendance,
 	seedFeedbackDemoDebriefs,
 	seedFeedbackDemoEvents,
 	seedFeedbackDemoMembers,
@@ -87,6 +88,7 @@ async function seedLocal() {
 	// The feedback demo: a past event with a sent form and its answers. Local only, never exported to the dev D1 seed.
 	await insertChunks(db, schema.members, seedFeedbackDemoMembers);
 	await insertChunks(db, schema.crsEvents, seedFeedbackDemoEvents);
+	await insertChunks(db, schema.crsAttendance, seedFeedbackDemoAttendance);
 	await insertChunks(db, schema.eventDebriefs, seedFeedbackDemoDebriefs);
 	await insertChunks(db, schema.surveys, seedFeedbackDemoSurveys);
 	await insertChunks(db, schema.surveyQuestions, seedFeedbackDemoQuestions);

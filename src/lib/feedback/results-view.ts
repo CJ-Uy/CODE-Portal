@@ -23,6 +23,14 @@ export function invitedLine(responded: number, invited: number): string | null {
 	return `${responded} of ${invited} invited (${Math.round((responded / invited) * 100)}%)`;
 }
 
+/**
+ * The invited-only view is offered only when it can't be used to pick out walk-ins. Comparing it with the full view
+ * would otherwise isolate the answers of 1 or 2 walk-in respondents, so it needs none, or enough to hide among.
+ */
+export function canFilterInvited(walkInCount: number): boolean {
+	return walkInCount === 0 || walkInCount >= RESULTS_MIN_RESPONSES;
+}
+
 /** Under 30%. Compared as whole numbers so 6 of 20 is exactly 30% and gets no caution. */
 export function isLowResponseRate(responded: number, invited: number): boolean {
 	return invited > 0 && responded * 10 < invited * 3;

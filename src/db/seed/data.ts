@@ -243,7 +243,8 @@ export const seedSurveyAssignments: InferInsertModel<typeof surveyAssignments>[]
 const DEMO_EVENT_ID = "evt_demo_past";
 const DEMO_SURVEY_ID = "srv_demo_past";
 const INVITED_COUNT = 24;
-const WALK_IN_COUNT = 2;
+// Three, not fewer: with 1 or 2 the invited-only filter would single them out, so the page hides it (see canFilterInvited).
+const WALK_IN_COUNT = 3;
 
 const attendeeNumber = (n: number) => String(n).padStart(2, "0");
 const attendeeId = (n: number) => `mem_fb_${attendeeNumber(n)}`;
@@ -407,7 +408,7 @@ const DEMO_RESPONSES: DemoResponse[] = [
 		change: "The venue is too small, di kami lahat kasya. Please book a bigger room.",
 	},
 	{
-		source: "invited",
+		source: "walk_in",
 		day: MANILA_SEP_28,
 		ratings: [3, 3, 3, 2, 3],
 		valuable: "The snacks, honestly.",
@@ -453,16 +454,15 @@ export const seedFeedbackDemoAnswers: InferInsertModel<typeof surveyAnswers>[] =
 	];
 });
 
-// 24 invited, 6 of whom answered (25%, so the low-response caution shows), plus the two walk-ins who answered from the event page.
+// 24 invited, 5 of whom answered (21%, so the low-response caution shows), plus the three walk-ins who answered from the event page.
 const DEMO_COMPLETED_AT = [
 	"2026-09-27T03:20:00.000Z",
 	"2026-09-27T05:45:00.000Z",
 	"2026-09-27T11:10:00.000Z",
 	"2026-09-27T14:30:00.000Z",
 	"2026-09-28T02:05:00.000Z",
-	"2026-09-28T09:40:00.000Z",
 ].map((at) => new Date(at));
-const DEMO_WALK_IN_COMPLETED_AT = [new Date("2026-09-27T07:00:00.000Z"), new Date("2026-09-28T04:00:00.000Z")];
+const DEMO_WALK_IN_COMPLETED_AT = ["2026-09-27T07:00:00.000Z", "2026-09-28T04:00:00.000Z", "2026-09-28T09:40:00.000Z"].map((at) => new Date(at));
 
 export const seedFeedbackDemoAssignments: InferInsertModel<typeof surveyAssignments>[] = [
 	...Array.from({ length: INVITED_COUNT }, (_, index) => ({
@@ -480,6 +480,15 @@ export const seedFeedbackDemoAssignments: InferInsertModel<typeof surveyAssignme
 		source: "walk_in" as const,
 	})),
 ];
+
+// Everyone invited and every walk-in checked in to the event, so the eligible and attendee counts are real. Check-ins
+// fall inside the event window (07:00 to 10:00 UTC), three minutes apart.
+export const seedFeedbackDemoAttendance: InferInsertModel<typeof crsAttendance>[] = seedFeedbackDemoMembers.map((member, index) => ({
+	eventId: DEMO_EVENT_ID,
+	memberId: member.id,
+	scannedAt: new Date(seedFeedbackDemoEvents[0].startsAt.getTime() + (5 + index * 3) * 60_000),
+	scannedBy: "mem_demo_admin",
+}));
 
 export const seedFeedbackDemoDebriefs: InferInsertModel<typeof eventDebriefs>[] = [
 	{

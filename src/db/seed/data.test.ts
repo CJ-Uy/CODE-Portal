@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { startOfUtc8Day } from "@/lib/date-slots";
+import { canFilterInvited } from "@/lib/feedback/results-view";
 import { scaleSummary } from "@/lib/feedback/stats";
 import { RESERVED_SLUG_DEFAULTS } from "@/lib/links";
 import {
 	seedFeedbackDemoAnswers,
 	seedFeedbackDemoAssignments,
+	seedFeedbackDemoAttendance,
 	seedFeedbackDemoDebriefs,
 	seedFeedbackDemoEvents,
 	seedFeedbackDemoMembers,
@@ -57,18 +59,32 @@ describe("feedback demo seed", () => {
 		expect(seedFeedbackDemoEvents[0].endsAt!.getTime()).toBeLessThan(seedFeedbackDemoSurveys[0].sentAt!.getTime());
 	});
 
-	it("has 8 responses, 6 invited and 2 walk-ins, matching the assignments", () => {
+	it("has 8 responses, 5 invited and 3 walk-ins, matching the assignments", () => {
 		expect(seedFeedbackDemoResponses).toHaveLength(8);
-		expect(seedFeedbackDemoResponses.filter((response) => response.source === "invited")).toHaveLength(6);
-		expect(seedFeedbackDemoResponses.filter((response) => response.source === "walk_in")).toHaveLength(2);
+		expect(seedFeedbackDemoResponses.filter((response) => response.source === "invited")).toHaveLength(5);
+		expect(seedFeedbackDemoResponses.filter((response) => response.source === "walk_in")).toHaveLength(3);
 
 		const invited = seedFeedbackDemoAssignments.filter((assignment) => assignment.source === "invited");
 		expect(invited).toHaveLength(24);
-		expect(invited.filter((assignment) => assignment.completedAt)).toHaveLength(6);
-		expect(seedFeedbackDemoAssignments.filter((assignment) => assignment.source === "walk_in" && assignment.completedAt)).toHaveLength(2);
+		expect(invited.filter((assignment) => assignment.completedAt)).toHaveLength(5);
+		expect(seedFeedbackDemoAssignments.filter((assignment) => assignment.source === "walk_in" && assignment.completedAt)).toHaveLength(3);
+		// Enough walk-ins that the invited-only filter does not single them out.
+		expect(canFilterInvited(3)).toBe(true);
 		// Every assignment is for a member the demo creates.
 		const memberIds = new Set(seedFeedbackDemoMembers.map((member) => member.id));
 		expect(seedFeedbackDemoAssignments.every((assignment) => memberIds.has(assignment.memberId))).toBe(true);
+	});
+
+	it("checks in everyone who was invited or walked in, once each, during the event", () => {
+		const event = seedFeedbackDemoEvents[0];
+		expect(seedFeedbackDemoAttendance).toHaveLength(27);
+		expect(new Set(seedFeedbackDemoAttendance.map((row) => row.memberId))).toEqual(new Set(seedFeedbackDemoAssignments.map((row) => row.memberId)));
+		expect(seedFeedbackDemoAttendance.every((row) => row.eventId === event.id && row.scannedBy === "mem_demo_admin")).toBe(true);
+		expect(
+			seedFeedbackDemoAttendance.every(
+				(row) => row.scannedAt.getTime() >= event.startsAt.getTime() && row.scannedAt.getTime() <= event.endsAt!.getTime(),
+			),
+		).toBe(true);
 	});
 
 	it("keeps responses anonymous: no member link, day-truncated, ids with no answer order", () => {

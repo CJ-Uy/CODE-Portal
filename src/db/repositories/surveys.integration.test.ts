@@ -623,15 +623,61 @@ describe("surveys repository on D1", () => {
 			).rejects.toThrow("This form has already closed.");
 		});
 
-		it("closes a running form and edits nothing else once closed", async () => {
+		it("closes a running form and moves its closing time to now", async () => {
+			const { repo, survey, row } = await runningForm();
+			const closedAt = new Date(NOW.getTime() + 5 * HOUR);
+
+			await repo.updateRunning(admin, { surveyId: survey.id, close: true }, closedAt);
+
+			const closed = await row();
+			expect(closed.status).toBe("closed");
+			// Not the planned time 72 hours out: the results read "Closed <when it closed>".
+			expect(closed.closesAt?.getTime()).toBe(closedAt.getTime());
+		});
+
+		it("keeps the planned closing time when the form had already run past it", async () => {
 			const { repo, survey, row } = await runningForm();
 
+			await repo.updateRunning(admin, { surveyId: survey.id, close: true }, new Date(in72h.getTime() + HOUR));
+
+			const closed = await row();
+			expect(closed.status).toBe("closed");
+			expect(closed.closesAt?.getTime()).toBe(in72h.getTime());
+		});
+
+		it("lets sharing be flipped on a closed form but nothing else", async () => {
+			const { db, repo, survey, row } = await runningForm();
+			const closedAt = new Date(NOW.getTime() + 5 * HOUR);
+			await repo.updateRunning(admin, { surveyId: survey.id, close: true }, closedAt);
+
+			await repo.updateRunning(admin, { surveyId: survey.id, shareWithOrganizers: false }, closedAt);
+			expect((await row()).shareWithOrganizers).toBe(false);
+			await repo.updateRunning(admin, { surveyId: survey.id, shareWithOrganizers: true }, closedAt);
+			expect((await row()).shareWithOrganizers).toBe(true);
+			const audits = await db.select().from(schema.auditLogs);
+			expect(audits.some((audit) => audit.detail === "organizer sharing off")).toBe(true);
+
+			// The closing date, a reminder and a second close are still refused, and a refused call changes nothing.
+			const later = new Date(closedAt.getTime() + 48 * HOUR);
+			for (const change of [{ closesAt: later }, { remindNow: true as const }, { close: true as const }]) {
+				await expect(repo.updateRunning(admin, { surveyId: survey.id, ...change }, closedAt)).rejects.toThrow(
+					"Only a running form can be edited.",
+				);
+			}
+			await expect(
+				repo.updateRunning(admin, { surveyId: survey.id, closesAt: later, shareWithOrganizers: false }, closedAt),
+			).rejects.toThrow("Only a running form can be edited.");
+			const after = await row();
+			expect(after.closesAt?.getTime()).toBe(closedAt.getTime());
+			expect(after.shareWithOrganizers).toBe(true);
+			expect(after.status).toBe("closed");
+		});
+
+		it("does not let a plain member flip sharing on a closed form", async () => {
+			const { repo, survey } = await runningForm();
 			await repo.updateRunning(admin, { surveyId: survey.id, close: true }, NOW);
 
-			expect((await row()).status).toBe("closed");
-			await expect(repo.updateRunning(admin, { surveyId: survey.id, shareWithOrganizers: false }, NOW)).rejects.toThrow(
-				"Only a running form can be edited.",
-			);
+			await expect(repo.updateRunning(member, { surveyId: survey.id, shareWithOrganizers: false }, NOW)).rejects.toThrow("Not authorized");
 		});
 
 		it("refuses a draft, a missing survey and a plain member", async () => {
@@ -640,6 +686,10 @@ describe("surveys repository on D1", () => {
 			const draft = await repo.createFromTemplate(admin, { templateId: "stpl_standard", eventId: "evt_1" });
 
 			await expect(repo.updateRunning(admin, { surveyId: draft.id, close: true }, NOW)).rejects.toThrow(
+				"Only a running form can be edited.",
+			);
+			// Sharing on a draft is chosen when it is sent, not before.
+			await expect(repo.updateRunning(admin, { surveyId: draft.id, shareWithOrganizers: false }, NOW)).rejects.toThrow(
 				"Only a running form can be edited.",
 			);
 			await expect(repo.updateRunning(admin, { surveyId: "srv_missing", close: true }, NOW)).rejects.toThrow("Survey not found.");

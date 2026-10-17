@@ -7,7 +7,7 @@ export type RunningIntent = "closesAt" | "close" | "remind" | "share";
 export const RUNNING_SAVED: Record<RunningIntent, string> = {
 	closesAt: "Closing time updated.",
 	close: "Form closed.",
-	remind: "Reminder queued. It goes out within a minute.",
+	remind: "Reminder queued. It goes out the next time the reminder job runs.",
 	share: "Sharing updated.",
 };
 

@@ -9,7 +9,7 @@ import { SummaryPanel } from "@/components/feedback/summary-panel";
 import { toLocalInput } from "@/lib/date-slots";
 import { formatEstimate } from "@/lib/feedback/editor-input";
 import { parseOptions } from "@/lib/feedback/form";
-import { canDraftSummary, countComments, summaryView } from "@/lib/feedback/results-view";
+import { canDraftSummary, canFilterInvited, countComments, summaryView } from "@/lib/feedback/results-view";
 import { errorLabel } from "@/lib/feedback/safe-log";
 import { sendDefaultClosesAt } from "@/lib/feedback/send-input";
 import { effectiveStatus, estimateSeconds, suggestInviteCount } from "@/lib/feedback/stats";
@@ -21,6 +21,7 @@ import { getSummarizer } from "@/server/feedback/ai";
 import { feedbackEmailReady } from "@/server/feedback/email";
 import { DraftWorkspace } from "./draft-workspace";
 import { RunningControls } from "./running-controls";
+import { ShareToggle } from "./share-toggle";
 
 export const dynamic = "force-dynamic";
 
@@ -106,10 +107,13 @@ export default async function AdminSurveyDetailPage({
 			console.error("Could not load the survey results.", { surveyId: id, error: errorLabel(error) });
 			return null;
 		});
-	const invitedOnly = filter === "invited";
 	// The unfiltered results feed the summary and the filter row; the filter only changes what the questions show.
 	const allResults = isDraft ? null : await loadResults("all");
-	const results = invitedOnly && allResults ? await loadResults("invited") : allResults;
+	// With 1 or 2 walk-ins, comparing the invited-only view with the full one would single out their answers, so the
+	// filter is not offered and a hand-typed ?filter=invited shows everything.
+	const filterOffered = allResults !== null && allResults.invitedCount > 0 && canFilterInvited(allResults.walkInCount);
+	const invitedOnly = filter === "invited" && filterOffered;
+	const results = invitedOnly ? await loadResults("invited") : allResults;
 
 	const now = new Date();
 	// Only a draft has a send panel, so only a draft pays for the head count and the email check.
@@ -129,9 +133,6 @@ export default async function AdminSurveyDetailPage({
 					{event ? <p className="min-w-0 text-sm text-muted-foreground [overflow-wrap:anywhere]">For the event {event.title}</p> : null}
 					<div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
 						<Badge variant="outline">{results?.status ?? detail.survey.status}</Badge>
-						{!isDraft && !running && detail.survey.eventId ? (
-							<span>{detail.survey.shareWithOrganizers ? "Organizers can see these results." : "Organizers can't see these results."}</span>
-						) : null}
 					</div>
 				</header>
 
@@ -164,10 +165,11 @@ export default async function AdminSurveyDetailPage({
 								closesAt={toLocalInput(timeClosed || !detail.survey.closesAt ? sendDefaultClosesAt(null, now) : detail.survey.closesAt)}
 								timeClosed={timeClosed}
 								reminder={detail.survey.reminderSentAt ? "sent" : timeClosed ? "closed" : "ready"}
-								hasEvent={Boolean(detail.survey.eventId)}
-								shared={detail.survey.shareWithOrganizers}
 							/>
 						) : null}
+
+						{/* Works on a closed form too: an admin can stop sharing with organizers at any time after sending. */}
+						{detail.survey.eventId ? <ShareToggle surveyId={detail.survey.id} shared={detail.survey.shareWithOrganizers} /> : null}
 
 						{!results || !allResults ? (
 							<p className="min-w-0 rounded-lg border border-border bg-secondary p-3 text-sm text-secondary-foreground">
@@ -175,7 +177,7 @@ export default async function AdminSurveyDetailPage({
 							</p>
 						) : (
 							<>
-								{allResults.invitedCount > 0 ? (
+								{filterOffered ? (
 									<nav aria-label="Which responses to show" className="flex flex-wrap gap-2">
 										<FilterLink href={base} current={!invitedOnly}>
 											All responses
@@ -188,7 +190,7 @@ export default async function AdminSurveyDetailPage({
 
 								<ResultsList results={results} mode="admin" />
 
-								{summarizerAvailable && !results.belowThreshold ? (
+								{summarizerAvailable && !allResults.belowThreshold ? (
 									<SummaryPanel
 										surveyId={detail.survey.id}
 										view={summaryView(allResults.summary, allResults.responseCount, countComments(allResults.questions))}
