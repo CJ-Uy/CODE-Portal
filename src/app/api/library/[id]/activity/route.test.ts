@@ -102,6 +102,19 @@ describe("POST /api/library/[id]/activity", () => {
 		expect(record).not.toHaveBeenCalled();
 	});
 
+	it("still answers 204 when recording fails, and logs nothing that identifies the member", async () => {
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+		try {
+			record.mockRejectedValue(new Error("D1 exploded for mem_reader on lib_1"));
+			const response = await ping({ kind: "active", seconds: 15 });
+			expect(response.status).toBe(204);
+			expect(record).toHaveBeenCalledTimes(1);
+			expect(JSON.stringify(logged.mock.calls)).not.toMatch(/mem_reader|lib_1|exploded/);
+		} finally {
+			logged.mockRestore();
+		}
+	});
+
 	it("accepts the seconds bounds", async () => {
 		expect((await ping({ kind: "active", seconds: 0 })).status).toBe(204);
 		expect((await ping({ kind: "active", seconds: 600 })).status).toBe(204);

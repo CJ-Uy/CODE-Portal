@@ -33,7 +33,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 	if (!body.success) return Response.json({ error: "Invalid activity ping." }, { status: 400 });
 
 	const { id } = await params;
-	const repositories = await getRepositories();
-	await repositories.libraryActivity.record(actor, id, body.data);
+	try {
+		const repositories = await getRepositories();
+		await repositories.libraryActivity.record(actor, id, body.data);
+	} catch {
+		// A lost ping costs a few seconds of reading time, and a 500 would only clutter the reader's console. Fixed text on purpose: the error or ids could identify the member.
+		console.error("Library activity ping failed.");
+	}
 	return new Response(null, { status: 204 });
 }

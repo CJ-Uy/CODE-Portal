@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
 import { libraryItemMemberDays, libraryItems, libraryListItems } from "@/db/schema";
-import { creditSeconds, utc8Day } from "@/lib/library/activity";
+import { ACTIVITY, creditSeconds, utc8Day } from "@/lib/library/activity";
 import type { Actor } from "@/server/auth/permissions";
 import { cardsByIds } from "./library";
 import type { Db, LibraryCard } from "./library";
@@ -19,7 +19,7 @@ export type LibraryActivityRepository = {
 	totalActiveSeconds(): Promise<number>;
 	/** Items ranked by how many distinct members saved them since `since`; only items this actor can browse. */
 	mostSavedSince(actor: Actor, since: Date, limit: number): Promise<LibraryCard[]>;
-	/** The item's owner or a moderator who can see it; anyone else gets "Library item not found.". Weeks with no activity are left out. */
+	/** The item's owner or a moderator who can see it; anyone else gets "Library item not found.". Always the last 12 ISO weeks, oldest first, with zeros for quiet weeks. */
 	weeklyForOwner(actor: Actor, itemId: string, now?: Date): Promise<LibraryWeek[]>;
 };
 
@@ -71,7 +71,7 @@ export function createLibraryActivityRepository(db: Db): LibraryActivityReposito
 			}
 
 			const delta = { opens: ping.kind === "open" ? 1 : 0, activeSeconds: seconds, downloads: ping.kind === "download" ? 1 : 0 };
-			// ponytail: read-then-write, so concurrent pings (two tabs) can overshoot the daily cap by at most one ping each. The increment itself is atomic, so no seconds are lost.
+			// The read above only sizes this ping's credit. The daily cap is enforced in SQL: the update clamps at the cap, so parallel pings that all read the same total still cannot push it over. A fresh insert is at most one ping's credit.
 			await db
 				.insert(libraryItemMemberDays)
 				.values({ itemId, memberId: actor.memberId, day, ...delta })
@@ -79,7 +79,7 @@ export function createLibraryActivityRepository(db: Db): LibraryActivityReposito
 					target: [libraryItemMemberDays.itemId, libraryItemMemberDays.memberId, libraryItemMemberDays.day],
 					set: {
 						opens: sql`${libraryItemMemberDays.opens} + ${delta.opens}`,
-						activeSeconds: sql`${libraryItemMemberDays.activeSeconds} + ${delta.activeSeconds}`,
+						activeSeconds: sql`MIN(${ACTIVITY.dailyCapSeconds}, ${libraryItemMemberDays.activeSeconds} + ${delta.activeSeconds})`,
 						downloads: sql`${libraryItemMemberDays.downloads} + ${delta.downloads}`,
 					},
 				});
@@ -160,13 +160,17 @@ export function createLibraryActivityRepository(db: Db): LibraryActivityReposito
 				.where(and(eq(libraryItemMemberDays.itemId, itemId), gte(libraryItemMemberDays.day, windowStart(utc8Day(now)))))
 				.groupBy(libraryItemMemberDays.day)
 				.orderBy(asc(libraryItemMemberDays.day));
+			const start = Date.parse(`${windowStart(utc8Day(now))}T00:00:00Z`);
 			const weeks = new Map<string, LibraryWeek>();
+			for (let i = 0; i < WEEKS_SHOWN; i++) {
+				const week = isoWeekLabel(new Date(start + i * 7 * DAY_MS).toISOString().slice(0, 10));
+				weeks.set(week, { week, opens: 0, activeSeconds: 0 });
+			}
 			for (const { day, opens, activeSeconds } of days) {
-				const week = isoWeekLabel(day);
-				const total = weeks.get(week) ?? { week, opens: 0, activeSeconds: 0 };
+				const total = weeks.get(isoWeekLabel(day));
+				if (!total) continue; // a day after this week, from a skewed clock
 				total.opens += opens;
 				total.activeSeconds += activeSeconds;
-				weeks.set(week, total);
 			}
 			return [...weeks.values()];
 		},

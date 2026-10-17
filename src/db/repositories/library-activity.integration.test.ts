@@ -31,6 +31,24 @@ describe("library activity: record and stats", () => {
 		expect((await activity.statsFor([id])).get(id)?.activeSeconds).toBe(7_200);
 	}, 20_000);
 
+	it("credits only what is left under the cap", async () => {
+		const id = await insertItem({});
+		await seedDay(id, "2026-10-16", 0, 7_190);
+		await activity.record(actors.other, id, { kind: "active", seconds: 30 }, new Date("2026-10-16T02:00:00Z"));
+		expect((await activity.statsFor([id])).get(id)?.activeSeconds).toBe(7_200);
+	});
+
+	it("holds the cap when pings land at the same instant", async () => {
+		const id = await insertItem({});
+		const now = new Date("2026-10-16T02:00:00Z");
+		await seedDay(id, "2026-10-16", 0, 7_170);
+		// Every ping reads 7,170 before any write lands, so each is credited the full 30 by creditSeconds alone.
+		await Promise.all(Array.from({ length: 15 }, () => activity.record(actors.other, id, { kind: "active", seconds: 30 }, now)));
+		const seconds = (await activity.statsFor([id])).get(id)?.activeSeconds ?? 0;
+		expect(seconds).toBeLessThanOrEqual(7_200);
+		expect(seconds).toBe(7_200);
+	});
+
 	it("starts a fresh cap on the next UTC+8 day", async () => {
 		const id = await insertItem({});
 		for (let i = 0; i < 250; i++) await activity.record(actors.other, id, { kind: "active", seconds: 30 }, new Date("2026-10-16T02:00:00Z"));
@@ -170,7 +188,7 @@ describe("library activity: mostSavedSince", () => {
 describe("library activity: weeklyForOwner", () => {
 	const now = new Date("2026-10-16T02:00:00Z"); // Friday, ISO 2026-W42
 
-	it("groups days into ISO weeks, oldest first, within the last 12 weeks", async () => {
+	it("returns the last 12 ISO weeks, oldest first, with zeros for quiet weeks", async () => {
 		const id = await insertItem({ createdBy: "owner" });
 		await seedDay(id, "2026-10-16", 2, 60); // W42
 		await seedDay(id, "2026-10-12", 1, 30); // W42 Monday
@@ -178,11 +196,22 @@ describe("library activity: weeklyForOwner", () => {
 		await seedDay(id, "2026-07-27", 7, 700); // W31 is the first of the 12 weeks
 		await seedDay(id, "2026-07-26", 9, 900); // W30 is outside the window
 		const weeks = await activity.weeklyForOwner(actors.owner, id, now);
-		expect(weeks).toEqual([
+		expect(weeks.map((row) => row.week)).toEqual([
+			"2026-W31", "2026-W32", "2026-W33", "2026-W34", "2026-W35", "2026-W36",
+			"2026-W37", "2026-W38", "2026-W39", "2026-W40", "2026-W41", "2026-W42",
+		]);
+		expect(weeks.filter((row) => row.opens > 0 || row.activeSeconds > 0)).toEqual([
 			{ week: "2026-W31", opens: 7, activeSeconds: 700 },
 			{ week: "2026-W41", opens: 4, activeSeconds: 100 },
 			{ week: "2026-W42", opens: 3, activeSeconds: 90 },
 		]);
+	});
+
+	it("returns twelve zero weeks for an item nobody has read", async () => {
+		const id = await insertItem({ createdBy: "owner" });
+		const weeks = await activity.weeklyForOwner(actors.owner, id, now);
+		expect(weeks).toHaveLength(12);
+		expect(weeks.every((row) => row.opens === 0 && row.activeSeconds === 0)).toBe(true);
 	});
 
 	it("labels weeks that straddle the new year by their ISO year", async () => {
@@ -191,7 +220,11 @@ describe("library activity: weeklyForOwner", () => {
 		await seedDay(id, "2026-12-28", 1, 10); // Monday, 2026-W53
 		await seedDay(id, "2027-01-04", 1, 10); // Monday, 2027-W01
 		const weeks = await activity.weeklyForOwner(actors.owner, id, new Date("2027-01-05T02:00:00Z"));
-		expect(weeks).toEqual([
+		expect(weeks.map((row) => row.week)).toEqual([
+			"2026-W43", "2026-W44", "2026-W45", "2026-W46", "2026-W47", "2026-W48",
+			"2026-W49", "2026-W50", "2026-W51", "2026-W52", "2026-W53", "2027-W01",
+		]);
+		expect(weeks.filter((row) => row.opens > 0)).toEqual([
 			{ week: "2026-W53", opens: 2, activeSeconds: 20 },
 			{ week: "2027-W01", opens: 1, activeSeconds: 10 },
 		]);
@@ -202,14 +235,16 @@ describe("library activity: weeklyForOwner", () => {
 		const theirs = await insertItem({ createdBy: "owner" });
 		await seedDay(mine, "2026-10-16", 1, 10);
 		await seedDay(theirs, "2026-10-16", 5, 50);
-		expect(await activity.weeklyForOwner(actors.owner, mine, now)).toEqual([{ week: "2026-W42", opens: 1, activeSeconds: 10 }]);
+		const weeks = await activity.weeklyForOwner(actors.owner, mine, now);
+		expect(weeks.at(-1)).toEqual({ week: "2026-W42", opens: 1, activeSeconds: 10 });
+		expect(weeks.reduce((sum, row) => sum + row.opens, 0)).toBe(1);
 	});
 
 	it("allows the owner and moderators and refuses everyone else", async () => {
 		const id = await insertItem({ createdBy: "owner" });
 		await seedDay(id, "2026-10-16", 1, 10);
-		expect(await activity.weeklyForOwner(actors.owner, id, now)).toHaveLength(1);
-		expect(await activity.weeklyForOwner(actors.moderator, id, now)).toHaveLength(1);
+		expect((await activity.weeklyForOwner(actors.owner, id, now)).at(-1)?.opens).toBe(1);
+		expect((await activity.weeklyForOwner(actors.moderator, id, now)).at(-1)?.opens).toBe(1);
 		await expect(activity.weeklyForOwner(actors.other, id, now)).rejects.toThrow("Library item not found.");
 		await expect(activity.weeklyForOwner(actors.owner, "lib_missing", now)).rejects.toThrow("Library item not found.");
 	});
