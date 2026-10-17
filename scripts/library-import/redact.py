@@ -10,9 +10,10 @@ Writes OUTDIR/<driveId>.pdf|.docx for each redacted document plus OUTDIR/verdict
 {driveId: {"verdict": "clean"|"redacted"|"confidential", "file": "<path to upload>", "reason": "...", "has_images": bool}}
 Fails closed. A document is only "clean" or "redacted" when it is readable, was reviewed, and no flagged string can
 still be found in it: not in its text, not when a hyphen, line break or tab splits the name, and not in the
-containers a reader never sees (comments, attributes, annotations, links, attachments, metadata). Everything else,
-including a review that cannot be trusted, ends up "confidential". "has_images" marks documents whose pictures
-nobody has checked.
+containers a reader never sees (comments, attributes, annotations, links, metadata, non-XML parts read as
+latin-1, UTF-8 and UTF-16). Files and archives embedded in a document are not opened: such a document is never
+trusted. Everything else, including a review that cannot be trusted, ends up "confidential". "has_images" marks
+documents whose pictures nobody has checked.
 Local tooling only: run it with the redact-venv python (pymupdf) as `python -B -I`, never as an app dependency.
 """
 import contextlib
@@ -84,14 +85,20 @@ def squash(s):
 
 
 class Haystack:
-    """Everything that can be read out of a document. `texts` are matched as written and squashed; `blobs`
-    (binary containers) as written only, because squashing random bytes would invent matches."""
+    """Everything that can be read out of a document. `texts` are matched as written and squashed. `blobs`
+    (bytes of non-XML members and of PDF streams) are first read three ways: latin-1 sees ASCII, UTF-8 sees
+    accented names, UTF-16LE (at both byte offsets) sees OLE-style text; then they are matched like texts.
+    `media` (pictures) are matched as written only, because squashing a photo's bytes would invent matches."""
 
-    def __init__(self, texts, blobs, labels=()):
-        texts, blobs = "\n".join(texts), "\n".join(blobs)
+    def __init__(self, texts, blobs, media, labels=()):
+        texts = list(texts)
+        for b in blobs:
+            texts += [b.decode("latin-1"), b.decode("utf-8", "ignore"),
+                      b.decode("utf-16-le", "ignore"), b[1:].decode("utf-16-le", "ignore")]
+        texts, media = "\n".join(texts), "\n".join(m.decode("latin-1") for m in media)
         for label in labels:  # our own labels are not leaks, even if a flagged string happens to sit inside one
-            texts, blobs = texts.replace(label, " "), blobs.replace(label, " ")
-        self.n, self.b, self.q = norm(texts), norm(blobs), squash(texts)
+            texts, media = texts.replace(label, " "), media.replace(label, " ")
+        self.n, self.b, self.q = norm(texts), norm(media), squash(texts)
 
     def has(self, s):
         q = squash(s)
@@ -101,14 +108,21 @@ class Haystack:
 TEXT_PARTS = re.compile(r"^(word/(document|header\d*|footer\d*|footnotes|endnotes|comments)|docProps/core)\.xml$")
 THUMBNAIL = re.compile(r"^docProps/thumbnail\.\w+$", re.I)
 XMLISH = re.compile(r"\.(xml|rels|vml|txt|json|html?)$", re.I)
-IMAGE_MEMBER = re.compile(r"\.(png|jpe?g|gif|bmp|tiff?|emf|wmf|svg|webp)$|^word/embeddings/", re.I)
+# anything in word/media is a picture whatever its extension (.emz, .wmz, .jfif, .heic, .wdp ...)
+IMAGE_MEMBER = re.compile(r"\.(png|jpe?g|gif|bmp|tiff?|emf|wmf|svg|webp)$|^word/(media|embeddings)/", re.I)
 IMAGE_OBJECT = re.compile(r"/Subtype\s*/Image")
 UTF16_HEX = re.compile(r"<(FEFF[0-9A-Fa-f\s]*)>")  # how PDFs often store titles and annotation text
+# A zip (docx, xlsx, ...), a PDF or an OLE file inside the document holds compressed or structured text this
+# script does not open. It does not recurse: such a document is simply never trusted.
+CONTAINER_MAGIC = (b"PK\x03\x04", b"%PDF-", b"\xd0\xcf\x11\xe0")
+EMBEDDED = "embedded file or archive, which cannot be scanned"
 
 
 def pdf_haystack(path):
     texts, blobs = [extract(path, "pdf")[0]], []  # raises for an encrypted pdf
     with pymupdf.open(path) as d:
+        if d.embfile_count():
+            raise Failed(EMBEDDED, "unverifiable")
         texts += [title for _, title, _ in d.get_toc()]
         for page in d:
             for annot in page.annots() or []:
@@ -118,31 +132,42 @@ def pdf_haystack(path):
             for link in page.get_links():
                 texts += [str(link.get("uri", "")), str(link.get("file", ""))]
         # every object's dictionary and every stream but the images (a scan's pages are huge and hold no strings);
-        # that includes embedded files, XMP and content streams
+        # that includes XMP and content streams (embedded files are refused above, and a stream that is secretly
+        # an archive is refused below)
         for xref in range(1, d.xref_length()):
             obj = d.xref_object(xref, compressed=False)
-            blobs.append(obj)
+            texts.append(obj)
             for h in UTF16_HEX.findall(obj):
                 h = re.sub(r"\s", "", h)
                 texts.append(bytes.fromhex(h[: len(h) // 2 * 2]).decode("utf-16-be", "ignore"))
             if d.xref_is_stream(xref) and not IMAGE_OBJECT.search(obj):
-                blobs.append(d.xref_stream(xref).decode("latin-1"))
-    return texts, blobs
+                stream = d.xref_stream(xref)
+                if stream.startswith(CONTAINER_MAGIC):
+                    raise Failed(EMBEDDED, "unverifiable")
+                blobs.append(stream)
+    return texts, blobs, []
 
 
 def docx_haystack(path):
-    texts, blobs = [extract(path, "docx")[0]], []
+    texts, blobs, media = [extract(path, "docx")[0]], [], []
     with zipfile.ZipFile(path) as z:
         for name in z.namelist():
+            if name.endswith("/"):  # a directory entry
+                continue
             texts.append(name)
             data = z.read(name)
+            if name.startswith("word/media/") or THUMBNAIL.match(name):
+                media.append(data)
+                continue
+            if name.startswith("word/embeddings/") or data.startswith(CONTAINER_MAGIC):
+                raise Failed(EMBEDDED, "unverifiable")
             if XMLISH.search(name):
                 xml = data.decode("utf-8", "ignore")
                 text = re.sub(r"</w:p>|<w:(?:br|cr|tab)\b[^>]*>", "\n", xml)  # breaks and tabs separate words
                 texts += [unescape(xml), unescape(re.sub(r"<[^>]+>", "", text))]  # raw (attributes) and tags stripped (split runs)
             else:
-                blobs.append(data.decode("latin-1"))
-    return texts, blobs
+                blobs.append(data)
+    return texts, blobs, media
 
 
 def haystack(path, typ):
@@ -348,6 +373,15 @@ def _raw(path):
         return d.tobytes(garbage=4, deflate=False, expand=255)
 
 
+def _inner_zip(member, text):
+    """A deflated zip, like a spreadsheet or document embedded in another one. The text repeats so that it
+    really compresses and is not readable in the bytes."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr(member, text * 20)
+    return buf.getvalue()
+
+
 XMP = ('<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?><x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF '
        'xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description xmlns:dc="http://purl.org/dc/elements/1.1/">'
        '<dc:creator><rdf:Seq><rdf:li>Juan Example</rdf:li></rdf:Seq></dc:creator></rdf:Description></rdf:RDF>'
@@ -396,6 +430,7 @@ def selftest():
         review("labelId", "redact", ("Client", org))
 
         # --- PDFs that must end up confidential: the name survives somewhere the redaction cannot reach
+        xlsx = _inner_zip("xl/sharedStrings.xml", "Acme Youth Council ")
         make_pdf(doc("hyphId", "h.pdf"), [et.FILLER + "Client is Acme Youth Coun-\ncil of the region"])  # hyphenated wrap
         make_pdf(doc("annotId", "n.pdf"), [et.FILLER])
         edit_pdf(dd / "annotId" / "n.pdf", lambda d: d[0].add_text_annot((100, 100), "Note: Juan Example said hi").set_info(title="Juan Example"))
@@ -422,6 +457,19 @@ def selftest():
         edit_pdf(dd / "widgetId" / "wd.pdf", add_field)
         make_pdf(doc("embId", "m.pdf"), [et.FILLER])
         edit_pdf(dd / "embId" / "m.pdf", lambda d: d.embfile_add("n.txt", b"Juan Example was here"))
+        # the name on the page, and again inside an attached .docx, whose deflated bytes show nothing
+        make_pdf(doc("embDocxId", "ed.pdf"), [et.FILLER + "Client is Acme Youth Council"])
+        et.make_docx(tmp / "inner.docx", [["Acme Youth Council"]] * 20)
+        edit_pdf(dd / "embDocxId" / "ed.pdf", lambda d: d.embfile_add("n.docx", (tmp / "inner.docx").read_bytes()))
+        make_pdf(doc("streamZipId", "sz.pdf"), [et.FILLER + "Client is Acme Youth Council"])  # a zip hidden in a plain stream, no attachment
+
+        def add_zip_stream(d):
+            x = d.get_new_xref()
+            d.update_object(x, "<<>>")
+            d.update_stream(x, xlsx, new=True)
+            d.xref_set_key(d.pdf_catalog(), "Blob", f"{x} 0 R")
+
+        edit_pdf(dd / "streamZipId" / "sz.pdf", add_zip_stream)
         make_pdf(doc("offId", "o.pdf"), [et.FILLER])  # a literal string drawn off the page: never extracted, still in the file
 
         def draw_off_page(d):
@@ -443,6 +491,8 @@ def selftest():
         review("linkId", "redact", JUAN)
         review("widgetId", "redact", JUAN)
         review("embId", "redact", JUAN)
+        review("embDocxId", "redact", ACME)
+        review("streamZipId", "redact", ACME)
         review("offId", "redact", JUAN)
         review("catalogId", "redact", JUAN)
         review("imgId", "redact", ("Zed Example", member))
@@ -465,6 +515,9 @@ def selftest():
         png, jpg = b"\x89PNG\r\n\x1a\n" + bytes(16), b"\xff\xd8\xff" + bytes(8)
         make_docx(doc("imgDocOk", "i.docx"), [["Welcome to Acme Youth Council"]],  # has a picture and a page-1 thumbnail
                   extra={"word/media/image1.png": png, "docProps/thumbnail.jpeg": jpg, "_rels/.rels": RELS})
+        # pictures are matched as written only: letters scattered through a photo's bytes must not count as a name
+        make_docx(doc("mediaNoiseId", "mn.docx"), [["Welcome to Acme Youth Council"]], extra={"word/media/image1.png": png + b"x Acme-Youth-Council x"})
+        review("mediaNoiseId", "redact", ACME)
         review("docxId", "redact", ACME, ("Smith & Sons Ltd", amp), JUAN)
         review("absentId", "redact", ("Nobody Here", org))  # not in a text-only document: passes trivially
         review("partsId", "redact", ACME, JUAN)
@@ -480,6 +533,21 @@ def selftest():
         make_docx(doc("descrId", "d.docx"), [["Hello"]],
                   raw_body='<w:p><w:r><w:drawing><wp:inline><wp:docPr id="1" name="Picture 1" descr="Acme Youth Council logo"/></wp:inline></w:drawing></w:r></w:p>')
         make_docx(doc("imgDocMissing", "m.docx"), [["Nothing sensitive here."]], extra={"word/media/image1.png": png})
+        # a picture format the extension list does not know: still a picture, because it sits in word/media
+        make_docx(doc("emzId", "emz.docx"), [["Nothing sensitive here."]], extra={"word/media/image1.emz": b"\x1f\x8b" + bytes(32)})
+        # the name is in the body, and again inside a deflated spreadsheet embedded in the package
+        make_docx(doc("embXlsxId", "x.docx"), [["Welcome to Acme Youth Council"]], extra={"word/embeddings/book.xlsx": xlsx})
+        make_docx(doc("magicId", "mg.docx"), [["Welcome to Acme Youth Council"]], extra={"customXml/inner.dat": xlsx})  # ... or under another name
+        make_docx(doc("embBinId", "eb.docx"), [["Welcome to Acme Youth Council"]], extra={"word/embeddings/object1.bin": bytes(range(1, 64))})  # any embedding
+        # text in non-XML members: UTF-16LE (as in OLE streams; a letter outside latin-1, which latin-1 reading mangles) and UTF-8 with an accent
+        make_docx(doc("utf16Id", "u16.docx"), [["Plain text only."]], extra={"word/aux.bin": "Łukasz Example".encode("utf-16-le")})
+        make_docx(doc("utf8Id", "u8.docx"), [["Plain text only."]], extra={"word/aux.dat": "Peña Example".encode("utf-8")})
+        review("emzId", "redact", ACME)
+        review("embXlsxId", "redact", ACME)
+        review("magicId", "redact", ACME)
+        review("embBinId", "redact", ACME)
+        review("utf16Id", "redact", ("Łukasz Example", member))
+        review("utf8Id", "redact", ("Peña Example", member))
         review("brId", "redact", ACME)
         review("tabId", "redact", ACME)
         review("brNoteId", "redact", ACME)
@@ -507,23 +575,26 @@ def selftest():
         code, stdout = _run_quiet(files, reviews, out)
         verdicts = json.loads((out / "verdicts.json").read_text(encoding="utf-8"))
         v = {k: x["verdict"] for k, x in verdicts.items()}
-        redacted = {"pdfId", "wrapId", "labelId", "docxId", "absentId", "partsId", "imgDocOk"}
+        redacted = {"pdfId", "wrapId", "labelId", "docxId", "absentId", "partsId", "imgDocOk", "mediaNoiseId"}
         assert code == 0
         assert {k for k, x in v.items() if x == "redacted"} == redacted, v
         assert {k for k, x in v.items() if x == "clean"} == {"cleanId"}, v
-        assert len(v) == 33 and set(v.values()) == {"redacted", "clean", "confidential"}, v
-        assert stdout.strip().splitlines()[-1] == ("clean=1 redacted=7 confidential=25 failed_verification=14 "
-                                                   "failed_unverifiable=2 failed_error=3 clean_demoted=3"), stdout
+        assert len(v) == 42 and set(v.values()) == {"redacted", "clean", "confidential"}, v
+        assert stdout.strip().splitlines()[-1] == ("clean=1 redacted=8 confidential=33 failed_verification=15 "
+                                                   "failed_unverifiable=9 failed_error=3 clean_demoted=3"), stdout
         assert sorted(p.name for p in out.iterdir()) == sorted(
             ["verdicts.json"] + [f"{k}.pdf" for k in ("pdfId", "wrapId", "labelId")]
-            + [f"{k}.docx" for k in ("docxId", "absentId", "partsId", "imgDocOk")])
+            + [f"{k}.docx" for k in ("docxId", "absentId", "partsId", "imgDocOk", "mediaNoiseId")])
         assert all(p.read_bytes() == b for p, b in before.items()), "originals must not be touched"
         assert all(verdicts[k]["reason"] == "reviewed" for k in redacted | {"cleanId"}), "no reviewer free text for clean or redacted"
 
         # why each confidential one is confidential
         survived = "redaction failed: 1 string(s) survived"
-        why = {k: survived for k in ("hyphId", "annotId", "annot2Id", "annot3Id", "linkId", "widgetId", "embId", "offId", "catalogId", "brId", "tabId", "brNoteId", "authorId", "descrId")}
+        why = {k: survived for k in ("hyphId", "annotId", "annot2Id", "annot3Id", "linkId", "widgetId", "offId", "catalogId", "brId", "tabId", "brNoteId", "authorId", "descrId", "utf16Id", "utf8Id")}
+        embedded = "redaction failed: embedded file or archive"  # cannot be scanned, so never trusted
+        why |= {k: embedded for k in ("embId", "embDocxId", "streamZipId", "embXlsxId", "magicId", "embBinId")}
         why |= {"imgId": "redaction failed: 1 string(s) not found", "imgDocMissing": "redaction failed: 1 string(s) not found",
+               "emzId": "redaction failed: 1 string(s) not found",
                "encId": "redaction failed: ValueError", "corruptId": "redaction failed: ", "nodocId": "redaction failed: unsupported file type",
                "cleanScanId": "clean demoted: no text layer", "cleanEncId": "clean demoted: unreadable (ValueError)",
                "multiId": "clean demoted: unsupported file type", "noReviewId": "not reviewed", "badId": "invalid review",
@@ -537,8 +608,8 @@ def selftest():
 
         # has_images: true for pictures and for anything unreadable, false for plain text
         flags = {k: x["has_images"] for k, x in verdicts.items()}
-        assert all(flags[k] for k in ("imgId", "imgDocOk", "imgDocMissing", "cleanScanId", "encId", "corruptId", "multiId")), flags
-        assert not any(flags[k] for k in ("pdfId", "docxId", "absentId", "partsId", "cleanId", "hyphId")), flags
+        assert all(flags[k] for k in ("imgId", "imgDocOk", "imgDocMissing", "emzId", "embXlsxId", "embBinId", "mediaNoiseId", "cleanScanId", "encId", "corruptId", "multiId")), flags
+        assert not any(flags[k] for k in ("pdfId", "docxId", "absentId", "partsId", "cleanId", "hyphId", "embDocxId", "magicId", "utf16Id")), flags
 
         # pdf: names gone from the text, bookmarks, metadata, XMP and the raw file; labels and other text stay
         red = Path(verdicts["pdfId"]["file"])
