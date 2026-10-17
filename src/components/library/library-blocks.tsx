@@ -1,8 +1,10 @@
 /* eslint-disable @next/next/no-img-element -- images come from our own authenticated /api/uploads route, which next/image's optimizer cannot read. */
+import { memo } from "react";
 import Link from "next/link";
 import { ExternalLink, Info, Lightbulb } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { LibraryBlock } from "@/lib/library/blocks";
+import { isBlankBlock, paragraphs } from "@/lib/library/block-view";
 import { KIND_LABELS } from "@/lib/library/taxonomy";
 import type { LibraryCard } from "@/db/repositories/library";
 import { cn } from "@/lib/utils";
@@ -11,29 +13,6 @@ import { InlineText } from "./inline-text";
 // Prose wraps at word breaks but still lets one very long word break, so phones never scroll sideways.
 const PROSE = "min-w-0 [overflow-wrap:anywhere]";
 const HTTPS_URL = /^https:\/\/\S+$/i;
-
-/** A block with nothing to show. The reader skips it and the editor shows a hint instead. */
-export function isBlankBlock(block: LibraryBlock): boolean {
-	switch (block.type) {
-		case "heading":
-		case "text":
-		case "callout":
-		case "quote":
-			return !block.props.text.trim();
-		case "list":
-			return block.props.items.every((item) => !item.trim());
-		case "code":
-			return !block.props.code.trim();
-		default:
-			return false;
-	}
-}
-
-const paragraphs = (text: string) =>
-	text
-		.split(/\n{2,}/)
-		.map((part) => part.trim())
-		.filter(Boolean);
 
 function Paragraphs({ text, className }: { text: string; className?: string }) {
 	return (
@@ -103,7 +82,7 @@ function LinkCard({ url, title, description }: { url: string; title: string; des
 }
 
 /** One block as our own JSX. The editor canvas reuses this so what you edit is what readers get. */
-export function LibraryBlockView({ block, embeds }: { block: LibraryBlock; embeds: Map<string, LibraryCard | null> }) {
+export const LibraryBlockView = memo(function LibraryBlockView({ block, embeds }: { block: LibraryBlock; embeds: Map<string, LibraryCard | null> }) {
 	if (isBlankBlock(block)) return null;
 
 	switch (block.type) {
@@ -195,7 +174,7 @@ export function LibraryBlockView({ block, embeds }: { block: LibraryBlock; embed
 		case "link":
 			return <LinkCard url={block.props.url} title={block.props.title} description={block.props.description} />;
 	}
-}
+});
 
 /** A page's blocks for reading. `embeds` maps an embedded item's id to its card, or null when the reader cannot see it. */
 export function LibraryBlocks({ blocks, embeds }: { blocks: LibraryBlock[]; embeds: Map<string, LibraryCard | null> }) {

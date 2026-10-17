@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { isBlankBlock, LibraryBlockView } from "./library-blocks";
+import { isBlankBlock } from "@/lib/library/block-view";
+import { LibraryBlockView } from "./library-blocks";
 
 type ItemOption = { id: string; title: string };
 type Props = {
@@ -63,6 +64,9 @@ const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // matches the library_image upload ru
 const NO_EMBEDS = new Map<string, never>();
 const IMAGE_ACCEPT = "image/png,image/jpeg,image/webp,image/gif";
 const SELECT_CLASS = "h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm";
+// Tailwind's xl breakpoint. From here up the side panel sits beside the canvas; below it, under the canvas.
+const SIDE_BY_SIDE = "(min-width: 1280px)";
+const NETWORK_ERROR = "Could not reach the server. Check your connection and try again.";
 
 /** Same test the saved block gets, so the editor and the schema never disagree. */
 const isHttpsUrl = (value: string) => libraryBlockSchema.safeParse({ id: "check", type: "link", props: { url: value, title: "" } }).success;
@@ -217,7 +221,7 @@ function ComposerPanel({ kind, itemPicker, uploading, uploadError, onUpload, onP
 	return (
 		<div className="grid grid-cols-1 content-start gap-4 rounded-xl border border-border bg-card p-4">
 			<div className="flex items-center justify-between gap-2">
-				<h3 className="text-sm font-semibold">{kind === "image" ? "Add an image" : kind === "item" ? "Embed a library item" : "Add a link card"}</h3>
+				<h3 tabIndex={-1} data-panel-heading className="text-sm font-semibold outline-none">{kind === "image" ? "Add an image" : kind === "item" ? "Embed a library item" : "Add a link card"}</h3>
 				<Button type="button" variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
 			</div>
 
@@ -292,12 +296,17 @@ export function LibraryBlockEditor({ itemId, blocks, onChange, itemPicker }: Pro
 	const [drop, setDrop] = useState<{ index: number } | null>(null);
 	const [composer, setComposer] = useState<Composer | null>(null);
 	const [uploading, setUploading] = useState(false);
-	const [uploadError, setUploadError] = useState("");
+	// Scoped to where the upload started (a block id, or "composer") so it never shows against another block.
+	const [uploadError, setUploadError] = useState<{ scope: string; message: string } | null>(null);
+	// Bumped to ask the side panel to take focus once the render it belongs to is in the DOM.
+	const [panelFocus, setPanelFocus] = useState(0);
 	// What async work (an upload finishing) should see, not what the render that started it saw.
-	const latest = useRef({ blocks, selectedId });
-	useEffect(() => { latest.current = { blocks, selectedId }; });
+	const latest = useRef({ blocks, selectedId, composer });
+	useEffect(() => { latest.current = { blocks, selectedId, composer }; });
 	const lastCommit = useRef(0);
 	const canvasRef = useRef<HTMLDivElement>(null);
+	const paletteRef = useRef<HTMLDivElement>(null);
+	const panelRef = useRef<HTMLDivElement>(null);
 
 	const selected = blocks.find((b) => b.id === selectedId) ?? null;
 	const titles = new Map(itemPicker.map((item) => [item.id, item.title]));
@@ -330,6 +339,27 @@ export function LibraryBlockEditor({ itemId, blocks, onChange, itemPicker }: Pro
 		onChange(next);
 	};
 
+	const blockEl = (id: string) => canvasRef.current?.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(id)}"]`) ?? null;
+	const focusBlock = (id: string) => {
+		const el = blockEl(id);
+		el?.focus({ preventScroll: true });
+		el?.scrollIntoView({ block: "nearest", behavior: "instant" }); // like focus(): the page's smooth scrolling would crawl across a long page
+	};
+	const requestPanelFocus = () => setPanelFocus((n) => n + 1);
+	/** Picking a block by hand. Below xl the panel is under the whole canvas, so take the editor to it. */
+	const selectBlock = (id: string) => {
+		setSelectedId(id);
+		setComposer(null);
+		setUploadError(null);
+		if (!window.matchMedia(SIDE_BY_SIDE).matches) requestPanelFocus();
+	};
+	useEffect(() => {
+		if (!panelFocus) return;
+		const panel = panelRef.current;
+		panel?.querySelector<HTMLElement>("[data-panel-heading]")?.focus({ preventScroll: true });
+		panel?.scrollIntoView({ block: "nearest", behavior: "instant" });
+	}, [panelFocus]);
+
 	/** Adds a block after the selected one. A block that does not validate yet never gets in. */
 	const insert = (block: LibraryBlock): boolean => {
 		const { blocks: current, selectedId: at } = latest.current;
@@ -338,53 +368,69 @@ export function LibraryBlockEditor({ itemId, blocks, onChange, itemPicker }: Pro
 		const index = after < 0 ? current.length : after + 1;
 		commit([...current.slice(0, index), block, ...current.slice(index)]);
 		setSelectedId(block.id);
-		requestAnimationFrame(() => canvasRef.current?.querySelector(`[data-block-id="${block.id}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
+		requestAnimationFrame(() => blockEl(block.id)?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
 		return true;
 	};
-	const update = (id: string, props: object) =>
-		commit(latest.current.blocks.map((b) => (b.id === id ? ({ ...b, props: { ...b.props, ...props } } as LibraryBlock) : b)), true);
+	const update = (id: string, props: object) => {
+		const current = latest.current.blocks;
+		if (!current.some((b) => b.id === id)) return; // deleted while an upload was in flight
+		commit(current.map((b) => (b.id === id ? ({ ...b, props: { ...b.props, ...props } } as LibraryBlock) : b)), true);
+	};
 
-	async function uploadImage(file: File): Promise<string | null> {
-		setUploadError("");
-		if (file.size > MAX_IMAGE_BYTES) {
-			setUploadError("Images can be up to 10 MB.");
+	async function uploadImage(file: File, scope: string): Promise<string | null> {
+		const fail = (message: string) => {
+			setUploadError({ scope, message });
 			return null;
-		}
+		};
+		setUploadError(null);
+		if (file.size > MAX_IMAGE_BYTES) return fail("Images can be up to 10 MB.");
 		setUploading(true);
 		try {
 			const body = new FormData();
 			body.set("purpose", "library_image");
 			body.set("itemId", itemId);
 			body.set("file", file);
-			const response = await fetch("/api/uploads", { method: "POST", credentials: "same-origin", body });
+			let response: Response;
+			try {
+				response = await fetch("/api/uploads", { method: "POST", credentials: "same-origin", body });
+			} catch {
+				return fail(NETWORK_ERROR);
+			}
 			const result = (await response.json().catch(() => ({}))) as { key?: string; error?: string };
-			if (!response.ok || !result.key) throw new Error(result.error || "Could not upload the image. Try again.");
+			if (!response.ok || !result.key) return fail(result.error || "Could not upload the image. Try again.");
 			return result.key;
-		} catch (error) {
-			setUploadError(error instanceof Error ? error.message : "Could not upload the image. Try again.");
-			return null;
 		} finally {
 			setUploading(false);
 		}
 	}
 	async function addImage(file: File) {
-		const key = await uploadImage(file);
-		if (!key) return;
+		const key = await uploadImage(file, "composer");
+		if (!key || latest.current.composer !== "image") return; // cancelled while it uploaded
 		const block = newLibraryBlock("image");
-		if (block.type === "image" && insert({ ...block, props: { ...block.props, key } })) setComposer(null);
-		else setUploadError("The image uploaded but could not be added to the page.");
+		if (block.type === "image" && insert({ ...block, props: { ...block.props, key } })) {
+			setComposer(null);
+			requestPanelFocus();
+		} else {
+			setUploadError({ scope: "composer", message: "The image uploaded but could not be added to the page." });
+		}
 	}
 	async function replaceImage(id: string, file: File) {
-		const key = await uploadImage(file);
+		const key = await uploadImage(file, id);
 		if (key) update(id, { key });
 	}
 	const addItem = (pickedId: string) => {
 		const block = newLibraryBlock("item");
-		if (block.type === "item" && insert({ ...block, props: { itemId: pickedId } })) setComposer(null);
+		if (block.type === "item" && insert({ ...block, props: { itemId: pickedId } })) {
+			setComposer(null);
+			requestPanelFocus();
+		}
 	};
 	const addLink = (url: string, title: string, description: string) => {
 		const block = newLibraryBlock("link");
-		if (block.type === "link" && insert({ ...block, props: { url, title, ...(description ? { description } : {}) } })) setComposer(null);
+		if (block.type === "link" && insert({ ...block, props: { url, title, ...(description ? { description } : {}) } })) {
+			setComposer(null);
+			requestPanelFocus();
+		}
 	};
 
 	const move = (id: string, delta: -1 | 1) => {
@@ -394,12 +440,19 @@ export function LibraryBlockEditor({ itemId, blocks, onChange, itemPicker }: Pro
 		const next = [...blocks];
 		[next[i], next[j]] = [next[j], next[i]];
 		commit(next);
-		requestAnimationFrame(() => canvasRef.current?.querySelector<HTMLElement>(`[data-block-id="${id}"]`)?.focus());
+		requestAnimationFrame(() => blockEl(id)?.focus());
 	};
 	const remove = (id: string) => {
 		const i = blocks.findIndex((b) => b.id === id);
+		if (i < 0) return;
+		const neighbour = blocks[i + 1]?.id ?? blocks[i - 1]?.id ?? null;
 		commit(blocks.filter((b) => b.id !== id));
-		setSelectedId(blocks[i + 1]?.id ?? blocks[i - 1]?.id ?? null);
+		setSelectedId(neighbour);
+		// The deleted block held focus. Hand it to the neighbour, or to the palette when the page is empty.
+		requestAnimationFrame(() => {
+			if (neighbour) focusBlock(neighbour);
+			else paletteRef.current?.querySelector<HTMLElement>("button:not(:disabled)")?.focus();
+		});
 	};
 	const duplicate = (id: string) => {
 		const source = blocks.find((b) => b.id === id);
@@ -412,8 +465,10 @@ export function LibraryBlockEditor({ itemId, blocks, onChange, itemPicker }: Pro
 	const moveTo = (id: string, index: number) => {
 		const from = blocks.findIndex((b) => b.id === id);
 		if (from < 0) return;
+		const target = index > from ? index - 1 : index;
+		if (target === from) return; // dropped where it already is
 		const next = blocks.filter((b) => b.id !== id);
-		next.splice(index > from ? index - 1 : index, 0, blocks[from]);
+		next.splice(target, 0, blocks[from]);
 		commit(next);
 	};
 
@@ -431,7 +486,7 @@ export function LibraryBlockEditor({ itemId, blocks, onChange, itemPicker }: Pro
 	});
 
 	const palette = (
-		<div className="flex gap-1.5 overflow-x-auto pb-1 md:grid md:content-start md:overflow-visible md:pb-0">
+		<div ref={paletteRef} className="flex gap-1.5 overflow-x-auto pb-1 md:grid md:content-start md:overflow-visible md:pb-0">
 			{PALETTE.map((entry) => {
 				const Icon = entry.icon;
 				return (
@@ -442,8 +497,11 @@ export function LibraryBlockEditor({ itemId, blocks, onChange, itemPicker }: Pro
 						aria-pressed={"compose" in entry ? composer === entry.compose : undefined}
 						onClick={() => {
 							if ("compose" in entry) {
-								setUploadError("");
-								setComposer((open) => (open === entry.compose ? null : entry.compose));
+								const opening = composer !== entry.compose;
+								setUploadError(null);
+								setComposer(opening ? entry.compose : null);
+								// The form lives in the side panel, which can be a long way down: take the editor to it.
+								if (opening) requestPanelFocus();
 							} else {
 								setComposer(null);
 								insert(entry.make());
@@ -489,18 +547,18 @@ export function LibraryBlockEditor({ itemId, blocks, onChange, itemPicker }: Pro
 							aria-roledescription="block"
 							aria-label={`Block ${index + 1}: ${TYPE_LABELS[block.type]}`}
 							aria-current={isSelected ? "true" : undefined}
-							onClick={() => { setSelectedId(block.id); setComposer(null); }}
+							onClick={() => selectBlock(block.id)}
 							onKeyDown={(e) => {
 								if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
 								e.preventDefault();
-								setSelectedId(block.id);
-								setComposer(null);
+								selectBlock(block.id);
 							}}
 							onDragOver={(e) => {
 								if (!dragId) return;
 								e.preventDefault();
 								const rect = e.currentTarget.getBoundingClientRect();
-								setDrop({ index: e.clientY < rect.top + rect.height / 2 ? index : index + 1 });
+								const at = e.clientY < rect.top + rect.height / 2 ? index : index + 1;
+								setDrop((current) => (current?.index === at ? current : { index: at }));
 							}}
 							onDrop={(e) => {
 								e.preventDefault();
@@ -509,7 +567,7 @@ export function LibraryBlockEditor({ itemId, blocks, onChange, itemPicker }: Pro
 								setDrop(null);
 							}}
 							className={cn(
-								"group relative min-w-0 cursor-pointer rounded-md px-2 py-2 transition-[transform,box-shadow,opacity] duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
+								"group relative min-w-0 scroll-my-20 cursor-pointer rounded-md px-2 py-2 transition-[transform,box-shadow,opacity] duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
 								isSelected ? "outline outline-2 -outline-offset-2 outline-ring" : "hover:outline hover:outline-1 hover:-outline-offset-1 hover:outline-border",
 								dragId === block.id && "scale-[1.02] opacity-60 shadow-lg",
 							)}
@@ -570,6 +628,14 @@ export function LibraryBlockEditor({ itemId, blocks, onChange, itemPicker }: Pro
 	const inspector = (
 		// Keyed so a field's own draft state never carries over to a different block.
 		<div key={selected?.id ?? "none"} className="grid grid-cols-1 content-start gap-4 rounded-xl border border-border bg-card p-4">
+			<div className="flex items-center justify-between gap-2">
+				<h3 tabIndex={-1} data-panel-heading className="text-sm font-semibold outline-none">{selected ? `Edit ${TYPE_LABELS[selected.type]}` : "Edit block"}</h3>
+				{selected ? (
+					<Button type="button" variant="ghost" size="sm" className="xl:hidden" onClick={() => focusBlock(selected.id)}>
+						Back to block
+					</Button>
+				) : null}
+			</div>
 			{!selected ? <p className="text-sm text-muted-foreground">Select a block to edit it.</p> : null}
 			{selected?.type === "heading" ? (
 				<>
@@ -621,7 +687,7 @@ export function LibraryBlockEditor({ itemId, blocks, onChange, itemPicker }: Pro
 			) : null}
 			{selected?.type === "image" ? (
 				<>
-					<PlainField label="Description for screen readers" maxLength={200} value={selected.props.alt} onChange={(alt) => update(selected.id, { alt })} hint="Say what the image shows." />
+					<PlainField label="Description for screen readers" maxLength={200} value={selected.props.alt} onChange={(alt) => update(selected.id, { alt })} hint={selected.props.alt.trim() ? "Say what the image shows." : "Add alt text so screen readers can describe this image."} />
 					<PlainField label="Caption (optional)" maxLength={300} value={selected.props.caption ?? ""} onChange={(caption) => update(selected.id, { caption: caption || undefined })} />
 					<label className="grid gap-2 text-sm font-medium">
 						{uploading ? "Uploading image..." : "Replace image"}
@@ -637,7 +703,7 @@ export function LibraryBlockEditor({ itemId, blocks, onChange, itemPicker }: Pro
 						/>
 						<span className="text-xs font-normal text-muted-foreground">PNG, JPG, WebP or GIF, up to 10 MB.</span>
 					</label>
-					{uploadError ? <p role="alert" className="text-sm text-destructive">{uploadError}</p> : null}
+					{uploadError?.scope === selected.id ? <p role="alert" className="text-sm text-destructive">{uploadError.message}</p> : null}
 				</>
 			) : null}
 			{selected?.type === "divider" ? <p className="text-sm text-muted-foreground">A thin line between sections. No settings.</p> : null}
@@ -669,11 +735,14 @@ export function LibraryBlockEditor({ itemId, blocks, onChange, itemPicker }: Pro
 			kind={composer}
 			itemPicker={itemPicker}
 			uploading={uploading}
-			uploadError={uploadError}
+			uploadError={uploadError?.scope === "composer" ? uploadError.message : ""}
 			onUpload={(file) => void addImage(file)}
 			onPickItem={addItem}
 			onAddLink={addLink}
-			onCancel={() => setComposer(null)}
+			onCancel={() => {
+				setComposer(null);
+				requestPanelFocus();
+			}}
 		/>
 	) : (
 		inspector
@@ -683,7 +752,13 @@ export function LibraryBlockEditor({ itemId, blocks, onChange, itemPicker }: Pro
 		<div className="grid grid-cols-1 gap-4 md:grid-cols-[180px_minmax(0,1fr)] xl:grid-cols-[180px_minmax(0,1fr)_300px]">
 			<div className="min-w-0">{palette}</div>
 			{canvas}
-			<div className="min-w-0 md:col-span-2 xl:col-span-1">{side}</div>
+			{/* Under the canvas below xl (scroll-my keeps it clear of the portal's sticky header and bottom bar); sticky beside it from xl. */}
+			<div
+				ref={panelRef}
+				className="min-w-0 scroll-my-20 md:col-span-2 xl:sticky xl:top-20 xl:col-span-1 xl:max-h-[calc(100dvh-6rem)] xl:self-start xl:overflow-y-auto"
+			>
+				{side}
+			</div>
 		</div>
 	);
 }
