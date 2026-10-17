@@ -550,14 +550,34 @@ describe("library repository: search text refresh", () => {
 });
 
 describe("library repository: legacy favorites shim", () => {
-	it("keeps toggleFavorite and listFavorites on the Saved list, and hides items the member cannot see", async () => {
+	it("keeps toggleFavorite and listFavorites on the Saved list", async () => {
 		const open = await insertItem({ title: "Open" });
-		const hidden = await insertItem({ title: "Hidden", confidentiality: "confidential" });
 		expect(await repo.toggleFavorite(actors.other, open)).toBe(true);
-		expect(await repo.toggleFavorite(actors.other, hidden)).toBe(true);
 		expect((await repo.listFavorites(actors.other)).map((item) => item.id)).toEqual([open]);
 		expect((await repo.listFavorites(actors.moderator)).map((item) => item.id)).toEqual([]);
 		expect(await repo.toggleFavorite(actors.other, open)).toBe(false);
+		expect(await repo.listFavorites(actors.other)).toEqual([]);
 		expect(await db.select().from(libraryLists).where(eq(libraryLists.memberId, "other"))).toHaveLength(1);
+	});
+
+	it("refuses to save an item the member cannot see, so it cannot inflate the save count", async () => {
+		const hidden = await insertItem({ title: "Hidden", confidentiality: "confidential" });
+		const draft = await insertItem({ title: "Draft", status: "draft", createdBy: "owner" });
+		for (const itemId of [hidden, draft, "lib_missing"]) {
+			await expect(repo.toggleFavorite(actors.other, itemId)).rejects.toThrow("Library item not found.");
+		}
+		// Nothing was written, not even an empty Saved list.
+		expect(await db.select().from(libraryLists).where(eq(libraryLists.memberId, "other"))).toEqual([]);
+		expect(await db.select().from(libraryListItems)).toEqual([]);
+		// The owner can still save their own draft.
+		expect(await repo.toggleFavorite(actors.owner, draft)).toBe(true);
+	});
+
+	it("lets a member un-save an item that has since become hidden", async () => {
+		const id = await insertItem({ title: "Soon gone" });
+		expect(await repo.toggleFavorite(actors.other, id)).toBe(true);
+		await repo.moderate(actors.moderator, id, "take_down", "Broken file");
+		expect(await repo.toggleFavorite(actors.other, id)).toBe(false);
+		expect(await db.select().from(libraryListItems)).toEqual([]);
 	});
 });

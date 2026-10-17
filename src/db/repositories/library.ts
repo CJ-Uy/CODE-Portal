@@ -204,7 +204,7 @@ function buildSearchText(item: LibraryItem, tagNames: string[]): string {
 }
 
 // Each chunk binds one id per item; D1 allows 100 bound parameters per statement.
-const REFRESH_CHUNK = 40;
+const ID_CHUNK = 40;
 
 /**
  * The searchText updates for these items, built but not run, so a caller can commit them in the same
@@ -218,8 +218,8 @@ export async function planSearchTextRefresh(
 ): Promise<BatchItem<"sqlite">[]> {
 	const ids = [...new Set(itemIds)];
 	const updates: BatchItem<"sqlite">[] = [];
-	for (let start = 0; start < ids.length; start += REFRESH_CHUNK) {
-		const chunk = ids.slice(start, start + REFRESH_CHUNK);
+	for (let start = 0; start < ids.length; start += ID_CHUNK) {
+		const chunk = ids.slice(start, start + ID_CHUNK);
 		const [items, tagRows] = await Promise.all([
 			db.select().from(libraryItems).where(inArray(libraryItems.id, chunk)),
 			db
@@ -277,6 +277,26 @@ const cardColumns = {
 	saves: savesOf.mapWith(Number),
 };
 
+async function selectCardsFrom(db: Db, where: SQL | undefined, order: SQL[], limit: number, offset: number): Promise<LibraryCard[]> {
+	const rows = await db.select(cardColumns).from(libraryItems).where(where).orderBy(...order).limit(limit).offset(offset);
+	return rows.map(({ tagNamesJson, ...card }) => ({
+		...card,
+		tagNames: (JSON.parse(tagNamesJson ?? "[]") as string[]).sort(),
+	}));
+}
+
+/**
+ * Cards for these items, in no particular order, with NO visibility filtering: the caller has already decided
+ * which items this reader may see. Unknown ids are skipped.
+ */
+export async function cardsByIds(db: Db, itemIds: string[]): Promise<LibraryCard[]> {
+	const ids = [...new Set(itemIds)];
+	const chunks: string[][] = [];
+	for (let start = 0; start < ids.length; start += ID_CHUNK) chunks.push(ids.slice(start, start + ID_CHUNK));
+	const found = await Promise.all(chunks.map((chunk) => selectCardsFrom(db, inArray(libraryItems.id, chunk), [], chunk.length, 0)));
+	return found.flat();
+}
+
 export function createLibraryRepository(db: Db, audit: AuditRepository, onModerated: LibraryModerationHook = () => {}): LibraryRepository {
 	async function ownList(actor: Actor, listId: string) {
 		const [list] = await db.select().from(libraryLists).where(eq(libraryLists.id, listId)).limit(1);
@@ -316,13 +336,7 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 		if (tagIds.length > 0) await db.insert(libraryItemTags).values(tagIds.map((tagId) => ({ itemId, tagId })));
 	}
 
-	async function selectCards(where: SQL | undefined, order: SQL[], limit: number, offset: number): Promise<LibraryCard[]> {
-		const rows = await db.select(cardColumns).from(libraryItems).where(where).orderBy(...order).limit(limit).offset(offset);
-		return rows.map(({ tagNamesJson, ...card }) => ({
-			...card,
-			tagNames: (JSON.parse(tagNamesJson ?? "[]") as string[]).sort(),
-		}));
-	}
+	const selectCards = (where: SQL | undefined, order: SQL[], limit: number, offset: number) => selectCardsFrom(db, where, order, limit, offset);
 
 	async function audited(actor: Actor, action: string, item: Pick<LibraryItem, "id">, detail?: string | null): Promise<void> {
 		await audit.record(actor, { action, targetType: "library_item", targetId: item.id, category: "library", detail });
@@ -654,7 +668,7 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 		},
 
 		// ponytail: temporary shim over the member's default "Saved" list while favorites are folded
-		// into lists (migration 0013 dropped library_favorites). Tasks 7/13/14 replace both methods.
+		// into lists (migration 0013 dropped library_favorites). Tasks 13/14 replace both methods.
 		async toggleFavorite(actor, itemId) {
 			const [saved] = await db
 				.select({ id: libraryLists.id })
@@ -662,17 +676,23 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 				.where(and(eq(libraryLists.memberId, actor.memberId), eq(libraryLists.isDefault, true)))
 				.limit(1);
 			const listId = saved?.id ?? `lst_saved_${actor.memberId}`;
+			if (saved) {
+				// Taking an item out is always allowed, even once it has since become hidden.
+				const inList = and(eq(libraryListItems.listId, listId), eq(libraryListItems.libraryItemId, itemId));
+				const [existing] = await db.select().from(libraryListItems).where(inList).limit(1);
+				if (existing) {
+					await db.delete(libraryListItems).where(inList);
+					return false;
+				}
+			}
+			// Saving needs sight of the item, otherwise a member could pad its save count by guessing ids.
+			const item = await loadItem(itemId);
+			if (!item || !canSeeItem(actor, item)) throw new Error("Library item not found.");
 			if (!saved) {
 				await db
 					.insert(libraryLists)
 					.values({ id: listId, memberId: actor.memberId, name: "Saved", isDefault: true })
 					.onConflictDoNothing();
-			}
-			const inList = and(eq(libraryListItems.listId, listId), eq(libraryListItems.libraryItemId, itemId));
-			const [existing] = await db.select().from(libraryListItems).where(inList).limit(1);
-			if (existing) {
-				await db.delete(libraryListItems).where(inList);
-				return false;
 			}
 			await db.insert(libraryListItems).values({ listId, libraryItemId: itemId, addedBy: actor.memberId }).onConflictDoNothing();
 			return true;
