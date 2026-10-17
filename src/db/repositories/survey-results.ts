@@ -1,4 +1,4 @@
-import { and, asc, count, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "@/db/schema";
 import { crsEvents, eventDebriefs, surveyAnswers, surveyAssignments, surveyQuestions, surveyResponses, surveys } from "@/db/schema";
@@ -72,7 +72,7 @@ async function baselines(db: Db, surveyId: string, eventType: string, metricKeys
 		.select({ id: surveys.id, status: surveys.status, closesAt: surveys.closesAt })
 		.from(surveys)
 		.innerJoin(crsEvents, eq(crsEvents.id, surveys.eventId))
-		.where(and(eq(crsEvents.type, eventType), ne(surveys.id, surveyId)));
+		.where(and(eq(crsEvents.type, eventType), isNull(crsEvents.deletedAt), ne(surveys.id, surveyId)));
 	const closedIds = candidates.filter((survey) => effectiveStatus(survey, now) === "closed").map((survey) => survey.id);
 
 	const means = new Map<MetricKey, number[]>();
@@ -146,7 +146,10 @@ async function buildResults(db: Db, survey: Survey, filter: ResultsFilter, now: 
 					filter === "invited" ? eq(surveyResponses.source, "invited") : undefined,
 					forOrganizers ? eq(surveyAnswers.hiddenFromOrganizers, false) : undefined,
 				),
-			),
+			)
+			// Ids are random, so this order is stable but says nothing about who answered when. Row order is
+			// insertion order, which would let comment i of one question be paired with comment i of another.
+			.orderBy(asc(surveyAnswers.id)),
 	]);
 	const answersFor = new Map<string, typeof answers>();
 	for (const answer of answers) {
@@ -253,6 +256,12 @@ export function createSurveyResultsRepository(db: Db, audit: AuditRepository): S
 					db.select({ id: surveys.id, eventId: surveys.eventId }).from(surveys).where(inArray(surveys.eventId, part)),
 					db.select({ eventId: eventDebriefs.eventId }).from(eventDebriefs).where(inArray(eventDebriefs.eventId, part)),
 				]);
+				const debriefed = new Set(debriefs.map((debrief) => debrief.eventId));
+				// A debrief without a form still gets a row, so the archive can mark it.
+				const withForm = new Set(forms.map((form) => form.eventId));
+				for (const eventId of debriefed) {
+					if (!withForm.has(eventId)) rows.set(eventId, { surveyId: null, overall: null, responses: 0, invitedRate: null, hasDebrief: true });
+				}
 				if (forms.length === 0) continue;
 
 				const surveyIds = forms.map((form) => form.id);
@@ -271,7 +280,6 @@ export function createSurveyResultsRepository(db: Db, audit: AuditRepository): S
 					if (row.value !== null) values.push(Number(row.value));
 					overallValues.set(row.surveyId, values);
 				}
-				const debriefed = new Set(debriefs.map((debrief) => debrief.eventId));
 
 				for (const form of forms) {
 					const bySource = responses.get(form.id) ?? { invited: 0, walk_in: 0 };

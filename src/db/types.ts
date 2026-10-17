@@ -231,9 +231,9 @@ export type SurveyResults = {
 	summary: (FeedbackSummary & { generatedAt: Date; responseCountAtGeneration: number }) | null;
 };
 
-// One row of the admin event archive.
+// One row of the admin event archive. surveyId is null for an event with a debrief but no feedback form.
 export type EventFeedbackRow = {
-	surveyId: string;
+	surveyId: string | null;
 	overall: ScaleSummary | null;
 	responses: number;
 	invitedRate: number | null;

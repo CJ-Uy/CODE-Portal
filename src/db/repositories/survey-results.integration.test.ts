@@ -214,16 +214,18 @@ describe("survey results on D1", () => {
 			["evt_a", "srv_a", {}, ["4", "4", "4"]],
 			["evt_b", "srv_b", {}, ["3", "4", "5"]],
 			["evt_c", "srv_c", { status: "running", closesAt: past }, ["5", "5", "5"]],
-			// Excluded: another type, still open, too few answers.
+			// Excluded: another type, still open, too few answers, a soft-deleted event.
 			["evt_d", "srv_d", {}, ["1", "1", "1"]],
 			["evt_e", "srv_e", { status: "running", closesAt: future }, ["1", "1", "1"]],
 			["evt_f", "srv_f", {}, ["1", "1"]],
+			["evt_g", "srv_g", {}, ["1", "1", "1"]],
 		];
 		for (const [eventId, surveyId, extra, values] of pastSurveys) {
 			await seedEvent(eventId, eventId === "evt_d" ? "seminar" : "workshop");
 			await seedSurvey({ id: surveyId, eventId, questions: [{ id: `${surveyId}_q`, type: "scale", metricKey: "overall" }], ...extra });
 			await respondMany(surveyId, `${surveyId}_q`, "invited", values);
 		}
+		await db.update(schema.crsEvents).set({ deletedAt: past }).where(eq(schema.crsEvents.id, "evt_g"));
 
 		const view = await results.getResults(admin, "srv_now", { filter: "all" }, NOW);
 		expect((view.questions[0] as Scale).baseline).toEqual({ mean: 4.3, events: 3 });
@@ -301,6 +303,32 @@ describe("survey results on D1", () => {
 		expect(audits[0]).toMatchObject({ targetType: "survey", targetId: "srv_1", category: "survey" });
 	});
 
+	it("returns comments in random-id order, not submission order", async () => {
+		await seedSurvey({
+			id: "srv_1",
+			eventId: "evt_1",
+			questions: [
+				{ id: "q1", type: "text" },
+				{ id: "q2", type: "text" },
+			],
+		});
+		// Inserted z, m, a: insertion order is the reverse of id order for both questions.
+		for (const [index, letter] of ["z", "m", "a"].entries()) {
+			await db.insert(schema.surveyResponses).values({ id: `srvr_${index}`, surveyId: "srv_1", source: "invited", submittedAt: past });
+			await db.insert(schema.surveyAnswers).values([
+				{ id: `srva_${letter}1`, responseId: `srvr_${index}`, questionId: "q1", value: `First ${letter}` },
+				{ id: `srva_${letter}2`, responseId: `srvr_${index}`, questionId: "q2", value: `Second ${letter}` },
+			]);
+		}
+
+		const adminView = await results.getResults(admin, "srv_1", { filter: "all" }, NOW);
+		const organizer = await results.getOrganizerResults(owner, "evt_1", NOW);
+		for (const view of [adminView, organizer!.results!]) {
+			expect((view.questions[0] as Text).answers.map((answer) => answer.id)).toEqual(["srva_a1", "srva_m1", "srva_z1"]);
+			expect((view.questions[1] as Text).answers.map((answer) => answer.id)).toEqual(["srva_a2", "srva_m2", "srva_z2"]);
+		}
+	});
+
 	it("tells organizers when results are not shared or too few", async () => {
 		expect(await results.getOrganizerResults(owner, "evt_1", NOW)).toEqual({ state: "none" });
 
@@ -348,10 +376,13 @@ describe("survey results on D1", () => {
 		await seedEvent("evt_3");
 		await seedSurvey({ id: "srv_3", eventId: "evt_3", questions: [{ id: "q4", type: "text" }] });
 		await seedEvent("evt_none");
+		// A debrief but no feedback form.
+		await seedEvent("evt_4");
+		await db.insert(schema.eventDebriefs).values({ eventId: "evt_4", happened: "It rained" });
 
 		// Far more ids than D1 binds in one statement.
 		const padding = Array.from({ length: 150 }, (_, i) => `evt_missing_${i}`);
-		const rows = await results.feedbackForEvents(crs, [...padding, "evt_1", "evt_2", "evt_3", "evt_none"]);
+		const rows = await results.feedbackForEvents(crs, [...padding, "evt_1", "evt_2", "evt_3", "evt_4", "evt_none"]);
 
 		expect(rows.get("evt_1")).toEqual({
 			surveyId: "srv_1",
@@ -362,7 +393,8 @@ describe("survey results on D1", () => {
 		});
 		expect(rows.get("evt_2")).toEqual({ surveyId: "srv_2", overall: null, responses: 1, invitedRate: null, hasDebrief: true });
 		expect(rows.get("evt_3")).toMatchObject({ surveyId: "srv_3", overall: null, responses: 0 });
+		expect(rows.get("evt_4")).toEqual({ surveyId: null, overall: null, responses: 0, invitedRate: null, hasDebrief: true });
 		expect(rows.has("evt_none")).toBe(false);
-		expect(rows.size).toBe(3);
+		expect(rows.size).toBe(4);
 	});
 });
