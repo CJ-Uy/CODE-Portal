@@ -62,10 +62,8 @@ describe("overview repository on D1", () => {
 		await env.DB.prepare("INSERT INTO surveys (id, title, status, created_by) VALUES (?, ?, ?, ?)")
 			.bind("srv_1", "Feedback", "running", "mem_admin")
 			.run();
-		await env.DB.prepare(
-			"INSERT INTO survey_assignments (survey_id, member_id, response_token_hash, completed_at) VALUES (?, ?, ?, ?)",
-		)
-			.bind("srv_1", "mem_ov", "hash_pending", null)
+		await env.DB.prepare("INSERT INTO survey_assignments (survey_id, member_id, completed_at) VALUES (?, ?, ?)")
+			.bind("srv_1", "mem_ov", null)
 			.run();
 		await env.DB.prepare(
 			"INSERT INTO crs_events (id, title, type, status, place, starts_at, description, created_by, checkin_secret) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -94,8 +92,52 @@ describe("overview repository on D1", () => {
 
 		expect(summary.retention).toMatchObject({ points: 8, retainedAt: 20, termName: "Term 1" });
 		expect(summary.pendingSurveys).toBe(1);
+		expect(summary.oldestPendingSurveyId).toBe("srv_1");
 		expect(summary.upcomingEvents).toBe(1);
 		expect(summary.linkClicks).toBe(12);
+	});
+
+	it("does not count a form past its closing time, or a walk-in row, as pending", async () => {
+		for (const [id, closesAt, source] of [
+			["srv_open", NOW.getTime() + 3_600_000, "invited"],
+			["srv_late", NOW.getTime() - 1, "invited"],
+			["srv_walk", null, "walk_in"],
+		] as const) {
+			await env.DB.prepare("INSERT INTO surveys (id, title, status, created_by, closes_at) VALUES (?, ?, ?, ?, ?)")
+				.bind(id, id, "running", "mem_admin", closesAt)
+				.run();
+			await env.DB.prepare("INSERT INTO survey_assignments (survey_id, member_id, completed_at, source) VALUES (?, ?, ?, ?)")
+				.bind(id, "mem_ov", null, source)
+				.run();
+		}
+
+		const repository = createOverviewRepository(drizzle(env.DB, { schema }));
+		const summary = await repository.getSummary(memberActor, NOW);
+
+		expect(summary.pendingSurveys).toBe(1);
+		expect(summary.oldestPendingSurveyId).toBe("srv_open");
+	});
+
+	it("links the oldest open invited form, skipping answered, closed and draft ones", async () => {
+		const rows = [
+			// [survey, status, assigned at, completed at]
+			["srv_answered", "running", 1, NOW.getTime() - 60_000],
+			["srv_closed", "closed", 2, null],
+			["srv_draft", "draft", 3, null],
+			["srv_newer", "running", 20, null],
+			["srv_older", "running", 10, null],
+		] as const;
+		for (const [id, status, assignedAt, completedAt] of rows) {
+			await env.DB.prepare("INSERT INTO surveys (id, title, status, created_by) VALUES (?, ?, ?, ?)").bind(id, id, status, "mem_admin").run();
+			await env.DB.prepare("INSERT INTO survey_assignments (survey_id, member_id, assigned_at, completed_at, source) VALUES (?, ?, ?, ?, ?)")
+				.bind(id, "mem_ov", assignedAt, completedAt, "invited")
+				.run();
+		}
+
+		const summary = await createOverviewRepository(drizzle(env.DB, { schema })).getSummary(memberActor, NOW);
+
+		expect(summary.pendingSurveys).toBe(2);
+		expect(summary.oldestPendingSurveyId).toBe("srv_older");
 	});
 
 	it("returns zeroed counts and a null term when the member has no activity and no active term", async () => {
@@ -107,6 +149,7 @@ describe("overview repository on D1", () => {
 		expect(summary).toEqual({
 			retention: { points: 0, retainedAt: null, termName: null },
 			pendingSurveys: 0,
+			oldestPendingSurveyId: null,
 			upcomingEvents: 0,
 			linkClicks: 0,
 		});

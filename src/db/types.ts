@@ -1,16 +1,22 @@
 import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
 import { z } from "zod";
+import type { ScaleSummary } from "@/lib/feedback/stats";
+import type { FeedbackSummary } from "@/lib/feedback/summary";
 import { quantizePoints } from "@/lib/points";
 import type {
+	eventDebriefs,
 	members,
+	MetricKey,
 	surveyAnswers,
 	surveyAssignments,
 	surveyQuestions,
 	surveyResponses,
 	surveys,
-	SurveyQuestionType,
+	surveyTemplates,
 	SurveyStatus,
 } from "./schema";
+
+export type { MetricKey, SurveySource } from "./schema";
 
 export type Member = InferSelectModel<typeof members>;
 export type NewMember = InferInsertModel<typeof members>;
@@ -82,14 +88,31 @@ export type SurveyQuestion = InferSelectModel<typeof surveyQuestions>;
 export type SurveyAssignment = InferSelectModel<typeof surveyAssignments>;
 export type SurveyResponse = InferSelectModel<typeof surveyResponses>;
 export type SurveyAnswer = InferSelectModel<typeof surveyAnswers>;
+export type SurveyTemplate = InferSelectModel<typeof surveyTemplates>;
+export type EventDebrief = InferSelectModel<typeof eventDebriefs>;
+
+export const METRIC_KEYS = ["overall", "flow", "content", "venue", "return_intent", "learning"] as const satisfies readonly MetricKey[];
 
 // A survey is created together with its ordered questions in one call so the
-// admin form is a single submit. Choice/scale questions carry their options.
-export const surveyQuestionInputSchema = z.object({
-	type: z.enum(["scale", "text", "choice"]),
-	prompt: z.string().trim().min(1).max(500),
-	options: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
-});
+// admin form is a single submit. A scale is always 1-5 and its options are the
+// [low, high] end labels; a choice lists its choices; text has no options.
+export const surveyQuestionInputSchema = z
+	.object({
+		type: z.enum(["scale", "text", "choice"]),
+		prompt: z.string().trim().min(1).max(500),
+		help: z.string().trim().min(1).max(500).optional(),
+		required: z.boolean().default(false),
+		metricKey: z.enum(METRIC_KEYS).optional(),
+		options: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
+	})
+	.superRefine((question, ctx) => {
+		const count = question.options?.length ?? 0;
+		const issue = (path: string, message: string) => ctx.addIssue({ code: "custom", path: [path], message });
+		if (question.type === "scale" && count !== 2) issue("options", "A scale needs exactly two labels: low and high.");
+		if (question.type === "choice" && count < 2) issue("options", "A choice question needs 2 to 20 options.");
+		if (question.type === "text" && count > 0) issue("options", "A text question has no options.");
+		if (question.metricKey && question.type !== "scale") issue("metricKey", "Only scale questions can be tracked.");
+	});
 
 export type SurveyQuestionInput = z.infer<typeof surveyQuestionInputSchema>;
 
@@ -101,47 +124,136 @@ export const createSurveyInputSchema = z.object({
 
 export type CreateSurveyInput = z.infer<typeof createSurveyInputSchema>;
 
-// Drawing the sample also flips the survey to running. sampleSize is the number
-// of members to draw; seed makes the draw deterministic and testable.
-export const sampleSurveyInputSchema = z.object({
+// A template is a reusable question list; a survey copies it at creation and never follows later edits.
+export const saveTemplateInputSchema = z.object({
+	id: z.string().trim().min(1).optional(),
+	name: z.string().trim().min(1).max(120),
+	description: z.string().trim().max(300).default(""),
+	questions: z.array(surveyQuestionInputSchema).min(1).max(30),
+});
+
+export type SaveTemplateInput = z.infer<typeof saveTemplateInputSchema>;
+
+export const createFromTemplateInputSchema = z.object({
+	templateId: z.string().trim().min(1),
+	eventId: z.string().trim().min(1).nullable(),
+	title: z.string().trim().min(1).max(200).optional(),
+});
+
+export type CreateFromTemplateInput = z.infer<typeof createFromTemplateInputSchema>;
+
+export const updateDraftInputSchema = z.object({
 	surveyId: z.string().trim().min(1),
-	sampleSize: z.number().int().min(1).max(1000),
+	title: z.string().trim().min(1).max(200),
+	questions: z.array(surveyQuestionInputSchema).min(1).max(30),
+});
+
+export type UpdateDraftInput = z.infer<typeof updateDraftInputSchema>;
+
+// Sending flips a draft to running and invites a seeded sample of the eligible members. `suggested`
+// uses the statistical head count, `all` invites everyone, `count` caps at the eligible total.
+export const sendSurveyInputSchema = z.object({
+	surveyId: z.string().trim().min(1),
+	invite: z.discriminatedUnion("mode", [
+		z.object({ mode: z.literal("suggested") }),
+		z.object({ mode: z.literal("all") }),
+		z.object({ mode: z.literal("count"), count: z.number().int().min(1).max(1000) }),
+	]),
+	allowWalkIn: z.boolean(),
+	shareWithOrganizers: z.boolean(),
+	emailInvitees: z.boolean(),
+	remind: z.boolean(),
+	closesAt: z.coerce.date(),
 	seed: z.string().trim().min(1).max(120).optional(),
 });
 
-export type SampleSurveyInput = z.infer<typeof sampleSurveyInputSchema>;
+export type SendSurveyInput = z.infer<typeof sendSurveyInputSchema>;
+
+// What can change on a running form. Questions and invitees are fixed once sent.
+export const updateRunningInputSchema = z.object({
+	surveyId: z.string().trim().min(1),
+	closesAt: z.coerce.date().optional(),
+	shareWithOrganizers: z.boolean().optional(),
+	close: z.literal(true).optional(),
+	remindNow: z.literal(true).optional(),
+});
+
+export type UpdateRunningInput = z.infer<typeof updateRunningInputSchema>;
 
 export const surveyAnswerInputSchema = z.object({
 	questionId: z.string().trim().min(1),
 	value: z.string().trim().min(1).max(2000),
 });
 
-// The raw token travels in the body; the server hashes it and never stores it.
+// The respondent is the signed-in member; eligibility comes from the session.
 export const submitSurveyResponseInputSchema = z.object({
 	surveyId: z.string().trim().min(1),
-	token: z.string().trim().min(1).max(200),
 	answers: z.array(surveyAnswerInputSchema).min(1).max(30),
 });
 
 export type SubmitSurveyResponseInput = z.infer<typeof submitSurveyResponseInputSchema>;
 
-// Aggregated, identity-free results. Per question we expose only counts.
-export type SurveyResultsQuestion = {
-	questionId: string;
-	prompt: string;
-	type: SurveyQuestionType;
-	answerCount: number;
-	// For scale/choice: value -> count. For text: omitted.
-	valueCounts?: Record<string, number>;
-	// For text: the raw answer strings, with no ordering tie to any member.
-	textAnswers?: string[];
-};
+// Interpreted, identity-free results for the admin and organizer views.
+export type ResultsQuestion =
+	| {
+			kind: "scale";
+			questionId: string;
+			prompt: string;
+			help: string | null;
+			metricKey: MetricKey | null;
+			labels: [string, string];
+			summary: ScaleSummary;
+			baseline: { mean: number; events: number } | null;
+	  }
+	| { kind: "choice"; questionId: string; prompt: string; options: string[]; counts: Record<string, number>; n: number }
+	| {
+			kind: "text";
+			questionId: string;
+			prompt: string;
+			answers: Array<{ id: string; value: string; hidden: boolean }>;
+			terms: Array<{ term: string; count: number }>;
+	  };
 
 export type SurveyResults = {
 	surveyId: string;
 	title: string;
+	eventId: string | null;
+	eventType: string | null;
 	status: SurveyStatus;
-	assignedCount: number;
-	completedCount: number;
-	questions: SurveyResultsQuestion[];
+	closesAt: Date | null;
+	invitedCount: number;
+	invitedResponded: number;
+	walkInCount: number;
+	responseCount: number;
+	belowThreshold: boolean;
+	shareWithOrganizers: boolean;
+	questions: ResultsQuestion[];
+	summary: (FeedbackSummary & { generatedAt: Date; responseCountAtGeneration: number }) | null;
 };
+
+// One row of the admin event archive. surveyId is null for an event with a debrief but no feedback form.
+export type EventFeedbackRow = {
+	surveyId: string | null;
+	overall: ScaleSummary | null;
+	responses: number;
+	invitedRate: number | null;
+	hasDebrief: boolean;
+};
+
+// The After Action Review. Each field is trimmed and an empty one is stored as null; a field left out of a save keeps its value.
+const debriefTextSchema = z
+	.string()
+	.trim()
+	.max(2000)
+	.transform((value) => value || null)
+	.optional();
+
+export const debriefInputSchema = z.object({
+	eventId: z.string().trim().min(1),
+	intended: debriefTextSchema,
+	happened: debriefTextSchema,
+	why: debriefTextSchema,
+	change: debriefTextSchema,
+});
+
+export type DebriefInput = z.infer<typeof debriefInputSchema>;

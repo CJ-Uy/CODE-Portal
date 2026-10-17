@@ -23,6 +23,12 @@
 	--input: #717d89;
 	--ring: #4986ac;
 	--radius: 0.5rem;
+	/* Feedback ratings 1-5, warm to cool through a neutral grey. Each step holds 3:1 against the card in this theme. */
+	--rating-1: #b3361a;
+	--rating-2: #e0762f;
+	--rating-3: #8a96a3;
+	--rating-4: #4b8fc4;
+	--rating-5: #1b4f8a;
 }
 
 .dark {
@@ -45,6 +51,11 @@
 	--border: #3d5266;
 	--input: #3d5266;
 	--ring: #90b4cc;
+	--rating-1: #f0703f;
+	--rating-2: #f7b57a;
+	--rating-3: #98a5b4;
+	--rating-4: #5aa3dc;
+	--rating-5: #a9d6f7;
 }
 
 @theme inline {

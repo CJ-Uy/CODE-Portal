@@ -10,6 +10,7 @@ import { runEmailDispatch } from "./src/server/email/dispatch";
 import { handleInboundEmail, MAX_INBOUND_BYTES } from "./src/server/email/inbound";
 import { bindingSender } from "./src/server/email/sender";
 import { runEmailJobs, type EmailJob } from "./src/server/email/jobs";
+import { runFeedbackReminders } from "./src/server/feedback/reminders";
 
 // Re-export the Durable Object classes OpenNext declares so a wrapper does not drop them.
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -22,7 +23,7 @@ export { DOShardedTagCache } from "./.open-next/worker.js";
 // @ts-ignore generated at build time
 export { BucketCachePurge } from "./.open-next/worker.js";
 
-type Env = CloudflareEnv & { FEATURE_EMAIL?: string; EMAIL_JOBS: Queue<EmailJob> };
+type Env = CloudflareEnv & { FEATURE_EMAIL?: string; FEATURE_SURVEYS?: string; FEATURE_NOTIFICATIONS?: string; EMAIL_JOBS: Queue<EmailJob> };
 
 export default {
 	fetch: handler.fetch,
@@ -33,16 +34,41 @@ export default {
 	},
 
 	async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
-		if (env.FEATURE_EMAIL !== "true") return;
 		const db = drizzle(env.DB, { schema });
-		ctx.waitUntil(
-			runEmailDispatch(db, bindingSender(env.EMAIL), emailConfigFrom(env as unknown as Record<string, unknown>)).then(
-				(result) => {
-					if (result.claimed || result.sent || result.failed || result.paused) console.log("email dispatch", JSON.stringify(result));
-				},
-				(error) => console.error("email dispatch failed", error),
-			),
-		);
+		let emailConfig: ReturnType<typeof emailConfigFrom> | null = null;
+		if (env.FEATURE_EMAIL === "true") {
+			try {
+				emailConfig = emailConfigFrom(env as unknown as Record<string, unknown>);
+			} catch (error) {
+				// A bad EMAIL_* var stops email dispatch, but must not take the feedback reminders down with it.
+				console.error("email config invalid", error);
+			}
+		}
+		if (emailConfig) {
+			ctx.waitUntil(
+				runEmailDispatch(db, bindingSender(env.EMAIL), emailConfig).then(
+					(result) => {
+						if (result.claimed || result.sent || result.failed || result.paused) console.log("email dispatch", JSON.stringify(result));
+					},
+					(error) => console.error("email dispatch failed", error),
+				),
+			);
+		}
+		// Runs whether or not email is on. The flags come from the Worker env because notify() cannot read the OpenNext request config here.
+		if (env.FEATURE_SURVEYS === "true") {
+			ctx.waitUntil(
+				runFeedbackReminders(db, {
+					now: new Date(),
+					notificationsEnabled: env.FEATURE_NOTIFICATIONS === "true",
+					email: emailConfig ? { queue: env.EMAIL_JOBS, baseUrl: emailConfig.publicBaseUrl } : null,
+				}).then(
+					(result) => {
+						if (result.surveys) console.log("feedback reminders", JSON.stringify(result));
+					},
+					(error) => console.error("feedback reminders failed", error),
+				),
+			);
+		}
 	},
 
 	async email(message: ForwardableEmailMessage, env: Env) {

@@ -10,14 +10,20 @@ import { allowedEventTypes } from "@/db/repositories/eventTypeRules";
 import { formatEventRange } from "@/lib/date-slots";
 import { inclusiveEndDate, toIsoDate } from "@/lib/calendar";
 import { googleCalendarUrl } from "@/lib/calendar-export";
+import { debriefView } from "@/lib/feedback/debrief-input";
+import { errorLabel } from "@/lib/feedback/safe-log";
 import { getAppConfig } from "@/server/env";
 import { EventShareBar } from "./event-share-bar";
 import { loadEventTypes } from "@/lib/event-type-load";
 import { answerLabel, type EventSignupAnswers, type EventSignupField } from "@/lib/event-signup-form";
 import { requireActor } from "@/server/auth/actor";
+import { isFeatureEnabled } from "@/server/features";
+import { canViewFeedbackArchive } from "@/server/feedback/archive-access";
 import { buildAwardEditorRows } from "./award-editor-input";
 import { EventManagePanel, type SignupResponseRow } from "./event-manage-panel";
 import { EventSignupPanel } from "./event-signup-panel";
+import { FeedbackCard } from "./feedback-card";
+import { OrganizerFeedback } from "./organizer-feedback";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +47,10 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 		? managed.myRole === "owner" || managed.myRole === "admin" || managed.canModerate
 		: false;
 	const canViewSignupResponses = event.rsvpResponsesPublic || canManageSignupResponses;
-	const [pointTypeLoad, staff, attendance, invites, signups, terms] = await Promise.all([
+	const surveysOn = isFeatureEnabled("surveys");
+	// The event's owner and staff admins; the repository checks this again for every read below.
+	const isOrganizer = managed ? managed.myRole === "owner" || managed.myRole === "admin" : false;
+	const [pointTypeLoad, staff, attendance, invites, signups, terms, feedback, organizerFeedback, debrief] = await Promise.all([
 		managed?.canSetPoints
 			? repositories.pointTypes
 					.list()
@@ -53,6 +62,25 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 		managed && isStaff ? repositories.events.listInvites(actor, eventId).catch(() => []) : Promise.resolve([]),
 		canViewSignupResponses ? repositories.events.listSignupResponses(actor, eventId).catch(() => []) : Promise.resolve([]),
 		managed && isStaff ? repositories.retention.listTerms(actor).catch(() => []) : Promise.resolve([]),
+		// The repository decides who may answer (real event staff never can), so an admin or moderator who
+		// attended as an ordinary attendee still gets the card.
+		surveysOn ? repositories.surveys.openFeedbackForEvent(actor, eventId).catch(() => null) : Promise.resolve(null),
+		isOrganizer && surveysOn
+			? repositories.surveyResults.getOrganizerResults(actor, eventId).catch((error: unknown) => {
+					console.error("Could not load the organizer feedback.", { eventId, error: errorLabel(error) });
+					return null;
+				})
+			: Promise.resolve(null),
+		// A failed read is kept apart from "no debrief yet", so the form is never shown empty over a debrief that exists.
+		isOrganizer && surveysOn
+			? repositories.eventDebriefs
+					.get(actor, eventId)
+					.then((row) => ({ ok: true as const, view: debriefView(row) }))
+					.catch((error: unknown) => {
+						console.error("Could not load the event debrief.", { eventId, error: errorLabel(error) });
+						return { ok: false as const };
+					})
+			: Promise.resolve(null),
 	]);
 	const awardsUnavailable = !awardLoad.ok || !pointTypeLoad.ok;
 	const awardRows =
@@ -152,6 +180,10 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 				</div>
 			</header>
 
+			{feedback && (feedback.state === "open" || feedback.state === "answered") ? (
+				<FeedbackCard surveyId={feedback.surveyId} state={feedback.state} />
+			) : null}
+
 			{/* An informational event has no signup and no check-in, so the whole interaction column
 			    goes away rather than rendering controls that the repository would reject. */}
 			{event.readOnly ? null : (
@@ -229,7 +261,12 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 					typesUnavailable={!typeLoad.ok}
 					awardRows={awardRows}
 					awardsUnavailable={awardsUnavailable}
+					canViewArchive={canViewFeedbackArchive(actor)}
 				/>
+			) : null}
+
+			{isOrganizer && surveysOn ? (
+				<OrganizerFeedback eventId={event.id} feedback={organizerFeedback} debrief={debrief?.ok ? debrief.view : null} />
 			) : null}
 		</div>
 	);

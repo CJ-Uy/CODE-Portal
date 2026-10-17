@@ -1,112 +1,219 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { CheckCircle2, Lock, Send } from "lucide-react";
+import { CheckCircle2, Send } from "lucide-react";
 import { getRepositories } from "@/db";
+import { RESPONDENT_STATE_MESSAGES, type RespondentView } from "@/db/repositories/surveys";
+import type { SurveyQuestion } from "@/db/types";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { parseOptions, safeFeedbackError, scaleLabels } from "@/lib/feedback/form";
 import { getActor } from "@/server/auth/actor";
+import { can, type Actor } from "@/server/auth/permissions";
 import { isFeatureEnabled } from "@/server/features";
 import { submitResponseAction } from "./actions";
 
 export const dynamic = "force-dynamic";
+
+// A radio pill: the input fills the label so a tap anywhere lands on it and the browser's "pick one" prompt anchors to it.
+const PILL =
+	"relative flex min-w-0 cursor-pointer items-center justify-center border border-input bg-background text-sm font-semibold transition-colors has-checked:border-primary has-checked:bg-primary has-checked:text-primary-foreground has-focus-visible:ring-2 has-focus-visible:ring-ring";
+const PILL_INPUT = "absolute inset-0 m-0 size-full cursor-pointer opacity-0";
 
 export default async function MemberSurveyPage({
 	params,
 	searchParams,
 }: {
 	params: Promise<{ id: string }>;
-	searchParams: Promise<{ t?: string; done?: string }>;
+	searchParams: Promise<{ done?: string; error?: string; preview?: string }>;
 }) {
 	if (!isFeatureEnabled("surveys")) notFound();
 	const actor = await getActor();
 	if (!actor) redirect("/signin");
 
-	const { id } = await params;
-	const { t: token, done } = await searchParams;
-	const repositories = await getRepositories();
+	const [{ id }, { done, error, preview }, repositories] = await Promise.all([params, searchParams, getRepositories()]);
+	// Only someone who can configure surveys gets a preview; for anyone else the parameter does nothing.
+	const isPreview = preview === "1" && can(actor, "survey:configure");
 	// surveys has no shared-dev internal proxy yet; degrade to not-found instead of crashing.
-	const detail = await repositories.surveys.getForRespondent(id).catch(() => null);
+	const detail = isPreview ? await previewView(repositories, actor, id) : await repositories.surveys.getForRespondent(actor, id).catch(() => null);
 	if (!detail) notFound();
 
-	if (done) {
-		return (
-			<div className="mx-auto grid max-w-2xl gap-4 py-8 text-center">
-				<CheckCircle2 className="mx-auto size-12 text-accent" />
-				<h1 className="font-heading text-3xl">Thank you</h1>
-				<p className="text-sm text-muted-foreground">Your response was recorded anonymously. It cannot be traced back to you.</p>
-			</div>
-		);
-	}
+	const { survey, questions, eventTitle, state } = detail;
+	const backHref = isPreview ? `/portal/admin/content/surveys/${survey.id}` : survey.eventId ? `/portal/calendar/${survey.eventId}` : "/portal";
 
 	return (
-		<div className="mx-auto grid max-w-2xl gap-6">
-			<div>
-				<p className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-					<Lock className="size-3" />
-					Anonymous survey
+		<div className="mx-auto grid w-full min-w-0 max-w-2xl gap-6">
+			<header className="grid min-w-0 gap-1">
+				<p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Feedback</p>
+				<h1 className="min-w-0 font-heading text-3xl leading-tight [overflow-wrap:anywhere]">{eventTitle ?? survey.title}</h1>
+				<p className="text-sm text-muted-foreground">
+					Your name isn&apos;t attached to your answers. Used only to evaluate this project (RA 10173).
 				</p>
-				<h1 className="mt-1 font-heading text-3xl">{detail.survey.title}</h1>
-				<p className="mt-1 text-sm text-muted-foreground">
-					Your answers cannot be traced back to you. Take your time.
-				</p>
-			</div>
+			</header>
 
-			{!token ? (
-				<Card>
-					<CardContent className="py-8 text-center text-sm text-muted-foreground">
-						This survey link is missing its access token. Open it again from your invitation.
-					</CardContent>
-				</Card>
-			) : (
+			{isPreview ? (
+				<p role="status" className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border bg-secondary p-3 text-sm text-secondary-foreground">
+					<span className="min-w-0 font-medium">Preview. This is how members see the form. Nothing here is saved or sent.</span>
+					<Link href={backHref} className="font-medium text-accent underline-offset-4 hover:underline">
+						Back to the form
+					</Link>
+				</p>
+			) : null}
+
+			{isPreview ? (
+				<fieldset disabled className="grid min-w-0 gap-4 border-0 p-0 [&_input]:cursor-default [&_label]:cursor-default">
+					<QuestionCards questions={questions} />
+				</fieldset>
+			) : state === "open" ? (
 				<form action={submitResponseAction} className="grid gap-4">
-					<input type="hidden" name="surveyId" value={detail.survey.id} />
-					<input type="hidden" name="token" value={token} />
-					{detail.questions.map((question, index) => (
-						<Card key={question.id}>
-							<CardHeader>
-								<CardTitle className="flex items-start gap-3 text-base font-medium">
-									<span className="grid size-6 shrink-0 place-items-center rounded-full bg-secondary text-xs font-semibold text-accent">
-										{index + 1}
-									</span>
-									{question.prompt}
-								</CardTitle>
-							</CardHeader>
-							<CardContent>
-								{question.type === "scale" ? (
-									<fieldset className="grid gap-2">
-										<div className="flex gap-2">
-											{[1, 2, 3, 4, 5].map((value) => (
-												<label
-													key={value}
-													className="flex-1 cursor-pointer rounded-lg border border-border py-2 text-center text-sm font-semibold transition-colors has-checked:border-accent has-checked:bg-secondary has-checked:text-foreground"
-												>
-													<input type="radio" name={`q:${question.id}`} value={value} className="sr-only" required />
-													{value}
-												</label>
-											))}
-										</div>
-										<div className="flex justify-between text-xs text-muted-foreground">
-											<span>Strongly disagree</span>
-											<span>Strongly agree</span>
-										</div>
-									</fieldset>
-								) : question.type === "text" ? (
-									<Textarea name={`q:${question.id}`} rows={3} placeholder="Your answer" />
-								) : (
-									<Input name={`q:${question.id}`} placeholder="Your answer" />
-								)}
-							</CardContent>
-						</Card>
-					))}
-					<div className="flex justify-end">
-						<Button type="submit">
-							<Send />
-							Submit response
-						</Button>
-					</div>
+					<input type="hidden" name="surveyId" value={survey.id} />
+					{error ? (
+						<p role="alert" className="rounded-lg border border-border bg-secondary p-3 text-sm font-medium text-secondary-foreground">
+							{safeFeedbackError(error)}
+						</p>
+					) : null}
+					<QuestionCards questions={questions} />
+					<Button type="submit" className="h-12 w-full sm:ml-auto sm:w-auto">
+						<Send />
+						Send feedback
+					</Button>
 				</form>
+			) : (
+				<StateCard
+					message={done && state === "answered" ? "Thanks, feedback sent." : RESPONDENT_STATE_MESSAGES[state]}
+					thanked={state === "answered"}
+					backHref={backHref}
+				/>
 			)}
+		</div>
+	);
+}
+
+// A signed-in configurer sees the saved questions of any form, drafts included, as if it were open to them.
+async function previewView(repositories: Awaited<ReturnType<typeof getRepositories>>, actor: Actor, id: string): Promise<RespondentView | null> {
+	const detail = await repositories.surveys.getById(actor, id).catch(() => null);
+	if (!detail) return null;
+	const event = detail.survey.eventId ? await repositories.events.getById(actor, detail.survey.eventId).catch(() => null) : null;
+	return { survey: detail.survey, questions: detail.questions, eventTitle: event?.title ?? null, state: "open" };
+}
+
+function QuestionCards({ questions }: { questions: SurveyQuestion[] }) {
+	return (
+		<>
+			{questions.some((question) => question.required) ? (
+				<p className="text-xs text-muted-foreground">
+					<span aria-hidden="true">* </span>Required
+				</p>
+			) : null}
+			{questions.map((question, index) => (
+				<Card key={question.id} className="p-4 sm:p-5">
+					{question.type === "text" ? (
+						<TextQuestion question={question} index={index} />
+					) : (
+						<fieldset className="grid min-w-0 gap-3 border-0 p-0" aria-describedby={question.help ? `help-${question.id}` : undefined}>
+							<legend className="w-full min-w-0 text-base font-medium leading-snug [overflow-wrap:anywhere]">
+								<Prompt question={question} index={index} />
+							</legend>
+							<Help question={question} />
+							{question.type === "scale" ? <ScaleOptions question={question} /> : <ChoiceOptions question={question} />}
+						</fieldset>
+					)}
+				</Card>
+			))}
+		</>
+	);
+}
+
+function StateCard({ message, thanked, backHref }: { message: string; thanked: boolean; backHref: string }) {
+	return (
+		<Card>
+			<CardContent className="grid justify-items-start gap-4 p-5">
+				<p className="flex min-w-0 items-center gap-2 text-base font-medium">
+					{thanked ? <CheckCircle2 className="size-5 shrink-0 text-accent" /> : null}
+					{message}
+				</p>
+				<Button asChild variant="outline">
+					<Link href={backHref}>{backHref === "/portal" ? "Back to portal" : "Back to event"}</Link>
+				</Button>
+			</CardContent>
+		</Card>
+	);
+}
+
+function Prompt({ question, index }: { question: SurveyQuestion; index: number }) {
+	return (
+		<>
+			<span className="tabular-nums text-muted-foreground">{index + 1}.</span> {question.prompt}
+			{question.required ? (
+				<>
+					<span aria-hidden="true" className="text-destructive">
+						{" "}
+						*
+					</span>
+					<span className="sr-only"> (required)</span>
+				</>
+			) : null}
+		</>
+	);
+}
+
+function Help({ question }: { question: SurveyQuestion }) {
+	if (!question.help) return null;
+	return (
+		<p id={`help-${question.id}`} className="-mt-1 min-w-0 text-sm text-muted-foreground [overflow-wrap:anywhere]">
+			{question.help}
+		</p>
+	);
+}
+
+function TextQuestion({ question, index }: { question: SurveyQuestion; index: number }) {
+	return (
+		<div className="grid min-w-0 gap-3">
+			<label htmlFor={`q-${question.id}`} className="min-w-0 text-base font-medium leading-snug [overflow-wrap:anywhere]">
+				<Prompt question={question} index={index} />
+			</label>
+			<Help question={question} />
+			<Textarea
+				id={`q-${question.id}`}
+				name={`q:${question.id}`}
+				rows={4}
+				maxLength={2000}
+				required={question.required}
+				aria-describedby={question.help ? `help-${question.id}` : undefined}
+			/>
+		</div>
+	);
+}
+
+function ScaleOptions({ question }: { question: SurveyQuestion }) {
+	const [low, high] = scaleLabels(question.optionsJson);
+	return (
+		<div className="grid gap-2">
+			<div className="grid grid-cols-5 gap-1.5">
+				{[1, 2, 3, 4, 5].map((value) => (
+					<label key={value} className={`${PILL} h-12 rounded-lg`}>
+						<input type="radio" name={`q:${question.id}`} value={value} required={question.required} className={PILL_INPUT} />
+						{value}
+					</label>
+				))}
+			</div>
+			<div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
+				<span className="min-w-0 [overflow-wrap:anywhere]">{low}</span>
+				<span className="min-w-0 text-right [overflow-wrap:anywhere]">{high}</span>
+			</div>
+		</div>
+	);
+}
+
+function ChoiceOptions({ question }: { question: SurveyQuestion }) {
+	return (
+		<div className="flex min-w-0 flex-wrap gap-2">
+			{parseOptions(question.optionsJson).map((option) => (
+				<label key={option} className={`${PILL} min-h-11 max-w-full rounded-full px-4 py-2 text-left font-medium`}>
+					<input type="radio" name={`q:${question.id}`} value={option} required={question.required} className={PILL_INPUT} />
+					<span className="min-w-0 [overflow-wrap:anywhere]">{option}</span>
+				</label>
+			))}
 		</div>
 	);
 }

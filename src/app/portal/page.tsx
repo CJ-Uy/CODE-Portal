@@ -18,6 +18,7 @@ export const dynamic = "force-dynamic";
 const EMPTY_SUMMARY: OverviewSummary = {
 	retention: { points: 0, retainedAt: null, termName: null },
 	pendingSurveys: 0,
+	oldestPendingSurveyId: null,
 	upcomingEvents: 0,
 	linkClicks: 0,
 };
@@ -125,7 +126,15 @@ export default async function PortalOverviewPage() {
 						icon={ClipboardCheck}
 					/>
 				) : null}
-				{flags.surveys ? (
+				{/* A member who signed in from a feedback email lands here, so a pending form is one tap away. */}
+				{flags.surveys && summary.oldestPendingSurveyId ? (
+					<Link
+						href={`/portal/surveys/${encodeURIComponent(summary.oldestPendingSurveyId)}`}
+						className="block min-w-0 rounded-lg transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					>
+						<MetricCard label="Surveys" value={String(summary.pendingSurveys)} description="Pending responses. Open the next one." icon={MessageSquare} />
+					</Link>
+				) : flags.surveys ? (
 					<MetricCard label="Surveys" value={String(summary.pendingSurveys)} description="Pending responses" icon={MessageSquare} />
 				) : null}
 				<MetricCard label="Events" value={String(summary.upcomingEvents)} description="Upcoming approved events" icon={CalendarDays} />

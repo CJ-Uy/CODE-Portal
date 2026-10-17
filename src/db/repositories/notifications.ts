@@ -13,7 +13,7 @@ import { isFeatureEnabled } from "@/server/features";
 // is structurally compatible at runtime, matching the existing members repo.
 type Db = DrizzleD1Database<typeof schema>;
 
-export type NotificationKind = "event_approved" | "event_invite" | "survey_assigned" | "forum_reply" | "points_awarded";
+export type NotificationKind = "event_approved" | "event_invite" | "survey_assigned" | "survey_reminder" | "forum_reply" | "points_awarded";
 
 export type FeedItem = {
 	id: string;
@@ -49,12 +49,20 @@ function toMs(value: Date | number | null): number | null {
  * Materialize one per-member notification row. This is a system side effect of
  * an already-authorized, already-audited action (event approval, survey
  * assignment, forum reply, points awarded), so it takes no actor and is not
- * itself audited. It is the ONLY write path for the notifications table.
+ * itself audited. With insertNotification() it is the only write path for the notifications table.
  * Phase 7 Task 7 calls this from the event-approve and survey-assign
  * triggers; Phase 4's forum-reply and points-award write paths call it too.
  */
 export async function notify(db: Db, input: NotifyInput): Promise<void> {
 	if (!isFeatureEnabled("notifications")) return;
+	await insertNotification(db, input);
+}
+
+/**
+ * The write behind notify(), with no feature-flag check. For callers outside the request context (the scheduled
+ * handler) that already know the flag from the Worker env, since isFeatureEnabled() parses the full app config through the OpenNext request context, which a cron run lacks.
+ */
+export async function insertNotification(db: Db, input: NotifyInput): Promise<void> {
 	await db.insert(notifications).values({
 		id: createId("ntf"),
 		memberId: input.memberId,

@@ -61,10 +61,42 @@ if (one("SELECT public_code AS v FROM crs_events WHERE id='evt_fix1'") === null)
 check("member_feed_state gone", one("SELECT COUNT(*) AS v FROM sqlite_master WHERE type='table' AND name='member_feed_state'"), 0);
 check("articles gone", one("SELECT COUNT(*) AS v FROM sqlite_master WHERE type='table' AND name='articles'"), 0);
 
-for (const file of files.filter((f) => f > "0004_unify_schema.sql")) applyOne(file);
+for (const file of files.filter((f) => f > "0004_unify_schema.sql" && f < "0012")) applyOne(file);
 check("email role seeded", one("SELECT COUNT(*) AS v FROM roles WHERE id='role_email'"), 1);
 check("unsubscribe slug reserved", one("SELECT COUNT(*) AS v FROM reserved_slugs WHERE slug='unsubscribe'"), 1);
 check("email_deliveries exists", one("SELECT COUNT(*) AS v FROM sqlite_master WHERE type='table' AND name='email_deliveries'"), 1);
+
+// 0012 drops survey_assignments.response_token_hash; an existing invitation must survive it.
+db.exec(`INSERT INTO surveys (id, title, created_by) VALUES ('srv_fix1', 'Fixture', 'mem_fix1')`);
+db.exec(
+	`INSERT INTO survey_assignments (survey_id, member_id, response_token_hash, completed_at)
+	 VALUES ('srv_fix1', 'mem_fix1', 'hash_fix1', 2000)`,
+);
+// A rule saved as "Super admins only" before 0012 stored survey:configure, which CRS now holds.
+db.exec(`INSERT INTO event_type_rules (type, required_permission, label) VALUES ('fix_super', 'survey:configure', 'Fixture')`);
+for (const file of files.filter((f) => f >= "0012")) applyOne(file);
+check("fixture assignment survived", one("SELECT completed_at AS v FROM survey_assignments WHERE survey_id='srv_fix1'"), 2000);
+check("fixture assignment is invited", one("SELECT source AS v FROM survey_assignments WHERE survey_id='srv_fix1'"), "invited");
+check(
+	"survey templates seeded",
+	one("SELECT group_concat(id, ',') AS v FROM (SELECT id FROM survey_templates ORDER BY position)"),
+	"stpl_standard,stpl_pulse,stpl_workshop",
+);
+const standard = JSON.parse(String(one("SELECT questions_json AS v FROM survey_templates WHERE id='stpl_standard'"))) as Array<{
+	metricKey?: string;
+}>;
+check("stpl_standard question count", standard.length, 7);
+check(
+	"stpl_standard metric keys",
+	standard.flatMap((q) => (q.metricKey ? [q.metricKey] : [])).join(","),
+	"overall,flow,content,venue,return_intent",
+);
+check(
+	"super-only rule rewritten",
+	one("SELECT required_permission AS v FROM event_type_rules WHERE type='fix_super'"),
+	"system:super_only",
+);
+check("feedback email category seeded", one("SELECT COUNT(*) AS v FROM email_categories WHERE id='ecat_feedback'"), 1);
 db.close();
 rmSync(work, { recursive: true, force: true });
 

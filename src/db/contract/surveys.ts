@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createSurveyInputSchema, sampleSurveyInputSchema, submitSurveyResponseInputSchema } from "@/db/types";
+import { createSurveyInputSchema, METRIC_KEYS, sendSurveyInputSchema } from "@/db/types";
 import { operation } from "./common";
 
 const surveyOutputSchema = z.object({
@@ -10,6 +10,17 @@ const surveyOutputSchema = z.object({
 	sampleSize: z.number().int().nullable(),
 	createdBy: z.string(),
 	createdAt: z.coerce.date(),
+	templateId: z.string().nullable(),
+	closesAt: z.coerce.date().nullable(),
+	sentAt: z.coerce.date().nullable(),
+	reminderAt: z.coerce.date().nullable(),
+	reminderSentAt: z.coerce.date().nullable(),
+	allowWalkIn: z.boolean(),
+	shareWithOrganizers: z.boolean(),
+	emailInvitees: z.boolean(),
+	aiSummaryJson: z.string().nullable(),
+	aiSummaryAt: z.coerce.date().nullable(),
+	aiSummaryResponseCount: z.number().int().nullable(),
 });
 
 const surveyQuestionOutputSchema = z.object({
@@ -19,24 +30,76 @@ const surveyQuestionOutputSchema = z.object({
 	type: z.enum(["scale", "text", "choice"]),
 	prompt: z.string(),
 	optionsJson: z.string().nullable(),
+	required: z.boolean(),
+	help: z.string().nullable(),
+	metricKey: z.enum(METRIC_KEYS).nullable(),
 });
+
+const scaleSummarySchema = z.object({
+	n: z.number().int(),
+	counts: z.tuple([z.number().int(), z.number().int(), z.number().int(), z.number().int(), z.number().int()]),
+	mean: z.number().nullable(),
+	topTwoPct: z.number().nullable(),
+});
+
+const resultsQuestionSchema = z.discriminatedUnion("kind", [
+	z.object({
+		kind: z.literal("scale"),
+		questionId: z.string(),
+		prompt: z.string(),
+		help: z.string().nullable(),
+		metricKey: z.enum(METRIC_KEYS).nullable(),
+		labels: z.tuple([z.string(), z.string()]),
+		summary: scaleSummarySchema,
+		baseline: z.object({ mean: z.number(), events: z.number().int() }).nullable(),
+	}),
+	z.object({
+		kind: z.literal("choice"),
+		questionId: z.string(),
+		prompt: z.string(),
+		options: z.array(z.string()),
+		counts: z.record(z.string(), z.number().int()),
+		n: z.number().int(),
+	}),
+	z.object({
+		kind: z.literal("text"),
+		questionId: z.string(),
+		prompt: z.string(),
+		answers: z.array(z.object({ id: z.string(), value: z.string(), hidden: z.boolean() })),
+		terms: z.array(z.object({ term: z.string(), count: z.number().int() })),
+	}),
+]);
 
 const surveyResultsSchema = z.object({
 	surveyId: z.string(),
 	title: z.string(),
+	eventId: z.string().nullable(),
+	eventType: z.string().nullable(),
 	status: z.enum(["draft", "running", "closed"]),
-	assignedCount: z.number().int(),
-	completedCount: z.number().int(),
-	questions: z.array(
-		z.object({
-			questionId: z.string(),
-			prompt: z.string(),
-			type: z.enum(["scale", "text", "choice"]),
-			answerCount: z.number().int(),
-			valueCounts: z.record(z.string(), z.number().int()).optional(),
-			textAnswers: z.array(z.string()).optional(),
-		}),
-	),
+	closesAt: z.coerce.date().nullable(),
+	invitedCount: z.number().int(),
+	invitedResponded: z.number().int(),
+	walkInCount: z.number().int(),
+	responseCount: z.number().int(),
+	belowThreshold: z.boolean(),
+	shareWithOrganizers: z.boolean(),
+	questions: z.array(resultsQuestionSchema),
+	summary: z
+		.object({
+			themes: z.array(
+				z.object({
+					label: z.string(),
+					description: z.string(),
+					share: z.enum(["most", "several", "a few"]),
+					quotes: z.array(z.string()),
+				}),
+			),
+			usedComments: z.number().int(),
+			totalComments: z.number().int(),
+			generatedAt: z.coerce.date(),
+			responseCountAtGeneration: z.number().int(),
+		})
+		.nullable(),
 });
 
 export const surveysContract = {
@@ -64,20 +127,11 @@ export const surveysContract = {
 		permission: "survey:configure",
 		sharedDev: "deny",
 	}),
-	sample: operation({
-		input: sampleSurveyInputSchema,
-		output: z.object({
-			assigned: z.number().int(),
-			tokens: z.array(z.object({ memberId: z.string(), token: z.string() })),
-		}),
+	send: operation({
+		input: sendSurveyInputSchema,
+		output: z.object({ invited: z.number().int(), eligible: z.number().int() }),
 		auth: "admin",
 		permission: "survey:configure",
-		sharedDev: "deny",
-	}),
-	submit: operation({
-		input: submitSurveyResponseInputSchema,
-		output: z.object({ ok: z.literal(true) }),
-		auth: "public",
 		sharedDev: "deny",
 	}),
 	results: operation({
