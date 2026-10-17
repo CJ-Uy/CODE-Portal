@@ -193,6 +193,11 @@ function searchWords(q: string | undefined): string[] {
 	return [...new Set((q ?? "").toLowerCase().split(/\s+/).filter(Boolean))].slice(0, MAX_WORDS);
 }
 
+/** Whether an edit touches what smart search embeds (title, summary, page body, tags). The editor's save uses the same test to decide whether to re-index. */
+export function changesIndexedText(input: Partial<Pick<LibraryItemDraftInput, "title" | "dek" | "blocks" | "tagIds">>): boolean {
+	return input.title !== undefined || input.dek !== undefined || input.blocks !== undefined || input.tagIds !== undefined;
+}
+
 /** What a stored link may look like. The item page checks the same pattern before it renders one as a link. */
 export const LINK_URL = /^https?:\/\/\S+$/i;
 
@@ -586,6 +591,8 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 				set.blocksJson = input.blocks;
 				set.readMinutes = readMinutes(blocksToPlainText(input.blocks));
 			}
+			// What smart search embeds changed: unindexed until the indexer reads it again, so the rebuild catches a missed re-index.
+			if (changesIndexedText(input)) set.indexedAt = null;
 			const tagIds = input.tagIds === undefined ? undefined : await assertTagsExist(input.tagIds);
 			await db.update(libraryItems).set(set).where(eq(libraryItems.id, id));
 			if (tagIds) await replaceTags(id, tagIds);
@@ -612,7 +619,7 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 			if (!row || row.createdBy !== actor.memberId) throw new Error("Library item not found.");
 			if (row.status !== "draft") throw new Error("Only a draft can be published.");
 			const to: LibraryStatus = input.containsClientData ? "pending_review" : "published";
-			await transition(actor, row, "draft", to, { containsClientData: input.containsClientData, moderationReason: null, publishedAt: new Date() });
+			await transition(actor, row, "draft", to, { containsClientData: input.containsClientData, moderationReason: null, publishedAt: new Date(), indexedAt: null });
 			await audited(actor, to === "published" ? "library:publish" : "library:submit_review", row);
 			if (to === "pending_review") {
 				await announce({ action: "submit_review", itemId: id, title: row.title, ownerId: row.createdBy, actorId: actor.memberId, reason: null });
@@ -624,11 +631,12 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 			const row = await requireModeratable(actor, id);
 			const why = reason?.trim() || null;
 			if ((action === "send_back" || action === "take_down") && !why) throw new Error("A reason is required.");
+			// Going live clears indexedAt in the same write: if the background index fails, the rebuild still finds the item.
 			const rules = {
-				approve: { from: "pending_review", to: "published", set: { moderationReason: null, publishedAt: new Date() } },
+				approve: { from: "pending_review", to: "published", set: { moderationReason: null, publishedAt: new Date(), indexedAt: null } },
 				send_back: { from: "pending_review", to: "draft", set: { moderationReason: why } },
 				take_down: { from: "published", to: "taken_down", set: { moderationReason: why } },
-				restore: { from: "taken_down", to: "published", set: { moderationReason: null } },
+				restore: { from: "taken_down", to: "published", set: { moderationReason: null, indexedAt: null } },
 			} as const;
 			const rule = rules[action];
 			if (row.status !== rule.from) throw new Error(`Cannot ${action.replace("_", " ")} an item that is ${row.status.replace("_", " ")}.`);
@@ -640,7 +648,7 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 		async flagClientData(actor, id) {
 			const row = await requireEditable(actor, id);
 			if (row.status !== "published") throw new Error("Only a published item can be flagged for review.");
-			await transition(actor, row, "published", "pending_review", { containsClientData: true, moderationReason: null });
+			await transition(actor, row, "published", "pending_review", { containsClientData: true, moderationReason: null, indexedAt: null });
 			await audited(actor, "library:flag_client_data", row);
 			await announce({ action: "submit_review", itemId: id, title: row.title, ownerId: row.createdBy, actorId: actor.memberId, reason: null });
 			return "pending_review";
@@ -766,7 +774,8 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 			if (!can(actor, "library:manage")) throw new Error("Not authorized to manage the library.");
 			const row = await loadItem(id);
 			if (!row) throw new Error("Library item not found.");
-			await db.update(libraryItems).set({ confidentiality: value, updatedAt: new Date() }).where(eq(libraryItems.id, id));
+			// Either way the index has to change (vectors dropped, or embedded again); unindexed until it has.
+			await db.update(libraryItems).set({ confidentiality: value, updatedAt: new Date(), indexedAt: null }).where(eq(libraryItems.id, id));
 			await audited(actor, "library:set_confidentiality", row, value);
 		},
 

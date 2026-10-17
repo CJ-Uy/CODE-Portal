@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { ZodError } from "zod";
 import { getRepositories } from "@/db";
+import { changesIndexedText } from "@/db/repositories/library";
 import type { LibraryStatus } from "@/lib/library/taxonomy";
 import { requireActor } from "@/server/auth/actor";
 import { assertFeatureEnabled } from "@/server/features";
@@ -98,8 +99,8 @@ export async function saveItemAction(input: SaveItemInput): Promise<Result> {
 		}
 		if (Object.keys(fields).length > 0) await repositories.library.updateItem(actor, itemId, fields);
 		if (tagIds) await repositories.libraryTags.setItemTags(actor, itemId, tagIds);
-		// A published item is re-read for smart search; the indexer leaves drafts alone.
-		scheduleLibraryIndex(itemId, "index");
+		// Re-read for smart search only when what it embeds changed; the indexer leaves drafts alone.
+		if (changesIndexedText({ ...fields, tagIds })) scheduleLibraryIndex(itemId, "index");
 		return { ok: true };
 	} catch (error) {
 		return { ok: false, error: friendly(error) };
@@ -143,6 +144,8 @@ export async function flagClientDataAction(input: { itemId: string }): Promise<{
 	const parsed = itemIdInputSchema.safeParse(input);
 	if (!parsed.success) throw new Error(firstIssue(parsed.error));
 	const status = await repositories.library.flagClientData(actor, parsed.data.itemId);
+	// Hidden until approved, so it should not hold any of a search's top places meanwhile.
+	scheduleLibraryIndex(parsed.data.itemId, "deindex");
 	revalidateItem(parsed.data.itemId);
 	return { status };
 }

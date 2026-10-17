@@ -4,6 +4,8 @@ const mocks = vi.hoisted(() => ({
 	getItem: vi.fn(),
 	updateItem: vi.fn(async () => ({})),
 	setItemTags: vi.fn(async () => undefined),
+	flagClientData: vi.fn(async () => "pending_review"),
+	scheduleLibraryIndex: vi.fn(),
 	redirect: vi.fn((url: string) => {
 		throw new Error(`REDIRECT ${url}`);
 	}),
@@ -11,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/db", () => ({
 	getRepositories: async () => ({
-		library: { getItem: mocks.getItem, updateItem: mocks.updateItem },
+		library: { getItem: mocks.getItem, updateItem: mocks.updateItem, flagClientData: mocks.flagClientData },
 		libraryTags: { setItemTags: mocks.setItemTags },
 	}),
 }));
@@ -19,9 +21,9 @@ vi.mock("@/server/auth/actor", () => ({ requireActor: async () => ({ memberId: "
 vi.mock("@/server/features", () => ({ assertFeatureEnabled: () => undefined }));
 vi.mock("next/cache", () => ({ revalidatePath: () => undefined }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
-vi.mock("@/server/library/indexer", () => ({ scheduleLibraryIndex: () => undefined }));
+vi.mock("@/server/library/indexer", () => ({ scheduleLibraryIndex: mocks.scheduleLibraryIndex }));
 
-import { createDraftAction, saveItemAction } from "./editor-actions";
+import { createDraftAction, flagClientDataAction, saveItemAction } from "./editor-actions";
 
 const item = (over: object) => ({
 	id: "lib_1",
@@ -65,6 +67,18 @@ describe("saveItemAction on a live item", () => {
 		expect(mocks.setItemTags).toHaveBeenCalledWith(expect.anything(), "lib_1", ["ltg_1"]);
 	});
 
+	it("re-reads the item for smart search only when what it embeds changed", async () => {
+		mocks.getItem.mockResolvedValue(item({}));
+		await saveItemAction({ itemId: "lib_1", year: 2024, url: "https://y.org" });
+		expect(mocks.scheduleLibraryIndex).not.toHaveBeenCalled();
+		await saveItemAction({ itemId: "lib_1", dek: "New summary" });
+		await saveItemAction({ itemId: "lib_1", tagIds: ["ltg_1"] });
+		expect(mocks.scheduleLibraryIndex.mock.calls).toEqual([
+			["lib_1", "index"],
+			["lib_1", "index"],
+		]);
+	});
+
 	it("will not take a bare format change, which would swap a live item's body", async () => {
 		const result = await saveItemAction({ itemId: "lib_1", format: "file" });
 		expect(result.ok).toBe(false);
@@ -74,6 +88,13 @@ describe("saveItemAction on a live item", () => {
 	it("says an item it cannot edit is not found", async () => {
 		mocks.getItem.mockResolvedValue(item({ canEdit: false }));
 		expect(await saveItemAction({ itemId: "lib_1", url: null })).toEqual({ ok: false, error: "Library item not found." });
+	});
+});
+
+describe("flagClientDataAction", () => {
+	it("drops the item from the smart-search index while it waits for review", async () => {
+		expect(await flagClientDataAction({ itemId: "lib_1" })).toEqual({ status: "pending_review" });
+		expect(mocks.scheduleLibraryIndex).toHaveBeenCalledWith("lib_1", "deindex");
 	});
 });
 

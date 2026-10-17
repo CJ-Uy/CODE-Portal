@@ -1,19 +1,30 @@
 import { env } from "cloudflare:test";
 import { drizzle } from "drizzle-orm/d1";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as schema from "@/db/schema";
 import { libraryItemTags, libraryTags } from "@/db/schema";
 import { createAuditRepository } from "@/db/repositories/audit";
 import { createLibraryRepository } from "@/db/repositories/library";
 import { actors, insertItem, resetLibrary, seedMembers } from "@/db/repositories/library-test-fixtures";
 import { createLibraryTagsRepository } from "@/db/repositories/library-tags";
+import { createMembersRepository } from "@/db/repositories/members";
+import type { MemberDb } from "@/db/repositories/members";
 import type { LibraryAi, LibraryVectors } from "./ai";
-import { smartBindings } from "./ai";
-import { fuseRankings, parseKeywordOutput, searchLibrary, smartRelated, smartSearch } from "./smart-search";
+import { getLibraryAi, getLibraryBindings, LIBRARY_EMBED_MODEL, LIBRARY_KEYWORD_MODEL } from "./ai";
+import { fuseRankings, parseKeywordOutput, searchLibrary, smartRelated, smartSearch, smartSearchPreference } from "./smart-search";
 
 const db = drizzle(env.DB, { schema });
 const audit = createAuditRepository(db);
 const repos = { library: createLibraryRepository(db, audit), libraryTags: createLibraryTagsRepository(db, audit) };
+
+// Where OpenNext keeps the Worker env; getCloudflareEnv reads it, so the real flag and binding checks run on this.
+const CONTEXT = Symbol.for("__cloudflare-context__");
+const workerEnv = (values: Record<string, unknown>) => {
+	(globalThis as Record<symbol, unknown>)[CONTEXT] = { env: values, ctx: { waitUntil: () => undefined }, cf: {} };
+};
+afterEach(() => {
+	delete (globalThis as Record<symbol, unknown>)[CONTEXT];
+});
 
 /** Records every call, so a test can say "the model was never asked". */
 function fakeAi(overrides: Partial<LibraryAi> = {}): LibraryAi & { calls: string[] } {
@@ -103,14 +114,49 @@ describe("smartSearch", () => {
 		const worded = await insertItem({ title: "Attendance tracker" });
 		await addTag("ltg_mot", "Motivation", [tagged]);
 		const ai = fakeAi({ keywords: async () => '{"tags":["motivation"],"words":["attendance"]}' });
+		const vectorize = fakeVectorize([`${tagged}:0`]);
 
-		const res = await smartSearch(actors.other, "how do i get members to show up", { ai, vectorize: fakeVectorize([]), repos });
+		const res = await smartSearch(actors.other, "how do i get members to show up", { ai, vectorize, repos });
 		expect(res?.chips).toEqual([{ label: "Motivation", tagId: "ltg_mot" }, { label: "attendance" }]);
-		expect(res?.ids).toEqual(expect.arrayContaining([tagged, worded]));
+		expect(res?.ids).toEqual([tagged, worded]);
 
-		const without = await smartSearch(actors.other, "how do i get members to show up", { ai, vectorize: fakeVectorize([]), repos }, { without: ["motivation"] });
-		expect(without?.chips).toEqual([{ label: "attendance" }]);
-		expect(without?.ids).toEqual([worded]);
+		const without = await smartSearch(actors.other, "how do i get members to show up", { ai, vectorize, repos }, { without: ["motivation", "attendance"] });
+		expect(without?.chips).toEqual([]);
+		expect(without?.ids).toEqual([tagged]);
+	});
+
+	it("lets a tag chip boost only what the query found, never add an item of its own", async () => {
+		const meaning = await insertItem({ title: "Keeping volunteers" });
+		const keyword = await insertItem({ title: "Burnout checklist" });
+		const offTopic = await insertItem({ title: "Most-saved org chart" });
+		await addTag("ltg_mot", "Motivation", [keyword, offTopic]);
+		// offTopic is the tag's most-saved item, but neither the vectors nor plain search found it.
+		await db.insert(schema.libraryLists).values({ id: "lst_1", memberId: "owner", name: "Saves" });
+		await db.insert(schema.libraryListItems).values({ listId: "lst_1", libraryItemId: offTopic, addedBy: "owner" });
+		const ai = fakeAi({ keywords: async () => '{"tags":["Motivation"]}' });
+
+		const res = await smartSearch(actors.other, "burnout", { ai, vectorize: fakeVectorize([`${meaning}:0`]), repos });
+		expect(res?.ids).not.toContain(offTopic);
+		// The tag lifts the keyword match above the vector match it tied with.
+		expect(res?.ids).toEqual([keyword, meaning]);
+	});
+
+	it("drops a word chip that only repeats the search", async () => {
+		const ai = fakeAi({ keywords: async () => '{"words":["Burnout","rest"]}' });
+		const res = await smartSearch(actors.other, "burnout", { ai, vectorize: fakeVectorize([]), repos });
+		expect(res?.chips).toEqual([{ label: "rest" }]);
+	});
+
+	it("logs why it fell back in fixed words, never the search", async () => {
+		const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+		try {
+			await smartSearch(actors.other, "secret plans", { ai: fakeAi({ embed: () => new Promise(() => {}) }), vectorize: fakeVectorize([]), repos, timeoutMs: 20 });
+			await smartSearch(actors.other, "secret plans", { ai: fakeAi({ embed: async () => Promise.reject(new Error("secret plans failed")) }), vectorize: fakeVectorize([]), repos });
+			await smartSearch(actors.other, "secret plans", { ai: fakeAi({ keywords: async () => "Here you go: secret plans" }), vectorize: fakeVectorize([]), repos });
+			expect(log.mock.calls).toEqual([["Library smart search fell back: timeout"], ["Library smart search fell back: error"], ["Library smart search fell back: invalid"]]);
+		} finally {
+			log.mockRestore();
+		}
 	});
 
 	it("keeps the member's filters on every list it fuses", async () => {
@@ -124,18 +170,26 @@ describe("smartSearch", () => {
 describe("searchLibrary: when smart search runs", () => {
 	const search = { q: "burnout", limit: 24, offset: 0 };
 
-	it("smart search off by flag: no AI call", async () => {
-		const ai = fakeAi();
+	it("smart search off by flag: no AI call, even with both bindings in the Worker env", async () => {
 		const run: string[] = [];
-		const binding = { run: async () => run.push("run"), toMarkdown: async () => run.push("toMarkdown") } as unknown as Ai;
-		const bindings = smartBindings(false, { AI: binding, VECTORIZE: fakeVectorize([]) as VectorizeIndex });
-		expect(bindings).toBeNull();
+		const AI = {
+			run: async (model: string) => (run.push(model), model.includes("bge") ? { data: [[0.1, 0.2]] } : { response: '{"tags":[],"words":[]}' }),
+			toMarkdown: async () => (run.push("toMarkdown"), { format: "markdown", data: "" }),
+		};
 		await insertItem({ title: "Burnout" });
-		const res = await searchLibrary(actors.other, { ...search, smart: true }, { smart: bindings, preference: true, repos });
+
+		workerEnv({ ...env, FEATURE_LIBRARY_SMART_SEARCH: "false", AI, VECTORIZE: fakeVectorize([]) });
+		expect(getLibraryAi()).toBeNull();
+		expect(getLibraryBindings()).not.toBeNull(); // indexing and the admin rebuild still have them
+		const off = await searchLibrary(actors.other, { ...search, smart: true }, { smart: getLibraryAi(), preference: true, repos });
 		expect(run).toEqual([]);
-		expect(ai.calls).toEqual([]);
-		expect(res.total).toBe(1);
-		expect(res.chips).toEqual([]);
+		expect(off.total).toBe(1);
+		expect(off.chips).toEqual([]);
+
+		// The same env with the flag on reaches the model, so the test above is not passing by accident.
+		workerEnv({ ...env, FEATURE_LIBRARY_SMART_SEARCH: "true", AI, VECTORIZE: fakeVectorize([]) });
+		await searchLibrary(actors.other, { ...search, smart: true }, { smart: getLibraryAi(), preference: true, repos });
+		expect(run.sort()).toEqual([LIBRARY_EMBED_MODEL, LIBRARY_KEYWORD_MODEL].sort());
 	});
 
 	it("member preference off: no AI call", async () => {
@@ -185,5 +239,28 @@ describe("smartRelated", () => {
 	it("is null for an item the actor cannot see", async () => {
 		const conf = await insertItem({ title: "Hidden", confidentiality: "confidential" });
 		expect(await smartRelated(actors.other, conf, { vectorize: fakeVectorize([`${conf}:0`]), repos })).toBeNull();
+	});
+
+	it("fits both index lookups in one budget", async () => {
+		const base = await insertItem({ title: "Base" });
+		const slow = <T>(value: T) => new Promise<T>((resolve) => setTimeout(() => resolve(value), 25));
+		const index = fakeVectorize([`${base}:0`]);
+		const vectorize = { ...index, getByIds: (ids: string[]) => index.getByIds(ids).then(slow), query: (vector: number[]) => index.query(vector).then(slow) };
+		const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+		try {
+			// Each step alone fits in 40 ms; the two together do not.
+			expect(await smartRelated(actors.other, base, { vectorize, repos, timeoutMs: 40 })).toBeNull();
+		} finally {
+			log.mockRestore();
+		}
+	});
+});
+
+describe("smartSearchPreference", () => {
+	it("is on for a member who never touched the switch, and follows it after", async () => {
+		const members = createMembersRepository(db as unknown as MemberDb, audit);
+		expect(await smartSearchPreference(members, actors.other)).toBe(true);
+		await members.updateProfile(actors.other, "other", { librarySmartSearch: false });
+		expect(await smartSearchPreference(members, actors.other)).toBe(false);
 	});
 });

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
 	roles: ["publishing"] as string[],
@@ -14,7 +14,6 @@ const mocks = vi.hoisted(() => ({
 	revalidatePath: vi.fn(),
 	scheduleLibraryIndex: vi.fn(),
 	rebuildIndexBatch: vi.fn(async () => ({ indexed: 10, remaining: 3 })),
-	smartOn: true,
 }));
 
 vi.mock("@/db", () => ({
@@ -31,7 +30,6 @@ vi.mock("@/server/features", () => ({
 	},
 }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
-vi.mock("@/server/library/ai", () => ({ getLibraryAi: () => (mocks.smartOn ? { ai: {}, vectorize: {} } : null) }));
 vi.mock("@/server/library/indexer", () => ({
 	scheduleLibraryIndex: mocks.scheduleLibraryIndex,
 	rebuildIndexBatch: mocks.rebuildIndexBatch,
@@ -60,7 +58,6 @@ beforeEach(() => {
 	vi.clearAllMocks();
 	mocks.roles = ["publishing"];
 	mocks.featureOn = true;
-	mocks.smartOn = true;
 	mocks.moderationQueue.mockResolvedValue({
 		pending: [],
 		takenDown: [],
@@ -206,17 +203,29 @@ describe("smart-search index", () => {
 		]);
 	});
 
-	it("rebuilds one batch for a library manager and refreshes the page", async () => {
+	// The real binding check runs on this Worker env (where OpenNext keeps it). The smart-search flag is off in it.
+	const CONTEXT = Symbol.for("__cloudflare-context__");
+	const withBindings = () => {
+		(globalThis as Record<symbol, unknown>)[CONTEXT] = { env: { FEATURE_LIBRARY_SMART_SEARCH: "false", AI: {}, VECTORIZE: {} }, ctx: {}, cf: {} };
+	};
+	afterEach(() => {
+		delete (globalThis as Record<symbol, unknown>)[CONTEXT];
+	});
+
+	it("rebuilds one batch for a library manager with the bindings, even while the flag is off, and refreshes the page", async () => {
+		withBindings();
 		expect(await rebuildLibraryIndexAction()).toEqual({ indexed: 10, remaining: 3 });
+		expect(mocks.rebuildIndexBatch).toHaveBeenCalledOnce();
 		expect(paths()).toEqual([PAGE]);
 	});
 
-	it("checks library:manage itself, and refuses when smart search is off", async () => {
+	it("checks library:manage itself, and refuses without the bindings", async () => {
+		withBindings();
 		mocks.roles = ["member"];
 		await expect(rebuildLibraryIndexAction()).rejects.toThrow("Not authorized to manage the library.");
 		mocks.roles = ["publishing"];
-		mocks.smartOn = false;
-		await expect(rebuildLibraryIndexAction()).rejects.toThrow("Smart search is off here.");
+		delete (globalThis as Record<symbol, unknown>)[CONTEXT];
+		await expect(rebuildLibraryIndexAction()).rejects.toThrow("The search index is not set up here.");
 		expect(mocks.rebuildIndexBatch).not.toHaveBeenCalled();
 	});
 });

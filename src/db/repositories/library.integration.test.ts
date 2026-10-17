@@ -19,6 +19,7 @@ import { createAuditRepository } from "./audit";
 import { createLibraryRepository, refreshSearchTextMany } from "./library";
 import type { LibraryModerationEvent } from "./library";
 import { actors, insertItem, resetLibrary, seedMembers } from "./library-test-fixtures";
+import { createLibraryTagsRepository } from "./library-tags";
 
 const db = drizzle(env.DB, { schema });
 const audit = createAuditRepository(db);
@@ -564,6 +565,51 @@ describe("library repository: search text refresh", () => {
 	it("refreshSearchTextMany with nothing to do is a no-op", async () => {
 		await refreshSearchTextMany(db, []);
 		await refreshSearchTextMany(db, ["lib_missing"]);
+	});
+});
+
+describe("library repository: smart-search indexedAt", () => {
+	// Every change smart search must re-read clears indexedAt in its own write, so a failed background index is never
+	// lost: the admin rebuild picks up whatever is still unindexed.
+	const markIndexed = (id: string) => db.update(libraryItems).set({ indexedAt: new Date() }).where(eq(libraryItems.id, id));
+	const indexedAt = async (id: string) => (await db.select({ at: libraryItems.indexedAt }).from(libraryItems).where(eq(libraryItems.id, id)))[0].at;
+
+	it("is cleared by publishing, embedded-text edits, tags, flagging, approval, restore and confidentiality", async () => {
+		const tags = createLibraryTagsRepository(db, audit);
+		const tag = await addTag("tg_idx", "Indexing");
+		const item = await repo.createDraft(actors.owner, { kind: "guide", title: "Guide" });
+
+		await markIndexed(item.id);
+		await repo.publish(actors.owner, item.id, { containsClientData: false });
+		expect(await indexedAt(item.id)).toBeNull();
+
+		await markIndexed(item.id);
+		await repo.updateItem(actors.owner, item.id, { year: 2024, url: null });
+		expect(await indexedAt(item.id)).not.toBeNull(); // nothing smart search embeds
+		await repo.updateItem(actors.owner, item.id, { dek: "A new summary" });
+		expect(await indexedAt(item.id)).toBeNull();
+
+		await markIndexed(item.id);
+		await tags.setItemTags(actors.owner, item.id, [tag]);
+		expect(await indexedAt(item.id)).toBeNull();
+
+		await markIndexed(item.id);
+		await repo.flagClientData(actors.owner, item.id);
+		expect(await indexedAt(item.id)).toBeNull();
+
+		await markIndexed(item.id);
+		await repo.moderate(actors.moderator, item.id, "approve");
+		expect(await indexedAt(item.id)).toBeNull();
+
+		await repo.moderate(actors.moderator, item.id, "take_down", "Names a client.");
+		await markIndexed(item.id);
+		await repo.moderate(actors.moderator, item.id, "restore");
+		expect(await indexedAt(item.id)).toBeNull();
+
+		await markIndexed(item.id);
+		await repo.setConfidentiality(actors.moderator, item.id, "confidential");
+		expect(await indexedAt(item.id)).toBeNull();
+		expect(await repo.unindexedCount(actors.moderator)).toBe(1);
 	});
 });
 

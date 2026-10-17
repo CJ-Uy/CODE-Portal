@@ -111,7 +111,8 @@ export function createLibraryTagsRepository(db: Db, audit: AuditRepository): Lib
 			// One batch is one D1 transaction: the item never ends up with no tags because the insert failed.
 			if (unique.length === 0) await clear;
 			else await db.batch([clear, db.insert(libraryItemTags).values(unique.map((tagId) => ({ itemId, tagId })))]);
-			await db.update(libraryItems).set({ updatedAt: new Date() }).where(eq(libraryItems.id, itemId));
+			// Tags are part of what smart search embeds: unindexed until the indexer reads it again (the rebuild catches a missed one).
+			await db.update(libraryItems).set({ updatedAt: new Date(), indexedAt: null }).where(eq(libraryItems.id, itemId));
 			await refreshSearchTextMany(db, [itemId]);
 		},
 

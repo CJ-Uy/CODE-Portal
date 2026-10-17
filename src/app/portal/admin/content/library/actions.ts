@@ -6,7 +6,7 @@ import { getRepositories } from "@/db";
 import { requireActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
 import { assertFeatureEnabled } from "@/server/features";
-import { getLibraryAi } from "@/server/library/ai";
+import { getLibraryBindings } from "@/server/library/ai";
 import { indexDeps, rebuildIndexBatch, scheduleLibraryIndex } from "@/server/library/indexer";
 import {
 	deleteTagInputSchema,
@@ -143,14 +143,15 @@ export async function mergeTagsAction(input: { fromId: string; intoId: string })
 
 /**
  * library:manage, checked here because the page only needs library:moderate. Reads the next 10 unindexed published items
- * into the smart-search index; the button calls it again until nothing is left.
+ * into the smart-search index; the button calls it again until nothing is left. Needs the bindings, not the smart-search
+ * flag: the index is built first and members get smart search after.
  */
 export async function rebuildLibraryIndexAction(): Promise<{ indexed: number; remaining: number }> {
 	assertFeatureEnabled("library");
 	const actor = await requireActor();
 	if (!can(actor, "library:manage")) throw new Error("Not authorized to manage the library.");
-	const bindings = getLibraryAi();
-	if (!bindings) throw new Error("Smart search is off here.");
+	const bindings = getLibraryBindings();
+	if (!bindings) throw new Error("The search index is not set up here.");
 	const result = await rebuildIndexBatch(await indexDeps(bindings));
 	revalidatePath(PAGE);
 	return result;

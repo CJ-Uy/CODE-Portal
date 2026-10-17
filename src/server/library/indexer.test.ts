@@ -122,6 +122,21 @@ describe("indexItem", () => {
 		expect((await row(id)).extractedText).toBe("");
 	});
 
+	it("does not mark an item read when it was edited while it was being read", async () => {
+		const id = await insertItem({ title: "Moving target" });
+		const { ai } = fakeAi();
+		const editMidway: LibraryAi = {
+			...ai,
+			embed: async (texts) => {
+				// The edit clears indexedAt and bumps updatedAt, as the repository's writes do.
+				await db.update(libraryItems).set({ dek: "Edited", updatedAt: new Date(Date.now() + 1000), indexedAt: null }).where(eq(libraryItems.id, id));
+				return ai.embed(texts);
+			},
+		};
+		await indexItem(id, { ai: editMidway, vectorize: fakeVectorize().vectorize, db, storage });
+		expect((await row(id)).indexedAt).toBeNull();
+	});
+
 	it("leaves drafts alone", async () => {
 		const id = await insertItem({ title: "Draft", status: "draft" });
 		const { ai, calls } = fakeAi();

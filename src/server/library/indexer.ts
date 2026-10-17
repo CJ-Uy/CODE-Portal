@@ -6,7 +6,7 @@ import { libraryItems, libraryItemTags, libraryTags } from "@/db/schema";
 import { blocksToPlainText } from "@/lib/library/blocks";
 import { runInBackground } from "@/server/cloudflare";
 import type { StorageAdapter } from "@/storage/types";
-import { getLibraryAi } from "./ai";
+import { getLibraryBindings } from "./ai";
 import type { LibraryAi, LibraryVectors, SmartBindings } from "./ai";
 
 export type IndexDeps = { ai: LibraryAi; vectorize: LibraryVectors; db: Db; storage: Pick<StorageAdapter, "getObject"> };
@@ -96,7 +96,11 @@ export async function indexItem(itemId: string, deps: IndexDeps): Promise<void> 
 		await deps.vectorize.upsert(chunks.map((_, n) => ({ id: `${itemId}:${n}`, values: vectors[n], metadata: { itemId, chunk: n } })));
 		await deps.vectorize.deleteByIds(chunkIds(itemId, chunks.length));
 	}
-	await deps.db.update(libraryItems).set({ indexedAt: new Date() }).where(eq(libraryItems.id, itemId));
+	// Only if nothing changed while this ran: an edit in the meantime cleared indexedAt, and it must stay cleared.
+	await deps.db
+		.update(libraryItems)
+		.set({ indexedAt: new Date() })
+		.where(and(eq(libraryItems.id, itemId), eq(libraryItems.updatedAt, item.updatedAt)));
 }
 
 /** Deletes every chunk id the item could have. Unknown ids are a no-op in Vectorize, so this needs no record of how many there were. */
@@ -135,15 +139,14 @@ export async function indexDeps(bindings: SmartBindings): Promise<IndexDeps> {
 
 /**
  * After a change to an item: re-index it ("index") or drop its vectors ("deindex") once the response is sent. Best
- * effort, because waitUntil has a short budget; the admin rebuild is the reliable path. Does nothing when smart search
- * is off or unavailable.
- * ponytail: edits made while the flag is off are not caught up later (indexedAt stays set); turn it off, then on, and an
- * edited item is stale until its next edit. D1 still filters what anyone can see.
+ * effort, because waitUntil has a short budget. The change itself cleared indexedAt in the same write, so an index that
+ * fails here is picked up by the admin rebuild. Runs whenever the bindings exist, flag or not, so the index is ready
+ * before members are shown smart search. Does nothing without the bindings.
  */
 export function scheduleLibraryIndex(itemId: string, op: "index" | "deindex"): void {
 	// Never throws: the change that called this has already been saved.
 	try {
-		const bindings = getLibraryAi();
+		const bindings = getLibraryBindings();
 		if (!bindings) return;
 		const task = async () => {
 			const deps = await indexDeps(bindings);

@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { getActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
 import { isFeatureEnabled } from "@/server/features";
-import { getLibraryAi } from "@/server/library/ai";
+import { getLibraryBindings } from "@/server/library/ai";
 import { noticeText, parseTab, TABS } from "./input";
 import type { TabKey } from "./input";
 import { PendingItemRow, ReportCard, TakenDownItemRow, TakenDownListRow } from "./queue";
@@ -49,8 +49,9 @@ export default async function AdminLibraryModerationPage({ searchParams }: { sea
 		tab === "search-index" ? repositories.library.unindexedCount(actor) : null,
 	]);
 
-	// The flag and the AI + VECTORIZE bindings: without both there is no index to rebuild.
-	const smartSearchOn = tab === "search-index" && getLibraryAi() !== null;
+	// The AI + VECTORIZE bindings, not the flag: the index is built before members are shown smart search.
+	const indexReady = tab === "search-index" && getLibraryBindings() !== null;
+	const membersSeeIt = isFeatureEnabled("librarySmartSearch");
 
 	const counts: Partial<Record<TabKey, number>> = {
 		waiting: queue.pending.length,
@@ -164,17 +165,20 @@ export default async function AdminLibraryModerationPage({ searchParams }: { sea
 									{unindexed === 0 ? "Every published item has been read into the search index." : `${plural(unindexed, "published item has", "published items have")} not been read into the search index yet.`}
 								</p>
 							</div>
-							{!smartSearchOn ? (
-								<p className="text-sm text-muted-foreground">Smart search is off here, so nothing is read into the index.</p>
-							) : can(actor, "library:manage") ? (
+							{!indexReady ? (
+								<p className="text-sm text-muted-foreground">The search index is not set up here, so nothing is read into it.</p>
+							) : (
 								<>
 									<p className="max-w-2xl text-sm text-muted-foreground">
 										New and edited items are read on their own shortly after they change. Rebuild reads anything that was missed, such as items added by an import, 10 at a time until none are left.
+										{membersSeeIt ? null : " Members do not see smart search yet: rebuild first, then turn it on."}
 									</p>
-									<RebuildIndexButton remaining={unindexed} />
+									{can(actor, "library:manage") ? (
+										<RebuildIndexButton remaining={unindexed} />
+									) : (
+										<p className="text-sm text-muted-foreground">A library manager can run the rebuild.</p>
+									)}
 								</>
-							) : (
-								<p className="text-sm text-muted-foreground">New and edited items are read on their own. A library manager can rebuild the index to catch up on anything missed.</p>
 							)}
 						</div>
 					) : null}
