@@ -1,3 +1,4 @@
+import type { RetentionRecordSource } from "@/db/schema";
 import { quantizePoints } from "@/lib/points";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -6,7 +7,7 @@ const WEEK_MS = 7 * DAY_MS;
 export type StatRecord = {
 	points: number | null;
 	recordedAt: Date;
-	source: "event_attendance" | "manual";
+	source: RetentionRecordSource;
 	eventId: string | null;
 };
 

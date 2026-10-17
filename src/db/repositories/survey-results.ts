@@ -1,8 +1,8 @@
-import { and, asc, count, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "@/db/schema";
-import { crsEvents, eventDebriefs, surveyAnswers, surveyAssignments, surveyQuestions, surveyResponses, surveys } from "@/db/schema";
-import type { EventFeedbackRow, MetricKey, ResultsQuestion, Survey, SurveyResults } from "@/db/types";
+import { crsEvents, eventDebriefs, members, surveyAnswers, surveyAssignments, surveyQuestions, surveyResponses, surveys } from "@/db/schema";
+import type { EventFeedbackRow, MetricKey, ResultsQuestion, ResultsRespondents, Survey, SurveyResults } from "@/db/types";
 import { canFilterInvited } from "@/lib/feedback/results-view";
 import { COMPARE_MIN_EVENTS, COMPARE_MIN_RESPONSES, effectiveStatus, RESULTS_MIN_RESPONSES, scaleSummary } from "@/lib/feedback/stats";
 import { buildSummaryInput, type FeedbackSummary, parseSummary, SUMMARY_SYSTEM_PROMPT, type Summarizer } from "@/lib/feedback/summary";
@@ -20,6 +20,7 @@ const ID_CHUNK = 90;
 
 export type ResultsFilter = "all" | "invited";
 
+// Organizers see answers without names: these results come from buildResults alone, never respondentNames.
 export type OrganizerResults = {
 	state: "none" | "not_shared" | "too_few" | "ready";
 	surveyId?: string;
@@ -27,7 +28,7 @@ export type OrganizerResults = {
 };
 
 export type SurveyResultsRepository = {
-	getResults(actor: Actor, surveyId: string, opts: { filter: ResultsFilter }, now?: Date): Promise<SurveyResults>;
+	getResults(actor: Actor, surveyId: string, opts: { filter: ResultsFilter }, now?: Date): Promise<SurveyResults & ResultsRespondents>;
 	getOrganizerResults(actor: Actor, eventId: string, now?: Date): Promise<OrganizerResults | null>;
 	setAnswerHidden(actor: Actor, input: { answerId: string; hidden: boolean }): Promise<void>;
 	feedbackForEvents(actor: Actor, eventIds: string[]): Promise<Map<string, EventFeedbackRow>>;
@@ -212,13 +213,38 @@ async function buildResults(db: Db, survey: Survey, requested: ResultsFilter, no
 	return { ...header, questions: resultQuestions, summary };
 }
 
+/**
+ * CRS only: who answered and who wrote each comment. Every response is listed whatever the filter, and responses from
+ * before names were recorded, or from a member since deleted, read as null.
+ */
+async function respondentNames(db: Db, surveyId: string): Promise<ResultsRespondents> {
+	const name = sql<string | null>`coalesce(${members.fullName}, ${members.name}, ${members.email})`;
+	const [respondents, answers] = await Promise.all([
+		db
+			.select({ name, submittedAt: surveyResponses.submittedAt })
+			.from(surveyResponses)
+			.leftJoin(members, eq(members.id, surveyResponses.memberId))
+			.where(eq(surveyResponses.surveyId, surveyId))
+			.orderBy(desc(surveyResponses.submittedAt)),
+		db
+			.select({ id: surveyAnswers.id, name })
+			.from(surveyAnswers)
+			.innerJoin(surveyResponses, eq(surveyResponses.id, surveyAnswers.responseId))
+			.innerJoin(surveyQuestions, eq(surveyQuestions.id, surveyAnswers.questionId))
+			.leftJoin(members, eq(members.id, surveyResponses.memberId))
+			.where(and(eq(surveyResponses.surveyId, surveyId), eq(surveyQuestions.type, "text"))),
+	]);
+	return { respondents, answerNames: Object.fromEntries(answers.map((answer) => [answer.id, answer.name])) };
+}
+
 export function createSurveyResultsRepository(db: Db, audit: AuditRepository): SurveyResultsRepository {
 	return {
 		async getResults(actor, surveyId, opts, now = new Date()) {
 			if (!can(actor, "survey:configure")) throw new Error("Not authorized to read survey results.");
 			const [survey] = await db.select().from(surveys).where(eq(surveys.id, surveyId)).limit(1);
 			if (!survey) throw new Error("Survey not found.");
-			return buildResults(db, survey, opts.filter, now, false);
+			const [results, names] = await Promise.all([buildResults(db, survey, opts.filter, now, false), respondentNames(db, survey.id)]);
+			return { ...results, ...names };
 		},
 
 		async getOrganizerResults(actor, eventId, now = new Date()) {

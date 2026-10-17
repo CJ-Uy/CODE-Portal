@@ -119,7 +119,7 @@ export const GUIDES: Guide[] = [
 	{
 		slug: "give-feedback",
 		title: "Give feedback after an event",
-		summary: "Answer a short form about an event you attended. Your name isn't attached to your answers.",
+		summary: "Answer a short form about an event you attended. CRS sees your name with your answers. Organizers don't.",
 		audience: "member",
 		icon: "message-square",
 		minutes: 2,
@@ -156,15 +156,16 @@ export const GUIDES: Guide[] = [
 				body: "Tap a number from 1 to 5 for each rating question. Questions marked * need an answer.",
 				image: {
 					src: "/guides/give-feedback/3.jpg",
-					alt: "Feedback form with 1 to 5 rating buttons under each question.",
+					alt: "Feedback form with a note on who sees your name, the points for answering, and 1 to 5 rating buttons.",
 					device: "phone",
 					callouts: [
-						{ x: 59.5, y: 31.4, label: "Your name isn't attached to your answers" },
-						{ x: 23.5, y: 36.5, label: "* means the question needs an answer" },
-						{ x: 59.5, y: 47.2, label: "Tap a number. Your pick turns dark." },
+						{ x: 93, y: 31.4, label: "CRS sees your name with your answers. Organizers don't." },
+						{ x: 75, y: 36.8, label: "How many points answering gives you" },
+						{ x: 23.5, y: 41.9, label: "* means the question needs an answer" },
+						{ x: 59.5, y: 52.6, label: "Tap a number. Your pick turns dark." },
 					],
 				},
-				tip: "Feedback is voluntary. Answering doesn't add or remove retention points.",
+				tip: "Feedback is voluntary. If the form gives points for answering, it says how many. You get them whatever you answer.",
 			},
 			{
 				title: "Send it",
@@ -219,7 +220,7 @@ export const GUIDES: Guide[] = [
 						{ x: 32.5, y: 51.2, label: "Points from each category" },
 					],
 				},
-				tip: "Points come from checking in at events and from records added by hand. Answering feedback forms doesn't change them.",
+				tip: "Points come from checking in at events, answering feedback forms, and records added by hand.",
 			},
 		],
 	},
@@ -360,7 +361,7 @@ export const GUIDES: Guide[] = [
 			},
 			{
 				title: "Read the answers",
-				body: "Rating questions show how people scored the event. Open questions list every comment, with the most common words on top. Tap a word to see only the comments that use it. Answers are anonymous, so you won't see who wrote what.",
+				body: "Rating questions show how people scored the event. Open questions list every comment, with the most common words on top. Tap a word to see only the comments that use it. You see the answers without names, so you won't see who wrote what.",
 				image: {
 					src: "/guides/organizer-feedback/2.jpg",
 					alt: "Event feedback with written comments and a cloud of common words.",
@@ -449,21 +450,22 @@ export const GUIDES: Guide[] = [
 					alt: "The Send panel with the Who to invite choices, the options and the closing time.",
 					device: "desktop",
 					callouts: [
-						{ x: 52.5, y: 40.2, label: "Who can be invited" },
-						{ x: 62.5, y: 48.2, label: "Suggested: a random sample" },
-						{ x: 42.5, y: 57.4, label: "Or everyone, or a number you choose" },
+						{ x: 52.5, y: 30.9, label: "Who can be invited" },
+						{ x: 62.5, y: 38.9, label: "Suggested: a random sample" },
+						{ x: 42.5, y: 48.2, label: "Or everyone, or a number you choose" },
 					],
 				},
 			},
 			{
 				title: "Set the options and send",
-				body: "Under Options, choose whether other attendees can answer from the event page, whether organizers see the results, whether to email invitees, and whether to remind people 24 hours before the form closes. Set the closing time, then review and tap Send now. Invitees get a notification right away.",
+				body: "Under Options, choose whether other attendees can answer from the event page, whether organizers see the results, whether to email invitees, and whether to remind people 24 hours before the form closes. Points for answering sets how many points each person who answers gets, and of which type. 0 turns them off. Set the closing time, then review and tap Send now. Invitees get a notification right away.",
 				image: {
 					src: "/guides/send-form/4.jpg",
-					alt: "The same Send panel, showing the options, the closing time and the Review and send button.",
+					alt: "The same Send panel, showing the options, points for answering, the closing time and the Review and send button.",
 					device: "desktop",
 					callouts: [
-						{ x: 50, y: 70.6, label: "Options: who else can answer, sharing, reminders" },
+						{ x: 51, y: 59.4, label: "Options: who else can answer, sharing, reminders" },
+						{ x: 53.5, y: 70.7, label: "Points for answering, and which kind" },
 						{ x: 50, y: 84.4, label: "When the form closes" },
 						{ x: 47.5, y: 91.9, label: "Review and send, or Preview first" },
 					],
@@ -483,7 +485,7 @@ export const GUIDES: Guide[] = [
 		steps: [
 			{
 				title: "Check who answered",
-				body: "Open the form from Admin, then Content, then Surveys. The response card shows how many answered, the reply rate of the invited group, and any walk-ins. When too few people reply, a note says to read the numbers as a rough signal.",
+				body: "Open the form from Admin, then Content, then Surveys. The response card shows how many answered, the reply rate of the invited group, and any walk-ins. Open Who responded to see each person and when they answered. When too few people reply, a note says to read the numbers as a rough signal.",
 				image: {
 					src: "/guides/read-results/1.jpg",
 					alt: "Survey details with Manage this form, the sharing status and the response count.",
@@ -498,7 +500,7 @@ export const GUIDES: Guide[] = [
 			},
 			{
 				title: "Read ratings and comments",
-				body: "Each rating question shows the share who rated 4 or 5, the mean, and how answers spread from 1 to 5. Open questions show common words and every comment. Tap a word or search to narrow the comments.",
+				body: "Each rating question shows the share who rated 4 or 5, the mean, and how answers spread from 1 to 5. Open questions show common words and every comment, with the name of the person who wrote it. Tap a word or search to narrow the comments.",
 				image: {
 					src: "/guides/read-results/2.jpg",
 					alt: "Results with a rating breakdown, a cloud of common words and a list of comments.",
@@ -510,7 +512,7 @@ export const GUIDES: Guide[] = [
 						{ x: 81.5, y: 79.8, label: "Hide a comment from organizers" },
 					],
 				},
-				tip: "A hidden comment disappears from the organizers' view only. You still see it here.",
+				tip: "Organizers see the comments without names. A hidden comment disappears from their view only. You still see it here.",
 			},
 			{
 				title: "Use the summary with care",

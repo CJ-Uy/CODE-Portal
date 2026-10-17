@@ -14,6 +14,7 @@ import { canDraftSummary, canFilterInvited, countComments, summaryView } from "@
 import { errorLabel } from "@/lib/feedback/safe-log";
 import { sendDefaultClosesAt } from "@/lib/feedback/send-input";
 import { effectiveStatus, estimateSeconds, suggestInviteCount } from "@/lib/feedback/stats";
+import { FEEDBACK_POINT_TYPE_ID } from "@/lib/point-types";
 import { getActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
 import { emailDbFromEnv } from "@/server/email/db";
@@ -117,8 +118,13 @@ export default async function AdminSurveyDetailPage({
 	const results = invitedOnly ? await loadResults("invited") : allResults;
 
 	const now = new Date();
-	// Only a draft has a send panel, so only a draft pays for the head count and the email check.
-	const [eligible, email] = isDraft ? await Promise.all([repositories.surveys.eligibleCount(actor, id), emailOption()]) : [0, "off" as const];
+	// Only a draft has a send panel, so only a draft pays for the head count, the email check and the point types.
+	const [eligible, email, allPointTypes] = isDraft
+		? await Promise.all([repositories.surveys.eligibleCount(actor, id), emailOption(), repositories.pointTypes.list()])
+		: [0, "off" as const, []];
+	const pointTypes = allPointTypes.filter((type) => type.active).map((type) => ({ id: type.id, label: type.label }));
+	// The draft's own type while it is active, else Feedback, else the first active one.
+	const pointTypeId = [detail.survey.pointTypeId, FEEDBACK_POINT_TYPE_ID].find((typeId) => pointTypes.some((type) => type.id === typeId)) ?? pointTypes[0]?.id ?? "";
 
 	// A form closed by hand has nothing left to change; one that only ran past its closing time can still be reopened.
 	const running = detail.survey.status === "running";
@@ -156,6 +162,9 @@ export default async function AdminSurveyDetailPage({
 							email,
 							questionCount: detail.questions.length,
 							estimate: formatEstimate(estimateSeconds(detail.questions)),
+							pointsAward: detail.survey.pointsAward,
+							pointTypeId,
+							pointTypes,
 						}}
 					/>
 				) : (

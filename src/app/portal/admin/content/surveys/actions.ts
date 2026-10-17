@@ -81,6 +81,7 @@ const SEND_ERRORS = [
 	"No one is eligible for this form yet.",
 	"This form has already been sent.",
 	"Survey not found.",
+	"Pick an active point type for answering.",
 ] as const;
 
 // Returns only on failure: success redirects to the survey page. Sending notifies members, so a failure to email
@@ -93,7 +94,7 @@ export async function sendSurveyAction(formData: FormData): Promise<ActionError 
 	try {
 		input = parseSendForm(formData);
 	} catch {
-		return { error: "Check the number of people to invite and the closing time, then try again." };
+		return { error: "Check the number of people to invite, the points for answering and the closing time, then try again." };
 	}
 
 	const repositories = await getRepositories();

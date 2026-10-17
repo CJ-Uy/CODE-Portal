@@ -6,7 +6,7 @@ import { setAnswerHiddenAction } from "@/app/portal/admin/content/surveys/action
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { chipSteps, commentsLabel, filterAnswers } from "@/lib/feedback/results-view";
+import { chipSteps, commentsLabel, filterAnswers, NAME_NOT_RECORDED } from "@/lib/feedback/results-view";
 import { cn } from "@/lib/utils";
 
 type Answer = { id: string; value: string; hidden: boolean };
@@ -19,9 +19,19 @@ const PROSE = "min-w-0 [overflow-wrap:anywhere]";
 /**
  * The comments for one text question: a word cloud of chips, a search box, and the list. A chip filters to the comments
  * that contain that word and a second click clears it. The list keeps the order it was given, which is deliberately
- * unrelated to when anyone answered, so this never sorts it.
+ * unrelated to when anyone answered, so this never sorts it. `names` (CRS only) puts the writer above each comment.
  */
-export function CommentsPanel({ answers, terms, canModerate }: { answers: Answer[]; terms: Array<{ term: string; count: number }>; canModerate: boolean }) {
+export function CommentsPanel({
+	answers,
+	terms,
+	canModerate,
+	names,
+}: {
+	answers: Answer[];
+	terms: Array<{ term: string; count: number }>;
+	canModerate: boolean;
+	names?: Record<string, string | null>;
+}) {
 	const [term, setTerm] = useState<string | null>(null);
 	const [query, setQuery] = useState("");
 	const [error, setError] = useState<string | null>(null);
@@ -120,7 +130,10 @@ export function CommentsPanel({ answers, terms, canModerate }: { answers: Answer
 				<ul className="grid min-w-0 gap-2">
 					{shown.map((answer) => (
 						<li key={answer.id} className="flex min-w-0 flex-wrap items-start justify-between gap-x-4 gap-y-2 rounded-lg border border-border/60 bg-background p-3">
-							<p className={cn(PROSE, "basis-56 flex-1 whitespace-pre-line text-sm", answer.hidden && "text-muted-foreground")}>{answer.value}</p>
+							<div className="grid min-w-0 basis-56 flex-1 gap-1">
+								{names ? <p className={cn(PROSE, "text-xs font-medium text-muted-foreground")}>{names[answer.id] ?? NAME_NOT_RECORDED}</p> : null}
+								<p className={cn(PROSE, "whitespace-pre-line text-sm", answer.hidden && "text-muted-foreground")}>{answer.value}</p>
+							</div>
 							{canModerate ? (
 								<div className="flex min-w-0 flex-wrap items-center gap-2">
 									{answer.hidden ? <Badge variant="warn">Hidden from organizers</Badge> : null}
