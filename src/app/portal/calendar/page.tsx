@@ -134,6 +134,7 @@ async function CreateEventControl() {
 			allowedTypes={typeLoad.ok ? allowedEventTypes(actor, typeLoad.rows) : []}
 			typesUnavailable={!typeLoad.ok}
 			canSetReadOnly={can(actor, "event:moderate")}
+			canViewArchive={isFeatureEnabled("surveys") && can(actor, "survey:configure")}
 		/>
 	);
 }
