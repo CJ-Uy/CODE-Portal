@@ -41,6 +41,15 @@ export function defaultFormat(kind: LibraryKind): LibraryFormat {
 	return kind === "website" ? "link" : "page";
 }
 
+// A Book/paper is a file, or a link when only a web page exists; a Case study can be written or uploaded. Default first.
+const EXTRA_FORMATS: Partial<Record<LibraryKind, LibraryFormat>> = { reading: "link", case_study: "file" };
+
+/** The formats a kind may take, its default first. */
+export function allowedFormats(kind: LibraryKind): LibraryFormat[] {
+	const extra = EXTRA_FORMATS[kind];
+	return extra ? [defaultFormat(kind), extra] : [defaultFormat(kind)];
+}
+
 export function defaultSource(kind: LibraryKind): LibrarySource {
 	if (kind === "article") return "member";
 	return kind === "reading" || kind === "website" ? "outside" : "code";

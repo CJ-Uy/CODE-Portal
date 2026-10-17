@@ -599,3 +599,37 @@ describe("library repository: legacy favorites shim", () => {
 		expect(await db.select().from(libraryListItems)).toEqual([]);
 	});
 });
+
+describe("library repository: formats and member search", () => {
+	it("lets a Book/paper be a link and a Case study be a file, and refuses formats a kind cannot take", async () => {
+		expect(await repo.createDraft(actors.owner, { kind: "reading", format: "link", title: "Web page" })).toMatchObject({ kind: "reading", format: "link" });
+		expect(await repo.createDraft(actors.owner, { kind: "case_study", format: "file", title: "Uploaded case" })).toMatchObject({ format: "file" });
+		await expect(repo.createDraft(actors.owner, { kind: "guide", format: "file", title: "No" })).rejects.toThrow(/format/i);
+		await expect(repo.createDraft(actors.owner, { kind: "website", format: "page", title: "No" })).rejects.toThrow(/format/i);
+	});
+
+	it("keeps the chosen format when the kind changes with it, and re-derives it otherwise", async () => {
+		const link = await repo.createDraft(actors.owner, { kind: "website", title: "Site" });
+		expect(await repo.updateItem(actors.owner, link.id, { kind: "reading", format: "link" })).toMatchObject({ kind: "reading", format: "link" });
+		expect(await repo.updateItem(actors.owner, link.id, { kind: "website" })).toMatchObject({ kind: "website", format: "link" });
+		await expect(repo.updateItem(actors.owner, link.id, { kind: "code_document", format: "link" })).rejects.toThrow(/format/i);
+		// A plain edit of an item whose stored format a kind would not pick today is left alone.
+		const odd = await insertItem({ createdBy: "owner", kind: "template", format: "page" });
+		expect(await repo.updateItem(actors.owner, odd, { title: "Still a page" })).toMatchObject({ format: "page" });
+	});
+
+	it("finds active members by name, never by email, and says nothing for short or inactive matches", async () => {
+		const insert = (id: string, fullName: string | null, name: string | null, status: string, email: string) =>
+			env.DB.prepare("INSERT INTO members (id, email, name, full_name, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+				.bind(id, email, name, fullName, status, Date.now(), Date.now())
+				.run();
+		await insert("m_ana", "Ana Reyes", "ana", "active", "secret.address@example.org");
+		await insert("m_bea", null, "Bea Cruz", "active", "bea@example.org");
+		await insert("m_old", "Ana Old", "ana2", "inactive", "old@example.org");
+		expect(await repo.searchMembers(actors.other, "ana")).toEqual([{ id: "m_ana", name: "Ana Reyes" }]);
+		expect(await repo.searchMembers(actors.other, "cruz")).toEqual([{ id: "m_bea", name: "Bea Cruz" }]);
+		expect(await repo.searchMembers(actors.other, "secret.address")).toEqual([]);
+		expect(await repo.searchMembers(actors.other, "a")).toEqual([]);
+		expect(await repo.searchMembers(actors.other, "100%")).toEqual([]);
+	});
+});

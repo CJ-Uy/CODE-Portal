@@ -22,6 +22,8 @@ type Props = {
 	onChange: (blocks: LibraryBlock[]) => void;
 	/** Items a page may embed. */
 	itemPicker: ItemOption[];
+	/** Tells the page when an image upload is in flight, so it can hold its autosave until the upload settles. */
+	onUploadingChange?: (uploading: boolean) => void;
 };
 
 // Image, item and link blocks need a value that only exists after an upload, a pick
@@ -288,7 +290,7 @@ function ComposerPanel({ kind, itemPicker, uploading, uploadError, onUpload, onP
 	);
 }
 
-export function LibraryBlockEditor({ itemId, blocks, onChange, itemPicker }: Props) {
+export function LibraryBlockEditor({ itemId, blocks, onChange, itemPicker, onUploadingChange }: Props) {
 	const [selectedId, setSelectedId] = useState<string | null>(blocks[0]?.id ?? null);
 	const [past, setPast] = useState<LibraryBlock[][]>([]);
 	const [future, setFuture] = useState<LibraryBlock[][]>([]);
@@ -303,6 +305,7 @@ export function LibraryBlockEditor({ itemId, blocks, onChange, itemPicker }: Pro
 	// What async work (an upload finishing) should see, not what the render that started it saw.
 	const latest = useRef({ blocks, selectedId, composer });
 	useEffect(() => { latest.current = { blocks, selectedId, composer }; });
+	useEffect(() => { onUploadingChange?.(uploading); }, [uploading, onUploadingChange]);
 	const lastCommit = useRef(0);
 	const canvasRef = useRef<HTMLDivElement>(null);
 	const paletteRef = useRef<HTMLDivElement>(null);

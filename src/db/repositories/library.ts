@@ -19,9 +19,10 @@ import {
 import { createId } from "@/lib/ids";
 import { blocksToPlainText, readMinutes } from "@/lib/library/blocks";
 import type { LibraryBlock } from "@/lib/library/blocks";
-import { defaultFormat, defaultPublicReadiness, defaultSource } from "@/lib/library/taxonomy";
+import { allowedFormats, defaultFormat, defaultPublicReadiness, defaultSource } from "@/lib/library/taxonomy";
 import type {
 	LibraryAuthor,
+	LibraryFormat,
 	LibraryKind,
 	LibraryPublicReadiness,
 	LibrarySource,
@@ -42,6 +43,8 @@ export type LibraryReport = InferSelectModel<typeof libraryReports>;
 
 export type LibraryItemDraftInput = {
 	kind: LibraryKind;
+	/** Defaults from the kind. Only a format the kind allows (a Book/paper may be a link, a Case study a file). */
+	format?: LibraryFormat;
 	title: string;
 	dek?: string;
 	source?: LibrarySource;
@@ -149,6 +152,8 @@ export type LibraryRepository = {
 	setConfidentiality(actor: Actor, id: string, value: Exclude<LibraryConfidentiality, "public">): Promise<void>;
 	deleteItem(actor: Actor, id: string): Promise<{ fileKeys: string[] }>;
 	listMine(actor: Actor): Promise<LibraryItem[]>;
+	/** Any member. Active members by name, for crediting a co-author; never their email. At least 2 characters, at most 8 results. */
+	searchMembers(actor: Actor, query: string): Promise<{ id: string; name: string }[]>;
 	listComments(actor: Actor, itemId: string): Promise<LibraryCommentView[]>;
 	addComment(actor: Actor, input: { itemId: string; parentId?: string | null; anonymous: boolean; body: string }): Promise<void>;
 	setCommentHidden(actor: Actor, commentId: string, hidden: boolean): Promise<void>;
@@ -195,6 +200,11 @@ function searchWords(q: string | undefined): string[] {
 
 function assertLink(url: string | null | undefined): void {
 	if (url && !/^https?:\/\/\S+$/i.test(url)) throw new Error("Use a link that starts with http:// or https://");
+}
+
+function requireFormat(kind: LibraryKind, format: LibraryFormat): LibraryFormat {
+	if (!allowedFormats(kind).includes(format)) throw new Error("That type cannot be used with this format.");
+	return format;
 }
 
 function requireTitle(title: string): string {
@@ -536,7 +546,7 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 			await db.insert(libraryItems).values({
 				id,
 				kind: input.kind,
-				format: defaultFormat(input.kind),
+				format: requireFormat(input.kind, input.format ?? defaultFormat(input.kind)),
 				source: input.source ?? defaultSource(input.kind),
 				status: "draft",
 				title,
@@ -560,9 +570,11 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 			const row = await requireEditable(actor, id);
 			assertLink(input.url);
 			const set: Partial<InferInsertModel<typeof libraryItems>> = { updatedAt: new Date() };
-			if (input.kind !== undefined && input.kind !== row.kind) {
-				set.kind = input.kind;
-				set.format = defaultFormat(input.kind);
+			const kindChanged = input.kind !== undefined && input.kind !== row.kind;
+			if (kindChanged || input.format !== undefined) {
+				const kind = input.kind ?? row.kind;
+				set.kind = kind;
+				set.format = requireFormat(kind, input.format ?? (kindChanged ? defaultFormat(kind) : row.format));
 			}
 			if (input.title !== undefined) set.title = requireTitle(input.title);
 			if (input.dek !== undefined) set.dek = input.dek.trim();
@@ -767,6 +779,26 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 
 		async listMine(actor) {
 			return db.select().from(libraryItems).where(eq(libraryItems.createdBy, actor.memberId)).orderBy(desc(libraryItems.updatedAt), asc(libraryItems.id));
+		},
+
+		async searchMembers(_actor, query) {
+			const words = searchWords(query);
+			if (words.join("").length < 2) return [];
+			const rows = await db
+				.select({ id: members.id, fullName: members.fullName, name: members.name })
+				.from(members)
+				.where(
+					and(
+						eq(members.status, "active"),
+						...words.map((word) => {
+							const pattern = likePattern(word);
+							return sql`(lower(coalesce(${members.fullName}, '')) LIKE ${pattern} ${LIKE_ESCAPE} OR lower(coalesce(${members.name}, '')) LIKE ${pattern} ${LIKE_ESCAPE} OR lower(coalesce(${members.nickname}, '')) LIKE ${pattern} ${LIKE_ESCAPE})`;
+						}),
+					),
+				)
+				.orderBy(asc(sql`lower(coalesce(${members.fullName}, ${members.name}, ''))`), asc(members.id))
+				.limit(8);
+			return rows.map((row) => ({ id: row.id, name: row.fullName || row.name || "Member" }));
 		},
 
 		async listComments(actor, itemId) {
@@ -982,6 +1014,7 @@ export function createUnavailableLibraryRepository(): LibraryRepository {
 		setConfidentiality: unavailable,
 		deleteItem: unavailable,
 		listMine: unavailable,
+		searchMembers: unavailable,
 		listComments: unavailable,
 		addComment: unavailable,
 		setCommentHidden: unavailable,

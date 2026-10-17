@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	allowedFormats,
 	defaultFormat,
 	defaultPublicReadiness,
 	defaultSource,
@@ -220,6 +221,14 @@ describe("taxonomy constants", () => {
 		expect(SUBTYPES.reading).toEqual(["Book", "Academic Article", "Report", "Other"]);
 		expect(FORMAT_DETAILS).toHaveLength(11);
 		expect(ENGAGEMENT_TYPES).toEqual(["STE", "LTE", "C-Team"]);
+	});
+
+	it("lists the formats each kind may take, the default first", () => {
+		expect(allowedFormats("reading")).toEqual(["file", "link"]);
+		expect(allowedFormats("case_study")).toEqual(["page", "file"]);
+		expect(allowedFormats("website")).toEqual(["link"]);
+		expect(allowedFormats("code_document")).toEqual(["file"]);
+		for (const kind of LIBRARY_KINDS) expect(allowedFormats(kind)[0]).toBe(defaultFormat(kind));
 	});
 
 	it("derives defaults from the kind", () => {
