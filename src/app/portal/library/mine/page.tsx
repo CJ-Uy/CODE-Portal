@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { signInPath } from "@/server/auth/sign-in";
 import { BookOpen, Plus } from "lucide-react";
 import { getRepositories } from "@/db";
 import type { LibraryItem } from "@/db/repositories/library";
@@ -109,7 +110,7 @@ function ItemRow({ item, stats, weeks }: { item: LibraryItem; stats: LibraryItem
 export default async function MyLibraryPage() {
 	if (!isFeatureEnabled("library")) notFound();
 	const actor = await getActor();
-	if (!actor) redirect("/signin");
+	if (!actor) redirect(await signInPath());
 
 	const repositories = await getRepositories();
 	const items = await repositories.library.listMine(actor).catch(() => []);

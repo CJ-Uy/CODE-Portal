@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { signInPath } from "@/server/auth/sign-in";
 import Link from "next/link";
 import { Bell, CheckCheck } from "lucide-react";
 import { getRepositories } from "@/db";
@@ -18,7 +19,7 @@ export default async function NotificationsPage() {
 	if (!isFeatureEnabled("notifications")) notFound();
 
 	const actor = await getActor();
-	if (!actor) redirect("/signin");
+	if (!actor) redirect(await signInPath());
 
 	const repositories = await getRepositories();
 	// notifications has no shared-dev internal proxy yet; degrade to an empty feed instead of crashing.

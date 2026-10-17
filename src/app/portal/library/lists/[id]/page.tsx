@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { signInPath } from "@/server/auth/sign-in";
 import { ArrowLeft, ListPlus, Plus } from "lucide-react";
 import { getRepositories } from "@/db";
 import type { LibraryCommentView } from "@/db/repositories/library";
@@ -39,7 +40,7 @@ function toRows(list: LibraryListView, now: Date): ListRow[] {
 export default async function LibraryListPage({ params }: { params: Promise<{ id: string }> }) {
 	if (!isFeatureEnabled("library")) notFound();
 	const actor = await getActor();
-	if (!actor) redirect("/signin");
+	if (!actor) redirect(await signInPath());
 	const { id } = await params;
 
 	const repositories = await getRepositories();

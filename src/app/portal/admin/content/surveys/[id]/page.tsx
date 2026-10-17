@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { signInPath } from "@/server/auth/sign-in";
 import { getRepositories } from "@/db";
 import type { ResultsFilter } from "@/db/repositories/survey-results";
 import type { SurveyQuestion, SurveyQuestionInput } from "@/db/types";
@@ -82,7 +83,7 @@ export default async function AdminSurveyDetailPage({
 	if (!isFeatureEnabled("surveys")) notFound();
 
 	const actor = await getActor();
-	if (!actor) redirect("/signin");
+	if (!actor) redirect(await signInPath());
 	if (!can(actor, "survey:configure")) redirect("/portal");
 
 	const [{ id }, { notice, filter }] = await Promise.all([params, searchParams]);

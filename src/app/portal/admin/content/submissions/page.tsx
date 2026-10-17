@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AdminIntro } from "@/components/portal/admin-intro";
 import { notFound, redirect } from "next/navigation";
+import { signInPath } from "@/server/auth/sign-in";
 import { Inbox } from "lucide-react";
 import { getRepositories } from "@/db";
 import { Badge } from "@/components/ui/badge";
@@ -29,7 +30,7 @@ export default async function AdminSubmissionsPage({
 }) {
 	if (!isFeatureEnabled("publicSite")) notFound();
 	const actor = await getActor();
-	if (!actor) redirect("/signin");
+	if (!actor) redirect(await signInPath());
 	if (!hasAnyAdminScope(actor)) redirect("/portal");
 
 	const tab = (await searchParams).tab === "feedback" ? "feedback" : "contact";

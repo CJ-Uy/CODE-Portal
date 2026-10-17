@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { signInPath } from "@/server/auth/sign-in";
 import { getRepositories } from "@/db";
 import { getActor } from "@/server/auth/actor";
 import { isFeatureEnabled } from "@/server/features";
@@ -13,7 +14,7 @@ const PICKER_PAGES = [0, 100, 200];
 export default async function EditLibraryItemPage({ params }: { params: Promise<{ id: string }> }) {
 	if (!isFeatureEnabled("library")) notFound();
 	const actor = await getActor();
-	if (!actor) redirect("/signin");
+	if (!actor) redirect(await signInPath());
 	const { id } = await params;
 
 	const repositories = await getRepositories();

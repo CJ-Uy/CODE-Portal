@@ -1,20 +1,26 @@
 import Image from "next/image";
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { ArrowLeft } from "lucide-react";
 import { signIn } from "@/auth";
 import { Button } from "@/components/ui/button";
-import { getGoogleAuthorizationParams } from "@/server/auth/access";
+import { getGoogleAuthorizationParams, getSignInReturnPath } from "@/server/auth/access";
+
+// Keeps `next` across the Google round trip. A failed attempt comes back as
+// /signin?error=..., which Auth.js builds without our query string.
+const NEXT_COOKIE = "signin-next";
 
 export default async function SignInPage({
 	searchParams,
 }: {
-	searchParams: Promise<{ error?: string; email?: string }>;
+	searchParams: Promise<{ error?: string; email?: string; next?: string | string[] }>;
 }) {
-	const { error, email } = await searchParams;
+	const { error, email, next } = await searchParams;
+	const redirectTo = getSignInReturnPath(next ?? (error ? (await cookies()).get(NEXT_COOKIE)?.value : undefined));
 	const notMember = error === "NotMember" && email;
 	const signInFailed = Boolean(error && !notMember);
 
-	return <main className="relative isolate grid min-h-screen place-items-center overflow-hidden bg-primary px-5 py-12 text-white"><div className="absolute inset-0 -z-20 bg-[radial-gradient(90%_70%_at_80%_10%,rgba(144,180,204,0.24),transparent_55%)]" /><div className="w-full max-w-sm"><span className="mx-auto grid size-16 place-items-center rounded-full bg-white"><Image src="/code-falcon-transparent.png" alt="CODE" width={44} height={49} priority className="h-12 w-auto object-contain" /></span><section className="mt-7 rounded-xl border border-white/15 bg-white/[0.04] p-7 backdrop-blur sm:p-8"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#90B4CC]">Member access</p><h1 className="mt-3 font-heading text-4xl">{notMember ? "You don’t have member access yet" : signInFailed ? "Sign-in didn’t finish" : "Welcome back"}</h1><p className="mt-3 text-sm leading-6 text-white/65">{notMember ? <><strong className="font-semibold text-white">{email}</strong> is not registered as a CODE member. Ask a CODE admin to add this email to the current member list, then try again.</> : signInFailed ? "Please start sign-in again from this page in the same browser. If it still fails, contact a CODE admin." : "Sign in with your approved Google account to enter the member portal."}</p><form className="mt-7" action={async () => { "use server"; await signIn("google", { redirectTo: "/portal" }, getGoogleAuthorizationParams(error)); }}><Button variant="secondary" className="w-full bg-white text-primary hover:bg-white/90" type="submit"><GoogleIcon />{notMember ? "Try another Google account" : "Continue with Google"}</Button></form></section><Link href="/" className="mt-6 flex items-center justify-center gap-2 text-sm font-semibold text-[#90B4CC] hover:text-white"><ArrowLeft className="size-4" />Back to the public site</Link></div></main>;
+	return <main className="relative isolate grid min-h-screen place-items-center overflow-hidden bg-primary px-5 py-12 text-white"><div className="absolute inset-0 -z-20 bg-[radial-gradient(90%_70%_at_80%_10%,rgba(144,180,204,0.24),transparent_55%)]" /><div className="w-full max-w-sm"><span className="mx-auto grid size-16 place-items-center rounded-full bg-white"><Image src="/code-falcon-transparent.png" alt="CODE" width={44} height={49} priority className="h-12 w-auto object-contain" /></span><section className="mt-7 rounded-xl border border-white/15 bg-white/[0.04] p-7 backdrop-blur sm:p-8"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#90B4CC]">Member access</p><h1 className="mt-3 font-heading text-4xl">{notMember ? "You don’t have member access yet" : signInFailed ? "Sign-in didn’t finish" : "Welcome back"}</h1><p className="mt-3 text-sm leading-6 text-white/65">{notMember ? <><strong className="font-semibold text-white">{email}</strong> is not registered as a CODE member. Ask a CODE admin to add this email to the current member list, then try again.</> : signInFailed ? "Please start sign-in again from this page in the same browser. If it still fails, contact a CODE admin." : "Sign in with your approved Google account to enter the member portal."}</p><form className="mt-7" action={async () => { "use server"; (await cookies()).set(NEXT_COOKIE, redirectTo, { httpOnly: true, sameSite: "lax", path: "/signin", maxAge: 15 * 60 }); await signIn("google", { redirectTo }, getGoogleAuthorizationParams(error)); }}><Button variant="secondary" className="w-full bg-white text-primary hover:bg-white/90" type="submit"><GoogleIcon />{notMember ? "Try another Google account" : "Continue with Google"}</Button></form></section><Link href="/" className="mt-6 flex items-center justify-center gap-2 text-sm font-semibold text-[#90B4CC] hover:text-white"><ArrowLeft className="size-4" />Back to the public site</Link></div></main>;
 }
 
 function GoogleIcon() {

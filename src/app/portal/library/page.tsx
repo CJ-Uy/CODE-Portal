@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { signInPath } from "@/server/auth/sign-in";
 import { BookOpen, ChevronLeft, ChevronRight, Plus, SearchX } from "lucide-react";
 import { getRepositories } from "@/db";
 import type { LibraryCard } from "@/db/repositories/library";
@@ -177,7 +178,7 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
 	if (!isFeatureEnabled("library")) notFound();
 
 	const actor = await getActor();
-	if (!actor) redirect("/signin");
+	if (!actor) redirect(await signInPath());
 	const search = parseLibrarySearchParams(await searchParams);
 	const searching = hasActiveSearch(search);
 

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { signInPath } from "@/server/auth/sign-in";
 import { ArrowRight, BookOpen, Clock, LifeBuoy, Search, SearchX } from "lucide-react";
 import { AUDIENCE_BADGE, GUIDE_ICONS } from "@/components/guides/guide-meta";
 import { EmptyState } from "@/components/portal/empty-state";
@@ -17,7 +18,7 @@ export const dynamic = "force-dynamic";
 
 export default async function GuidesPage({ searchParams }: { searchParams: Promise<{ q?: string | string[]; for?: string | string[] }> }) {
 	const actor = await getActor();
-	if (!actor) redirect("/signin");
+	if (!actor) redirect(await signInPath());
 	const params = await searchParams;
 
 	const visible = visibleGuides(GUIDES, {

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { signInPath } from "@/server/auth/sign-in";
 import { CheckCircle2, Send } from "lucide-react";
 import { getRepositories } from "@/db";
 import { RESPONDENT_STATE_MESSAGES, type RespondentView } from "@/db/repositories/surveys";
@@ -29,7 +30,7 @@ export default async function MemberSurveyPage({
 }) {
 	if (!isFeatureEnabled("surveys")) notFound();
 	const actor = await getActor();
-	if (!actor) redirect("/signin");
+	if (!actor) redirect(await signInPath());
 
 	const [{ id }, { done, error, preview }, repositories] = await Promise.all([params, searchParams, getRepositories()]);
 	// Only someone who can configure surveys gets a preview; for anyone else the parameter does nothing.

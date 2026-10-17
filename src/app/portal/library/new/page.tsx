@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { signInPath } from "@/server/auth/sign-in";
 import { ArrowLeft } from "lucide-react";
 import { getRepositories } from "@/db";
 import type { LibraryFormat, LibraryKind } from "@/lib/library/taxonomy";
@@ -27,7 +28,7 @@ const PROBLEMS: Record<string, string> = {
 export default async function NewLibraryItemPage({ searchParams }: { searchParams: Promise<{ list?: string; problem?: string; for?: string }> }) {
 	if (!isFeatureEnabled("library")) notFound();
 	const actor = await getActor();
-	if (!actor) redirect("/signin");
+	if (!actor) redirect(await signInPath());
 	const { list, problem, for: card } = await searchParams;
 	const problemText = problem && Object.hasOwn(PROBLEMS, problem) ? PROBLEMS[problem] : null;
 

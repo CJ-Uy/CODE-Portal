@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { signInPath } from "@/server/auth/sign-in";
 import Link from "next/link";
 import { ArrowRight, BookOpen, CalendarDays, ClipboardCheck, Link2, Megaphone, MessageSquare } from "lucide-react";
 import { getRepositories } from "@/db";
@@ -26,7 +27,7 @@ const EMPTY_SUMMARY: OverviewSummary = {
 
 export default async function PortalOverviewPage() {
 	const actor = await getActor();
-	if (!actor) redirect("/signin");
+	if (!actor) redirect(await signInPath());
 
 	const flags = getFeatureFlags();
 	const repositories = await getRepositories();
