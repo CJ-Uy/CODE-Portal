@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, getTableColumns, isNull } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import * as schema from "@/db/schema";
 import { members, surveyAnswers, surveyAssignments, surveyQuestions, surveyResponses, surveys } from "@/db/schema";
@@ -17,10 +17,18 @@ import { seededSample } from "@/lib/sample";
 import type { Actor } from "@/server/auth/permissions";
 import { can } from "@/server/auth/permissions";
 import type { AuditRepository } from "./audit";
+import { chunk } from "./email-audience";
 import { notify } from "./notifications";
 import { pageLimit } from "./types";
 
 type SurveyDb = DrizzleD1Database<typeof schema>;
+
+// D1 binds at most 100 parameters per statement, and drizzle can bind one per column per row.
+const D1_MAX_PARAMS = 100;
+const rowsPerInsert = (table: typeof surveyQuestions | typeof surveyAnswers) =>
+	Math.floor(D1_MAX_PARAMS / Object.keys(getTableColumns(table)).length);
+const QUESTION_ROWS_PER_INSERT = rowsPerInsert(surveyQuestions);
+const ANSWER_ROWS_PER_INSERT = rowsPerInsert(surveyAnswers);
 
 export type SampleResult = { assigned: number };
 
@@ -55,19 +63,21 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 				})
 				.returning();
 
-			await db.insert(surveyQuestions).values(
-				input.questions.map((question, index) => ({
-					id: createId("srvq"),
-					surveyId,
-					position: index + 1,
-					type: question.type,
-					prompt: question.prompt,
-					optionsJson: question.options ? JSON.stringify(question.options) : null,
-					required: question.required,
-					help: question.help ?? null,
-					metricKey: question.metricKey ?? null,
-				})),
+			const questionRows = input.questions.map((question, index) => ({
+				id: createId("srvq"),
+				surveyId,
+				position: index + 1,
+				type: question.type,
+				prompt: question.prompt,
+				optionsJson: question.options ? JSON.stringify(question.options) : null,
+				required: question.required,
+				help: question.help ?? null,
+				metricKey: question.metricKey ?? null,
+			}));
+			const [firstQuestions, ...moreQuestions] = chunk(questionRows, QUESTION_ROWS_PER_INSERT).map((part) =>
+				db.insert(surveyQuestions).values(part),
 			);
+			await db.batch([firstQuestions, ...moreQuestions]);
 
 			await audit.record(actor, {
 				action: "survey:create",
@@ -177,6 +187,13 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 
 			// ponytail: rare crash after the claim can lose one response slot; use a transactional DB if that matters.
 			const responseId = createId("srvr");
+			const answerRows = input.answers.map((answer) => ({
+				id: createId("srva"),
+				responseId,
+				questionId: answer.questionId,
+				value: answer.value,
+			}));
+			// One batch is atomic, so the response and every answer chunk land together or not at all.
 			await db.batch([
 				db.insert(surveyResponses).values({
 					id: responseId,
@@ -185,14 +202,7 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 					// Day only, so the response cannot be matched to the assignment's exact completedAt.
 					submittedAt: startOfUtc8Day(now),
 				}),
-				db.insert(surveyAnswers).values(
-					input.answers.map((answer) => ({
-						id: createId("srva"),
-						responseId,
-						questionId: answer.questionId,
-						value: answer.value,
-					})),
-				),
+				...chunk(answerRows, ANSWER_ROWS_PER_INSERT).map((part) => db.insert(surveyAnswers).values(part)),
 			]);
 			return { ok: true };
 		},

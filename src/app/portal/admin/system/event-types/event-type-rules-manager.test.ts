@@ -18,6 +18,13 @@ describe("event type creator permissions", () => {
 		expect(creatorPermissionValue("event:moderate")).toBe("event:create_restricted");
 		expect(creatorPermissionValue("retention:configure")).toBe("retention:record");
 		expect(creatorPermissionValue("library:moderate")).toBe("announcement:manage");
-		expect(creatorPermissionValue("unknown:legacy")).toBe("survey:configure");
+		expect(creatorPermissionValue("email:send")).toBe("system:super_only");
+		expect(creatorPermissionValue("unknown:legacy")).toBe("system:super_only");
+	});
+
+	it("keeps Super admins only on a permission no role holds, and files surveys under retention", () => {
+		expect(creatorPermissionOptions.find((option) => option.label === "Super admins only")?.value).toBe("system:super_only");
+		expect(creatorPermissionValue("system:super_only")).toBe("system:super_only");
+		expect(creatorPermissionValue("survey:configure")).toBe("retention:record");
 	});
 });

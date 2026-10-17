@@ -40,6 +40,8 @@ export const permissionActions = [
 	"library:moderate",
 	"email:send",
 	"email:configure",
+	// Never granted to any role; marks gates only super admins pass (super passes every can() check).
+	"system:super_only",
 ] as const;
 
 export type PermissionAction = (typeof permissionActions)[number];

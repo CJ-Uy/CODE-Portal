@@ -15,6 +15,7 @@ import {
 const plainMember: Actor = { memberId: "mem_plain", roles: ["member"] };
 const eventsAdmin: Actor = { memberId: "mem_events", roles: ["events"] };
 const superAdmin: Actor = { memberId: "mem_super", roles: ["super"] };
+const retentionAdmin: Actor = { memberId: "mem_retention", roles: ["retention"] };
 
 function makeRepo() {
 	const db = drizzle(env.DB, { schema });
@@ -77,6 +78,14 @@ describe("event type rules on D1", () => {
 		expect(canCreateType(plainMember, rows, "casual")).toBe(true);
 		expect(canCreateType(plainMember, rows, "official")).toBe(false);
 		expect(canCreateType(eventsAdmin, rows, "official")).toBe(true);
+		expect(canCreateType(superAdmin, rows, "official")).toBe(true);
+	});
+
+	it("keeps a super-only type super-only for the CRS role", async () => {
+		const repo = makeRepo();
+		await repo.setRequiredPermission(superAdmin, "official", "system:super_only");
+		const rows = await repo.list();
+		expect(canCreateType(retentionAdmin, rows, "official")).toBe(false);
 		expect(canCreateType(superAdmin, rows, "official")).toBe(true);
 	});
 
