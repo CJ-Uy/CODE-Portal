@@ -6,6 +6,7 @@ import { submitSurveyResponseInputSchema } from "@/db/types";
 import { requireActor } from "@/server/auth/actor";
 import { assertFeatureEnabled } from "@/server/features";
 import { FEEDBACK_EMPTY_ERROR, FEEDBACK_GENERIC_ERROR, parseFeedbackForm, safeFeedbackError } from "@/lib/feedback/form";
+import { errorLabel } from "@/lib/feedback/safe-log";
 
 export async function submitResponseAction(formData: FormData): Promise<void> {
 	assertFeatureEnabled("surveys");
@@ -24,7 +25,8 @@ export async function submitResponseAction(formData: FormData): Promise<void> {
 			await (await getRepositories()).surveys.submitResponse(actor, input.data);
 		} catch (error) {
 			const message = safeFeedbackError(error instanceof Error ? error.message : null);
-			if (message === FEEDBACK_GENERIC_ERROR) console.error("Feedback submit failed", error);
+			// The error type only: a failed query's message can quote the answers it was writing.
+			if (message === FEEDBACK_GENERIC_ERROR) console.error("Feedback submit failed", { surveyId, error: errorLabel(error) });
 			target = failed(message);
 		}
 	}

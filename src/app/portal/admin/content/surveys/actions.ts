@@ -241,11 +241,19 @@ export async function saveTemplateAction(formData: FormData): Promise<SaveTempla
 	redirect(TEMPLATES_PATH);
 }
 
-export async function archiveTemplateAction(formData: FormData) {
+// Returns only on failure: success redirects to the template list.
+export async function archiveTemplateAction(_previous: ActionError | null, formData: FormData): Promise<ActionError | null> {
 	assertFeatureEnabled("surveys");
 	const actor = await requireActor();
 	const repositories = await getRepositories();
-	await repositories.surveys.archiveTemplate(actor, String(formData.get("id") ?? ""));
+	try {
+		await repositories.surveys.archiveTemplate(actor, String(formData.get("id") ?? ""));
+	} catch (error) {
+		// A stale second archive, from another tab or a double click, finds nothing left to archive.
+		if (error instanceof Error && error.message === "Template not found.") return { error: "This template was already archived or no longer exists." };
+		console.error("Could not archive the template.", errorLabel(error));
+		return { error: "Couldn't archive the template. Try again." };
+	}
 	revalidatePath(TEMPLATES_PATH);
 	redirect(TEMPLATES_PATH);
 }

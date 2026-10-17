@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
 const EMPTY_SUMMARY: OverviewSummary = {
 	retention: { points: 0, retainedAt: null, termName: null },
 	pendingSurveys: 0,
+	oldestPendingSurveyId: null,
 	upcomingEvents: 0,
 	linkClicks: 0,
 };

@@ -26,6 +26,7 @@ import type {
 	UpdateRunningInput,
 } from "@/db/types";
 import { startOfUtc8Day } from "@/lib/date-slots";
+import { errorLabel } from "@/lib/feedback/safe-log";
 import { effectiveStatus, reminderAtFor, suggestInviteCount } from "@/lib/feedback/stats";
 import { createId } from "@/lib/ids";
 import { seededSample } from "@/lib/sample";
@@ -421,14 +422,25 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 				detail: `Invited ${drawn.length} of ${eligibleIds.length} eligible.`,
 			});
 			// ponytail: one notify() call per invitee; batch them if "all" on a very large event nears the subrequest cap.
+			// The send has committed, so a failed notice is logged and skipped: it must not fail the send or stop the email step.
+			let failedNotices = 0;
+			let lastFailure = "";
 			for (const memberId of drawn) {
-				await notify(db, {
-					memberId,
-					kind: "survey_assigned",
-					title: eventTitle ? `How was ${eventTitle}?` : survey.title,
-					body: "Share quick feedback. Your name isn't attached to your answers.",
-					href: `/portal/surveys/${input.surveyId}`,
-				});
+				try {
+					await notify(db, {
+						memberId,
+						kind: "survey_assigned",
+						title: eventTitle ? `How was ${eventTitle}?` : survey.title,
+						body: "Share quick feedback. Your name isn't attached to your answers.",
+						href: `/portal/surveys/${input.surveyId}`,
+					});
+				} catch (error) {
+					failedNotices += 1;
+					lastFailure = errorLabel(error);
+				}
+			}
+			if (failedNotices > 0) {
+				console.error("Some feedback invite notifications failed.", { surveyId: input.surveyId, failed: failedNotices, error: lastFailure });
 			}
 			return { invited: drawn.length, eligible: eligibleIds.length };
 		},
@@ -553,9 +565,22 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 				.returning({ source: surveyAssignments.source });
 			if (!claimed) throw new Error(RESPONDENT_STATE_MESSAGES.answered);
 
-			// ponytail: rare crash after the claim can lose one response slot; use a transactional DB if that matters.
 			// One atomic write, so the response and every answer chunk land together or not at all.
-			await runAtomic(db, [...responseInserts(db, survey.id, claimed.source, input.answers, now)]);
+			// ponytail: a Worker dying between the claim and this write still loses the slot; use a transactional DB if that matters.
+			try {
+				await runAtomic(db, [...responseInserts(db, survey.id, claimed.source, input.answers, now)]);
+			} catch (error) {
+				// Best effort: release the claim so a retry can answer, instead of reading "already answered" with nothing stored.
+				try {
+					await db
+						.update(surveyAssignments)
+						.set({ completedAt: null })
+						.where(and(eq(surveyAssignments.surveyId, survey.id), eq(surveyAssignments.memberId, actor.memberId)));
+				} catch {
+					// The original error is the one worth reporting.
+				}
+				throw error;
+			}
 			return { ok: true };
 		},
 

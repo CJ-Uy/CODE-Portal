@@ -2,6 +2,7 @@ import { and, eq, gt, isNull, lte } from "drizzle-orm";
 import { insertNotification } from "@/db/repositories/notifications";
 import type { SurveyDb } from "@/db/repositories/surveys";
 import { crsEvents, surveyAssignments, surveys } from "@/db/schema";
+import { errorLabel } from "@/lib/feedback/safe-log";
 import type { EmailJob } from "@/server/email/jobs";
 import { queueFeedbackEmail } from "./email";
 
@@ -18,7 +19,8 @@ export type ReminderDeps = {
  *
  * Each due form is claimed with a conditional UPDATE ... RETURNING before anything is sent, so a repeat tick (or a
  * concurrent one) finds nothing to claim and the reminder goes out at most once. A notification or email step that fails
- * after the claim is logged and not retried; the other step and the remaining claimed forms still run.
+ * after the claim is logged and not retried; the other step and the remaining claimed forms still run. A failed event
+ * title read falls back to the form's own title.
  */
 export async function runFeedbackReminders(db: SurveyDb, deps: ReminderDeps): Promise<{ surveys: number; notified: number; emailed: number }> {
 	const { now } = deps;
@@ -31,8 +33,13 @@ export async function runFeedbackReminders(db: SurveyDb, deps: ReminderDeps): Pr
 	let notified = 0;
 	let emailed = 0;
 	for (const survey of claimed) {
-		const [event] = survey.eventId ? await db.select({ title: crsEvents.title }).from(crsEvents).where(eq(crsEvents.id, survey.eventId)).limit(1) : [];
-		const title = event?.title ?? survey.title;
+		let title = survey.title;
+		try {
+			const [event] = survey.eventId ? await db.select({ title: crsEvents.title }).from(crsEvents).where(eq(crsEvents.id, survey.eventId)).limit(1) : [];
+			title = event?.title ?? survey.title;
+		} catch (error) {
+			console.error(`Feedback reminder title read failed for survey ${survey.id}; using the form's own title.`, errorLabel(error));
+		}
 
 		if (deps.notificationsEnabled) {
 			try {

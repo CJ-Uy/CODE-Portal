@@ -3,6 +3,7 @@ import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "@/db/schema";
 import { crsEvents, eventDebriefs, surveyAnswers, surveyAssignments, surveyQuestions, surveyResponses, surveys } from "@/db/schema";
 import type { EventFeedbackRow, MetricKey, ResultsQuestion, Survey, SurveyResults } from "@/db/types";
+import { canFilterInvited } from "@/lib/feedback/results-view";
 import { COMPARE_MIN_EVENTS, COMPARE_MIN_RESPONSES, effectiveStatus, RESULTS_MIN_RESPONSES, scaleSummary } from "@/lib/feedback/stats";
 import { buildSummaryInput, type FeedbackSummary, parseSummary, SUMMARY_SYSTEM_PROMPT, type Summarizer } from "@/lib/feedback/summary";
 import { topTerms } from "@/lib/feedback/words";
@@ -102,14 +103,18 @@ async function baselines(db: Db, surveyId: string, eventType: string, metricKeys
 	return out;
 }
 
-/** `forOrganizers` drops hidden comments entirely and never carries the summary. */
-async function buildResults(db: Db, survey: Survey, filter: ResultsFilter, now: Date, forOrganizers: boolean): Promise<SurveyResults> {
+/**
+ * `forOrganizers` drops hidden comments entirely and never carries the summary. An invited-only request falls back to
+ * everything when there are 1 or 2 walk-ins, because comparing the two views would single out their answers.
+ */
+async function buildResults(db: Db, survey: Survey, requested: ResultsFilter, now: Date, forOrganizers: boolean): Promise<SurveyResults> {
 	const [event] = survey.eventId
 		? await db.select({ type: crsEvents.type }).from(crsEvents).where(eq(crsEvents.id, survey.eventId)).limit(1)
 		: [];
 	const eventType = event?.type ?? null;
 	const { invited, responses } = await surveyCounts(db, [survey.id]);
 	const bySource = responses.get(survey.id) ?? { invited: 0, walk_in: 0 };
+	const filter = requested === "invited" && !canFilterInvited(bySource.walk_in) ? "all" : requested;
 	const responseCount = filter === "invited" ? bySource.invited : bySource.invited + bySource.walk_in;
 	const belowThreshold = responseCount < RESULTS_MIN_RESPONSES;
 

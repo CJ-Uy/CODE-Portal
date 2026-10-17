@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as schema from "@/db/schema";
 import { surveyAssignments, surveys } from "@/db/schema";
 import { startOfUtc8Day } from "@/lib/date-slots";
@@ -427,6 +427,31 @@ describe("surveys repository on D1", () => {
 			return { db, repo, survey };
 		}
 
+		it("still sends when a notification write fails after the commit", async () => {
+			const { db, survey } = await eventForm(10);
+			const noNotices = Object.assign(Object.create(db), {
+				insert: (table: Parameters<typeof db.insert>[0]) => {
+					if (table === schema.notifications) throw new Error("D1_ERROR: notifications unavailable");
+					return db.insert(table);
+				},
+			}) as typeof db;
+			const repo = createSurveysRepository(noNotices, createAuditRepository(noNotices));
+			const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+			try {
+				await expect(repo.send(admin, sendInput(survey.id), NOW)).resolves.toMatchObject({ eligible: 10 });
+				const [row] = await db.select().from(surveys).where(eq(surveys.id, survey.id));
+				expect(row.status).toBe("running");
+				expect(await assignedIds(db, survey.id)).toHaveLength(row.sampleSize ?? -1);
+				expect(await db.select().from(schema.notifications)).toHaveLength(0);
+				// Logged once, by error type only.
+				expect(logged).toHaveBeenCalledTimes(1);
+				expect(logged.mock.calls[0][1]).toEqual({ surveyId: survey.id, failed: row.sampleSize, error: "Error" });
+			} finally {
+				logged.mockRestore();
+			}
+		});
+
 		it("sends to the suggested sample of eligible attendees and notifies them", async () => {
 			const { db, repo, survey } = await eventForm(80);
 
@@ -764,6 +789,24 @@ describe("surveys repository on D1", () => {
 			await expect(repo.submitResponse(walkIn, answer(), LATE)).rejects.toThrow("You've already answered this form.");
 			expect(await db.select().from(schema.surveyResponses)).toHaveLength(0);
 			expect(await db.select().from(schema.surveyAnswers)).toHaveLength(0);
+		});
+
+		it("releases an invitee's claim when the response write fails, so a retry can answer", async () => {
+			const { db, repo, survey, answer, invited } = await eventForm();
+			const failing = Object.assign(Object.create(db), {
+				batch: async () => {
+					throw new Error("D1_ERROR: write failed");
+				},
+			}) as typeof db;
+			const flaky = createSurveysRepository(failing, createAuditRepository(failing));
+
+			await expect(flaky.submitResponse(invited, answer(), LATE)).rejects.toThrow("D1_ERROR: write failed");
+			const [assignment] = await db.select().from(surveyAssignments).where(eq(surveyAssignments.memberId, invited.memberId));
+			expect(assignment.completedAt).toBeNull();
+			expect(await db.select().from(schema.surveyResponses)).toHaveLength(0);
+
+			await expect(repo.submitResponse(invited, answer(), LATE)).resolves.toEqual({ ok: true });
+			expect(await db.select().from(schema.surveyResponses)).toHaveLength(1);
 		});
 
 		it("stores a walk-in response's submittedAt as the Manila day start", async () => {

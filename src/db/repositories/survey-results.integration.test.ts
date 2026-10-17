@@ -180,9 +180,11 @@ describe("survey results on D1", () => {
 		expect(text.answers.map((answer) => answer.value).sort()).toEqual(["More pizza please", "Pizza was great", "Too loud"]);
 		expect(text.terms[0]).toEqual({ term: "pizza", count: 2 });
 
+		// Two more walk-ins, so the invited-only view has three to hide among instead of singling one out.
+		await respondMany("srv_1", "q1", "walk_in", ["2", "2"]);
 		const invited = await results.getResults(crs, "srv_1", { filter: "invited" }, NOW);
 		expect(invited.responseCount).toBe(3);
-		expect(invited.walkInCount).toBe(1);
+		expect(invited.walkInCount).toBe(3);
 		expect((invited.questions[0] as Scale).summary).toMatchObject({ n: 3, mean: 4.3, topTwoPct: 100 });
 		expect((invited.questions[2] as Text).answers).toHaveLength(2);
 	});
@@ -190,10 +192,28 @@ describe("survey results on D1", () => {
 	it("applies the threshold after the invited filter", async () => {
 		await seedSurvey({ id: "srv_1", questions: [{ id: "q1", type: "scale" }] });
 		await respondMany("srv_1", "q1", "invited", ["5", "4"]);
-		await respondMany("srv_1", "q1", "walk_in", ["3", "3"]);
+		await respondMany("srv_1", "q1", "walk_in", ["3", "3", "3"]);
 
 		expect((await results.getResults(admin, "srv_1", { filter: "all" }, NOW)).belowThreshold).toBe(false);
 		expect(await results.getResults(admin, "srv_1", { filter: "invited" }, NOW)).toMatchObject({ responseCount: 2, belowThreshold: true, questions: [] });
+	});
+
+	it("shows everything for an invited-only request while 1 or 2 walk-ins could be singled out", async () => {
+		await seedSurvey({ id: "srv_1", questions: [{ id: "q1", type: "text" }] });
+		await respondMany("srv_1", "q1", "invited", ["Good talks", "Nice room", "Fun games"]);
+		await respondMany("srv_1", "q1", "walk_in", ["Too loud"]);
+
+		const one = await results.getResults(admin, "srv_1", { filter: "invited" }, NOW);
+		expect(one.responseCount).toBe(4);
+		expect((one.questions[0] as Text).answers.map((answer) => answer.value)).toContain("Too loud");
+
+		await respondMany("srv_1", "q1", "walk_in", ["Long lines"]);
+		expect((await results.getResults(admin, "srv_1", { filter: "invited" }, NOW)).responseCount).toBe(5);
+
+		await respondMany("srv_1", "q1", "walk_in", ["Cold food"]);
+		const three = await results.getResults(admin, "srv_1", { filter: "invited" }, NOW);
+		expect(three.responseCount).toBe(3);
+		expect((three.questions[0] as Text).answers.map((answer) => answer.value)).not.toContain("Too loud");
 	});
 
 	it("compares to past same-type events only with enough data", async () => {

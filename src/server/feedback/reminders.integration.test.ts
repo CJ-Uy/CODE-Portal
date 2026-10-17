@@ -69,6 +69,30 @@ describe("runFeedbackReminders", () => {
 		expect(row.title).toBe("Last day for feedback on Survey svy_1");
 	});
 
+	it("falls back to the form's own title when the event title read fails, and still reminds every claimed form", async () => {
+		await env.DB.prepare("INSERT INTO crs_events (id, title, type, place, starts_at, description, created_by, checkin_secret) VALUES ('evt_2', 'Study Jam', 'official', 'Room', ?, 'd', 'mem_admin', 's')").bind(NOW.getTime() - 48 * HOUR).run();
+		await seedSurvey("svy_1", { eventId: "evt_1" });
+		await seedSurvey("svy_2", { eventId: "evt_2" });
+		await assign("svy_1", "mem_b", "invited");
+		await assign("svy_2", "mem_c", "invited");
+		const brokenTitles = Object.assign(Object.create(db), {
+			select: (fields?: Record<string, unknown>) => {
+				if (fields?.title === schema.crsEvents.title) throw new Error("D1_ERROR: read failed");
+				return fields ? db.select(fields as never) : db.select();
+			},
+		}) as typeof db;
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		try {
+			expect(await runFeedbackReminders(brokenTitles, noEmail)).toEqual({ surveys: 2, notified: 2, emailed: 0 });
+			const rows = await db.select().from(notifications);
+			expect(rows.map((row) => row.title).sort()).toEqual([expect.stringContaining("Survey svy_1"), expect.stringContaining("Survey svy_2")]);
+			expect(logged).toHaveBeenCalledTimes(2);
+		} finally {
+			logged.mockRestore();
+		}
+	});
+
 	it("skips closed, expired, not-yet-due, already-reminded and draft forms", async () => {
 		await seedSurvey("svy_closed", { status: "closed" });
 		await seedSurvey("svy_draft", { status: "draft" });
