@@ -37,33 +37,3 @@ export async function requestAccessAction(formData: FormData): Promise<void> {
 	await repositories.library.requestAccess(actor, itemId);
 	revalidatePath("/portal/library");
 }
-
-export async function createListAction(formData: FormData): Promise<void> {
-	assertFeatureEnabled("library");
-	const actor = await requireActor();
-	const name = z.string().trim().min(1).max(60).parse(formData.get("name"));
-	const color = z.string().trim().min(1).max(20).parse(formData.get("color") || "#0c315c");
-	const repositories = await getRepositories();
-	await repositories.library.createList(actor, { name, color });
-	revalidatePath("/portal/library/lists");
-}
-
-export async function addToListAction(formData: FormData): Promise<void> {
-	assertFeatureEnabled("library");
-	const actor = await requireActor();
-	const listId = z.string().min(1).parse(formData.get("listId"));
-	const itemId = z.string().min(1).parse(formData.get("itemId"));
-	const repositories = await getRepositories();
-	await repositories.library.addToList(actor, { listId, itemId });
-	revalidatePath("/portal/library/lists");
-}
-
-export async function removeFromListAction(formData: FormData): Promise<void> {
-	assertFeatureEnabled("library");
-	const actor = await requireActor();
-	const listId = z.string().min(1).parse(formData.get("listId"));
-	const itemId = z.string().min(1).parse(formData.get("itemId"));
-	const repositories = await getRepositories();
-	await repositories.library.removeFromList(actor, { listId, itemId });
-	revalidatePath("/portal/library/lists");
-}

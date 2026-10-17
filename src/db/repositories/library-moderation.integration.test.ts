@@ -559,19 +559,9 @@ describe("small fixes", () => {
 		const listId = await sharedList("Pack");
 		await lists.setPinned(actors.moderator, listId, true);
 		expect((await lists.collections(actors.other)).map((list) => list.id)).toEqual([listId]);
+		await lists.setPinned(actors.moderator, listId, true, 7);
+		expect((await lists.getList(actors.moderator, listId))?.pinOrder).toBe(7);
 		await lists.setPinned(actors.moderator, listId, false);
 		expect(await lists.collections(actors.other)).toEqual([]);
-	});
-
-	it("the legacy addToList only files items the member can see", async () => {
-		const mine = await repo.createList(actors.other, { name: "Mine", color: "#000000" });
-		const draft = await insertItem({ status: "draft", createdBy: "owner" });
-		const confidential = await insertItem({ confidentiality: "confidential" });
-		const open = await insertItem({});
-		await expect(repo.addToList(actors.other, { listId: mine.id, itemId: draft })).rejects.toThrow(/not found/i);
-		await expect(repo.addToList(actors.other, { listId: mine.id, itemId: confidential })).rejects.toThrow(/not found/i);
-		await expect(repo.addToList(actors.other, { listId: mine.id, itemId: "missing" })).rejects.toThrow(/not found/i);
-		await repo.addToList(actors.other, { listId: mine.id, itemId: open });
-		expect((await lists.getList(actors.other, mine.id))?.items).toHaveLength(1);
 	});
 });

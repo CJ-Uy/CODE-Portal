@@ -6,7 +6,6 @@ import {
 	libraryComments,
 	libraryItems,
 	libraryItemTags,
-	libraryListItems,
 	libraryLists,
 	libraryReports,
 	libraryTags,
@@ -160,13 +159,6 @@ export type LibraryRepository = {
 	related(actor: Actor, id: string, limit?: number): Promise<LibraryCard[]>;
 	setExtractedText(id: string, text: string): Promise<void>;
 	requestAccess(actor: Actor, itemId: string): Promise<void>;
-	// ponytail: legacy favorites and list methods stay until the lists repository and pages land (Tasks 7, 13, 14).
-	toggleFavorite(actor: Actor, itemId: string): Promise<boolean>;
-	listFavorites(actor: Actor): Promise<LibraryItem[]>;
-	createList(actor: Actor, input: { name: string; color: string }): Promise<LibraryList>;
-	listLists(actor: Actor): Promise<LibraryList[]>;
-	addToList(actor: Actor, input: { listId: string; itemId: string }): Promise<void>;
-	removeFromList(actor: Actor, input: { listId: string; itemId: string }): Promise<void>;
 };
 
 const DEFAULT_LIMIT = 24;
@@ -389,12 +381,6 @@ async function moderatorIds(db: Db): Promise<string[]> {
 }
 
 export function createLibraryRepository(db: Db, audit: AuditRepository, onModerated: LibraryModerationHook = () => {}): LibraryRepository {
-	async function ownList(actor: Actor, listId: string) {
-		const [list] = await db.select().from(libraryLists).where(eq(libraryLists.id, listId)).limit(1);
-		if (!list || list.memberId !== actor.memberId) throw new Error("List not found.");
-		return list;
-	}
-
 	async function loadItem(id: string): Promise<LibraryItem | null> {
 		const [row] = await db.select().from(libraryItems).where(eq(libraryItems.id, id)).limit(1);
 		return row ?? null;
@@ -926,77 +912,6 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 				category: "library",
 			});
 		},
-
-		// ponytail: temporary shim over the member's default "Saved" list while favorites are folded
-		// into lists (migration 0013 dropped library_favorites). Tasks 13/14 replace both methods.
-		async toggleFavorite(actor, itemId) {
-			const [saved] = await db
-				.select({ id: libraryLists.id })
-				.from(libraryLists)
-				.where(and(eq(libraryLists.memberId, actor.memberId), eq(libraryLists.isDefault, true)))
-				.limit(1);
-			const listId = saved?.id ?? `lst_saved_${actor.memberId}`;
-			if (saved) {
-				// Taking an item out is always allowed, even once it has since become hidden.
-				const inList = and(eq(libraryListItems.listId, listId), eq(libraryListItems.libraryItemId, itemId));
-				const [existing] = await db.select().from(libraryListItems).where(inList).limit(1);
-				if (existing) {
-					await db.delete(libraryListItems).where(inList);
-					return false;
-				}
-			}
-			// Saving needs sight of the item, otherwise a member could pad its save count by guessing ids.
-			const item = await loadItem(itemId);
-			if (!item || !canSeeItem(actor, item)) throw new Error("Library item not found.");
-			if (!saved) {
-				await db
-					.insert(libraryLists)
-					.values({ id: listId, memberId: actor.memberId, name: "Saved", isDefault: true })
-					.onConflictDoNothing();
-			}
-			await db.insert(libraryListItems).values({ listId, libraryItemId: itemId, addedBy: actor.memberId }).onConflictDoNothing();
-			return true;
-		},
-		async listFavorites(actor) {
-			const rows = await db
-				.select({ item: libraryItems })
-				.from(libraryLists)
-				.innerJoin(libraryListItems, eq(libraryListItems.listId, libraryLists.id))
-				.innerJoin(libraryItems, eq(libraryItems.id, libraryListItems.libraryItemId))
-				.where(and(eq(libraryLists.memberId, actor.memberId), eq(libraryLists.isDefault, true)))
-				.orderBy(desc(libraryListItems.createdAt));
-			return rows.map((row) => row.item).filter((item) => canSeeItem(actor, item));
-		},
-		async createList(actor, input) {
-			const [row] = await db
-				.insert(libraryLists)
-				.values({ id: createId("lst"), memberId: actor.memberId, name: input.name, color: input.color })
-				.returning();
-			return row;
-		},
-		async listLists(actor) {
-			return db
-				.select()
-				.from(libraryLists)
-				.where(eq(libraryLists.memberId, actor.memberId))
-				.orderBy(desc(libraryLists.createdAt));
-		},
-		async addToList(actor, input) {
-			await ownList(actor, input.listId);
-			// Same rule as toggleFavorite: filing an item needs sight of it, or a member could pad its save count by guessing ids.
-			const item = await loadItem(input.itemId);
-			if (!item || !canSeeItem(actor, item)) throw new Error("Library item not found.");
-			await db
-				.insert(libraryListItems)
-				.values({ listId: input.listId, libraryItemId: input.itemId, addedBy: actor.memberId })
-				.onConflictDoNothing();
-		},
-		async removeFromList(actor, input) {
-			await ownList(actor, input.listId);
-			await db
-				.delete(libraryListItems)
-				.where(and(eq(libraryListItems.listId, input.listId), eq(libraryListItems.libraryItemId, input.itemId)));
-		},
 	};
 	return repo;
 }
@@ -1028,11 +943,5 @@ export function createUnavailableLibraryRepository(): LibraryRepository {
 		related: unavailable,
 		setExtractedText: unavailable,
 		requestAccess: unavailable,
-		toggleFavorite: unavailable,
-		listFavorites: unavailable,
-		createList: unavailable,
-		listLists: unavailable,
-		addToList: unavailable,
-		removeFromList: unavailable,
 	};
 }

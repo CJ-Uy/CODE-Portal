@@ -23,6 +23,8 @@ export type LibraryListItemView =
 export type LibraryListView = LibraryListSummary & {
 	ownerName: string;
 	moderationReason: string | null;
+	/** Where a pinned list sits among the collections (lower first); only meaningful while it is pinned. */
+	pinOrder: number;
 	editors: { memberId: string; name: string }[];
 	items: LibraryListItemView[];
 };
@@ -294,6 +296,7 @@ export function createLibraryListsRepository(db: Db, audit: AuditRepository): Li
 				...summaryOf(list, role, items.length),
 				ownerName: owner ? displayName(owner) : "Member",
 				moderationReason: list.moderationReason,
+				pinOrder: list.pinOrder,
 				editors: editors.map((editor) => ({ memberId: editor.memberId, name: displayName(editor) })),
 				items,
 			};
@@ -301,7 +304,7 @@ export function createLibraryListsRepository(db: Db, audit: AuditRepository): Li
 
 		async ensureSaved(actor) {
 			const id = savedListId(actor.memberId);
-			// The favorites shim in library.ts uses the same id, so both land on one list; the primary key settles races.
+			// The primary key settles two first saves racing each other.
 			await db.insert(libraryLists).values({ id, memberId: actor.memberId, name: "Saved", isDefault: true }).onConflictDoNothing();
 			return id;
 		},

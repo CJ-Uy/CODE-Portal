@@ -338,7 +338,7 @@ describe("library lists: roles", () => {
 });
 
 describe("library lists: saved and summaries", () => {
-	it("creates the Saved list once, on the id the favorites shim uses", async () => {
+	it("creates the Saved list once, on a predictable id", async () => {
 		const first = await lists.ensureSaved(actors.other);
 		const second = await lists.ensureSaved(actors.other);
 		expect(second).toBe(first);
@@ -346,11 +346,18 @@ describe("library lists: saved and summaries", () => {
 		const rows = await db.select().from(libraryLists).where(eq(libraryLists.memberId, "other"));
 		expect(rows).toHaveLength(1);
 		expect(rows[0]).toMatchObject({ name: "Saved", isDefault: true, shared: false });
-		// The shim lands on the very same list.
 		const itemId = await insertItem({});
-		expect(await repo.toggleFavorite(actors.other, itemId)).toBe(true);
-		expect(await db.select().from(libraryLists).where(eq(libraryLists.memberId, "other"))).toHaveLength(1);
+		await lists.addItem(actors.other, { listId: first, itemId });
 		expect(order(await lists.getList(actors.other, first))).toEqual([itemId]);
+	});
+
+	it("lets a member take an item out of a list after it has been taken down", async () => {
+		const itemId = await insertItem({ title: "Soon gone" });
+		const saved = await lists.ensureSaved(actors.other);
+		await lists.addItem(actors.other, { listId: saved, itemId });
+		await repo.moderate(actors.moderator, itemId, "take_down", "Broken file");
+		await lists.removeItem(actors.other, { listId: saved, itemId });
+		expect(await db.select().from(libraryListItems)).toEqual([]);
 	});
 
 	it("lists the member's lists with Saved first, then the lists they edit, with counts and roles", async () => {
