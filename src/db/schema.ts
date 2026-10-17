@@ -4,6 +4,15 @@ import type { EventSignupAnswers, EventSignupField } from "@/lib/event-signup-fo
 import type { PointMilestone } from "@/lib/point-milestones";
 import type { Audience, EmailBlock, EmailCampaignStatus, EmailDeliveryStatus } from "@/lib/email/types";
 import type { MergeOverrides } from "@/lib/email/merge";
+import type { LibraryBlock } from "@/lib/library/blocks";
+import type {
+	LibraryAuthor,
+	LibraryFormat,
+	LibraryKind,
+	LibraryPublicReadiness,
+	LibrarySource,
+	LibraryStatus,
+} from "@/lib/library/taxonomy";
 import type { SurveyQuestionInput } from "./types";
 
 export type MemberStatus = "active" | "pending" | "inactive";
@@ -48,6 +57,7 @@ export const members = sqliteTable(
 		birthday: text("birthday"),
 		birthdayPrivate: integer("birthday_private", { mode: "boolean" }).notNull().default(true),
 		avatarKey: text("avatar_key"),
+		librarySmartSearch: integer("library_smart_search", { mode: "boolean" }).notNull().default(true),
 		status: text("status").$type<MemberStatus>().notNull().default("active"),
 		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
 		updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
@@ -732,8 +742,9 @@ export const announcementReads = sqliteTable(
 	],
 );
 
-export type LibraryKind = "article" | "case_study";
 export type LibraryConfidentiality = "public" | "members" | "confidential";
+export type LibraryReportReason = "client_data" | "inappropriate" | "copyright" | "broken_file" | "other";
+export type LibraryReportResolution = "dismissed" | "taken_down";
 
 export const libraryItems = sqliteTable(
 	"library_items",
@@ -754,14 +765,71 @@ export const libraryItems = sqliteTable(
 		questionsJson: text("questions_json", { mode: "json" }).$type<string[]>().notNull().default([]),
 		referencesJson: text("references_json", { mode: "json" }).$type<string[]>().notNull().default([]),
 		topicsJson: text("topics_json", { mode: "json" }).$type<string[]>().notNull().default([]),
+		// v2 content model. The legacy abstract/sections/components/questions/references/topics
+		// columns above are never read; blocksJson is the body.
+		format: text("format").$type<LibraryFormat>().notNull().default("page"),
+		source: text("source").$type<LibrarySource>().notNull().default("code"),
+		status: text("status").$type<LibraryStatus>().notNull().default("published"),
+		blocksJson: text("blocks_json", { mode: "json" }).$type<LibraryBlock[]>().notNull().default([]),
+		authorsJson: text("authors_json", { mode: "json" }).$type<LibraryAuthor[]>().notNull().default([]),
+		subtype: text("subtype"),
+		formatDetail: text("format_detail"),
+		engagementType: text("engagement_type"),
+		year: integer("year"),
+		fileCode: text("file_code"),
+		fileKey: text("file_key"),
+		fileName: text("file_name"),
+		fileType: text("file_type"),
+		fileBytes: integer("file_bytes"),
+		url: text("url"),
+		containsClientData: integer("contains_client_data", { mode: "boolean" }),
+		clientDataRedacted: integer("client_data_redacted", { mode: "boolean" }).notNull().default(false),
+		moderationReason: text("moderation_reason"),
+		publicReadiness: text("public_readiness").$type<LibraryPublicReadiness>(),
+		extractedText: text("extracted_text").notNull().default(""),
+		searchText: text("search_text").notNull().default(""),
+		indexedAt: integer("indexed_at", { mode: "timestamp_ms" }),
+		// The owner: every edit and takedown permission check keys on this.
 		createdBy: text("created_by").references(() => members.id, { onDelete: "set null" }),
+		// Kept NOT NULL: set at creation and overwritten at first publish.
 		publishedAt: integer("published_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
 		updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
 	},
 	(table) => [
 		index("library_items_category_idx").on(table.category),
 		index("library_items_published_at_idx").on(table.publishedAt),
+		index("library_items_status_idx").on(table.status),
+		index("library_items_kind_idx").on(table.kind),
+		index("library_items_source_idx").on(table.source),
+		index("library_items_created_by_idx").on(table.createdBy),
 	],
+);
+
+export const libraryTags = sqliteTable(
+	"library_tags",
+	{
+		id: text("id").primaryKey(),
+		name: text("name").notNull(),
+		// Lowercase, whitespace collapsed; the uniqueness key.
+		slug: text("slug").notNull(),
+		groupName: text("group_name").notNull().default("Ungrouped"),
+		createdBy: text("created_by").references(() => members.id, { onDelete: "set null" }),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	},
+	(table) => [uniqueIndex("library_tags_slug_unique").on(table.slug)],
+);
+
+export const libraryItemTags = sqliteTable(
+	"library_item_tags",
+	{
+		itemId: text("item_id")
+			.notNull()
+			.references(() => libraryItems.id, { onDelete: "cascade" }),
+		tagId: text("tag_id")
+			.notNull()
+			.references(() => libraryTags.id, { onDelete: "cascade" }),
+	},
+	(table) => [primaryKey({ columns: [table.itemId, table.tagId] }), index("library_item_tags_tag_id_idx").on(table.tagId)],
 );
 
 export const libraryComments = sqliteTable(
@@ -784,20 +852,6 @@ export const libraryComments = sqliteTable(
 	(table) => [index("library_comments_library_item_id_idx").on(table.libraryItemId)],
 );
 
-export const libraryFavorites = sqliteTable(
-	"library_favorites",
-	{
-		memberId: text("member_id")
-			.notNull()
-			.references(() => members.id, { onDelete: "cascade" }),
-		libraryItemId: text("library_item_id")
-			.notNull()
-			.references(() => libraryItems.id, { onDelete: "cascade" }),
-		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
-	},
-	(table) => [primaryKey({ columns: [table.memberId, table.libraryItemId] })],
-);
-
 export const libraryLists = sqliteTable("library_lists", {
 	id: text("id").primaryKey(),
 	memberId: text("member_id")
@@ -805,7 +859,20 @@ export const libraryLists = sqliteTable("library_lists", {
 		.references(() => members.id, { onDelete: "cascade" }),
 	name: text("name").notNull(),
 	color: text("color").notNull().default("#0c315c"),
+	description: text("description").notNull().default(""),
+	shared: integer("shared", { mode: "boolean" }).notNull().default(false),
+	// The member's "Saved" list: id lst_saved_<memberId>, created on first save.
+	isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
+	pinned: integer("pinned", { mode: "boolean" }).notNull().default(false),
+	pinOrder: integer("pin_order").notNull().default(0),
+	takenDownAt: integer("taken_down_at", { mode: "timestamp_ms" }),
+	moderationReason: text("moderation_reason"),
 	createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	// ponytail: nullable with no SQL default because SQLite refuses ALTER TABLE ADD COLUMN with a
+	// non-constant default (this column can't be NOT NULL DEFAULT now without a table rebuild).
+	// Migration 0013 backfills it from created_at and drizzle stamps "now" on every insert, so a
+	// null only appears for a raw-SQL insert that omits it. Readers can fall back to createdAt.
+	updatedAt: integer("updated_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()),
 });
 
 export const libraryListItems = sqliteTable(
@@ -817,9 +884,89 @@ export const libraryListItems = sqliteTable(
 		libraryItemId: text("library_item_id")
 			.notNull()
 			.references(() => libraryItems.id, { onDelete: "cascade" }),
+		note: text("note").notNull().default(""),
+		addedBy: text("added_by").references(() => members.id, { onDelete: "set null" }),
+		position: integer("position").notNull().default(0),
+		// "Added at".
 		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
 	},
 	(table) => [primaryKey({ columns: [table.listId, table.libraryItemId] })],
+);
+
+export const libraryListMembers = sqliteTable(
+	"library_list_members",
+	{
+		listId: text("list_id")
+			.notNull()
+			.references(() => libraryLists.id, { onDelete: "cascade" }),
+		memberId: text("member_id")
+			.notNull()
+			.references(() => members.id, { onDelete: "cascade" }),
+		role: text("role").$type<"editor">().notNull().default("editor"),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	},
+	(table) => [primaryKey({ columns: [table.listId, table.memberId] }), index("library_list_members_member_id_idx").on(table.memberId)],
+);
+
+export const libraryListComments = sqliteTable(
+	"library_list_comments",
+	{
+		id: text("id").primaryKey(),
+		listId: text("list_id")
+			.notNull()
+			.references(() => libraryLists.id, { onDelete: "cascade" }),
+		memberId: text("member_id")
+			.notNull()
+			.references(() => members.id, { onDelete: "cascade" }),
+		// self-referential parent; plain text to avoid table self-FK ordering issues.
+		parentId: text("parent_id"),
+		anonymous: integer("anonymous", { mode: "boolean" }).notNull().default(false),
+		body: text("body").notNull(),
+		hidden: integer("hidden", { mode: "boolean" }).notNull().default(false),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	},
+	(table) => [index("library_list_comments_list_id_idx").on(table.listId)],
+);
+
+export const libraryReports = sqliteTable(
+	"library_reports",
+	{
+		id: text("id").primaryKey(),
+		itemId: text("item_id").references(() => libraryItems.id, { onDelete: "cascade" }),
+		listId: text("list_id").references(() => libraryLists.id, { onDelete: "cascade" }),
+		memberId: text("member_id")
+			.notNull()
+			.references(() => members.id, { onDelete: "cascade" }),
+		reason: text("reason").$type<LibraryReportReason>().notNull(),
+		details: text("details").notNull().default(""),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+		resolvedBy: text("resolved_by").references(() => members.id, { onDelete: "set null" }),
+		resolvedAt: integer("resolved_at", { mode: "timestamp_ms" }),
+		resolution: text("resolution").$type<LibraryReportResolution>(),
+	},
+	(table) => [index("library_reports_item_id_idx").on(table.itemId), index("library_reports_list_id_idx").on(table.listId)],
+);
+
+export const libraryItemMemberDays = sqliteTable(
+	"library_item_member_days",
+	{
+		itemId: text("item_id")
+			.notNull()
+			.references(() => libraryItems.id, { onDelete: "cascade" }),
+		memberId: text("member_id")
+			.notNull()
+			.references(() => members.id, { onDelete: "cascade" }),
+		// Calendar day in UTC+8 (matches the calendar feature), e.g. 2026-10-16.
+		day: text("day").notNull(),
+		opens: integer("opens").notNull().default(0),
+		activeSeconds: integer("active_seconds").notNull().default(0),
+		downloads: integer("downloads").notNull().default(0),
+	},
+	(table) => [
+		primaryKey({ columns: [table.itemId, table.memberId, table.day] }),
+		index("library_item_member_days_item_id_idx").on(table.itemId),
+		index("library_item_member_days_day_idx").on(table.day),
+	],
 );
 
 export const contactSubmissions = sqliteTable(

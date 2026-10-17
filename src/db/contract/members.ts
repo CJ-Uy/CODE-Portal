@@ -15,6 +15,7 @@ export const memberOutputSchema = z.object({
 	birthday: z.string().nullable(),
 	birthdayPrivate: z.boolean(),
 	avatarKey: z.string().nullable(),
+	librarySmartSearch: z.boolean(),
 	status: z.enum(["active", "pending", "inactive"]),
 	createdAt: z.coerce.date(),
 	updatedAt: z.coerce.date(),

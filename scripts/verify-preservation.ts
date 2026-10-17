@@ -74,7 +74,7 @@ db.exec(
 );
 // A rule saved as "Super admins only" before 0012 stored survey:configure, which CRS now holds.
 db.exec(`INSERT INTO event_type_rules (type, required_permission, label) VALUES ('fix_super', 'survey:configure', 'Fixture')`);
-for (const file of files.filter((f) => f >= "0012")) applyOne(file);
+for (const file of files.filter((f) => f >= "0012" && f < "0013")) applyOne(file);
 check("fixture assignment survived", one("SELECT completed_at AS v FROM survey_assignments WHERE survey_id='srv_fix1'"), 2000);
 check("fixture assignment is invited", one("SELECT source AS v FROM survey_assignments WHERE survey_id='srv_fix1'"), "invited");
 check(
@@ -97,6 +97,45 @@ check(
 	"system:super_only",
 );
 check("feedback email category seeded", one("SELECT COUNT(*) AS v FROM email_categories WHERE id='ecat_feedback'"), 1);
+
+// 0013 folds library_favorites into per-member "Saved" lists, deletes the three demo items and drops the
+// favorites table. Favorites sit on real items: a favorite on a demo item would cascade away with it.
+db.exec(`INSERT INTO library_items (id, title) VALUES ('lib_fix_a', 'Fixture A'), ('lib_fix_b', 'Fixture B')`);
+db.exec(
+	`INSERT INTO library_items (id, title) VALUES
+	 ('lib_onboarding', 'Demo 1'), ('lib_events_playbook', 'Demo 2'), ('lib_internal_notes', 'Demo 3')`,
+);
+db.exec(
+	`INSERT INTO library_favorites (member_id, library_item_id, created_at)
+	 VALUES ('mem_fix1', 'lib_fix_a', 4000), ('mem_fix1', 'lib_fix_b', 3000)`,
+);
+// A list that predates 0013 must get updated_at backfilled from created_at, not left at the column default.
+db.exec(`INSERT INTO library_lists (id, member_id, name, created_at) VALUES ('lst_fix_old', 'mem_fix1', 'Old list', 5000)`);
+for (const file of files.filter((f) => f >= "0013")) applyOne(file);
+check("one Saved list per favoriting member", one("SELECT COUNT(*) AS v FROM library_lists WHERE is_default = 1"), 1);
+check("Saved list id", one("SELECT id AS v FROM library_lists WHERE is_default = 1"), "lst_saved_mem_fix1");
+check("Saved list name", one("SELECT name AS v FROM library_lists WHERE is_default = 1"), "Saved");
+check("Saved list owner", one("SELECT member_id AS v FROM library_lists WHERE is_default = 1"), "mem_fix1");
+check("Saved list dated from earliest favorite", one("SELECT created_at AS v FROM library_lists WHERE id='lst_saved_mem_fix1'"), 3000);
+check("Saved list holds both favorites", one("SELECT COUNT(*) AS v FROM library_list_items WHERE list_id='lst_saved_mem_fix1'"), 2);
+check(
+	"favorites keep their items",
+	one("SELECT group_concat(library_item_id, ',') AS v FROM (SELECT library_item_id FROM library_list_items WHERE list_id='lst_saved_mem_fix1' ORDER BY library_item_id)"),
+	"lib_fix_a,lib_fix_b",
+);
+check(
+	"favorites credited to the member",
+	one("SELECT COUNT(*) AS v FROM library_list_items WHERE list_id='lst_saved_mem_fix1' AND added_by='mem_fix1'"),
+	2,
+);
+check("favorite added-at preserved", one("SELECT created_at AS v FROM library_list_items WHERE library_item_id='lib_fix_a'"), 4000);
+check("library_favorites gone", one("SELECT COUNT(*) AS v FROM sqlite_master WHERE type='table' AND name='library_favorites'"), 0);
+check("demo items deleted", one("SELECT COUNT(*) AS v FROM library_items WHERE id IN ('lib_onboarding','lib_events_playbook','lib_internal_notes')"), 0);
+check("real items survived", one("SELECT COUNT(*) AS v FROM library_items WHERE id IN ('lib_fix_a','lib_fix_b')"), 2);
+check("existing item defaults to published", one("SELECT status AS v FROM library_items WHERE id='lib_fix_a'"), "published");
+check("existing list updated_at backfilled", one("SELECT updated_at AS v FROM library_lists WHERE id='lst_fix_old'"), 5000);
+check("existing list is not a Saved list", one("SELECT is_default AS v FROM library_lists WHERE id='lst_fix_old'"), 0);
+check("smart search defaults on", one("SELECT library_smart_search AS v FROM members WHERE id='mem_fix1'"), 1);
 db.close();
 rmSync(work, { recursive: true, force: true });
 

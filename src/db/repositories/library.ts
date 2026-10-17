@@ -3,15 +3,14 @@ import type { InferSelectModel } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import {
 	libraryComments,
-	libraryFavorites,
 	libraryItems,
 	libraryListItems,
 	libraryLists,
 	members,
 	type LibraryConfidentiality,
-	type LibraryKind,
 } from "@/db/schema";
 import { createId } from "@/lib/ids";
+import type { LibraryKind } from "@/lib/library/taxonomy";
 import type { Actor } from "@/server/auth/permissions";
 import { can } from "@/server/auth/permissions";
 import type * as schema from "../schema";
@@ -199,28 +198,35 @@ export function createLibraryRepository(db: Db, audit: AuditRepository): Library
 				category: "library",
 			});
 		},
+		// ponytail: temporary shim over the member's default "Saved" list while favorites are folded
+		// into lists (migration 0013 dropped library_favorites). Tasks 5/13/14 replace both methods.
 		async toggleFavorite(actor, itemId) {
-			const [existing] = await db
-				.select()
-				.from(libraryFavorites)
-				.where(and(eq(libraryFavorites.memberId, actor.memberId), eq(libraryFavorites.libraryItemId, itemId)))
+			const [saved] = await db
+				.select({ id: libraryLists.id })
+				.from(libraryLists)
+				.where(and(eq(libraryLists.memberId, actor.memberId), eq(libraryLists.isDefault, true)))
 				.limit(1);
+			const listId = saved?.id ?? `lst_saved_${actor.memberId}`;
+			if (!saved) {
+				await db.insert(libraryLists).values({ id: listId, memberId: actor.memberId, name: "Saved", isDefault: true });
+			}
+			const inList = and(eq(libraryListItems.listId, listId), eq(libraryListItems.libraryItemId, itemId));
+			const [existing] = await db.select().from(libraryListItems).where(inList).limit(1);
 			if (existing) {
-				await db
-					.delete(libraryFavorites)
-					.where(and(eq(libraryFavorites.memberId, actor.memberId), eq(libraryFavorites.libraryItemId, itemId)));
+				await db.delete(libraryListItems).where(inList);
 				return false;
 			}
-			await db.insert(libraryFavorites).values({ memberId: actor.memberId, libraryItemId: itemId });
+			await db.insert(libraryListItems).values({ listId, libraryItemId: itemId, addedBy: actor.memberId });
 			return true;
 		},
 		async listFavorites(actor) {
 			const rows = await db
 				.select({ item: libraryItems })
-				.from(libraryFavorites)
-				.innerJoin(libraryItems, eq(libraryItems.id, libraryFavorites.libraryItemId))
-				.where(eq(libraryFavorites.memberId, actor.memberId))
-				.orderBy(desc(libraryFavorites.createdAt));
+				.from(libraryLists)
+				.innerJoin(libraryListItems, eq(libraryListItems.listId, libraryLists.id))
+				.innerJoin(libraryItems, eq(libraryItems.id, libraryListItems.libraryItemId))
+				.where(and(eq(libraryLists.memberId, actor.memberId), eq(libraryLists.isDefault, true)))
+				.orderBy(desc(libraryListItems.createdAt));
 			const canManage = can(actor, "library:manage");
 			return rows.map((row) => row.item).filter((item) => visibleToActor(item, canManage));
 		},
@@ -242,7 +248,7 @@ export function createLibraryRepository(db: Db, audit: AuditRepository): Library
 			await ownList(actor, input.listId);
 			await db
 				.insert(libraryListItems)
-				.values({ listId: input.listId, libraryItemId: input.itemId })
+				.values({ listId: input.listId, libraryItemId: input.itemId, addedBy: actor.memberId })
 				.onConflictDoNothing();
 		},
 		async removeFromList(actor, input) {

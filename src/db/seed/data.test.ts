@@ -1,6 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { RESERVED_SLUG_DEFAULTS } from "@/lib/links";
-import { seedLinkDailyStats, seedPointTypes, seedReservedSlugs, seedShortLinks } from "./data";
+import { seedLibraryItems, seedLibraryTags, seedLinkDailyStats, seedPointTypes, seedReservedSlugs, seedShortLinks } from "./data";
+
+describe("library seeds", () => {
+	it("seeds one synthetic item per format", () => {
+		expect(seedLibraryItems.map((item) => item.format).sort()).toEqual(["file", "link", "page"]);
+	});
+
+	it("seeds the 37 starting tags with unique ids and slugs", () => {
+		expect(seedLibraryTags).toHaveLength(37);
+		expect(new Set(seedLibraryTags.map((tag) => tag.id)).size).toBe(37);
+		expect(new Set(seedLibraryTags.map((tag) => tag.slug)).size).toBe(37);
+		expect(seedLibraryTags[0]).toMatchObject({ id: "ltg_vision_mission_vmos", slug: "vision & mission (vmos)", groupName: "Direction & Strategy" });
+	});
+});
 
 describe("link seed data", () => {
 	it("seeds all route-shadow reserved slugs from the links helper", () => {
