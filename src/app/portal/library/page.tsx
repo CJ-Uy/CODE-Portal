@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { BookOpen, Clock, Lock, Search } from "lucide-react";
+import { BookOpen, Lock, Search } from "lucide-react";
 import { getRepositories } from "@/db";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/portal/empty-state";
+import { KIND_LABELS, LIBRARY_KINDS } from "@/lib/library/taxonomy";
 import { getActor } from "@/server/auth/actor";
 import { isFeatureEnabled } from "@/server/features";
 import type { LibraryConfidentiality } from "@/db/schema";
@@ -22,7 +23,7 @@ const CONFIDENTIALITY_LABEL: Record<LibraryConfidentiality, string> = {
 export default async function LibraryPage({
 	searchParams,
 }: {
-	searchParams: Promise<{ category?: string; q?: string }>;
+	searchParams: Promise<{ kind?: string; q?: string }>;
 }) {
 	// The portal layout already redirects signed-out visitors to /signin, so this guard is
 	// what a signed-in member hits. Kept above the data loading so a disabled surface
@@ -34,12 +35,12 @@ export default async function LibraryPage({
 	const params = await searchParams;
 
 	const repositories = await getRepositories();
+	// ponytail: stopgap listing on the new search API; Task 13 replaces this page.
+	const kind = LIBRARY_KINDS.find((value) => value === params.kind);
 	const items = await repositories.library
-		.listItems(actor, { category: params.category, q: params.q })
+		.search(actor, { q: params.q, kinds: kind ? [kind] : undefined, limit: 100 })
+		.then((result) => result.cards)
 		.catch(() => []);
-	// Derive category chips from a broad fetch so filters stay stable across views.
-	const all = await repositories.library.listItems(actor, {}).catch(() => []);
-	const categories = Array.from(new Set(all.map((item) => item.category))).sort();
 
 	return (
 		<div className="grid gap-5">
@@ -52,7 +53,7 @@ export default async function LibraryPage({
 			</div>
 
 			<form className="flex flex-wrap items-center gap-2" action="/portal/library">
-				{params.category ? <input type="hidden" name="category" value={params.category} /> : null}
+				{kind ? <input type="hidden" name="kind" value={kind} /> : null}
 				<div className="relative flex-1 sm:max-w-sm">
 					<Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 					<Input name="q" defaultValue={params.q ?? ""} placeholder="Search title or topic" className="pl-9" />
@@ -66,14 +67,9 @@ export default async function LibraryPage({
 			</form>
 
 			<div className="flex flex-wrap gap-2">
-				<CategoryChip label="All" href={buildHref(undefined, params.q)} active={!params.category} />
-				{categories.map((category) => (
-					<CategoryChip
-						key={category}
-						label={category}
-						href={buildHref(category, params.q)}
-						active={params.category === category}
-					/>
+				<CategoryChip label="All" href={buildHref(undefined, params.q)} active={!kind} />
+				{LIBRARY_KINDS.map((value) => (
+					<CategoryChip key={value} label={KIND_LABELS[value]} href={buildHref(value, params.q)} active={kind === value} />
 				))}
 			</div>
 
@@ -86,7 +82,7 @@ export default async function LibraryPage({
 							<Card className="h-full transition-colors group-hover:border-accent">
 								<CardHeader>
 									<div className="flex flex-wrap items-center gap-2">
-										<Badge variant="secondary">{item.category}</Badge>
+										<Badge variant="secondary">{KIND_LABELS[item.kind]}</Badge>
 										{item.confidentiality !== "members" ? (
 											<Badge variant={item.confidentiality === "confidential" ? "warn" : "info"} className="gap-1">
 												{item.confidentiality === "confidential" ? <Lock className="size-3" /> : null}
@@ -98,10 +94,6 @@ export default async function LibraryPage({
 								</CardHeader>
 								<CardContent className="flex flex-col gap-3">
 									<p className="line-clamp-3 text-sm text-muted-foreground">{item.dek}</p>
-									<span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-										<Clock className="size-3" />
-										{item.readMinutes} min read
-									</span>
 								</CardContent>
 							</Card>
 						</Link>
@@ -112,9 +104,9 @@ export default async function LibraryPage({
 	);
 }
 
-function buildHref(category: string | undefined, q: string | undefined): string {
+function buildHref(kind: string | undefined, q: string | undefined): string {
 	const sp = new URLSearchParams();
-	if (category) sp.set("category", category);
+	if (kind) sp.set("kind", kind);
 	if (q) sp.set("q", q);
 	const query = sp.toString();
 	return query ? `/portal/library?${query}` : "/portal/library";

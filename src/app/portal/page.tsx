@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MetricCard, RetentionProgress } from "@/components/portal/overview-metrics";
+import { KIND_LABELS } from "@/lib/library/taxonomy";
 import { getActor } from "@/server/auth/actor";
 import { getAppConfig } from "@/server/env";
 import { getFeatureFlags } from "@/server/features";
@@ -34,7 +35,12 @@ export default async function PortalOverviewPage() {
 	const [summary, announcements, libraryItems, scanEvents, terms] = await Promise.all([
 		repositories.overview.getSummary(actor).catch(() => EMPTY_SUMMARY),
 		flags.announcements ? repositories.announcements.listForMember(actor, { limit: 3 }).catch(() => []) : Promise.resolve([]),
-		flags.library ? repositories.library.listItems(actor, { limit: 3 }).catch(() => []) : Promise.resolve([]),
+		flags.library
+			? repositories.library
+					.search(actor, { sort: "newest", limit: 3 })
+					.then((result) => result.cards)
+					.catch(() => [])
+			: Promise.resolve([]),
 		repositories.events.listPublished(actor, { limit: 100 }).catch(() => []),
 		repositories.retention.listTerms(actor).catch(() => []),
 	]);
@@ -187,7 +193,7 @@ export default async function PortalOverviewPage() {
 									href={`/portal/library/${item.id}`}
 									className="group grid gap-1 rounded-lg border border-border p-3 transition-colors hover:border-accent"
 								>
-									<span className="text-xs text-muted-foreground">{item.category}</span>
+									<span className="text-xs text-muted-foreground">{KIND_LABELS[item.kind]}</span>
 									<span className="text-sm font-medium leading-snug group-hover:text-accent">{item.title}</span>
 								</Link>
 							))
