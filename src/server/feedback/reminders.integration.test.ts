@@ -2,7 +2,7 @@ import { env } from "cloudflare:test";
 import { drizzle } from "drizzle-orm/d1";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as schema from "@/db/schema";
-import { emailCampaigns, notifications, surveys } from "@/db/schema";
+import { emailCampaigns, notifications, surveyQuestions, surveys } from "@/db/schema";
 import type { EmailJob } from "@/server/email/jobs";
 import { runFeedbackReminders } from "./reminders";
 
@@ -44,7 +44,7 @@ describe("runFeedbackReminders", () => {
 
 		const rows = await db.select().from(notifications);
 		expect(rows.map((r) => r.memberId).sort()).toEqual(["mem_b", "mem_c"]);
-		expect(rows[0]).toMatchObject({ kind: "survey_reminder", title: "Last day for feedback on General Assembly", body: "It takes about two minutes.", href: "/portal/surveys/svy_1" });
+		expect(rows[0]).toMatchObject({ kind: "survey_reminder", title: "Reminder: feedback on General Assembly", href: "/portal/surveys/svy_1" });
 		const [survey] = await db.select().from(surveys);
 		expect(survey.reminderSentAt?.getTime()).toBe(NOW.getTime());
 
@@ -66,7 +66,19 @@ describe("runFeedbackReminders", () => {
 		await assign("svy_1", "mem_b", "invited");
 		await runFeedbackReminders(db, noEmail);
 		const [row] = await db.select().from(notifications);
-		expect(row.title).toBe("Last day for feedback on Survey svy_1");
+		expect(row.title).toBe("Reminder: feedback on Survey svy_1");
+	});
+
+	it("gives the form's own time estimate, not a fixed one", async () => {
+		await seedSurvey("svy_1");
+		await assign("svy_1", "mem_b", "invited");
+		// Eight text questions at 45s each: 360s, which reads "About 6 min".
+		await db.insert(surveyQuestions).values(
+			Array.from({ length: 8 }, (_, i) => ({ id: `srvq_${i}`, surveyId: "svy_1", position: i + 1, type: "text" as const, prompt: `Q${i}` })),
+		);
+		await runFeedbackReminders(db, noEmail);
+		const [row] = await db.select().from(notifications);
+		expect(row.body).toBe("It takes about 6 min.");
 	});
 
 	it("falls back to the form's own title when the event title read fails, and still reminds every claimed form", async () => {
@@ -130,7 +142,7 @@ describe("runFeedbackReminders", () => {
 			expect(campaign.status).toBe("scheduled");
 			expect(campaign.createdBy).toBe("mem_admin");
 			expect(campaign.audience.include).toEqual([{ kind: "survey_invitees", surveyId: "svy_1" }]);
-			expect(campaign.subject).toBe("Last day to share feedback on General Assembly");
+			expect(campaign.subject).toBe("Reminder: share feedback on General Assembly");
 			expect(send).toHaveBeenCalledTimes(1);
 
 			expect((await runFeedbackReminders(db, deps)).emailed).toBe(0);

@@ -30,6 +30,9 @@ const surveyQuestionOutputSchema = z.object({
 	type: z.enum(["scale", "text", "choice"]),
 	prompt: z.string(),
 	optionsJson: z.string().nullable(),
+	required: z.boolean(),
+	help: z.string().nullable(),
+	metricKey: z.enum(METRIC_KEYS).nullable(),
 });
 
 const scaleSummarySchema = z.object({

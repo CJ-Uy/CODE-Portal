@@ -1,8 +1,10 @@
 import { and, eq, gt, isNull, lte } from "drizzle-orm";
 import { insertNotification } from "@/db/repositories/notifications";
 import type { SurveyDb } from "@/db/repositories/surveys";
-import { crsEvents, surveyAssignments, surveys } from "@/db/schema";
+import { crsEvents, surveyAssignments, surveyQuestions, surveys } from "@/db/schema";
+import { formatEstimate } from "@/lib/feedback/editor-input";
 import { errorLabel } from "@/lib/feedback/safe-log";
+import { estimateSeconds } from "@/lib/feedback/stats";
 import type { EmailJob } from "@/server/email/jobs";
 import { queueFeedbackEmail } from "./email";
 
@@ -14,13 +16,14 @@ export type ReminderDeps = {
 };
 
 /**
- * The one-time "last day" reminder for feedback forms, run by the per-minute cron. System caller: no actor or
- * permission check. Walk-ins are never reminded.
+ * The one-time reminder for feedback forms, run by the per-minute cron. It usually goes 24h before close, but an admin
+ * can send it early, so the wording never says "last day". System caller: no actor or permission check. Walk-ins are
+ * never reminded.
  *
  * Each due form is claimed with a conditional UPDATE ... RETURNING before anything is sent, so a repeat tick (or a
  * concurrent one) finds nothing to claim and the reminder goes out at most once. A notification or email step that fails
- * after the claim is logged and not retried; the other step and the remaining claimed forms still run. A failed event
- * title read falls back to the form's own title.
+ * after the claim is logged and not retried; the other step and the remaining claimed forms still run. A failed read of
+ * the event title or the questions falls back to the form's own title and leaves the time estimate out.
  */
 export async function runFeedbackReminders(db: SurveyDb, deps: ReminderDeps): Promise<{ surveys: number; notified: number; emailed: number }> {
 	const { now } = deps;
@@ -34,11 +37,13 @@ export async function runFeedbackReminders(db: SurveyDb, deps: ReminderDeps): Pr
 	let emailed = 0;
 	for (const survey of claimed) {
 		let title = survey.title;
+		let estimate: string | null = null;
 		try {
 			const [event] = survey.eventId ? await db.select({ title: crsEvents.title }).from(crsEvents).where(eq(crsEvents.id, survey.eventId)).limit(1) : [];
 			title = event?.title ?? survey.title;
+			estimate = formatEstimate(estimateSeconds(await db.select({ type: surveyQuestions.type }).from(surveyQuestions).where(eq(surveyQuestions.surveyId, survey.id))));
 		} catch (error) {
-			console.error(`Feedback reminder title read failed for survey ${survey.id}; using the form's own title.`, errorLabel(error));
+			console.error(`Feedback reminder details read failed for survey ${survey.id}; using the form's own title.`, errorLabel(error));
 		}
 
 		if (deps.notificationsEnabled) {
@@ -52,8 +57,8 @@ export async function runFeedbackReminders(db: SurveyDb, deps: ReminderDeps): Pr
 					await insertNotification(db, {
 						memberId,
 						kind: "survey_reminder",
-						title: `Last day for feedback on ${title}`,
-						body: "It takes about two minutes.",
+						title: `Reminder: feedback on ${title}`,
+						body: estimate ? `It takes ${estimate.toLowerCase()}.` : "Your name isn't attached to your answers.",
 						href: `/portal/surveys/${survey.id}`,
 					});
 					notified++;
@@ -70,6 +75,7 @@ export async function runFeedbackReminders(db: SurveyDb, deps: ReminderDeps): Pr
 					createdBy: survey.createdBy,
 					title,
 					closesAt: survey.closesAt,
+					estimate,
 					kind: "reminder",
 					baseUrl: deps.email.baseUrl,
 					now,

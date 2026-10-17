@@ -4,10 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getRepositories } from "@/db";
 import { createFromTemplateInputSchema, saveTemplateInputSchema, updateDraftInputSchema } from "@/db/types";
-import { parseQuestionsField, QUESTIONS_ERROR } from "@/lib/feedback/editor-input";
+import { formatEstimate, parseQuestionsField, QUESTIONS_ERROR } from "@/lib/feedback/editor-input";
 import { parseRunningForm, RUNNING_SAVED } from "@/lib/feedback/running-input";
 import { errorLabel } from "@/lib/feedback/safe-log";
 import { parseSendForm } from "@/lib/feedback/send-input";
+import { estimateSeconds } from "@/lib/feedback/stats";
 import { requireActor } from "@/server/auth/actor";
 import { emailConfigFromEnv, emailDbFromEnv, emailQueueFromEnv } from "@/server/email/db";
 import { assertFeatureEnabled, isFeatureEnabled } from "@/server/features";
@@ -113,6 +114,7 @@ export async function sendSurveyAction(formData: FormData): Promise<ActionError 
 				createdBy: actor.memberId,
 				title: event?.title ?? detail?.survey.title ?? "this form",
 				closesAt: input.closesAt,
+				estimate: detail ? formatEstimate(estimateSeconds(detail.questions)) : null,
 				kind: "invite",
 				baseUrl: emailConfigFromEnv().publicBaseUrl,
 			});

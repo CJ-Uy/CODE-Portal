@@ -8,7 +8,7 @@ import { feedbackEmailReady, queueFeedbackEmail } from "./email";
 
 const db = drizzle(env.DB, { schema });
 const NOW = new Date("2026-10-16T04:00:00Z");
-const input = { surveyId: "svy_1", createdBy: "mem_admin", title: "GA", closesAt: new Date("2026-10-19T12:00:00Z"), baseUrl: "https://beta.example.org", now: NOW };
+const input = { surveyId: "svy_1", createdBy: "mem_admin", title: "GA", closesAt: new Date("2026-10-19T12:00:00Z"), estimate: "About 2 min", baseUrl: "https://beta.example.org", now: NOW };
 
 function fakeQueue() {
 	const send = vi.fn(async () => {});
@@ -41,7 +41,8 @@ describe("queueFeedbackEmail", () => {
 		const [campaign] = await db.select().from(emailCampaigns);
 		expect(campaign.status).toBe("scheduled");
 		expect(campaign.scheduledAt?.getTime()).toBe(NOW.getTime() + 120_000);
-		expect(campaign.subject).toBe("Last day to share feedback on GA");
+		expect(campaign.subject).toBe("Reminder: share feedback on GA");
+		expect(JSON.stringify(campaign.blocks)).toContain("it takes about 2 min");
 		expect(JSON.stringify(campaign.blocks)).toContain("https://beta.example.org/portal/surveys/svy_1");
 		expect(send).toHaveBeenCalledTimes(1);
 		const calls = send.mock.calls as unknown as [EmailJob, { delaySeconds: number }][];

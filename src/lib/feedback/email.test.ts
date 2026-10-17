@@ -5,7 +5,7 @@ import { FEEDBACK_EMAIL_CATEGORY_ID, feedbackEmailContent } from "./email";
 
 const CLOSES = new Date("2026-10-13T12:00:00Z");
 const WHEN = formatUtc8DateTime(CLOSES);
-const input = { title: "Hackfest", link: "https://x/portal/surveys/s1", closesAt: CLOSES };
+const input = { title: "Hackfest", link: "https://x/portal/surveys/s1", closesAt: CLOSES, estimate: "About 6 min" };
 const texts = (blocks: ReturnType<typeof feedbackEmailContent>["blocks"]) => blocks.flatMap((b) => (b.type === "text" ? [b.props.text] : []));
 
 describe("feedbackEmailContent", () => {
@@ -16,21 +16,30 @@ describe("feedbackEmailContent", () => {
 	it("writes the invite with the exact subject and button", () => {
 		const c = feedbackEmailContent("invite", input);
 		expect(c.subject).toBe("How was Hackfest?");
-		expect(c.preheader).toBe("Two minutes of feedback helps the next one go better.");
+		expect(c.preheader).toBe("Your feedback helps the next one go better.");
 		expect(c.blocks.some((b) => b.type === "button" && b.props.href === "https://x/portal/surveys/s1")).toBe(true);
 		expect(c.blocks.find((b) => b.type === "button")).toMatchObject({ props: { label: "Share feedback" } });
 		expect(texts(c.blocks)).toEqual([
 			"Hi {{first_name}},",
-			"Thanks for coming to Hackfest. We'd like your feedback. It takes about two minutes, and your name isn't attached to your answers.",
+			"Thanks for coming to Hackfest. We'd like your feedback. It takes about 6 min, and your name isn't attached to your answers.",
 			`Open until ${WHEN}.`,
 		]);
 	});
 
-	it("never implies the reminder targets non-responders", () => {
+	it("leaves the time out when the form's estimate is unknown, and never hard-codes one", () => {
+		const invite = feedbackEmailContent("invite", { ...input, estimate: null });
+		expect(texts(invite.blocks)[1]).toBe("Thanks for coming to Hackfest. We'd like your feedback, and your name isn't attached to your answers.");
+		const reminder = feedbackEmailContent("reminder", { ...input, estimate: null });
+		expect(texts(reminder.blocks)[1]).toBe(`If you've already answered, thank you, and you can ignore this. If not, the form closes ${WHEN}.`);
+		for (const c of [invite, reminder]) expect(JSON.stringify(c)).not.toMatch(/two minutes/i);
+	});
+
+	it("never implies the reminder targets non-responders, or that it is the last day", () => {
 		const c = feedbackEmailContent("reminder", input);
-		expect(c.subject).toBe("Last day to share feedback on Hackfest");
+		expect(c.subject).toBe("Reminder: share feedback on Hackfest");
+		expect(JSON.stringify(c)).not.toMatch(/last day/i);
 		expect(JSON.stringify(c.blocks)).toContain("If you've already answered, thank you");
-		expect(texts(c.blocks)[1]).toBe(`If you've already answered, thank you, and you can ignore this. If not, the form closes ${WHEN}.`);
+		expect(texts(c.blocks)[1]).toBe(`If you've already answered, thank you, and you can ignore this. If not, it takes about 6 min, and the form closes ${WHEN}.`);
 		expect(c.blocks.some((b) => b.type === "button" && b.props.label === "Share feedback")).toBe(true);
 	});
 

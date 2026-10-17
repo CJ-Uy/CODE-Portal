@@ -23,13 +23,24 @@ export async function feedbackEmailReady(db: EmailDb): Promise<boolean> {
 export async function queueFeedbackEmail(
 	db: EmailDb,
 	queue: Queue<EmailJob>,
-	input: { surveyId: string; createdBy: string; title: string; closesAt: Date; kind: FeedbackEmailKind; baseUrl: string; now?: Date },
+	input: {
+		surveyId: string;
+		createdBy: string;
+		title: string;
+		closesAt: Date;
+		/** formatEstimate's "About 2 min" for the form's questions, or null to leave the time out. */
+		estimate: string | null;
+		kind: FeedbackEmailKind;
+		baseUrl: string;
+		now?: Date;
+	},
 ): Promise<"queued" | "no_sender"> {
 	const now = input.now ?? new Date();
 	const content = feedbackEmailContent(input.kind, {
 		title: input.title,
 		link: `${input.baseUrl}/portal/surveys/${input.surveyId}`,
 		closesAt: input.closesAt,
+		estimate: input.estimate,
 	});
 	const at = new Date(now.getTime() + SEND_DELAY_MS);
 	const campaign = await createEmailCampaignsRepository(db, createAuditRepository(db)).createFeedbackCampaign({
