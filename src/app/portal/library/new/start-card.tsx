@@ -23,7 +23,7 @@ function Start() {
 	);
 }
 
-export function StartCard({ format, kinds, listId }: { format: LibraryFormat; kinds: LibraryKind[]; listId: string }) {
+export function StartCard({ format, kinds, listId, error }: { format: LibraryFormat; kinds: LibraryKind[]; listId: string; error: string | null }) {
 	const { icon: Icon, heading, blurb } = COPY[format];
 	return (
 		<form action={createDraftAction} className="grid min-w-0 content-start gap-4 rounded-xl border border-border bg-card p-4 sm:p-5">
@@ -52,7 +52,13 @@ export function StartCard({ format, kinds, listId }: { format: LibraryFormat; ki
 			</fieldset>
 			<label className="grid gap-2 text-sm font-medium">
 				Title
-				<Input name="title" required maxLength={200} placeholder="You can change this later" autoComplete="off" />
+				{/* The pattern needs a visible character, so a title of spaces is caught here too. */}
+				<Input name="title" required maxLength={200} pattern={String.raw`.*\S.*`} title="Enter a title" placeholder="You can change this later" autoComplete="off" aria-invalid={Boolean(error)} />
+				{error ? (
+					<span role="alert" className="text-xs font-normal text-destructive">
+						{error}
+					</span>
+				) : null}
 			</label>
 			<Start />
 		</form>

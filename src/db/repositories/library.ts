@@ -152,7 +152,7 @@ export type LibraryRepository = {
 	setConfidentiality(actor: Actor, id: string, value: Exclude<LibraryConfidentiality, "public">): Promise<void>;
 	deleteItem(actor: Actor, id: string): Promise<{ fileKeys: string[] }>;
 	listMine(actor: Actor): Promise<LibraryItem[]>;
-	/** Any member. Active members by name, for crediting a co-author; never their email. At least 2 characters, at most 8 results. */
+	/** Any member. Active members by name, for crediting a co-author; never their email. At least one word of 2 characters, at most 8 results. */
 	searchMembers(actor: Actor, query: string): Promise<{ id: string; name: string }[]>;
 	listComments(actor: Actor, itemId: string): Promise<LibraryCommentView[]>;
 	addComment(actor: Actor, input: { itemId: string; parentId?: string | null; anonymous: boolean; body: string }): Promise<void>;
@@ -573,8 +573,11 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 			const kindChanged = input.kind !== undefined && input.kind !== row.kind;
 			if (kindChanged || input.format !== undefined) {
 				const kind = input.kind ?? row.kind;
+				const format = requireFormat(kind, input.format ?? (kindChanged ? defaultFormat(kind) : row.format));
+				// The body belongs to the format: a live item that switched would lose its file, link or page.
+				if (format !== row.format && row.status !== "draft") throw new Error("Only a draft can change its format.");
 				set.kind = kind;
-				set.format = requireFormat(kind, input.format ?? (kindChanged ? defaultFormat(kind) : row.format));
+				set.format = format;
 			}
 			if (input.title !== undefined) set.title = requireTitle(input.title);
 			if (input.dek !== undefined) set.dek = input.dek.trim();
@@ -783,7 +786,8 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 
 		async searchMembers(_actor, query) {
 			const words = searchWords(query);
-			if (words.join("").length < 2) return [];
+			// One real word is needed: "a b" would match half the roster.
+			if (!words.some((word) => word.length >= 2)) return [];
 			const rows = await db
 				.select({ id: members.id, fullName: members.fullName, name: members.name })
 				.from(members)

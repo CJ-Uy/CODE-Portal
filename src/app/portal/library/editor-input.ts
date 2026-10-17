@@ -1,7 +1,7 @@
-import { z } from "zod";
+import { z, type ZodError } from "zod";
 import { isBlankBlock } from "@/lib/library/block-view";
 import { libraryBlocksSchema, type LibraryBlock } from "@/lib/library/blocks";
-import { allowedFormats, ENGAGEMENT_TYPES, FORMAT_DETAILS, LIBRARY_KINDS, SUBTYPES, type LibraryFormat } from "@/lib/library/taxonomy";
+import { allowedFormats, ENGAGEMENT_TYPES, FORMAT_DETAILS, LIBRARY_KINDS, SUBTYPES, type LibraryFormat, type LibraryStatus } from "@/lib/library/taxonomy";
 
 /** A D1 row tops out near 2 MB; the rest of the row (title, summary, search text, authors) needs room. */
 export const MAX_BLOCKS_BYTES = 1_500_000;
@@ -51,23 +51,29 @@ const authors = z
 	.max(20, "An item can credit at most 20 authors.");
 
 /** Every field but the id is optional: autosave sends only what changed. Anything not listed here (status, owner, flags) cannot be sent. */
-export const saveItemInputSchema = z.object({
-	itemId,
-	kind: kind.optional(),
-	/** Only needed with a kind change, to keep a Book/paper a link or a Case study a file. */
-	format: format.optional(),
-	title: title.optional(),
-	dek: z.string().trim().max(500, "The summary can be at most 500 characters.").optional(),
-	source: z.enum(["code", "member", "outside"]).optional(),
-	authors: authors.optional(),
-	subtype: z.enum([...SUBTYPES.code_document, ...SUBTYPES.reading]).nullable().optional(),
-	formatDetail: z.enum(FORMAT_DETAILS).nullable().optional(),
-	engagementType: z.enum(ENGAGEMENT_TYPES).nullable().optional(),
-	year: year.optional(),
-	url: url.optional(),
-	blocks: blocks.optional(),
-	tagIds: z.array(z.string().min(1).max(80)).max(MAX_TAGS, `An item can have at most ${MAX_TAGS} tags.`).optional(),
-});
+export const saveItemInputSchema = z
+	.object({
+		itemId,
+		kind: kind.optional(),
+		/** Only ever sent with a kind change, to keep a Book/paper a link or a Case study a file. */
+		format: format.optional(),
+		title: title.optional(),
+		dek: z.string().trim().max(500, "The summary can be at most 500 characters.").optional(),
+		source: z.enum(["code", "member", "outside"]).optional(),
+		authors: authors.optional(),
+		subtype: z.enum([...SUBTYPES.code_document, ...SUBTYPES.reading]).nullable().optional(),
+		formatDetail: z.enum(FORMAT_DETAILS).nullable().optional(),
+		engagementType: z.enum(ENGAGEMENT_TYPES).nullable().optional(),
+		year: year.optional(),
+		url: url.optional(),
+		blocks: blocks.optional(),
+		tagIds: z.array(z.string().min(1).max(80)).max(MAX_TAGS, `An item can have at most ${MAX_TAGS} tags.`).optional(),
+	})
+	// A format on its own would swap the body of an item (a file for a link) without a type change to explain it.
+	.refine((value) => value.format === undefined || value.kind !== undefined, {
+		message: "The format only changes together with the type.",
+		path: ["format"],
+	});
 export type SaveItemInput = z.infer<typeof saveItemInputSchema>;
 
 /** The /new forms: `Object.fromEntries(formData)` is enough, extra keys are dropped. */
@@ -127,4 +133,32 @@ export function publishProblems(item: { format: LibraryFormat; title: string; fi
 export function actionErrorMessage(error: unknown, fallback: string): string {
 	const message = error instanceof Error ? error.message : "";
 	return message && message.length < 200 && !/Server Components|digest|fetch failed/i.test(message) ? message : fallback;
+}
+
+type LiveBody = { status: LibraryStatus; format: LibraryFormat; title: string; fileKey: string | null; url: string | null; blocks: LibraryBlock[] };
+
+/**
+ * What an edit would take away from an item that is already out of draft: its title, its link or its page.
+ * A draft may be half-built, so it returns nothing. A live item that was already missing something is not
+ * blamed for it; only a problem the edit introduces counts. saveItemAction refuses the save on any of these.
+ */
+export function editProblems(current: LiveBody, next: { title?: string; url?: string | null; blocks?: LibraryBlock[] }): string[] {
+	if (current.status === "draft") return [];
+	const before = publishProblems(current);
+	const after = publishProblems({
+		format: current.format,
+		title: next.title ?? current.title,
+		fileKey: current.fileKey,
+		url: next.url === undefined ? current.url : next.url,
+		blocks: next.blocks ?? current.blocks,
+	});
+	return after.filter((problem) => !before.includes(problem));
+}
+
+/** Why /new refused a form, as a fixed code: the page turns it into a sentence, so a crafted link cannot put its own words on the page. */
+export type DraftProblem = "title" | "kind" | "format" | "invalid";
+
+export function draftProblem(error: ZodError): DraftProblem {
+	const field = error.issues[0]?.path[0];
+	return field === "title" || field === "kind" || field === "format" ? field : "invalid";
 }

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
+import { isBlankBlock } from "@/lib/library/block-view";
 import type { LibraryBlock } from "@/lib/library/blocks";
 import {
 	allowedFormats,
@@ -25,6 +26,7 @@ import {
 	type LibrarySource,
 	type LibraryStatus,
 } from "@/lib/library/taxonomy";
+import { cn } from "@/lib/utils";
 import { useAutosave } from "@/app/portal/admin/email/use-autosave";
 import { attachFileAction, createTagAction, saveItemAction, searchAuthorsAction } from "../../editor-actions";
 import {
@@ -33,9 +35,18 @@ import {
 	MAX_FILE_BYTES,
 	MAX_TAGS,
 	publishProblems,
-	saveItemInputSchema,
-	type SaveItemInput,
 } from "../../editor-input";
+import {
+	allFieldErrors,
+	buildPatch,
+	describeErrors,
+	fieldError,
+	hasUnsaved,
+	type FieldErrors,
+	type FieldKey,
+	type Fields,
+	type PatchContext,
+} from "../../editor-patch";
 import { ClientDataDialog, PublishDialog } from "./publish-dialog";
 
 export type EditorItem = {
@@ -61,64 +72,12 @@ export type EditorItem = {
 type TagOption = { id: string; name: string; groupName: string };
 type ItemOption = { id: string; title: string };
 
-/** Everything the autosave watches. Year and link stay as typed; they are checked before they are sent. */
-type Fields = {
-	kind: LibraryKind;
-	title: string;
-	dek: string;
-	source: LibrarySource;
-	authors: LibraryAuthor[];
-	subtype: string | null;
-	formatDetail: string | null;
-	engagementType: string | null;
-	year: string;
-	url: string;
-	blocks: LibraryBlock[];
-	tagIds: string[];
-};
-type FieldKey = keyof Fields;
-const FIELD_KEYS: FieldKey[] = ["kind", "title", "dek", "source", "authors", "subtype", "formatDetail", "engagementType", "year", "url", "blocks", "tagIds"];
-
 const SELECT_CLASS = "h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm";
 const ENGAGEMENT_KINDS = new Set<LibraryKind>(["code_document", "template", "case_study"]);
 const YEAR_KINDS = new Set<LibraryKind>(["code_document", "template", "case_study", "reading"]);
 const FILE_LABELS: Record<string, string> = { pdf: "PDF", docx: "Word", pptx: "PowerPoint", xlsx: "Excel" };
 const FILE_ACCEPT = ".pdf,.docx,.pptx,.xlsx";
 const NETWORK_ERROR = "Could not reach the server. Check your connection and try again.";
-
-/** What the schema takes for a field: an empty year or link means none. */
-function inputFor(key: FieldKey, value: Fields[FieldKey]): unknown {
-	return (key === "year" || key === "url") && value === "" ? null : value;
-}
-
-/** The schema's own words for a field, or null when it is fine. The same test decides what autosave sends. */
-function fieldError(key: FieldKey, value: Fields[FieldKey]): string | null {
-	const result = saveItemInputSchema.shape[key].safeParse(inputFor(key, value));
-	return result.success ? null : (result.error.issues[0]?.message ?? "Check this field.");
-}
-
-const same = (key: FieldKey, a: Fields[FieldKey], b: Fields[FieldKey]) => (key === "blocks" ? a === b : JSON.stringify(a) === JSON.stringify(b));
-
-/** What changed since the last save and is valid. A field that is not valid yet is left out (and shown inline), so it cannot hold up the rest. */
-function buildPatch(itemId: string, format: LibraryFormat, now: Fields, saved: Fields) {
-	const patch: Record<string, unknown> = { itemId };
-	const keys: FieldKey[] = [];
-	const errors: Partial<Record<FieldKey, string>> = {};
-	for (const key of FIELD_KEYS) {
-		if (same(key, now[key], saved[key])) continue;
-		const error = fieldError(key, now[key]);
-		if (error) {
-			errors[key] = error;
-			continue;
-		}
-		patch[key] = saveItemInputSchema.shape[key].parse(inputFor(key, now[key]));
-		keys.push(key);
-	}
-	if (keys.length === 0) return { patch: null, keys, errors };
-	// A new kind keeps the format the item already has (a Book/paper stays a link, a Case study a file).
-	if (keys.includes("kind")) patch.format = format;
-	return { patch: patch as SaveItemInput, keys, errors };
-}
 
 const formatBytes = (bytes: number) => (bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`);
 
@@ -327,7 +286,8 @@ function StatusNote({ item, isOwner }: { item: EditorItem; isOwner: boolean }) {
 	else if (item.status === "taken_down") text = `A library moderator took this down${reason ? `: ${reason}` : "."} Edit it to fix the problem. Only a moderator can publish it again.`;
 	else if (reason) text = `A library moderator sent this back: ${reason} Make the changes, then publish again.`;
 	else text = isOwner ? "Only you and library moderators can see this until you publish it." : "A draft. Only its owner and library moderators can see it.";
-	return <p className="min-w-0 rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm [overflow-wrap:anywhere]">{text}</p>;
+	// A moderator's reason is free text: break-all keeps a long unbroken one inside the card.
+	return <p className={cn("min-w-0 rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm", reason ? "break-all" : "[overflow-wrap:anywhere]")}>{text}</p>;
 }
 
 export function ItemEditor({ item, tags, itemPicker, isOwner }: { item: EditorItem; tags: TagOption[]; itemPicker: ItemOption[]; isOwner: boolean }) {
@@ -359,6 +319,12 @@ export function ItemEditor({ item, tags, itemPicker, isOwner }: { item: EditorIt
 		imageBusy.current = busy;
 	}, []);
 
+	// What the editor needs to know about the item it saves into; a live item must keep its link or its page.
+	const ctx: PatchContext = useMemo(
+		() => ({ itemId: item.id, format: item.format, live: item.status !== "draft", had: { link: Boolean(item.url), content: !item.blocks.every(isBlankBlock) } }),
+		[item.id, item.format, item.status, item.url, item.blocks],
+	);
+
 	const value: Fields = useMemo(
 		() => ({ kind, title, dek, source, authors, subtype, formatDetail, engagementType, year, url, blocks, tagIds }),
 		[kind, title, dek, source, authors, subtype, formatDetail, engagementType, year, url, blocks, tagIds],
@@ -376,7 +342,7 @@ export function ItemEditor({ item, tags, itemPicker, isOwner }: { item: EditorIt
 
 	const save = async (now: Fields) => {
 		await settle();
-		const { patch, keys, errors } = buildPatch(item.id, item.format, now, savedRef.current);
+		const { patch, keys, errors } = buildPatch(ctx, now, savedRef.current);
 		if (patch) {
 			const result = await saveItemAction(patch).catch(() => ({ ok: false as const, error: NETWORK_ERROR }));
 			if (!result.ok) {
@@ -385,28 +351,27 @@ export function ItemEditor({ item, tags, itemPicker, isOwner }: { item: EditorIt
 			}
 			savedRef.current = { ...savedRef.current, ...Object.fromEntries(keys.map((key) => [key, now[key]])) } as Fields;
 		}
-		// Title, link and year show their problem next to the field; a page that is too big has no field, so say it here.
-		setSaveError(errors.blocks ?? "");
-		return !errors.blocks;
+		// A field that is not valid was left out of the save. That is not "Saved": say which one, and keep it unsaved.
+		const rejected = describeErrors(errors);
+		setSaveError(rejected.join(" "));
+		return rejected.length === 0;
 	};
 	const { state, flush } = useAutosave(value, save, 2000);
 
 	// Closing the tab inside the two-second window, or mid-upload, would lose work: ask first.
 	useEffect(() => {
 		const warn = (event: BeforeUnloadEvent) => {
-			if (fileBusy.current || imageBusy.current || buildPatch(item.id, item.format, valueRef.current, savedRef.current).patch) event.preventDefault();
+			if (fileBusy.current || imageBusy.current || hasUnsaved(ctx, valueRef.current, savedRef.current)) event.preventDefault();
 		};
 		window.addEventListener("beforeunload", warn);
 		return () => window.removeEventListener("beforeunload", warn);
-	}, [item.id, item.format]);
+	}, [ctx]);
 
-	const errors = {
-		title: fieldError("title", title),
-		year: fieldError("year", year),
-		url: fieldError("url", url),
-	};
+	// A big page is not cheap to check, so it is checked when the page changes, not on every keystroke elsewhere.
+	const blocksError = useMemo(() => fieldError(ctx, "blocks", blocks), [ctx, blocks]);
+	const errors: FieldErrors = useMemo(() => allFieldErrors(ctx, value, blocksError), [ctx, value, blocksError]);
 	const touch = (key: FieldKey) => setTouched((current) => new Set(current).add(key));
-	const shown = (key: "title" | "year" | "url") => (touched.has(key) ? errors[key] : null);
+	const shown = (key: "title" | "year" | "url") => (touched.has(key) ? (errors[key] ?? null) : null);
 
 	const kinds = LIBRARY_KINDS.filter((candidate) => candidate === kind || allowedFormats(candidate).includes(item.format));
 	const subtypes: readonly string[] | null = kind === "code_document" ? SUBTYPES.code_document : kind === "reading" ? SUBTYPES.reading : null;
@@ -459,9 +424,12 @@ export function ItemEditor({ item, tags, itemPicker, isOwner }: { item: EditorIt
 		}
 	};
 
+	// Publishing waits for every field to be valid, and says which one is not. Missing content is reported once, not again as a field error.
 	const problems = [
-		...publishProblems({ format: item.format, title, fileKey: file?.key ?? null, url: errors.url ? null : url.trim() || null, blocks }),
-		...(errors.year ? ["Fix the year."] : []),
+		...publishProblems({ format: item.format, title, fileKey: file?.key ?? null, url: url.trim() || null, blocks }).filter(
+			(problem) => !(errors.title && problem === "Add a title.") && !(errors.url && problem === "Add the link."),
+		),
+		...describeErrors(errors),
 	];
 	const canPublish = isOwner && item.status === "draft";
 	const status = STATUS_BADGE[item.status];
@@ -633,6 +601,7 @@ export function ItemEditor({ item, tags, itemPicker, isOwner }: { item: EditorIt
 					) : (
 						<p className="text-sm text-muted-foreground">No authors yet.</p>
 					)}
+					{authors.some((author) => !author.name.trim()) ? <p className="text-xs text-muted-foreground">A row with no name is not saved.</p> : null}
 					<AuthorPicker disabled={authors.length >= 20} onAdd={(author) => setAuthors((current) => (current.length >= 20 ? current : [...current, author]))} />
 				</Section>
 

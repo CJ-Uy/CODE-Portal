@@ -16,11 +16,20 @@ const PATHS: { format: LibraryFormat; kinds: LibraryKind[] }[] = [
 	{ format: "link", kinds: ["website", "reading"] },
 ];
 
-export default async function NewLibraryItemPage({ searchParams }: { searchParams: Promise<{ list?: string }> }) {
+// /new?problem=... comes back from createDraftAction. Only these codes become words, so a crafted link cannot write its own message.
+const PROBLEMS: Record<string, string> = {
+	title: "Give it a title to start the draft.",
+	kind: "Pick what it is.",
+	format: "That choice does not go with this option. Pick one of the types shown.",
+	invalid: "Something was wrong with that. Check it and try again.",
+};
+
+export default async function NewLibraryItemPage({ searchParams }: { searchParams: Promise<{ list?: string; problem?: string; for?: string }> }) {
 	if (!isFeatureEnabled("library")) notFound();
 	const actor = await getActor();
 	if (!actor) redirect("/signin");
-	const { list } = await searchParams;
+	const { list, problem, for: card } = await searchParams;
+	const problemText = problem && Object.hasOwn(PROBLEMS, problem) ? PROBLEMS[problem] : null;
 
 	// A list is only offered when the member can edit it; the action checks again, this just says so.
 	const repositories = await getRepositories();
@@ -47,7 +56,7 @@ export default async function NewLibraryItemPage({ searchParams }: { searchParam
 			</div>
 			<div className="grid gap-4 md:grid-cols-3">
 				{PATHS.map((path) => (
-					<StartCard key={path.format} format={path.format} kinds={path.kinds} listId={target?.id ?? ""} />
+					<StartCard key={path.format} format={path.format} kinds={path.kinds} listId={target?.id ?? ""} error={problemText && card === path.format ? problemText : null} />
 				))}
 			</div>
 		</div>

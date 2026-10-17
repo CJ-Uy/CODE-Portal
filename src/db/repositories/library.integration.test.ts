@@ -618,6 +618,27 @@ describe("library repository: formats and member search", () => {
 		expect(await repo.updateItem(actors.owner, odd, { title: "Still a page" })).toMatchObject({ format: "page" });
 	});
 
+	it("refuses to change the format of an item once it is out of draft", async () => {
+		const live = await insertItem({ createdBy: "owner", kind: "reading", format: "file", fileKey: "library/x/owner/f.pdf" });
+		await expect(repo.updateItem(actors.owner, live, { format: "link" })).rejects.toThrow(/draft/i);
+		await expect(repo.updateItem(actors.owner, live, { kind: "website" })).rejects.toThrow(/draft/i); // website derives to a link
+		await expect(repo.updateItem(actors.owner, live, { kind: "case_study", format: "page" })).rejects.toThrow(/draft/i);
+		for (const status of ["pending_review", "taken_down"] as const) {
+			const id = await insertItem({ createdBy: "owner", kind: "case_study", format: "page", status });
+			await expect(repo.updateItem(actors.owner, id, { kind: "case_study", format: "file" })).rejects.toThrow(/draft/i);
+		}
+		expect(await repo.getItem(actors.owner, live)).toMatchObject({ kind: "reading", format: "file", fileKey: "library/x/owner/f.pdf" });
+		// The same format with a new type is fine, and so is editing anything else.
+		expect(await repo.updateItem(actors.owner, live, { kind: "template", format: "file" })).toMatchObject({ kind: "template", format: "file" });
+		expect(await repo.updateItem(actors.owner, live, { title: "Renamed", format: "file" })).toMatchObject({ title: "Renamed", format: "file" });
+	});
+
+	it("lets a draft change its format", async () => {
+		const draft = await repo.createDraft(actors.owner, { kind: "reading", title: "Book" });
+		expect(await repo.updateItem(actors.owner, draft.id, { format: "link" })).toMatchObject({ kind: "reading", format: "link" });
+		expect(await repo.updateItem(actors.owner, draft.id, { kind: "website", format: "link" })).toMatchObject({ kind: "website", format: "link" });
+	});
+
 	it("finds active members by name, never by email, and says nothing for short or inactive matches", async () => {
 		const insert = (id: string, fullName: string | null, name: string | null, status: string, email: string) =>
 			env.DB.prepare("INSERT INTO members (id, email, name, full_name, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
@@ -630,6 +651,9 @@ describe("library repository: formats and member search", () => {
 		expect(await repo.searchMembers(actors.other, "cruz")).toEqual([{ id: "m_bea", name: "Bea Cruz" }]);
 		expect(await repo.searchMembers(actors.other, "secret.address")).toEqual([]);
 		expect(await repo.searchMembers(actors.other, "a")).toEqual([]);
+		expect(await repo.searchMembers(actors.other, "a b")).toEqual([]); // two letters in all, but no word
+		expect(await repo.searchMembers(actors.other, "a a")).toEqual([]);
+		expect(await repo.searchMembers(actors.other, "ana r")).toEqual([{ id: "m_ana", name: "Ana Reyes" }]);
 		expect(await repo.searchMembers(actors.other, "100%")).toEqual([]);
 	});
 });

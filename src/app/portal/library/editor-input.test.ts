@@ -3,6 +3,8 @@ import {
 	actionErrorMessage,
 	attachFileInputSchema,
 	createDraftInputSchema,
+	draftProblem,
+	editProblems,
 	isOwnFileKey,
 	MAX_BLOCKS_BYTES,
 	MAX_TAGS,
@@ -172,5 +174,58 @@ describe("actionErrorMessage", () => {
 		expect(actionErrorMessage(new Error("Only a draft can be published."), "Try again.")).toBe("Only a draft can be published.");
 		expect(actionErrorMessage(new Error("An error occurred in the Server Components render. The specific message is omitted."), "Try again.")).toBe("Try again.");
 		expect(actionErrorMessage("boom", "Try again.")).toBe("Try again.");
+	});
+});
+
+describe("a format only travels with a kind", () => {
+	it("refuses a bare format, which would swap a live item's body", () => {
+		expect(saveItemInputSchema.safeParse({ itemId: "lib_1", format: "link" }).success).toBe(false);
+		expect(saveItemInputSchema.safeParse({ itemId: "lib_1", format: "file", title: "T" }).success).toBe(false);
+		expect(saveItemInputSchema.safeParse({ itemId: "lib_1", kind: "reading", format: "link" }).success).toBe(true);
+		expect(saveItemInputSchema.safeParse({ itemId: "lib_1", kind: "reading" }).success).toBe(true);
+	});
+});
+
+describe("editProblems", () => {
+	const link = { status: "published" as const, format: "link" as const, title: "T", fileKey: null, url: "https://x.org", blocks: [] };
+	const page = { status: "published" as const, format: "page" as const, title: "T", fileKey: null, url: null, blocks: [{ id: "a", type: "text" as const, props: { text: "Body" } }] };
+
+	it("refuses to clear the link of a live link item", () => {
+		expect(editProblems(link, { url: null })).toEqual(["Add the link."]);
+		expect(editProblems({ ...link, status: "pending_review" }, { url: null })).toEqual(["Add the link."]);
+		expect(editProblems({ ...link, status: "taken_down" }, { url: null })).toEqual(["Add the link."]);
+	});
+
+	it("allows the same edit on a draft", () => {
+		expect(editProblems({ ...link, status: "draft" }, { url: null })).toEqual([]);
+		expect(editProblems({ ...page, status: "draft" }, { blocks: [] })).toEqual([]);
+	});
+
+	it("refuses to empty a live page, but lets it change", () => {
+		expect(editProblems(page, { blocks: [] })).toEqual(["Write something on the page."]);
+		expect(editProblems(page, { blocks: [{ id: "a", type: "text", props: { text: "  " } }] })).toEqual(["Write something on the page."]);
+		expect(editProblems(page, { blocks: [{ id: "a", type: "text", props: { text: "Other" } }] })).toEqual([]);
+		expect(editProblems(link, { url: "https://y.org" })).toEqual([]);
+		expect(editProblems(link, {})).toEqual([]);
+	});
+
+	it("only blames an edit for what it takes away", () => {
+		expect(editProblems({ ...page, blocks: [] }, { title: "Better" })).toEqual([]);
+		expect(editProblems({ ...link, url: null }, { title: "Better" })).toEqual([]);
+	});
+});
+
+describe("draftProblem", () => {
+	it("turns a refused /new form into a fixed code", () => {
+		const code = (input: object) => {
+			const parsed = createDraftInputSchema.safeParse(input);
+			return parsed.success ? null : draftProblem(parsed.error);
+		};
+		expect(code({ kind: "guide", title: "   " })).toBe("title");
+		expect(code({ kind: "guide", title: "x".repeat(201) })).toBe("title");
+		expect(code({ kind: "podcast", title: "T" })).toBe("kind");
+		expect(code({ kind: "guide", format: "file", title: "T" })).toBe("format");
+		expect(code({ title: "T" })).toBe("kind");
+		expect(code({ kind: "guide", title: "T" })).toBeNull();
 	});
 });

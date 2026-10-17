@@ -84,7 +84,7 @@ function ItemRow({ item, stats, weeks }: { item: LibraryItem; stats: LibraryItem
 			</div>
 
 			{item.moderationReason && (item.status === "taken_down" || item.status === "draft") ? (
-				<p className="min-w-0 rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm [overflow-wrap:anywhere]">
+				<p className="min-w-0 break-all rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm">
 					{item.status === "taken_down" ? "A library moderator took this down: " : "A library moderator sent this back: "}
 					{item.moderationReason}
 				</p>
@@ -99,7 +99,7 @@ function ItemRow({ item, stats, weeks }: { item: LibraryItem; stats: LibraryItem
 						<Stat label="Reading time" value={formatHours(stats.activeSeconds)} />
 						<Stat label="Downloads" value={String(stats.downloads)} />
 					</dl>
-					{weeks ? <WeeklyBars weeks={weeks} /> : null}
+					{weeks ? <WeeklyBars weeks={weeks} /> : <p className="text-xs text-muted-foreground">No reads yet</p>}
 				</div>
 			) : null}
 		</li>

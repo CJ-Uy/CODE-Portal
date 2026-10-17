@@ -10,6 +10,8 @@ import { assertFeatureEnabled } from "@/server/features";
 import {
 	attachFileInputSchema,
 	createDraftInputSchema,
+	draftProblem,
+	editProblems,
 	isOwnFileKey,
 	itemIdInputSchema,
 	publishInputSchema,
@@ -45,7 +47,15 @@ function revalidateItem(itemId: string) {
 export async function createDraftAction(formData: FormData): Promise<void> {
 	const { actor, repositories } = await guard();
 	const parsed = createDraftInputSchema.safeParse(Object.fromEntries(formData));
-	if (!parsed.success) throw new Error(firstIssue(parsed.error));
+	if (!parsed.success) {
+		// Back to the form with a fixed code (not the message), saying which card it was and keeping the list.
+		const back = new URLSearchParams({ problem: draftProblem(parsed.error) });
+		const card = formData.get("format");
+		if (card === "file" || card === "page" || card === "link") back.set("for", card);
+		const list = formData.get("listId");
+		if (typeof list === "string" && /^[A-Za-z0-9._-]{1,80}$/.test(list)) back.set("list", list);
+		redirect(`/portal/library/new?${back}`);
+	}
 	const { kind, format, title, listId } = parsed.data;
 
 	// Anyone may read their own name; the name is only a default and the author can change it.
@@ -75,6 +85,16 @@ export async function saveItemAction(input: SaveItemInput): Promise<Result> {
 	if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
 	const { itemId, tagIds, ...fields } = parsed.data;
 	try {
+		// Past draft an item has readers: never save it into a state publishing would have refused (no link, empty page).
+		if (fields.title !== undefined || fields.url !== undefined || fields.blocks !== undefined) {
+			const current = await repositories.library.getItem(actor, itemId);
+			if (!current?.canEdit) return { ok: false, error: "Library item not found." };
+			const [problem] = editProblems(
+				{ status: current.status, format: current.format, title: current.title, fileKey: current.fileKey, url: current.url, blocks: current.blocksJson },
+				fields,
+			);
+			if (problem) return { ok: false, error: problem };
+		}
 		if (Object.keys(fields).length > 0) await repositories.library.updateItem(actor, itemId, fields);
 		if (tagIds) await repositories.libraryTags.setItemTags(actor, itemId, tagIds);
 		return { ok: true };
