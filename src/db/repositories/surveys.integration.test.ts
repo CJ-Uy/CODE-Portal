@@ -792,7 +792,7 @@ describe("surveys repository on D1", () => {
 		});
 
 		it("releases an invitee's claim when the response write fails, so a retry can answer", async () => {
-			const { db, repo, survey, answer, invited } = await eventForm();
+			const { db, repo, answer, invited } = await eventForm();
 			const failing = Object.assign(Object.create(db), {
 				batch: async () => {
 					throw new Error("D1_ERROR: write failed");
