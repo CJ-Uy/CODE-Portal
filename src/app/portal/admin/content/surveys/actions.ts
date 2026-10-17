@@ -5,10 +5,13 @@ import { redirect } from "next/navigation";
 import { getRepositories } from "@/db";
 import { createFromTemplateInputSchema, saveTemplateInputSchema, updateDraftInputSchema } from "@/db/types";
 import { parseQuestionsField, QUESTIONS_ERROR } from "@/lib/feedback/editor-input";
+import { parseRunningForm, RUNNING_SAVED } from "@/lib/feedback/running-input";
+import { errorLabel } from "@/lib/feedback/safe-log";
 import { parseSendForm } from "@/lib/feedback/send-input";
 import { requireActor } from "@/server/auth/actor";
 import { emailConfigFromEnv, emailDbFromEnv, emailQueueFromEnv } from "@/server/email/db";
 import { assertFeatureEnabled, isFeatureEnabled } from "@/server/features";
+import { getSummarizer } from "@/server/feedback/ai";
 import { queueFeedbackEmail } from "@/server/feedback/email";
 
 const SURVEYS_PATH = "/portal/admin/content/surveys";
@@ -122,6 +125,85 @@ export async function sendSurveyAction(formData: FormData): Promise<ActionError 
 	revalidatePath(SURVEYS_PATH);
 	revalidatePath(`${SURVEYS_PATH}/${input.surveyId}`);
 	redirect(`${SURVEYS_PATH}/${input.surveyId}${notice ? `?notice=${notice}` : ""}`);
+}
+
+// Every survey detail page, whichever form it shows, so the action never trusts a path from the client.
+const DETAIL_PAGES = `${SURVEYS_PATH}/[id]`;
+
+const RUNNING_ERRORS = [
+	"Pick a closing time in the future.",
+	"The reminder was already sent.",
+	"This form has already closed.",
+	"Only a running form can be edited.",
+	"Survey not found.",
+] as const;
+
+export type RunningResult = { ok: string } | { error: string } | null;
+
+// Used with useActionState, so it takes the previous result first. Errors come back as text; the panel keeps its place.
+export async function updateRunningAction(_previous: RunningResult, formData: FormData): Promise<RunningResult> {
+	assertFeatureEnabled("surveys");
+	const actor = await requireActor();
+
+	let parsed;
+	try {
+		parsed = parseRunningForm(formData);
+	} catch {
+		return { error: "Check the closing time and try again." };
+	}
+
+	const repositories = await getRepositories();
+	try {
+		await repositories.surveys.updateRunning(actor, parsed.input);
+	} catch (error) {
+		return { error: safeMessage(error, RUNNING_ERRORS, "Couldn't update the form. Check the survey page before trying again.") };
+	}
+	revalidatePath(DETAIL_PAGES, "page");
+	return { ok: RUNNING_SAVED[parsed.intent] };
+}
+
+const HIDE_ERRORS = ["Answer not found.", "Only comments can be hidden."] as const;
+
+// Hiding only keeps a comment from organizers; admins still see it, marked.
+export async function setAnswerHiddenAction(formData: FormData): Promise<ActionError | undefined> {
+	assertFeatureEnabled("surveys");
+	const actor = await requireActor();
+
+	const answerId = nullableText(formData.get("answerId"));
+	if (!answerId) return { error: "Couldn't find that comment." };
+
+	const repositories = await getRepositories();
+	try {
+		await repositories.surveyResults.setAnswerHidden(actor, { answerId, hidden: formData.get("hidden") === "1" });
+	} catch (error) {
+		return { error: safeMessage(error, HIDE_ERRORS, "Couldn't change that comment. Try again.") };
+	}
+	revalidatePath(DETAIL_PAGES, "page");
+}
+
+// "none": the model ran (or the comments did not support a summary) and nothing reliable came back; an earlier draft stays.
+export type SummaryActionState = { status: "drafted" } | { status: "none" } | { status: "error"; message: string } | null;
+
+// Never logs the thrown error itself: a database or model error can quote the comments being summarized.
+export async function generateSummaryAction(_previous: SummaryActionState, formData: FormData): Promise<SummaryActionState> {
+	assertFeatureEnabled("surveys");
+	const actor = await requireActor();
+
+	const surveyId = nullableText(formData.get("surveyId"));
+	const summarizer = getSummarizer();
+	if (!surveyId || !summarizer) return { status: "error", message: "Summaries aren't available here." };
+
+	const repositories = await getRepositories();
+	let summary;
+	try {
+		summary = await repositories.surveyResults.generateSummary(actor, surveyId, summarizer);
+	} catch (error) {
+		console.error("Feedback summary failed.", { surveyId, error: errorLabel(error) });
+		return { status: "error", message: "Couldn't draft a summary right now. Try again in a minute." };
+	}
+	if (!summary) return { status: "none" };
+	revalidatePath(DETAIL_PAGES, "page");
+	return { status: "drafted" };
 }
 
 const TEMPLATES_PATH = `${SURVEYS_PATH}/templates`;

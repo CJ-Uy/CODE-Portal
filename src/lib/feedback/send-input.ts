@@ -8,15 +8,18 @@ const WINDOW_MS = 72 * 3_600_000;
 // A checkbox that is not ticked is simply absent from the form.
 const checked = (formData: FormData, name: string) => formData.get(name) !== null;
 
+/** A datetime-local value (UTC+8) as a Date. toLocalInput round-trips only a real calendar time, so "2026-02-31T10:00" is refused instead of rolling into March. */
+export function parseLocalClosesAt(raw: string): Date {
+	const closesAt = fromLocalInput(raw);
+	if (!LOCAL_INPUT.test(raw) || toLocalInput(closesAt) !== raw) throw new Error("Pick a closing time.");
+	return closesAt;
+}
+
 /** The send panel posts its choices as a plain form; this turns them into the repository's input and throws when they do not fit. */
 export function parseSendForm(formData: FormData): SendSurveyInput {
 	const mode = formData.get("invite") ?? "suggested";
 	const invite = mode === "count" ? { mode, count: Number(formData.get("count")) } : { mode };
-
-	// toLocalInput round-trips only a real calendar time, so "2026-02-31T10:00" is refused instead of rolling into March.
-	const raw = String(formData.get("closesAt") ?? "");
-	const closesAt = fromLocalInput(raw);
-	if (!LOCAL_INPUT.test(raw) || toLocalInput(closesAt) !== raw) throw new Error("Pick a closing time.");
+	const closesAt = parseLocalClosesAt(String(formData.get("closesAt") ?? ""));
 
 	return sendSurveyInputSchema.parse({
 		surveyId: formData.get("surveyId"),
