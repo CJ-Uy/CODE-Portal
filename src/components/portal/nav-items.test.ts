@@ -4,6 +4,7 @@ import { primaryNav, secondaryNav, visibleMobileNav, visiblePrimaryNav, visibleS
 
 it("keeps released tools above Profile and every visible destination reachable on mobile", () => {
 	expect(primaryNav.map((item) => item.id)).toEqual(["overview", "calendar", "retention", "ments", "links", "mail", "notifications", "profile"]);
+	expect(secondaryNav.map((item) => [item.id, item.feature])).toEqual([["library", "library"], ["announcements", "announcements"], ["guides", undefined]]);
 	for (let mask = 0; mask < 64; mask++) {
 		const flags = Object.fromEntries(["retention", "ments", "email", "notifications", "library", "announcements"].map((key, index) => [key, Boolean(mask & (1 << index))])) as FeatureFlags;
 		const desktop = [...visiblePrimaryNav(flags), ...visibleSecondaryNav(flags)];
