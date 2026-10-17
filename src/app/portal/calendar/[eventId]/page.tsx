@@ -15,9 +15,11 @@ import { EventShareBar } from "./event-share-bar";
 import { loadEventTypes } from "@/lib/event-type-load";
 import { answerLabel, type EventSignupAnswers, type EventSignupField } from "@/lib/event-signup-form";
 import { requireActor } from "@/server/auth/actor";
+import { isFeatureEnabled } from "@/server/features";
 import { buildAwardEditorRows } from "./award-editor-input";
 import { EventManagePanel, type SignupResponseRow } from "./event-manage-panel";
 import { EventSignupPanel } from "./event-signup-panel";
+import { FeedbackCard } from "./feedback-card";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +43,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 		? managed.myRole === "owner" || managed.myRole === "admin" || managed.canModerate
 		: false;
 	const canViewSignupResponses = event.rsvpResponsesPublic || canManageSignupResponses;
-	const [pointTypeLoad, staff, attendance, invites, signups, terms] = await Promise.all([
+	const [pointTypeLoad, staff, attendance, invites, signups, terms, feedback] = await Promise.all([
 		managed?.canSetPoints
 			? repositories.pointTypes
 					.list()
@@ -53,6 +55,10 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 		managed && isStaff ? repositories.events.listInvites(actor, eventId).catch(() => []) : Promise.resolve([]),
 		canViewSignupResponses ? repositories.events.listSignupResponses(actor, eventId).catch(() => []) : Promise.resolve([]),
 		managed && isStaff ? repositories.retention.listTerms(actor).catch(() => []) : Promise.resolve([]),
+		// Staff give feedback through the debrief, so the member card is for everyone else.
+		!isStaff && isFeatureEnabled("surveys")
+			? repositories.surveys.openFeedbackForEvent(actor, eventId).catch(() => null)
+			: Promise.resolve(null),
 	]);
 	const awardsUnavailable = !awardLoad.ok || !pointTypeLoad.ok;
 	const awardRows =
@@ -151,6 +157,10 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 					{awardLoad.ok ? <AwardChips awards={awardLoad.rows} /> : <p className="text-sm text-muted-foreground">Points unavailable</p>}
 				</div>
 			</header>
+
+			{feedback && (feedback.state === "open" || feedback.state === "answered") ? (
+				<FeedbackCard surveyId={feedback.surveyId} state={feedback.state} />
+			) : null}
 
 			{/* An informational event has no signup and no check-in, so the whole interaction column
 			    goes away rather than rendering controls that the repository would reject. */}
