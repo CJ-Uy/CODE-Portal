@@ -1,4 +1,5 @@
 import { env } from "cloudflare:test";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { beforeEach, describe, expect, it } from "vitest";
 import * as schema from "@/db/schema";
@@ -16,6 +17,12 @@ const tags = createLibraryTagsRepository(db, audit);
 async function auditRows() {
 	const rows = await db.select().from(auditLogs);
 	return rows.map((row) => ({ action: row.action, category: row.category, targetId: row.targetId, detail: row.detail }));
+}
+
+/** Adds `count` published items already carrying `tagId`, each with a deliberately stale index entry. */
+async function tagManyItems(tagId: string, count: number): Promise<void> {
+	for (let i = 0; i < count; i++) await insertItem({ id: `lib_many_${i}`, searchText: "stale" });
+	await db.run(sql`INSERT INTO library_item_tags (item_id, tag_id) SELECT id, ${tagId} FROM library_items`);
 }
 
 beforeEach(async () => {
@@ -109,16 +116,47 @@ describe("library tags repository", () => {
 		expect((await tags.listTags())[0].itemCount).toBe(2);
 	});
 
-	it("merge handles more items than one D1 statement can bind", async () => {
+	it("merge of a tag on 120 items retags and re-indexes all of them in one go", async () => {
 		const from = await tags.createTag(actors.other, "Many");
 		const into = await tags.createTag(actors.other, "Plenty");
-		for (let i = 0; i < 120; i++) {
-			const id = await insertItem({});
-			await db.insert(libraryItemTags).values({ itemId: id, tagId: from.id });
-		}
+		await tagManyItems(from.id, 120);
 		await tags.mergeTags(actors.moderator, from.id, into.id);
 		expect((await tags.listTags()).map((t) => [t.name, t.itemCount])).toEqual([["Plenty", 120]]);
-	}, 30_000);
+		expect((await repo.search(actors.other, { q: "plenty" })).total).toBe(120);
+		expect((await repo.search(actors.other, { q: "stale" })).total).toBe(0);
+		expect((await repo.search(actors.other, { q: "many" })).total).toBe(0);
+	});
+
+	it("delete of a tag on 120 items re-indexes all of them without the tag name", async () => {
+		const doomed = await tags.createTag(actors.other, "Doomed");
+		await tagManyItems(doomed.id, 120);
+		expect((await tags.listTags())[0].itemCount).toBe(120);
+		await tags.deleteTag(actors.moderator, doomed.id);
+		expect((await repo.search(actors.other, { q: "doomed" })).total).toBe(0);
+		expect((await repo.search(actors.other, { q: "stale" })).total).toBe(0);
+		expect((await repo.search(actors.other, { q: "untitled" })).total).toBe(120);
+	});
+
+	it("rename of a tag on 120 items re-indexes all of them under the new name", async () => {
+		const t = await tags.createTag(actors.other, "Before");
+		await tagManyItems(t.id, 120);
+		await tags.renameTag(actors.moderator, t.id, "After");
+		expect((await repo.search(actors.other, { q: "after" })).total).toBe(120);
+		expect((await repo.search(actors.other, { q: "before" })).total).toBe(0);
+	});
+
+	it("caps an item at 40 tags", async () => {
+		const made: string[] = [];
+		for (let i = 0; i < 41; i++) made.push((await tags.createTag(actors.owner, `Cap ${i}`)).id);
+		const id = await insertItem({ createdBy: "owner" });
+		await expect(tags.setItemTags(actors.owner, id, made)).rejects.toThrow("An item can have at most 40 tags.");
+		expect((await repo.getItem(actors.owner, id))?.tags).toEqual([]);
+		await tags.setItemTags(actors.owner, id, made.slice(0, 40));
+		expect((await repo.getItem(actors.owner, id))?.tags).toHaveLength(40);
+		// Repeats collapse before the cap is checked.
+		await tags.setItemTags(actors.owner, id, Array.from({ length: 50 }, () => made[0]));
+		expect((await repo.getItem(actors.owner, id))?.tags).toHaveLength(1);
+	});
 
 	it("merge refuses a tag into itself or a missing tag", async () => {
 		const a = await tags.createTag(actors.other, "Solo");

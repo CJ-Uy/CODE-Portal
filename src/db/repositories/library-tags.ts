@@ -5,7 +5,7 @@ import { createId } from "@/lib/ids";
 import type { Actor } from "@/server/auth/permissions";
 import { can } from "@/server/auth/permissions";
 import type { AuditRepository } from "./audit";
-import { refreshSearchText } from "./library";
+import { planSearchTextRefresh, refreshSearchTextMany } from "./library";
 import type { Db } from "./library";
 import { canEditItem } from "./library-access";
 
@@ -26,6 +26,8 @@ export type LibraryTagsRepository = {
 };
 
 const MAX_NAME_LENGTH = 60;
+// Also keeps the tag-link insert (2 binds per row) under D1's 100-parameter limit per statement.
+const MAX_TAGS_PER_ITEM = 40;
 const DEFAULT_GROUP = "Ungrouped";
 
 // Plain SQL for the same reason as library.ts: drizzle strips table prefixes from columns in a single-table select list.
@@ -65,12 +67,6 @@ export function createLibraryTagsRepository(db: Db, audit: AuditRepository): Lib
 		return rows.map((row) => row.id);
 	}
 
-	// ponytail: one refresh (3 queries) per affected item, run in sequence. Fine for a few hundred items per tag;
-	// batch the work or queue it if a single tag ever spans thousands.
-	async function refreshAll(itemIds: string[]): Promise<void> {
-		for (const id of itemIds) await refreshSearchText(db, id);
-	}
-
 	async function audited(actor: Actor, action: string, tagId: string, detail: string): Promise<void> {
 		await audit.record(actor, { action, targetType: "library_tag", targetId: tagId, category: "library", detail });
 	}
@@ -96,6 +92,7 @@ export function createLibraryTagsRepository(db: Db, audit: AuditRepository): Lib
 			const [item] = await db.select().from(libraryItems).where(eq(libraryItems.id, itemId)).limit(1);
 			if (!item || !canEditItem(actor, item)) throw new Error("Library item not found.");
 			const unique = [...new Set(tagIds)];
+			if (unique.length > MAX_TAGS_PER_ITEM) throw new Error(`An item can have at most ${MAX_TAGS_PER_ITEM} tags.`);
 			if (unique.length > 0) {
 				const found = await db.select({ id: libraryTags.id }).from(libraryTags).where(inArray(libraryTags.id, unique));
 				if (found.length !== unique.length) throw new Error("Unknown tag.");
@@ -105,7 +102,7 @@ export function createLibraryTagsRepository(db: Db, audit: AuditRepository): Lib
 			if (unique.length === 0) await clear;
 			else await db.batch([clear, db.insert(libraryItemTags).values(unique.map((tagId) => ({ itemId, tagId })))]);
 			await db.update(libraryItems).set({ updatedAt: new Date() }).where(eq(libraryItems.id, itemId));
-			await refreshSearchText(db, itemId);
+			await refreshSearchTextMany(db, [itemId]);
 		},
 
 		async renameTag(actor, tagId, name) {
@@ -119,8 +116,8 @@ export function createLibraryTagsRepository(db: Db, audit: AuditRepository): Lib
 			}
 			await db.update(libraryTags).set({ name: clean, slug }).where(eq(libraryTags.id, tagId));
 			await audited(actor, "library:tag_rename", tagId, `${tag.name} -> ${clean}`);
-			// Tag names are part of every tagged item's search text.
-			await refreshAll(await itemIdsWith(tagId));
+			// Tag names are part of every tagged item's search text. Renaming again to the same name retries a failed refresh.
+			await refreshSearchTextMany(db, await itemIdsWith(tagId));
 		},
 
 		async regroupTag(actor, tagId, groupName) {
@@ -138,9 +135,11 @@ export function createLibraryTagsRepository(db: Db, audit: AuditRepository): Lib
 			const from = await loadTag(fromId);
 			const into = await loadTag(intoId);
 			const affected = await itemIdsWith(fromId);
+			// The search texts are planned BEFORE the tag disappears and committed in the same batch: once `from`
+			// is gone `affected` could not be recovered, so a refresh after the commit could never be retried.
+			const refresh = await planSearchTextRefresh(db, affected, (names) => [...new Set(names.map((n) => (n === from.name ? into.name : n)))]);
 			// Insert-from-select (one statement, however many items) skips items that already carry both tags.
 			// D1 allows 100 bound parameters per statement, so a values() list would cap a merge at 50 items.
-			// All three statements commit together.
 			await db.batch([
 				db
 					.insert(libraryItemTags)
@@ -153,18 +152,23 @@ export function createLibraryTagsRepository(db: Db, audit: AuditRepository): Lib
 					.onConflictDoNothing(),
 				db.delete(libraryItemTags).where(eq(libraryItemTags.tagId, fromId)),
 				db.delete(libraryTags).where(eq(libraryTags.id, fromId)),
+				...refresh,
 			]);
 			await audited(actor, "library:tag_merge", intoId, `${from.name} (${fromId}) -> ${into.name}; items=${affected.length}`);
-			await refreshAll(affected);
 		},
 
 		async deleteTag(actor, tagId) {
 			requireModerator(actor);
 			const tag = await loadTag(tagId);
 			const affected = await itemIdsWith(tagId);
-			await db.batch([db.delete(libraryItemTags).where(eq(libraryItemTags.tagId, tagId)), db.delete(libraryTags).where(eq(libraryTags.id, tagId))]);
+			// Planned before the delete and committed with it, for the same reason as mergeTags.
+			const refresh = await planSearchTextRefresh(db, affected, (names) => names.filter((n) => n !== tag.name));
+			await db.batch([
+				db.delete(libraryItemTags).where(eq(libraryItemTags.tagId, tagId)),
+				db.delete(libraryTags).where(eq(libraryTags.id, tagId)),
+				...refresh,
+			]);
 			await audited(actor, "library:tag_delete", tagId, `${tag.name}; items=${affected.length}`);
-			await refreshAll(affected);
 		},
 	};
 }

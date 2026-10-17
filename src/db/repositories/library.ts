@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import type { InferInsertModel, InferSelectModel, SQL } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import {
 	libraryComments,
@@ -187,27 +188,66 @@ function storageKeys(item: Pick<LibraryItem, "fileKey" | "blocksJson">): string[
 }
 
 /** searchText = lower(title, summary, file code, authors, tags, block text, extracted text up to 200k chars). */
-export async function refreshSearchText(db: Db, itemId: string): Promise<void> {
-	const [item] = await db.select().from(libraryItems).where(eq(libraryItems.id, itemId)).limit(1);
-	if (!item) return;
-	const tagRows = await db
-		.select({ name: libraryTags.name })
-		.from(libraryItemTags)
-		.innerJoin(libraryTags, eq(libraryTags.id, libraryItemTags.tagId))
-		.where(eq(libraryItemTags.itemId, itemId));
-	const searchText = [
+function buildSearchText(item: LibraryItem, tagNames: string[]): string {
+	return [
 		item.title,
 		item.dek,
 		item.fileCode,
 		...item.authorsJson.map((author) => author.name),
-		...tagRows.map((tag) => tag.name),
+		...tagNames,
 		blocksToPlainText(item.blocksJson),
 		item.extractedText.slice(0, EXTRACTED_TEXT_INDEX_CAP),
 	]
 		.filter(Boolean)
 		.join("\n")
 		.toLowerCase();
-	await db.update(libraryItems).set({ searchText }).where(eq(libraryItems.id, itemId));
+}
+
+// Each chunk binds one id per item; D1 allows 100 bound parameters per statement.
+const REFRESH_CHUNK = 40;
+
+/**
+ * The searchText updates for these items, built but not run, so a caller can commit them in the same
+ * `db.batch` as the change that makes them necessary. `rewriteTagNames` lets that caller pass the tag names
+ * the items WILL have (a merge or delete that has not been applied yet). Unknown ids are skipped.
+ */
+export async function planSearchTextRefresh(
+	db: Db,
+	itemIds: string[],
+	rewriteTagNames?: (names: string[]) => string[],
+): Promise<BatchItem<"sqlite">[]> {
+	const ids = [...new Set(itemIds)];
+	const updates: BatchItem<"sqlite">[] = [];
+	for (let start = 0; start < ids.length; start += REFRESH_CHUNK) {
+		const chunk = ids.slice(start, start + REFRESH_CHUNK);
+		const [items, tagRows] = await Promise.all([
+			db.select().from(libraryItems).where(inArray(libraryItems.id, chunk)),
+			db
+				.select({ itemId: libraryItemTags.itemId, name: libraryTags.name })
+				.from(libraryItemTags)
+				.innerJoin(libraryTags, eq(libraryTags.id, libraryItemTags.tagId))
+				.where(inArray(libraryItemTags.itemId, chunk)),
+		]);
+		const namesByItem = new Map<string, string[]>();
+		for (const row of tagRows) namesByItem.set(row.itemId, [...(namesByItem.get(row.itemId) ?? []), row.name]);
+		for (const item of items) {
+			const names = namesByItem.get(item.id) ?? [];
+			const searchText = buildSearchText(item, rewriteTagNames ? rewriteTagNames(names) : names);
+			updates.push(db.update(libraryItems).set({ searchText }).where(eq(libraryItems.id, item.id)));
+		}
+	}
+	return updates;
+}
+
+// ponytail: the new texts are held in memory together (up to ~200k chars per item). Fine for hundreds of items; commit per chunk if a tag ever spans thousands.
+/** Recomputes searchText for many items: chunked reads, then every update in one `db.batch`. */
+export async function refreshSearchTextMany(db: Db, itemIds: string[]): Promise<void> {
+	const [first, ...rest] = await planSearchTextRefresh(db, itemIds);
+	if (first) await db.batch([first, ...rest]);
+}
+
+export async function refreshSearchText(db: Db, itemId: string): Promise<void> {
+	await refreshSearchTextMany(db, [itemId]);
 }
 
 // Written out in plain SQL on purpose: drizzle strips table prefixes from columns inside a single-table

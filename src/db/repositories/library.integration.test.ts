@@ -16,7 +16,7 @@ import {
 } from "@/db/schema";
 import type { LibraryBlock } from "@/lib/library/blocks";
 import { createAuditRepository } from "./audit";
-import { createLibraryRepository } from "./library";
+import { createLibraryRepository, refreshSearchTextMany } from "./library";
 import type { LibraryModerationEvent } from "./library";
 import { actors, insertItem, resetLibrary, seedMembers } from "./library-test-fixtures";
 
@@ -526,6 +526,26 @@ describe("library repository: search", () => {
 		});
 		expect(card).not.toHaveProperty("blocksJson");
 		expect(card).not.toHaveProperty("searchText");
+	});
+});
+
+describe("library repository: search text refresh", () => {
+	it("refreshSearchTextMany re-indexes every item across chunks and skips unknown or repeated ids", async () => {
+		const ids: string[] = [];
+		for (let i = 0; i < 90; i++) ids.push(await insertItem({ title: `Doc ${i}`, searchText: "stale" }));
+		const tag = await addTag("tg_cohort", "Cohort");
+		await tagItem(ids[89], tag);
+		await refreshSearchTextMany(db, [...ids, ...ids.slice(0, 5), "lib_missing"]);
+		const rows = await db.select({ id: libraryItems.id, text: libraryItems.searchText }).from(libraryItems);
+		expect(rows).toHaveLength(90);
+		for (const row of rows) expect(row.text).not.toContain("stale");
+		expect(rows.find((row) => row.id === ids[89])?.text).toBe("doc 89\ncohort");
+		expect(rows.find((row) => row.id === ids[0])?.text).toBe("doc 0");
+	});
+
+	it("refreshSearchTextMany with nothing to do is a no-op", async () => {
+		await refreshSearchTextMany(db, []);
+		await refreshSearchTextMany(db, ["lib_missing"]);
 	});
 });
 
