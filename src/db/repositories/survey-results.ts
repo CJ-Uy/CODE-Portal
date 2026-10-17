@@ -4,7 +4,7 @@ import type * as schema from "@/db/schema";
 import { crsEvents, eventDebriefs, surveyAnswers, surveyAssignments, surveyQuestions, surveyResponses, surveys } from "@/db/schema";
 import type { EventFeedbackRow, MetricKey, ResultsQuestion, Survey, SurveyResults } from "@/db/types";
 import { COMPARE_MIN_EVENTS, COMPARE_MIN_RESPONSES, effectiveStatus, RESULTS_MIN_RESPONSES, scaleSummary } from "@/lib/feedback/stats";
-import type { FeedbackSummary } from "@/lib/feedback/summary";
+import { buildSummaryInput, type FeedbackSummary, parseSummary, SUMMARY_SYSTEM_PROMPT, type Summarizer } from "@/lib/feedback/summary";
 import { topTerms } from "@/lib/feedback/words";
 import type { Actor } from "@/server/auth/permissions";
 import { can } from "@/server/auth/permissions";
@@ -30,6 +30,7 @@ export type SurveyResultsRepository = {
 	getOrganizerResults(actor: Actor, eventId: string, now?: Date): Promise<OrganizerResults | null>;
 	setAnswerHidden(actor: Actor, input: { answerId: string; hidden: boolean }): Promise<void>;
 	feedbackForEvents(actor: Actor, eventIds: string[]): Promise<Map<string, EventFeedbackRow>>;
+	generateSummary(actor: Actor, surveyId: string, summarizer: Summarizer): Promise<FeedbackSummary | null>;
 };
 
 type ScaleQuestion = Extract<ResultsQuestion, { kind: "scale" }>;
@@ -298,10 +299,58 @@ export function createSurveyResultsRepository(db: Db, audit: AuditRepository): S
 			}
 			return rows;
 		},
+
+		async generateSummary(actor, surveyId, summarizer) {
+			if (!can(actor, "survey:configure")) throw new Error("Not authorized to summarize survey comments.");
+			const [survey] = await db.select({ id: surveys.id }).from(surveys).where(eq(surveys.id, surveyId)).limit(1);
+			if (!survey) throw new Error("Survey not found.");
+
+			const { responses } = await surveyCounts(db, [surveyId]);
+			const bySource = responses.get(surveyId) ?? { invited: 0, walk_in: 0 };
+			const responseCount = bySource.invited + bySource.walk_in;
+			// The same anonymity floor as the results page, which would not show this summary anyway.
+			if (responseCount < RESULTS_MIN_RESPONSES) return null;
+
+			const rows = await db
+				.select({ questionId: surveyAnswers.questionId, prompt: surveyQuestions.prompt, value: surveyAnswers.value })
+				.from(surveyAnswers)
+				.innerJoin(surveyQuestions, eq(surveyQuestions.id, surveyAnswers.questionId))
+				.where(and(eq(surveyQuestions.surveyId, surveyId), eq(surveyQuestions.type, "text")))
+				// Question order, then random answer ids, as in buildResults, so the model input carries no submission order.
+				.orderBy(asc(surveyQuestions.position), asc(surveyAnswers.id));
+			const groups = new Map<string, { prompt: string; answers: string[] }>();
+			for (const row of rows) {
+				const group = groups.get(row.questionId);
+				if (group) group.answers.push(row.value);
+				else groups.set(row.questionId, { prompt: row.prompt, answers: [row.value] });
+			}
+
+			const input = buildSummaryInput([...groups.values()]);
+			if (input.total === 0) return null;
+
+			const raw = await summarizer({ system: SUMMARY_SYSTEM_PROMPT, user: input.text });
+			const themes = parseSummary(raw, rows.map((row) => row.value));
+			// Nothing reliable came back: keep whatever summary is already stored.
+			if (themes.length === 0) return null;
+
+			const summary: FeedbackSummary = { themes, usedComments: input.used, totalComments: input.total };
+			await db
+				.update(surveys)
+				.set({ aiSummaryJson: JSON.stringify(summary), aiSummaryAt: new Date(), aiSummaryResponseCount: responseCount })
+				.where(eq(surveys.id, surveyId));
+			await audit.record(actor, { action: "survey:summary", targetType: "survey", targetId: surveyId, category: "survey" });
+			return summary;
+		},
 	};
 }
 
 export function createUnavailableSurveyResultsRepository(): SurveyResultsRepository {
 	const unavailable = () => Promise.reject(new Error("Survey results are not available through this repository adapter."));
-	return { getResults: unavailable, getOrganizerResults: unavailable, setAnswerHidden: unavailable, feedbackForEvents: unavailable };
+	return {
+		getResults: unavailable,
+		getOrganizerResults: unavailable,
+		setAnswerHidden: unavailable,
+		feedbackForEvents: unavailable,
+		generateSummary: unavailable,
+	};
 }

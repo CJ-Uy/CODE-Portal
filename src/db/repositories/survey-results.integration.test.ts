@@ -4,6 +4,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { beforeEach, describe, expect, it } from "vitest";
 import * as schema from "@/db/schema";
 import type { MetricKey, ResultsQuestion, SurveySource } from "@/db/types";
+import type { Summarizer } from "@/lib/feedback/summary";
 import type { Actor } from "@/server/auth/permissions";
 import { createAuditRepository } from "./audit";
 import { createSurveyResultsRepository } from "./survey-results";
@@ -396,5 +397,119 @@ describe("survey results on D1", () => {
 		expect(rows.get("evt_4")).toEqual({ surveyId: null, overall: null, responses: 0, invitedRate: null, hasDebrief: true });
 		expect(rows.has("evt_none")).toBe(false);
 		expect(rows.size).toBe(4);
+	});
+	describe("generateSummary", () => {
+		const themeJson = (quotes: string[]) =>
+			JSON.stringify({ themes: [{ label: "Venue heat", description: "Hot room.", share: "several", quotes }] });
+
+		async function seedComments() {
+			await seedSurvey({
+				id: "srv_1",
+				eventId: "evt_1",
+				questions: [
+					{ id: "q1", type: "scale", metricKey: "overall" },
+					{ id: "q2", type: "text" },
+					{ id: "q3", type: "text" },
+				],
+			});
+			await respond("srv_1", "invited", { q1: "5", q2: "The venue too hot for a workshop", q3: "More pizza" });
+			await respond("srv_1", "invited", { q1: "4", q2: "Loved the speakers" });
+			await respond("srv_1", "invited", { q1: "4", q3: "Start on time" });
+			await respond("srv_1", "walk_in", { q1: "3", q2: "   " });
+		}
+
+		it("stores a grounded summary from a fake summarizer", async () => {
+			await seedComments();
+			let received: { system: string; user: string } | undefined;
+			let calls = 0;
+			const fake: Summarizer = async (prompt) => {
+				calls += 1;
+				received = prompt;
+				return themeJson(["venue too hot"]);
+			};
+
+			const summary = await results.generateSummary(admin, "srv_1", fake);
+
+			expect(calls).toBe(1);
+			expect(summary).toEqual({
+				themes: [{ label: "Venue heat", description: "Hot room.", share: "several", quotes: ["venue too hot"] }],
+				usedComments: 4,
+				totalComments: 4,
+			});
+			// Comments go out grouped under their question prompt, and nothing else does.
+			expect(received?.user).toContain("## Prompt q2");
+			expect(received?.user).toContain("## Prompt q3");
+			expect(received?.user).toContain("The venue too hot for a workshop");
+			expect(received?.user).not.toContain("Prompt q1");
+
+			const view = await results.getResults(admin, "srv_1", { filter: "all" }, NOW);
+			expect(view.summary).toMatchObject({ usedComments: 4, totalComments: 4, responseCountAtGeneration: 4 });
+			expect(view.summary?.themes).toHaveLength(1);
+			expect(view.summary?.generatedAt).toBeInstanceOf(Date);
+
+			const audited = await env.DB.prepare("SELECT action, target_type, target_id FROM audit_logs WHERE action = 'survey:summary'").all();
+			expect(audited.results).toEqual([{ action: "survey:summary", target_type: "survey", target_id: "srv_1" }]);
+		});
+
+		it("replaces an earlier summary on regenerate", async () => {
+			await seedComments();
+			await results.generateSummary(admin, "srv_1", async () => themeJson(["venue too hot"]));
+			await respond("srv_1", "invited", { q1: "5", q2: "Parking was hard" });
+
+			await results.generateSummary(admin, "srv_1", async () => themeJson(["parking was hard"]));
+
+			const view = await results.getResults(admin, "srv_1", { filter: "all" }, NOW);
+			expect(view.summary).toMatchObject({ responseCountAtGeneration: 5, totalComments: 5 });
+			expect(view.summary?.themes.map((theme) => theme.quotes)).toEqual([["parking was hard"]]);
+		});
+
+		it("stores nothing when the model invents quotes", async () => {
+			await seedComments();
+
+			expect(await results.generateSummary(admin, "srv_1", async () => themeJson(["the food was cold"]))).toBeNull();
+			expect(await results.generateSummary(admin, "srv_1", async () => "not json at all")).toBeNull();
+
+			expect((await results.getResults(admin, "srv_1", { filter: "all" }, NOW)).summary).toBeNull();
+			const audited = await env.DB.prepare("SELECT COUNT(*) AS n FROM audit_logs WHERE action = 'survey:summary'").first<{ n: number }>();
+			expect(audited?.n).toBe(0);
+		});
+
+		it("keeps an earlier summary when a regenerate yields nothing", async () => {
+			await seedComments();
+			await results.generateSummary(admin, "srv_1", async () => themeJson(["venue too hot"]));
+
+			expect(await results.generateSummary(admin, "srv_1", async () => themeJson(["invented"]))).toBeNull();
+
+			const view = await results.getResults(admin, "srv_1", { filter: "all" }, NOW);
+			expect(view.summary?.themes[0].quotes).toEqual(["venue too hot"]);
+		});
+
+		it("does not call the model below the results threshold or without comments", async () => {
+			let calls = 0;
+			const fake: Summarizer = async () => {
+				calls += 1;
+				return themeJson(["x"]);
+			};
+			await seedSurvey({ id: "srv_few", questions: [{ id: "q1", type: "text" }] });
+			await respondMany("srv_few", "q1", "invited", ["venue too hot", "fine"]);
+			await seedSurvey({ id: "srv_none", questions: [{ id: "q2", type: "scale" }, { id: "q3", type: "text" }] });
+			await respondMany("srv_none", "q2", "invited", ["5", "4", "4"]);
+
+			expect(await results.generateSummary(admin, "srv_few", fake)).toBeNull();
+			expect(await results.generateSummary(admin, "srv_none", fake)).toBeNull();
+			expect(calls).toBe(0);
+		});
+
+		it("denies organizers and members, and reports a missing survey", async () => {
+			await seedComments();
+			const fake: Summarizer = async () => {
+				throw new Error("must not be called");
+			};
+
+			await expect(results.generateSummary(owner, "srv_1", fake)).rejects.toThrow("Not authorized");
+			await expect(results.generateSummary(staffAdmin, "srv_1", fake)).rejects.toThrow("Not authorized");
+			await expect(results.generateSummary(attendee, "srv_1", fake)).rejects.toThrow("Not authorized");
+			await expect(results.generateSummary(admin, "srv_missing", fake)).rejects.toThrow("Survey not found");
+		});
 	});
 });
