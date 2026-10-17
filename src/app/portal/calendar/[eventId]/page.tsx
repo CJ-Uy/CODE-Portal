@@ -18,6 +18,7 @@ import { loadEventTypes } from "@/lib/event-type-load";
 import { answerLabel, type EventSignupAnswers, type EventSignupField } from "@/lib/event-signup-form";
 import { requireActor } from "@/server/auth/actor";
 import { isFeatureEnabled } from "@/server/features";
+import { canViewFeedbackArchive } from "@/server/feedback/archive-access";
 import { buildAwardEditorRows } from "./award-editor-input";
 import { EventManagePanel, type SignupResponseRow } from "./event-manage-panel";
 import { EventSignupPanel } from "./event-signup-panel";
@@ -260,6 +261,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 					typesUnavailable={!typeLoad.ok}
 					awardRows={awardRows}
 					awardsUnavailable={awardsUnavailable}
+					canViewArchive={canViewFeedbackArchive(actor)}
 				/>
 			) : null}
 

@@ -10,6 +10,7 @@ import { utc8Parts } from "@/lib/date-slots";
 import { requireActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
 import { isFeatureEnabled } from "@/server/features";
+import { canViewFeedbackArchive } from "@/server/feedback/archive-access";
 import { CreateEventSheet } from "./create-event-sheet";
 import { CreateEventSkeleton, EventsListSkeleton, MonthGridSkeleton } from "./calendar-skeletons";
 import { EventsList } from "./events-list";
@@ -134,7 +135,7 @@ async function CreateEventControl() {
 			allowedTypes={typeLoad.ok ? allowedEventTypes(actor, typeLoad.rows) : []}
 			typesUnavailable={!typeLoad.ok}
 			canSetReadOnly={can(actor, "event:moderate")}
-			canViewArchive={isFeatureEnabled("surveys") && can(actor, "survey:configure")}
+			canViewArchive={canViewFeedbackArchive(actor)}
 		/>
 	);
 }

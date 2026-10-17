@@ -22,9 +22,10 @@ vi.mock("./actions", () => ({
 
 import { EventManagePanel, isOptimisticallyRemoved, type ManageEvent } from "./event-manage-panel";
 
-function renderPanel(event: ManageEvent): string {
+function renderPanel(event: ManageEvent, canViewArchive?: boolean): string {
 	return renderToStaticMarkup(
 		createElement(EventManagePanel, {
+			canViewArchive,
 			event,
 			staff: [],
 			attendance: [],
@@ -105,5 +106,41 @@ describe("EventManagePanel check-in access", () => {
 		expect(markup).toContain("<textarea");
 		expect(markup).toContain("Saved details");
 		expect(markup).toContain("Save changes");
+	});
+
+	describe("planning link on the edit form", () => {
+		const pastEvent: ManageEvent = {
+			id: "past-event",
+			title: "Past workshop",
+			type: "casual",
+			place: "Room 1",
+			description: "Saved details",
+			startsAt: new Date("2020-07-10T10:00:00.000Z"),
+			endsAt: null,
+			capacity: null,
+			graceMinutes: null,
+			rsvpForm: [],
+			rsvpResponsesPublic: false,
+			allDay: false,
+			readOnly: false,
+			myRole: "owner",
+			canModerate: false,
+			canSetPoints: false,
+			attendingCount: 0,
+		};
+
+		it("links to the archive filtered by the selected type, in a new tab, when the viewer can open the archive", () => {
+			const markup = renderPanel(pastEvent, true);
+			expect(markup).toContain("See feedback from past casual events");
+			expect(markup).toContain('href="/portal/admin/data/events?type=casual"');
+			expect(markup).toContain('target="_blank"');
+			expect(markup).toContain('rel="noopener noreferrer"');
+			expect(markup).toContain("(opens in a new tab)");
+		});
+
+		it("shows no link by default or when the viewer cannot open the archive", () => {
+			expect(renderPanel(pastEvent)).not.toContain("See feedback from past");
+			expect(renderPanel(pastEvent, false)).not.toContain("See feedback from past");
+		});
 	});
 });

@@ -19,10 +19,10 @@ import { deriveEnd, fromLocalInput, toLocalInput } from "@/lib/date-slots";
 import type { EventSignupField } from "@/lib/event-signup-form";
 import type { EventTypeRow } from "@/db/repositories/eventTypeRules";
 import { colourClasses } from "@/lib/event-type-colours";
-import { planningLink } from "@/lib/feedback/archive-view";
 import { cn } from "@/lib/utils";
 import { createEventAction } from "./actions";
 import { EventSignupFormEditor } from "./event-signup-form-editor";
+import { PlanningLink } from "./planning-link";
 
 const FIELD = "w-full rounded-lg border border-border bg-background p-2 text-sm";
 
@@ -43,7 +43,7 @@ export function CreateEventSheet({
 	typesUnavailable: boolean;
 	/** event:moderate. The repository re-checks this; the prop only hides the control. */
 	canSetReadOnly?: boolean;
-	/** survey:configure with surveys on. The archive page re-checks access; the prop only hides the link. */
+	/** From canViewFeedbackArchive(). The archive page re-checks access; the prop only hides the link. */
 	canViewArchive?: boolean;
 }) {
 	const router = useRouter();
@@ -139,7 +139,6 @@ export function CreateEventSheet({
 	const datesFilled = allDay ? Boolean(startDay && endDay) : Boolean(startsAt && endsAt);
 	const selectedType = allowedTypes.find((option) => option.type === type);
 	const preview = colourClasses(selectedType?.colour ?? "slate");
-	const archiveLink = canViewArchive && selectedType ? planningLink(selectedType.type, selectedType.label) : null;
 	const canSubmit =
 		title.trim() && place.trim() && description.trim() && datesFilled && !endBeforeStart && !noAllowedTypes && !typesUnavailable;
 
@@ -196,14 +195,7 @@ export function CreateEventSheet({
 						</div>
 					) : null}
 
-					{archiveLink ? (
-						<p className="-mt-2 min-w-0 text-xs [overflow-wrap:anywhere]">
-							{/* New tab: the form is mid-edit and closing the sheet would discard it. */}
-							<a href={archiveLink.href} target="_blank" rel="noopener noreferrer" className="text-primary underline-offset-4 hover:underline">
-								{archiveLink.text}
-							</a>
-						</p>
-					) : null}
+					{canViewArchive && selectedType ? <PlanningLink type={selectedType.type} label={selectedType.label} className="-mt-2" /> : null}
 
 					<label className="grid gap-1.5 text-sm">
 						<span className="font-medium">Place</span>
