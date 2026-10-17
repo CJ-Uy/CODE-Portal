@@ -3,68 +3,13 @@
 import { useState, useTransition } from "react";
 import type { LibraryCommentView } from "@/db/repositories/library";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Textarea } from "@/components/ui/textarea";
+import { CommentBox } from "@/components/library/comment-box";
 import { cn } from "@/lib/utils";
 import { actionErrorMessage } from "../../editor-input";
 import { addListCommentAction, setListCommentHiddenAction } from "../../list-actions";
 import { COMMENT_MAX } from "../../list-input";
 
 const WHEN = new Intl.DateTimeFormat("en", { timeZone: "Asia/Manila", day: "numeric", month: "short", year: "numeric" });
-
-/** The same comment box as an item's discussion: anonymous posting is allowed, and a reply hangs under a top-level comment. */
-function CommentBox({ listId, parentId, label, placeholder, onPosted }: { listId: string; parentId?: string; label: string; placeholder: string; onPosted?: () => void }) {
-	const [body, setBody] = useState("");
-	const [anonymous, setAnonymous] = useState(false);
-	const [error, setError] = useState("");
-	const [pending, startTransition] = useTransition();
-
-	return (
-		<form
-			className="grid gap-3"
-			onSubmit={(event) => {
-				event.preventDefault();
-				if (!body.trim()) return;
-				setError("");
-				startTransition(async () => {
-					try {
-						await addListCommentAction({ listId, parentId: parentId ?? null, anonymous, body });
-						setBody("");
-						setAnonymous(false);
-						onPosted?.();
-					} catch (e) {
-						setError(actionErrorMessage(e, "Could not post that. Try again."));
-					}
-				});
-			}}
-		>
-			<Textarea
-				value={body}
-				rows={parentId ? 2 : 3}
-				placeholder={placeholder}
-				aria-label={placeholder}
-				maxLength={COMMENT_MAX}
-				required
-				disabled={pending}
-				onChange={(event) => setBody(event.target.value)}
-			/>
-			<div className="flex flex-wrap items-center justify-between gap-3">
-				<label className="flex items-center gap-2 text-sm text-muted-foreground">
-					<Checkbox checked={anonymous} onCheckedChange={(value) => setAnonymous(value === true)} disabled={pending} />
-					Post anonymously
-				</label>
-				<Button type="submit" size="sm" disabled={pending || !body.trim()}>
-					{pending ? "Posting..." : label}
-				</Button>
-			</div>
-			{error ? (
-				<p role="alert" className="min-w-0 text-sm text-destructive [overflow-wrap:anywhere]">
-					{error}
-				</p>
-			) : null}
-		</form>
-	);
-}
 
 function CommentRow({ listId, comment, canModerate }: { listId: string; comment: LibraryCommentView; canModerate: boolean }) {
 	const [error, setError] = useState("");
@@ -74,7 +19,7 @@ function CommentRow({ listId, comment, canModerate }: { listId: string; comment:
 		<div className={cn("min-w-0 rounded-xl border border-border p-3", comment.hidden && "opacity-60")}>
 			<div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
 				<div className="min-w-0 text-sm">
-					<span className="min-w-0 break-all font-medium">{comment.authorName}</span>
+					<span className="min-w-0 font-medium [overflow-wrap:anywhere]">{comment.authorName}</span>
 					{comment.anonymous && canModerate ? <span className="ml-2 text-xs text-muted-foreground">(anonymous)</span> : null}
 					{comment.hidden ? <span className="ml-2 text-xs text-destructive">hidden</span> : null}
 					<span className="ml-2 text-xs text-muted-foreground">{WHEN.format(comment.createdAt)}</span>
@@ -125,7 +70,14 @@ function Reply({ listId, parentId }: { listId: string; parentId: string }) {
 			</button>
 			{open ? (
 				<div className="mt-2">
-					<CommentBox listId={listId} parentId={parentId} label="Reply" placeholder="Write a reply" onPosted={() => setOpen(false)} />
+					<CommentBox
+						post={(draft) => addListCommentAction({ listId, ...draft })}
+						parentId={parentId}
+						label="Reply"
+						placeholder="Write a reply"
+						maxLength={COMMENT_MAX}
+						onPosted={() => setOpen(false)}
+					/>
 				</div>
 			) : null}
 		</div>
@@ -147,7 +99,7 @@ export function ListComments({ listId, comments, canComment, canModerate }: { li
 			</h2>
 			{canComment ? (
 				<div className="rounded-xl border border-border p-4">
-					<CommentBox listId={listId} label="Comment" placeholder="Add a comment" />
+					<CommentBox post={(draft) => addListCommentAction({ listId, ...draft })} label="Comment" placeholder="Add a comment" maxLength={COMMENT_MAX} />
 				</div>
 			) : (
 				<p className="min-w-0 text-sm text-muted-foreground">You can read this list as a moderator, but only people who can open it can comment.</p>

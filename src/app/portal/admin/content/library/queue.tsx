@@ -25,12 +25,12 @@ function ItemSummary({ item, date }: { item: ItemRow; date: string }) {
 	return (
 		<div className="grid min-w-0 gap-1">
 			<div className="flex min-w-0 flex-wrap items-center gap-2">
-				<Link href={`/portal/library/${item.id}`} className="min-w-0 break-all font-medium hover:underline">
+				<Link href={`/portal/library/${item.id}`} className="min-w-0 [overflow-wrap:anywhere] font-medium hover:underline">
 					{item.title}
 				</Link>
 				{item.clientData ? <Badge variant="warn">Includes client data</Badge> : null}
 			</div>
-			<p className="min-w-0 break-all text-sm text-muted-foreground">{item.meta}</p>
+			<p className="min-w-0 [overflow-wrap:anywhere] text-sm text-muted-foreground">{item.meta}</p>
 			<p className="text-xs text-muted-foreground">
 				{date} {item.when}
 			</p>
@@ -76,7 +76,7 @@ export function ReportCard({ report }: { report: ReportRow }) {
 					<Badge variant="secondary">{report.targetKind}</Badge>
 					<Badge variant="outline">{report.reason}</Badge>
 				</div>
-				<Link href={report.href} className="min-w-0 break-all font-medium hover:underline">
+				<Link href={report.href} className="min-w-0 [overflow-wrap:anywhere] font-medium hover:underline">
 					{report.targetTitle}
 				</Link>
 				{report.details ? <p className="min-w-0 text-sm [overflow-wrap:anywhere]">{report.details}</p> : null}
@@ -138,7 +138,7 @@ export function TakenDownListRow({ list }: { list: ListRow }) {
 	return (
 		<li className={card}>
 			<div className="grid min-w-0 gap-1">
-				<Link href={`/portal/library/lists/${list.id}`} className="min-w-0 break-all font-medium hover:underline">
+				<Link href={`/portal/library/lists/${list.id}`} className="min-w-0 [overflow-wrap:anywhere] font-medium hover:underline">
 					{list.name}
 				</Link>
 				<p className="text-xs text-muted-foreground">Taken down {list.when}</p>

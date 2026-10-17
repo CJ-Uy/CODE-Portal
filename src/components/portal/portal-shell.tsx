@@ -10,6 +10,7 @@ import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle, SheetTri
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Breadcrumb } from "./breadcrumb";
+import { libraryPageTitle } from "./library-title";
 import { AdminNavigation } from "./admin-navigation";
 import { MemberAvatar } from "./member-avatar";
 import { adminNav, primaryNav, secondaryNav, visiblePrimaryNav, visibleSecondaryNav, visibleMobileNav, type NavItem } from "./nav-items";
@@ -68,6 +69,10 @@ function getPageHeading(pathname: string): { section: string; title: string } {
 		}
 		return adminHeading(cleanPath) ?? { section: "Admin", title: "Console" };
 	}
+
+	// Before the prefix loop: "/portal/library" would otherwise title every library subpage "Library item".
+	const libraryTitle = libraryPageTitle(cleanPath);
+	if (libraryTitle) return { section: "Library", title: libraryTitle };
 
 	for (const [prefix, title] of Object.entries(detailTitles)) {
 		if (cleanPath.startsWith(`${prefix}/`)) {

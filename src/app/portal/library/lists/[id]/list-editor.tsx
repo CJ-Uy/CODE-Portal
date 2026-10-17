@@ -255,7 +255,7 @@ export function ListEditor({ listId, rows, canEdit }: { listId: string; rows: Li
 											<p className="min-w-0 text-xs text-muted-foreground [overflow-wrap:anywhere]">
 												{row.addedBy ? (
 													<>
-														Added by <span className="break-all">{row.addedBy}</span> · {row.added}
+														Added by <span className="[overflow-wrap:anywhere]">{row.addedBy}</span> · {row.added}
 													</>
 												) : (
 													<>Added {row.added}</>

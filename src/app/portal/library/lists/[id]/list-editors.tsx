@@ -59,7 +59,7 @@ export function ListEditors({ listId, ownerId, editors }: { listId: string; owne
 				<ul className="grid gap-2">
 					{editors.map((editor) => (
 						<li key={editor.memberId} className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
-							<span className="min-w-0 break-all text-sm font-medium">{editor.name}</span>
+							<span className="min-w-0 [overflow-wrap:anywhere] text-sm font-medium">{editor.name}</span>
 							<Button
 								type="button"
 								size="sm"
@@ -102,7 +102,7 @@ export function ListEditors({ listId, ownerId, editors }: { listId: string; owne
 									}
 									className="flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
 								>
-									<span className="min-w-0 break-all">{member.name}</span>
+									<span className="min-w-0 [overflow-wrap:anywhere]">{member.name}</span>
 									<span className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
 										<Plus className="size-3.5" aria-hidden />
 										Add

@@ -41,13 +41,13 @@ export function LibraryItemCard({ card, compact = false, className }: { card: Li
 					</Badge>
 				) : null}
 			</div>
-			<p className={cn("min-w-0 break-all font-medium leading-snug", compact && "line-clamp-2 text-sm")}>{card.title}</p>
+			<p className={cn("min-w-0 [overflow-wrap:anywhere] font-medium leading-snug", compact && "line-clamp-2 text-sm")}>{card.title}</p>
 			{!compact && card.dek ? <p className="line-clamp-2 min-w-0 text-sm text-muted-foreground [overflow-wrap:anywhere]">{card.dek}</p> : null}
-			{byline ? <p className="line-clamp-2 min-w-0 break-all text-xs text-muted-foreground">{byline}</p> : null}
+			{byline ? <p className="line-clamp-2 min-w-0 [overflow-wrap:anywhere] text-xs text-muted-foreground">{byline}</p> : null}
 			{!compact && tags.length > 0 ? (
 				<div className="flex min-w-0 flex-wrap gap-1">
 					{tags.map((tag) => (
-						<Badge key={tag} variant="outline" className="min-w-0 max-w-full break-all font-normal text-muted-foreground">
+						<Badge key={tag} variant="outline" className="min-w-0 max-w-full [overflow-wrap:anywhere] font-normal text-muted-foreground">
 							{tag}
 						</Badge>
 					))}

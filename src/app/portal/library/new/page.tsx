@@ -49,7 +49,7 @@ export default async function NewLibraryItemPage({ searchParams }: { searchParam
 					Start a draft first. Nothing is shared until you publish it, and you can keep working on it as long as you like.
 				</p>
 				{target ? (
-					<p className="mt-3 min-w-0 max-w-2xl break-all rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm">
+					<p className="mt-3 min-w-0 max-w-2xl [overflow-wrap:anywhere] rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm">
 						It will also be added to your list <span className="font-medium">{target.name}</span>.
 					</p>
 				) : null}

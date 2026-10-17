@@ -49,7 +49,7 @@ export function TagManager({ groups }: { groups: TagGroup[] }) {
 
 			{groups.map((group) => (
 				<section key={group.groupName} aria-label={`${group.groupName} tags`} className="grid min-w-0 gap-2">
-					<h2 className="min-w-0 break-all font-heading text-xl">{group.groupName}</h2>
+					<h2 className="min-w-0 [overflow-wrap:anywhere] font-heading text-xl">{group.groupName}</h2>
 					<ul className="grid min-w-0 gap-2">
 						{group.tags.map((tag) => (
 							// Keyed by what it shows, so a rename or a move that just landed resets the row's fields to the saved values.
@@ -101,7 +101,7 @@ function TagItem({ tag, groups, groupList, onAsk }: { tag: TagRow; groups: TagGr
 	return (
 		<li className="min-w-0 rounded-lg border border-border bg-card">
 			<div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 p-3">
-				<p className="min-w-0 flex-[1_1_8rem] break-all font-medium">{tag.name}</p>
+				<p className="min-w-0 flex-[1_1_8rem] [overflow-wrap:anywhere] font-medium">{tag.name}</p>
 				<span className="shrink-0 text-xs text-muted-foreground">{usedByText(tag.itemCount)}</span>
 				<Button type="button" size="sm" variant="outline" aria-expanded={open} aria-controls={panel} onClick={() => setOpen(!open)}>
 					{open ? "Close" : "Manage"}

@@ -26,7 +26,6 @@ import {
 	type LibrarySource,
 	type LibraryStatus,
 } from "@/lib/library/taxonomy";
-import { cn } from "@/lib/utils";
 import { useAutosave } from "@/app/portal/admin/email/use-autosave";
 import { attachFileAction, createTagAction, saveItemAction, searchAuthorsAction } from "../../editor-actions";
 import {
@@ -161,7 +160,7 @@ function AuthorPicker({ disabled, onAdd }: { disabled: boolean; onAdd: (author: 
 								onClick={() => add({ name: member.name, memberId: member.id })}
 								className="flex w-full min-w-0 items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-secondary"
 							>
-								<span className="min-w-0 break-all">{member.name}</span>
+								<span className="min-w-0 [overflow-wrap:anywhere]">{member.name}</span>
 								<span className="shrink-0 text-xs text-muted-foreground">CODE member</span>
 							</button>
 						</li>
@@ -169,7 +168,7 @@ function AuthorPicker({ disabled, onAdd }: { disabled: boolean; onAdd: (author: 
 					<li className="min-w-0">
 						<button type="button" onClick={() => add({ name: term })} className="flex w-full min-w-0 items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-secondary">
 							<Plus className="size-4 shrink-0" aria-hidden />
-							<span className="min-w-0 break-all">Add &ldquo;{term}&rdquo; as written</span>
+							<span className="min-w-0 [overflow-wrap:anywhere]">Add &ldquo;{term}&rdquo; as written</span>
 						</button>
 					</li>
 				</ul>
@@ -229,7 +228,7 @@ function TagPicker({ options, selected, onChange, onCreated }: { options: TagOpt
 									aria-pressed={on}
 									disabled={!on && full}
 									onClick={() => toggle(tag.id)}
-									className="max-w-full break-all rounded-full border border-border px-3 py-1.5 text-left text-sm transition-colors hover:border-accent disabled:opacity-50 aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground"
+									className="max-w-full [overflow-wrap:anywhere] rounded-full border border-border px-3 py-1.5 text-left text-sm transition-colors hover:border-accent disabled:opacity-50 aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground"
 								>
 									{tag.name}
 								</button>
@@ -286,8 +285,8 @@ function StatusNote({ item, isOwner }: { item: EditorItem; isOwner: boolean }) {
 	else if (item.status === "taken_down") text = `A library moderator took this down${reason ? `: ${reason}` : "."} Edit it to fix the problem. Only a moderator can publish it again.`;
 	else if (reason) text = `A library moderator sent this back: ${reason} Make the changes, then publish again.`;
 	else text = isOwner ? "Only you and library moderators can see this until you publish it." : "A draft. Only its owner and library moderators can see it.";
-	// A moderator's reason is free text: break-all keeps a long unbroken one inside the card.
-	return <p className={cn("min-w-0 rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm", reason ? "break-all" : "[overflow-wrap:anywhere]")}>{text}</p>;
+	// A moderator's reason is free text: anywhere-wrapping keeps a long unbroken one inside the card without splitting ordinary words.
+	return <p className="min-w-0 rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm [overflow-wrap:anywhere]">{text}</p>;
 }
 
 export function ItemEditor({ item, tags, itemPicker, isOwner }: { item: EditorItem; tags: TagOption[]; itemPicker: ItemOption[]; isOwner: boolean }) {
@@ -558,7 +557,7 @@ export function ItemEditor({ item, tags, itemPicker, isOwner }: { item: EditorIt
 						</Field>
 						{url.trim() && !errors.url ? (
 							<a href={url.trim()} target="_blank" rel="noreferrer noopener" className="inline-flex w-fit max-w-full items-center gap-1 text-sm text-accent underline">
-								<span className="min-w-0 break-all">Check the link</span>
+								<span className="min-w-0 [overflow-wrap:anywhere]">Check the link</span>
 								<ExternalLink className="size-3.5 shrink-0" aria-hidden />
 							</a>
 						) : null}

@@ -20,7 +20,7 @@ function ListRow({ list }: { list: LibraryListSummary }) {
 			>
 				<span className="mt-1 size-4 shrink-0 rounded-full" style={{ backgroundColor: list.color }} aria-hidden />
 				<div className="grid min-w-0 flex-1 gap-1">
-					<p className="min-w-0 break-all font-medium">{list.name}</p>
+					<p className="min-w-0 [overflow-wrap:anywhere] font-medium">{list.name}</p>
 					{list.description.trim() ? <p className="line-clamp-2 min-w-0 text-sm text-muted-foreground [overflow-wrap:anywhere]">{list.description}</p> : null}
 					<div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
 						<span>

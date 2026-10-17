@@ -132,18 +132,18 @@ export default async function LibraryItemPage({ params }: { params: Promise<{ id
 					<ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm" aria-label="Authors">
 						{item.authors.map((author, index) => (
 							<li key={`${author.name}-${index}`} className="inline-flex min-w-0 items-center gap-1.5">
-								<span className="min-w-0 break-all font-medium">{author.name}</span>
+								<span className="min-w-0 [overflow-wrap:anywhere] font-medium">{author.name}</span>
 								{author.stillInCode ? <Badge variant="info">Still in CODE</Badge> : null}
 							</li>
 						))}
 					</ul>
 				) : null}
-				{facts.length > 0 ? <p className="min-w-0 break-all text-sm text-muted-foreground">{facts.join(" · ")}</p> : null}
+				{facts.length > 0 ? <p className="min-w-0 [overflow-wrap:anywhere] text-sm text-muted-foreground">{facts.join(" · ")}</p> : null}
 				{item.tags.length > 0 ? (
 					<ul className="flex flex-wrap gap-2" aria-label="Tags">
 						{item.tags.map((tag) => (
 							<li key={tag.id} className="min-w-0">
-								<Badge variant="outline" className="max-w-full break-all">
+								<Badge variant="outline" className="max-w-full [overflow-wrap:anywhere]">
 									{tag.name}
 								</Badge>
 							</li>
@@ -256,7 +256,7 @@ function StatusNote({ item }: { item: LibraryItemView }) {
 	else if (reason) text = `A library moderator sent this back: ${reason}`;
 	else text = "A draft. Only its owner and library moderators can see it.";
 	return (
-		<p role="status" className={`min-w-0 rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm ${reason ? "break-all" : "[overflow-wrap:anywhere]"}`}>
+		<p role="status" className="min-w-0 rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm [overflow-wrap:anywhere]">
 			{text}
 		</p>
 	);
@@ -343,7 +343,7 @@ function CommentRow({ comment, itemId, canModerate }: { comment: LibraryCommentV
 		<div className={`min-w-0 rounded-xl border border-border p-3 ${comment.hidden ? "opacity-60" : ""}`}>
 			<div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
 				<div className="min-w-0 text-sm">
-					<span className="min-w-0 break-all font-medium">{comment.authorName}</span>
+					<span className="min-w-0 [overflow-wrap:anywhere] font-medium">{comment.authorName}</span>
 					{comment.anonymous && canModerate ? <span className="ml-2 text-xs text-muted-foreground">(anonymous)</span> : null}
 					{comment.hidden ? <span className="ml-2 text-xs text-destructive">hidden</span> : null}
 					<span className="ml-2 text-xs text-muted-foreground">{WHEN.format(comment.createdAt)}</span>
