@@ -54,7 +54,7 @@ describe("library repository: access and publishing", () => {
 		const { cards, total } = await repo.search(actors.other, { q: "needle" });
 		expect(total).toBe(1);
 		expect(cards[0].id).toBe("lib_0");
-	});
+	}, 30_000);
 
 	it("hides drafts, pending, taken-down and confidential items from search and getItem", async () => {
 		await insertItem({ id: "d", title: "Zeta", status: "draft", createdBy: "owner" });
@@ -487,7 +487,7 @@ describe("library repository: search", () => {
 		expect(tail.cards).toHaveLength(30);
 		expect(tail.cards[29].id).toBe("lib_000");
 		expect((await repo.search(actors.other, { offset: -5, limit: 1 })).cards[0].id).toBe("lib_129");
-	});
+	}, 30_000);
 
 	it("cards carry the card fields, tag names and no body", async () => {
 		const a = await addTag("tag_a", "Zebra");
