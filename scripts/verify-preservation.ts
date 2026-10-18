@@ -111,7 +111,7 @@ db.exec(
 );
 // A list that predates 0013 must get updated_at backfilled from created_at, not left at the column default.
 db.exec(`INSERT INTO library_lists (id, member_id, name, created_at) VALUES ('lst_fix_old', 'mem_fix1', 'Old list', 5000)`);
-for (const file of files.filter((f) => f >= "0013")) applyOne(file);
+for (const file of files.filter((f) => f >= "0013" && f < "0014")) applyOne(file);
 check("one Saved list per favoriting member", one("SELECT COUNT(*) AS v FROM library_lists WHERE is_default = 1"), 1);
 check("Saved list id", one("SELECT id AS v FROM library_lists WHERE is_default = 1"), "lst_saved_mem_fix1");
 check("Saved list name", one("SELECT name AS v FROM library_lists WHERE is_default = 1"), "Saved");
@@ -136,6 +136,25 @@ check("existing item defaults to published", one("SELECT status AS v FROM librar
 check("existing list updated_at backfilled", one("SELECT updated_at AS v FROM library_lists WHERE id='lst_fix_old'"), 5000);
 check("existing list is not a Saved list", one("SELECT is_default AS v FROM library_lists WHERE id='lst_fix_old'"), 0);
 check("smart search defaults on", one("SELECT library_smart_search AS v FROM members WHERE id='mem_fix1'"), 1);
+
+// 0014 seeds the Feedback point type and gives drafts 1 point of it. srv_fix1 is still a draft; a form that already went
+// out was sent without points and keeps 0, and its old response stays unlinked from any member.
+db.exec(`INSERT INTO surveys (id, title, created_by, status) VALUES ('srv_fix2', 'Sent', 'mem_fix1', 'running')`);
+db.exec(`INSERT INTO survey_responses (id, survey_id, submitted_at) VALUES ('srvr_fix1', 'srv_fix2', 6000)`);
+for (const file of files.filter((f) => f >= "0014")) applyOne(file);
+check("feedback point type seeded", one("SELECT key || ',' || label || ',' || active AS v FROM point_types WHERE id='pt_feedback'"), "feedback,Feedback,1");
+check(
+	"feedback point type placed last",
+	one("SELECT position AS v FROM point_types WHERE id='pt_feedback'"),
+	one("SELECT MAX(position) AS v FROM point_types"),
+);
+check("retention point type kept its place", one("SELECT position AS v FROM point_types WHERE id='pt_retention'"), 0);
+check("draft gets 1 point", one("SELECT points_award AS v FROM surveys WHERE id='srv_fix1'"), 1);
+check("draft gets the Feedback type", one("SELECT point_type_id AS v FROM surveys WHERE id='srv_fix1'"), "pt_feedback");
+check("sent form keeps 0 points", one("SELECT points_award AS v FROM surveys WHERE id='srv_fix2'"), 0);
+check("sent form has no point type", one("SELECT point_type_id AS v FROM surveys WHERE id='srv_fix2'"), null);
+check("old response stays unlinked", one("SELECT member_id AS v FROM survey_responses WHERE id='srvr_fix1'"), null);
+check("old response keeps its time", one("SELECT submitted_at AS v FROM survey_responses WHERE id='srvr_fix1'"), 6000);
 db.close();
 rmSync(work, { recursive: true, force: true });
 

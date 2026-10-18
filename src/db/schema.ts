@@ -39,7 +39,7 @@ export type AuditCategory =
 	| "announcement"
 	| "library"
 	| "email";
-export type RetentionRecordSource = "event_attendance" | "manual";
+export type RetentionRecordSource = "event_attendance" | "manual" | "survey_response";
 
 const nowMs = sql`(unixepoch() * 1000)`;
 
@@ -502,6 +502,10 @@ export const retentionRecords = sqliteTable(
 		uniqueIndex("retention_records_event_member_type_idx")
 			.on(table.eventId, table.memberId, table.pointTypeId)
 			.where(sql`source = 'event_attendance'`),
+		// One feedback award per member per event. A form with no event relies on the answer-once guard instead.
+		uniqueIndex("retention_records_survey_event_member_type_idx")
+			.on(table.eventId, table.memberId, table.pointTypeId)
+			.where(sql`source = 'survey_response'`),
 	],
 );
 
@@ -529,6 +533,9 @@ export const surveys = sqliteTable(
 		aiSummaryJson: text("ai_summary_json"),
 		aiSummaryAt: integer("ai_summary_at", { mode: "timestamp_ms" }),
 		aiSummaryResponseCount: integer("ai_summary_response_count"),
+		// Points for answering, awarded once per respondent on submit. 0 turns it off.
+		pointsAward: real("points_award").notNull().default(0),
+		pointTypeId: text("point_type_id").references(() => pointTypes.id),
 	},
 	// One feedback form per event. SQLite allows many NULLs, so general surveys are unaffected.
 	(table) => [index("surveys_status_idx").on(table.status), uniqueIndex("surveys_event_id_unique").on(table.eventId)],
@@ -572,15 +579,21 @@ export const surveyAssignments = sqliteTable(
 	],
 );
 
-export const surveyResponses = sqliteTable("survey_responses", {
-	id: text("id").primaryKey(),
-	surveyId: text("survey_id")
-		.notNull()
-		.references(() => surveys.id, { onDelete: "cascade" }),
-	// Truncated to the Manila day so it cannot be matched against survey_assignments.completed_at.
-	submittedAt: integer("submitted_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
-	source: text("source").$type<SurveySource>().notNull().default("invited"),
-});
+export const surveyResponses = sqliteTable(
+	"survey_responses",
+	{
+		id: text("id").primaryKey(),
+		surveyId: text("survey_id")
+			.notNull()
+			.references(() => surveys.id, { onDelete: "cascade" }),
+		// Rows from before migration 0014 hold the Manila day and no member: those members were told their name was
+		// not attached, so they stay unlinked. Newer rows keep the real time and the member.
+		submittedAt: integer("submitted_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+		source: text("source").$type<SurveySource>().notNull().default("invited"),
+		memberId: text("member_id").references(() => members.id, { onDelete: "set null" }),
+	},
+	(table) => [index("survey_responses_survey_member_idx").on(table.surveyId, table.memberId)],
+);
 
 export const surveyAnswers = sqliteTable("survey_answers", {
 	id: text("id").primaryKey(),

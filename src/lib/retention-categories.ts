@@ -1,11 +1,19 @@
 import type { MyHistoryRecord } from "@/db/repositories/retention";
+import type { RetentionRecordSource } from "@/db/schema";
 import { toLocalDate } from "@/lib/date-slots";
 import { quantizePoints } from "@/lib/points";
 
 export type RetentionCategory = { key: string; label: string; colour: string; points: number; activities: number };
 export type CategoryFrame = { date: string | null; categories: RetentionCategory[] };
 
+/** How a record's source reads next to it. */
+export function sourceLabel(source: RetentionRecordSource): string {
+	return source === "manual" ? "Manual record" : source === "survey_response" ? "Feedback forms" : "Event attendance";
+}
+
 export function recordCategory(record: MyHistoryRecord): Pick<RetentionCategory, "key" | "label" | "colour"> {
+	// Feedback points carry the event id, but they are their own points system, not part of the event's category.
+	if (record.source === "survey_response") return { key: "source:survey_response", label: "Feedback forms", colour: "accent" };
 	if (record.eventType) return { key: record.eventType, label: record.eventTypeLabel || record.eventType, colour: record.eventColour || "slate" };
 	return record.source === "manual"
 		? { key: "source:manual", label: "Manual records", colour: "slate" }

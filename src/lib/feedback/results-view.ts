@@ -17,6 +17,15 @@ export const commentsLabel = (count: number) => plural(count, "comment");
 
 const formatDay = (date: Date) => new Intl.DateTimeFormat("en", { timeZone: "Asia/Manila", dateStyle: "medium" }).format(date);
 
+export const NAME_NOT_RECORDED = "Name not recorded";
+
+/** One row of the CRS "Who responded" list. Answers from before names were recorded kept only the day, so they show the day. */
+export function respondentRow(respondent: { name: string | null; submittedAt: Date }): { name: string; when: string } {
+	return respondent.name
+		? { name: respondent.name, when: formatUtc8DateTime(respondent.submittedAt) }
+		: { name: NAME_NOT_RECORDED, when: formatDay(respondent.submittedAt) };
+}
+
 /** "6 of 24 invited (25%)", or null when nobody was invited (every response is a walk-in). */
 export function invitedLine(responded: number, invited: number): string | null {
 	if (invited <= 0) return null;

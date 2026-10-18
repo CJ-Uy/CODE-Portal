@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { getRepositories } from "@/db";
+import { sourceLabel } from "@/lib/retention-categories";
 import { requireActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
 import { loadRetentionPickers } from "../retention/data";
@@ -85,7 +86,7 @@ export default async function LedgerAdminPage({ searchParams }: { searchParams: 
 										<td className="px-4 py-2.5 tabular-nums text-muted-foreground">{formatDateTime(row.recordedAt)}</td>
 										<td className="min-w-0 px-4 py-2.5"><Link href={`/portal/admin/members/${row.memberId}?termId=${selectedTerm?.id ?? ""}`} className="break-all font-medium text-primary underline-offset-4 hover:underline">{row.memberName ?? "Member"}</Link></td>
 										<td className="min-w-0 break-all px-4 py-2.5">{row.pointTypeLabel}</td>
-										<td className="px-4 py-2.5 capitalize">{row.source.replaceAll("_", " ")}</td>
+										<td className="px-4 py-2.5">{sourceLabel(row.source)}</td>
 										<td className="min-w-0 break-all px-4 py-2.5">{row.eventTitle ?? row.reason}</td>
 										<td className="px-4 py-2.5 text-right tabular-nums">{row.points ?? 0}</td>
 									</tr>

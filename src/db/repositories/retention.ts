@@ -128,7 +128,8 @@ function statusFor(totalPoints: number, retainedAt: number, probationBelow: numb
 	return "on_track";
 }
 
-async function getCurrentTermId(db: Db, now: Date): Promise<string | null> {
+/** The term whose window holds `now`, the latest-starting one if terms overlap. Attendance points use the same rule. */
+export async function getCurrentTermId(db: Db, now: Date): Promise<string | null> {
 	const [term] = await db
 		.select({ id: terms.id })
 		.from(terms)

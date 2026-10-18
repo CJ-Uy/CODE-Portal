@@ -54,6 +54,22 @@ describe("parseSendForm", () => {
 		expect(() => parseSendForm(form({ ...BASE, closesAt }))).toThrow();
 	});
 
+	it("reads points for answering, with a blank box as 0", () => {
+		expect(parseSendForm(form({ ...BASE, pointsAward: "1.5", pointTypeId: "pt_feedback" }))).toMatchObject({ pointsAward: 1.5, pointTypeId: "pt_feedback" });
+		expect(parseSendForm(form({ ...BASE, pointsAward: "", pointTypeId: "pt_feedback" }))).toMatchObject({ pointsAward: 0 });
+		expect(parseSendForm(form({ ...BASE, pointsAward: "0", pointTypeId: "" }))).toMatchObject({ pointsAward: 0, pointTypeId: null });
+		expect(parseSendForm(form({ ...BASE, pointsAward: "0.125", pointTypeId: "pt_feedback" })).pointsAward).toBe(0.13);
+	});
+
+	it.each([
+		["negative points", { pointsAward: "-1", pointTypeId: "pt_feedback" }],
+		["more than 100 points", { pointsAward: "101", pointTypeId: "pt_feedback" }],
+		["text points", { pointsAward: "lots", pointTypeId: "pt_feedback" }],
+		["points without a point type", { pointsAward: "1", pointTypeId: "" }],
+	])("rejects %s", (_name, extra) => {
+		expect(() => parseSendForm(form({ ...BASE, ...extra }))).toThrow();
+	});
+
 	it("throws when the survey id is missing", () => {
 		expect(() => parseSendForm(form({ closesAt: BASE.closesAt }))).toThrow();
 	});

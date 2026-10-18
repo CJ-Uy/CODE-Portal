@@ -21,14 +21,15 @@ describe("feedbackEmailContent", () => {
 		expect(c.blocks.find((b) => b.type === "button")).toMatchObject({ props: { label: "Share feedback" } });
 		expect(texts(c.blocks)).toEqual([
 			"Hi {{first_name}},",
-			"Thanks for coming to Hackfest. We'd like your feedback. It takes about 6 min, and your name isn't attached to your answers.",
+			"Thanks for coming to Hackfest. We'd like your feedback. It takes about 6 min.",
+			"CRS can see your name with your answers so they can follow up. Organizers see the answers without names.",
 			`Open until ${WHEN}.`,
 		]);
 	});
 
 	it("leaves the time out when the form's estimate is unknown, and never hard-codes one", () => {
 		const invite = feedbackEmailContent("invite", { ...input, estimate: null });
-		expect(texts(invite.blocks)[1]).toBe("Thanks for coming to Hackfest. We'd like your feedback, and your name isn't attached to your answers.");
+		expect(texts(invite.blocks)[1]).toBe("Thanks for coming to Hackfest. We'd like your feedback.");
 		const reminder = feedbackEmailContent("reminder", { ...input, estimate: null });
 		expect(texts(reminder.blocks)[1]).toBe(`If you've already answered, thank you, and you can ignore this. If not, the form closes ${WHEN}.`);
 		for (const c of [invite, reminder]) expect(JSON.stringify(c)).not.toMatch(/two minutes/i);

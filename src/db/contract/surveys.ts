@@ -21,6 +21,8 @@ const surveyOutputSchema = z.object({
 	aiSummaryJson: z.string().nullable(),
 	aiSummaryAt: z.coerce.date().nullable(),
 	aiSummaryResponseCount: z.number().int().nullable(),
+	pointsAward: z.number(),
+	pointTypeId: z.string().nullable(),
 });
 
 const surveyQuestionOutputSchema = z.object({

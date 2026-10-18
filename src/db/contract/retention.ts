@@ -11,7 +11,7 @@ export const retentionRecordOutputSchema = z.object({
 	pointTypeLabel: z.string(),
 	points: z.number().nullable(),
 	reason: z.string(),
-	source: z.enum(["event_attendance", "manual"]),
+	source: z.enum(["event_attendance", "manual", "survey_response"]),
 	recordedBy: z.string(),
 	recordedAt: z.coerce.date(),
 });
@@ -60,7 +60,7 @@ export const termMasterRowOutputSchema = z.object({
 	pointTypeLabel: z.string(),
 	points: z.number().nullable(),
 	reason: z.string(),
-	source: z.enum(["event_attendance", "manual"]),
+	source: z.enum(["event_attendance", "manual", "survey_response"]),
 	recordedAt: z.coerce.date(),
 });
 

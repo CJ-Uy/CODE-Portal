@@ -22,7 +22,7 @@ export function FeedbackCard({ surveyId, state }: { surveyId: string; state: "op
 					<MessageSquareText className="mt-0.5 size-5 shrink-0 text-accent" />
 					<div className="min-w-0">
 						<p className="text-sm font-semibold">Share feedback</p>
-						<p className="text-sm text-muted-foreground">A few quick questions. Your name isn&apos;t attached to your answers.</p>
+						<p className="text-sm text-muted-foreground">A few quick questions about this event.</p>
 					</div>
 				</div>
 				<Button asChild className="w-full sm:w-auto">

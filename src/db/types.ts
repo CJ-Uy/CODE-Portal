@@ -153,20 +153,25 @@ export type UpdateDraftInput = z.infer<typeof updateDraftInputSchema>;
 
 // Sending flips a draft to running and invites a seeded sample of the eligible members. `suggested`
 // uses the statistical head count, `all` invites everyone, `count` caps at the eligible total.
-export const sendSurveyInputSchema = z.object({
-	surveyId: z.string().trim().min(1),
-	invite: z.discriminatedUnion("mode", [
-		z.object({ mode: z.literal("suggested") }),
-		z.object({ mode: z.literal("all") }),
-		z.object({ mode: z.literal("count"), count: z.number().int().min(1).max(1000) }),
-	]),
-	allowWalkIn: z.boolean(),
-	shareWithOrganizers: z.boolean(),
-	emailInvitees: z.boolean(),
-	remind: z.boolean(),
-	closesAt: z.coerce.date(),
-	seed: z.string().trim().min(1).max(120).optional(),
-});
+// pointsAward 0 turns points for answering off; any other amount needs a point type, which send() checks is active.
+export const sendSurveyInputSchema = z
+	.object({
+		surveyId: z.string().trim().min(1),
+		invite: z.discriminatedUnion("mode", [
+			z.object({ mode: z.literal("suggested") }),
+			z.object({ mode: z.literal("all") }),
+			z.object({ mode: z.literal("count"), count: z.number().int().min(1).max(1000) }),
+		]),
+		allowWalkIn: z.boolean(),
+		shareWithOrganizers: z.boolean(),
+		emailInvitees: z.boolean(),
+		remind: z.boolean(),
+		closesAt: z.coerce.date(),
+		seed: z.string().trim().min(1).max(120).optional(),
+		pointsAward: z.number().finite().min(0).max(100).transform(quantizePoints),
+		pointTypeId: z.string().trim().min(1).nullable(),
+	})
+	.refine((input) => input.pointsAward === 0 || input.pointTypeId !== null, { message: "Pick a point type.", path: ["pointTypeId"] });
 
 export type SendSurveyInput = z.infer<typeof sendSurveyInputSchema>;
 
@@ -230,6 +235,14 @@ export type SurveyResults = {
 	shareWithOrganizers: boolean;
 	questions: ResultsQuestion[];
 	summary: (FeedbackSummary & { generatedAt: Date; responseCountAtGeneration: number }) | null;
+};
+
+// Who answered, for CRS only. Organizer results are SurveyResults alone and never carry these.
+export type ResultsRespondents = {
+	/** Everyone who answered, newest first. name is null when it was not recorded (answers from before names were kept). */
+	respondents: Array<{ name: string | null; submittedAt: Date }>;
+	/** The writer of each written answer, by answer id, null when not recorded. */
+	answerNames: Record<string, string | null>;
 };
 
 // One row of the admin event archive. surveyId is null for an event with a debrief but no feedback form.

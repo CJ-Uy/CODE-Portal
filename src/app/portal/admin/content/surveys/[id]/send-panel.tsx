@@ -7,6 +7,7 @@ import { Eye, Send, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { sendSurveyAction } from "../actions";
 
 type InviteMode = "suggested" | "all" | "count";
@@ -24,13 +25,18 @@ export type SendPanelProps = {
 	email: "off" | "no_sender" | "ready";
 	questionCount: number;
 	estimate: string;
+	/** The draft's points for answering, and its point type picked out of the active ones (empty when none are active). */
+	pointsAward: number;
+	pointTypeId: string;
+	pointTypes: Array<{ id: string; label: string }>;
 };
 
 const RADIO = "mt-1 size-4 shrink-0 accent-primary";
 
 /** `unsaved`: the editor has changes that are not saved yet, so sending would send the old questions. */
 export function SendPanel(props: SendPanelProps & { unsaved: boolean }) {
-	const { unsaved, surveyId, hasEvent, eligible, suggested, stillCheckingIn, closesAt, email, questionCount, estimate } = props;
+	const { unsaved, surveyId, hasEvent, eligible, suggested, stillCheckingIn, closesAt, email, questionCount, estimate, pointsAward, pointTypeId, pointTypes } =
+		props;
 	const [invite, setInvite] = useState<InviteMode>("suggested");
 	const [count, setCount] = useState(String(suggested));
 	const [confirming, setConfirming] = useState(false);
@@ -165,6 +171,33 @@ export function SendPanel(props: SendPanelProps & { unsaved: boolean }) {
 							<p className="min-w-0 text-sm text-muted-foreground">Email invites are unavailable. Set a default sender for the Feedback requests email category.</p>
 						) : null}
 						<CheckOption name="remind" label="Remind people who haven't answered, 24 hours before closing" />
+						<div className="grid min-w-0 gap-1.5 text-sm">
+							<div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+								<label htmlFor="send-pointsAward" className="min-w-0">
+									Points for answering
+								</label>
+								<Input
+									id="send-pointsAward"
+									name="pointsAward"
+									type="number"
+									inputMode="decimal"
+									min={0}
+									max={100}
+									step={0.01}
+									defaultValue={pointsAward}
+									className="w-24"
+								/>
+								<Select name="pointTypeId" defaultValue={pointTypeId} aria-label="Point type for answering" className="w-auto min-w-0 max-w-full">
+									{pointTypes.length === 0 ? <option value="">No active point types</option> : null}
+									{pointTypes.map((type) => (
+										<option key={type.id} value={type.id}>
+											{type.label}
+										</option>
+									))}
+								</Select>
+							</div>
+							<p className="min-w-0 text-xs text-muted-foreground">Everyone who answers gets them, whatever they answer. 0 turns them off.</p>
+						</div>
 					</fieldset>
 
 					<label className="grid min-w-0 gap-2 text-sm font-medium sm:max-w-xs">

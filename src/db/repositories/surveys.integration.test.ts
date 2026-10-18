@@ -4,7 +4,6 @@ import { drizzle } from "drizzle-orm/d1";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as schema from "@/db/schema";
 import { surveyAssignments, surveys } from "@/db/schema";
-import { startOfUtc8Day } from "@/lib/date-slots";
 import type { Actor } from "@/server/auth/permissions";
 import { createAuditRepository } from "./audit";
 import { createSurveysRepository, type SurveysRepository } from "./surveys";
@@ -71,6 +70,8 @@ const sendCount = (repo: SurveysRepository, surveyId: string, count: number, ext
 			remind: true,
 			closesAt: in72h,
 			seed: "fixed",
+			pointsAward: 0,
+			pointTypeId: null,
 			...extra,
 		},
 		NOW,
@@ -185,7 +186,7 @@ describe("surveys repository on D1", () => {
 		const responses = await db.select().from(schema.surveyResponses);
 		expect(responses).toHaveLength(1);
 		expect(responses[0].source).toBe("invited");
-		expect(Object.keys(responses[0])).not.toContain("memberId");
+		expect(responses[0].memberId).toBe(invited.memberId);
 	});
 
 	it("rejects an uninvited member", async () => {
@@ -203,7 +204,7 @@ describe("surveys repository on D1", () => {
 		expect(await db.select().from(schema.surveyResponses)).toHaveLength(0);
 	});
 
-	it("stores submittedAt truncated to the Manila day", async () => {
+	it("stores the real submittedAt", async () => {
 		await seedMembers(1);
 		const { db, repo } = setup();
 		const survey = await repo.create(admin, { title: "S", questions: [{ type: "text", prompt: "Q", required: false }] });
@@ -218,8 +219,7 @@ describe("surveys repository on D1", () => {
 		);
 
 		const [response] = await db.select().from(schema.surveyResponses);
-		expect(response.submittedAt.getTime()).toBe(startOfUtc8Day(now).getTime());
-		expect(response.submittedAt.toISOString()).toBe("2026-10-09T16:00:00.000Z");
+		expect(response.submittedAt.toISOString()).toBe("2026-10-10T15:30:00.000Z");
 	});
 
 	// D1 binds at most 100 parameters per statement; 30 is the schema maximum for both.
@@ -414,6 +414,8 @@ describe("surveys repository on D1", () => {
 			emailInvitees: false,
 			remind: true,
 			closesAt: in72h,
+			pointsAward: 0,
+			pointTypeId: null,
 			...extra,
 		});
 
@@ -467,7 +469,7 @@ describe("surveys repository on D1", () => {
 			expect(notes[0]).toMatchObject({
 				kind: "survey_assigned",
 				title: "How was Study Jam?",
-				body: "Share quick feedback. Your name isn't attached to your answers.",
+				body: "Share quick feedback.",
 				href: `/portal/surveys/${survey.id}`,
 			});
 			const [row] = await db.select().from(surveys).where(eq(surveys.id, survey.id));
@@ -760,7 +762,7 @@ describe("surveys repository on D1", () => {
 			const [response] = await db.select().from(schema.surveyResponses);
 			const [assignment] = await db.select().from(surveyAssignments).where(eq(surveyAssignments.memberId, walkIn.memberId));
 			expect(response.source).toBe("walk_in");
-			expect(Object.keys(response)).not.toContain("memberId");
+			expect(response.memberId).toBe(walkIn.memberId);
 			expect(assignment).toMatchObject({ surveyId: survey.id, source: "walk_in" });
 			expect(assignment.completedAt?.getTime()).toBe(LATE.getTime());
 			expect(await db.select().from(schema.surveyAnswers)).toHaveLength(1);
@@ -809,14 +811,13 @@ describe("surveys repository on D1", () => {
 			expect(await db.select().from(schema.surveyResponses)).toHaveLength(1);
 		});
 
-		it("stores a walk-in response's submittedAt as the Manila day start", async () => {
+		it("stores a walk-in response's real submittedAt", async () => {
 			const { db, repo, answer, walkIn } = await eventForm();
 
 			await repo.submitResponse(walkIn, answer(), LATE);
 
 			const [response] = await db.select().from(schema.surveyResponses);
-			expect(response.submittedAt.getTime()).toBe(startOfUtc8Day(LATE).getTime());
-			expect(response.submittedAt.toISOString()).toBe("2026-10-16T16:00:00.000Z");
+			expect(response.submittedAt.getTime()).toBe(LATE.getTime());
 		});
 
 		it("lets an invited member of an event form answer and then reads answered", async () => {
@@ -998,6 +999,164 @@ describe("surveys repository on D1", () => {
 				repo.submitResponse(walkIn, { surveyId: survey.id, answers: questions.map((q) => ({ questionId: q.id, value: q.prompt })) }, LATE),
 			).resolves.toEqual({ ok: true });
 			expect(await db.select().from(schema.surveyAnswers)).toHaveLength(30);
+		});
+	});
+
+	describe("points for answering", () => {
+		// The check-ins fall in term A; the form is answered in term B.
+		const CHECKED_IN = new Date("2026-10-15T10:00:00.000Z");
+		const ANSWERED = new Date("2026-10-17T00:00:00.000Z");
+		const TERMS = [
+			{ id: "term_a", name: "A", retainedAt: 20, probationBelow: 10, startsAt: new Date("2026-06-01T00:00:00Z"), endsAt: new Date("2026-10-16T12:00:00Z") },
+			{ id: "term_b", name: "B", retainedAt: 20, probationBelow: 10, startsAt: new Date("2026-10-16T12:00:01Z"), endsAt: new Date("2027-03-31T00:00:00Z") },
+		];
+		const setActive = (active: boolean) => env.DB.prepare("UPDATE point_types SET active = ? WHERE id = 'pt_feedback'").bind(active ? 1 : 0).run();
+
+		beforeEach(async () => {
+			await env.DB.prepare("DELETE FROM retention_records").run();
+			await env.DB.prepare("DELETE FROM terms").run();
+			await env.DB.prepare("DELETE FROM notifications").run();
+			await setActive(true);
+			await setup().db.insert(schema.terms).values(TERMS);
+		});
+
+		// mem_0..mem_2 checked in to evt_1 (unless eventId is null); one is invited, the others can walk in.
+		async function pointsForm(options: { eventId?: string | null; pointsAward?: number; pointTypeId?: string | null } = {}) {
+			await seedMembers(3);
+			const eventId = options.eventId === undefined ? "evt_1" : options.eventId;
+			if (eventId) {
+				await seedEvent(eventId);
+				await env.DB.batch(
+					["mem_0", "mem_1", "mem_2"].map((memberId) =>
+						env.DB.prepare("INSERT INTO crs_attendance (event_id, member_id, scanned_at, scanned_by) VALUES (?, ?, ?, ?)").bind(
+							eventId,
+							memberId,
+							CHECKED_IN.getTime(),
+							"mem_admin",
+						),
+					),
+				);
+			}
+			const { db, repo } = setup();
+			const survey = await repo.create(admin, { title: "General", eventId, questions: [{ type: "text", prompt: "Q", required: false }] });
+			await sendCount(repo, survey.id, 1, { pointsAward: options.pointsAward ?? 1.5, pointTypeId: options.pointTypeId ?? "pt_feedback" });
+			const [question] = (await repo.getById(admin, survey.id))!.questions;
+			const answer = (value: string) => ({ surveyId: survey.id, answers: [{ questionId: question.id, value }] });
+			const invitedId = (await assignedIds(db, survey.id))[0];
+			const walkIn = asMember(["mem_0", "mem_1", "mem_2"].find((id) => id !== invitedId)!);
+			return { db, repo, survey, answer, invited: asMember(invitedId), walkIn };
+		}
+
+		it("gives a new draft 1 Feedback point, or none while that type is retired", async () => {
+			const { repo } = setup();
+			expect(await repo.create(admin, { title: "S", questions: textQuestions(1) })).toMatchObject({ pointsAward: 1, pointTypeId: "pt_feedback" });
+
+			await setActive(false);
+			expect(await repo.createFromTemplate(admin, { templateId: "stpl_pulse", eventId: null })).toMatchObject({ pointsAward: 0, pointTypeId: null });
+		});
+
+		it("stores the points on send, says so in the notice, and refuses a point type that is not active", async () => {
+			await seedMembers(2);
+			const { db, repo } = setup();
+			const survey = await repo.create(admin, { title: "S", questions: textQuestions(1) });
+
+			await expect(sendCount(repo, survey.id, 1, { pointsAward: 1, pointTypeId: "pt_missing" })).rejects.toThrow("Pick an active point type for answering.");
+			await setActive(false);
+			await expect(sendCount(repo, survey.id, 1, { pointsAward: 1, pointTypeId: "pt_feedback" })).rejects.toThrow("Pick an active point type for answering.");
+			await setActive(true);
+
+			await sendCount(repo, survey.id, 1, { pointsAward: 0.75, pointTypeId: "pt_feedback" });
+			const [row] = await db.select().from(surveys).where(eq(surveys.id, survey.id));
+			expect(row).toMatchObject({ status: "running", pointsAward: 0.75, pointTypeId: "pt_feedback" });
+			const [note] = await db.select().from(schema.notifications);
+			expect(note.body).toBe("Share quick feedback. You'll get 0.75 Feedback points for answering.");
+
+			// 0 turns points off, so no point type is kept, whatever the picker showed.
+			const off = await repo.create(admin, { title: "Off", questions: textQuestions(1) });
+			await sendCount(repo, off.id, 1, { pointsAward: 0, pointTypeId: "pt_missing" });
+			const [offRow] = await db.select().from(surveys).where(eq(surveys.id, off.id));
+			expect(offRow).toMatchObject({ pointsAward: 0, pointTypeId: null });
+		});
+
+		it("awards an invitee once, in the term of their check-in, recorded by the form's creator", async () => {
+			const { db, repo, answer, invited } = await pointsForm();
+
+			await repo.submitResponse(invited, answer("Loved it"), ANSWERED);
+			await expect(repo.submitResponse(invited, answer("Again"), ANSWERED)).rejects.toThrow("You've already answered this form.");
+
+			const records = await db.select().from(schema.retentionRecords);
+			expect(records).toHaveLength(1);
+			expect(records[0]).toMatchObject({
+				memberId: invited.memberId,
+				termId: "term_a",
+				eventId: "evt_1",
+				pointTypeId: "pt_feedback",
+				points: 1.5,
+				source: "survey_response",
+				recordedBy: "mem_admin",
+				reason: "Answered the feedback form for Study Jam",
+			});
+			expect(records[0].recordedAt.getTime()).toBe(ANSWERED.getTime());
+		});
+
+		it("awards a walk-in the same points whatever they answered", async () => {
+			const { db, repo, answer, invited, walkIn } = await pointsForm();
+
+			await repo.submitResponse(invited, answer("Great"), ANSWERED);
+			await repo.submitResponse(walkIn, answer("Terrible, honestly"), ANSWERED);
+
+			const records = await db.select().from(schema.retentionRecords);
+			expect(records.map((record) => [record.memberId, record.points, record.source]).sort()).toEqual(
+				[
+					[invited.memberId, 1.5, "survey_response"],
+					[walkIn.memberId, 1.5, "survey_response"],
+				].sort(),
+			);
+		});
+
+		it("awards nothing when the form gives 0 points", async () => {
+			const { db, repo, answer, invited } = await pointsForm({ pointsAward: 0, pointTypeId: null });
+
+			await expect(repo.submitResponse(invited, answer("ok"), ANSWERED)).resolves.toEqual({ ok: true });
+			expect(await db.select().from(schema.surveyResponses)).toHaveLength(1);
+			expect(await db.select().from(schema.retentionRecords)).toHaveLength(0);
+		});
+
+		it("uses the time of answering and the form title for a form with no event", async () => {
+			const { db, repo, answer, invited } = await pointsForm({ eventId: null });
+
+			await repo.submitResponse(invited, answer("ok"), ANSWERED);
+
+			const [record] = await db.select().from(schema.retentionRecords);
+			expect(record).toMatchObject({ termId: "term_b", eventId: null, reason: "Answered the feedback form for General" });
+		});
+
+		it("keeps the answer but skips a second award for the same event", async () => {
+			const { db, repo, answer, invited } = await pointsForm();
+			// Points from an earlier form for the same event, since deleted.
+			await db.insert(schema.retentionRecords).values({
+				id: "ret_old",
+				memberId: invited.memberId,
+				termId: "term_a",
+				eventId: "evt_1",
+				pointTypeId: "pt_feedback",
+				points: 1,
+				reason: "Answered the feedback form for Study Jam",
+				source: "survey_response",
+				recordedBy: "mem_admin",
+			});
+
+			await expect(repo.submitResponse(invited, answer("ok"), ANSWERED)).resolves.toEqual({ ok: true });
+			expect(await db.select().from(schema.surveyResponses)).toHaveLength(1);
+			expect((await db.select().from(schema.retentionRecords)).map((record) => record.id)).toEqual(["ret_old"]);
+		});
+
+		it("still takes the answer when no term covers it", async () => {
+			const { db, repo, answer, invited } = await pointsForm({ eventId: null });
+			await env.DB.prepare("DELETE FROM terms").run();
+
+			await expect(repo.submitResponse(invited, answer("ok"), ANSWERED)).resolves.toEqual({ ok: true });
+			expect(await db.select().from(schema.retentionRecords)).toHaveLength(0);
 		});
 	});
 });

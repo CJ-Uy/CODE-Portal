@@ -394,3 +394,33 @@ These do not block building on beta, but OSG should confirm them before prod.
 - Whether the archive nav label changes.
 - Pagination and limits on the comment list.
 - Deliberately skipped: per-member survey-fatigue throttling. It would bias samples against frequent attendees. Revisit if members complain about volume.
+
+## 16. OSG decisions (2026-10-18) and the changes they cause
+
+OSG answered the §14 questions through CJ.
+
+| # | Question | OSG answer | Effect on the build |
+|---|---|---|---|
+| 1 | Drop "no form, no points"? | Yes. Attendance (QR check-in) is the points. Answering a form is an extra, separate points system. | New: answering a form awards points (16.1). |
+| 2 | Anonymous answers? | No. They need to see who answered, to follow up or act on something serious. | New: responses are linked to the member and CRS sees names (16.2). |
+| 3 | Organizers see feedback by default? | Yes, by default, and CRS can turn it off. | Already built (`share_with_organizers` defaults to true). No change. |
+| 4 | Non-CRS planners browse the archive? | No. CRS publishes interpreted, contextualised results as Library articles. | Already built (archive needs `survey:configure` + `retention:record`). Publishing to the Library is a later follow-up, not part of this change. |
+| 5 | 72-hour window? | Yes as the default, and it must stay editable. | Already built (Send panel "Closes at" and "Update closing time"). No change. |
+
+### 16.1 Points for answering
+
+- Each form carries `points_award` (real, may be 0) and `point_type_id`, both set on the draft and shown in the Send panel next to the other options ("Points for answering: [1] [Feedback ▾]"). 0 turns it off.
+- Migration 0014 seeds a point type `feedback` labelled "Feedback" (`pt_feedback`) so "an extra, separate points system" works out of the box; CRS can pick any active point type instead.
+- Defaults for a new draft: 1 point of `pt_feedback`.
+- When a member submits (invited or walk-in), the same atomic write that stores the response adds one `retention_records` row: `source = 'survey_response'`, the form's point type and amount, `event_id` = the form's event, the term the attendance points for that event use (same term resolution as event attendance), `recorded_by` = the form's creator, reason "Answered the feedback form for <event title>" (or the form title when there is no event). A partial unique index on (event_id, member_id, point_type_id) where `source = 'survey_response'` stops double awards; the existing answer-once guard covers forms without an event.
+- Points never depend on what was answered.
+- Retention views label the new source "Feedback forms".
+- The member form says how many points answering earns, and the thank-you state confirms them.
+
+### 16.2 Names on responses
+
+- `survey_responses.member_id` (nullable, FK members, `on delete set null`) is set on every new submission, and `submitted_at` keeps the real time for new rows.
+- Responses stored before migration 0014 stay unlinked. Those members were told their name was not attached, so nothing tries to re-link them.
+- CRS admins (`survey:configure`) see the respondent's name next to each written answer in the admin results, and can see the list of who responded.
+- Organizers keep the anonymous view: no names, comments still in random order. This protects honest feedback about the organizers themselves, and is easy to widen later if OSG asks.
+- The member form states it plainly before anyone answers: "CRS can see your name with your answers so they can follow up. Organizers see the answers without names." Every place that promised anonymity (form note, notification and email copy, guides) is updated to match.
