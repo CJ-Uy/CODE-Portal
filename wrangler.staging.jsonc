@@ -25,6 +25,7 @@
 	"ai": {
 		"binding": "AI"
 	},
+	"vectorize": [{ "binding": "VECTORIZE", "index_name": "code-portal-staged-library" }],
 	"services": [
 		{
 			"binding": "WORKER_SELF_REFERENCE",
@@ -45,7 +46,7 @@
 		// Unfinished surfaces stay hidden on staging until each one ships. Only "true" enables.
 		"FEATURE_RETENTION": "true",
 		"FEATURE_LIBRARY": "true",
-		"FEATURE_LIBRARY_SMART_SEARCH": "false",
+		"FEATURE_LIBRARY_SMART_SEARCH": "true",
 		"FEATURE_ANNOUNCEMENTS": "true",
 		"FEATURE_NOTIFICATIONS": "true",
 		"FEATURE_SURVEYS": "true",
