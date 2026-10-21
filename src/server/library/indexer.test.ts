@@ -85,6 +85,22 @@ describe("indexItem", () => {
 		expect(calls.filter((call) => call.startsWith("toMarkdown"))).toEqual([]);
 	});
 
+	it.each([
+		["PDF", "application/pdf"],
+		["docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+	])("sends a %s file to conversion with its required MIME type", async (extension, contentType) => {
+		const fileName = `module.${extension}`;
+		const id = await insertItem({ title: "Module", format: "file", fileKey: `library/x/owner/${fileName}`, fileName, fileBytes: 100 });
+		const { ai } = fakeAi();
+		ai.toMarkdown = async ({ blob }) => {
+			expect(blob.type).toBe(contentType);
+			expect(await blob.text()).toBe("%PDF synthetic");
+			return "Converted module text.";
+		};
+		await indexItem(id, { ai, vectorize: fakeVectorize().vectorize, db, storage });
+		expect((await row(id)).extractedText).toBe("Converted module text.");
+	});
+
 	it("indexes a file it cannot convert by its title, summary and tags only", async () => {
 		const id = await insertItem({ title: "Slides", format: "file", fileKey: "library/x/owner/s.pptx", fileName: "s.pptx", fileBytes: 100 });
 		const { ai, calls } = fakeAi("never used");

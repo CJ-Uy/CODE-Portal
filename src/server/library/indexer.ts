@@ -62,7 +62,8 @@ async function fileText(item: LibraryItem, deps: IndexDeps): Promise<string> {
 	if (!item.fileKey || !CONVERTIBLE.test(name) || (item.fileBytes ?? 0) > CONVERT_MAX_BYTES) return "";
 	const object = await deps.storage.getObject(item.fileKey).catch(() => null);
 	if (!object?.body) return "";
-	const markdown = await deps.ai.toMarkdown({ name, blob: await new Response(object.body).blob() });
+	const contentType = /\.pdf$/i.test(name) ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+	const markdown = await deps.ai.toMarkdown({ name, blob: await new Response(object.body, { headers: { "content-type": contentType } }).blob() });
 	return markdown.slice(0, EXTRACTED_TEXT_CAP);
 }
 
