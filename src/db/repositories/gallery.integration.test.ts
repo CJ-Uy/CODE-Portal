@@ -331,6 +331,7 @@ describe("gallery browsing and search", () => {
 		const evented = await upload(ana, { eventId: "evt" });
 		const find = async (q: string) => (await gallery.browse(ana, { sort: "recent", q })).items.map((item) => item.id);
 		expect(await find("sunset")).toEqual([captioned.id]);
+		expect(await find("summit day")).toEqual([captioned.id]);
 		expect(await find("award")).toEqual([topical.id]);
 		expect(await find("keep")).toEqual([person.id]);
 		expect(await find("retreat")).toEqual([evented.id]);
@@ -347,7 +348,7 @@ describe("gallery browsing and search", () => {
 });
 
 describe("gallery event albums", () => {
-	it("gives each ended, approved event one album, and skips the rest", async () => {
+	it("gives each started, approved event one album, and skips the rest", async () => {
 		await insertEvent("past", { title: "General Assembly" });
 		await insertEvent("future", { startsAt: Date.now() + 5 * DAY });
 		await insertEvent("pending", { status: "pending" });

@@ -70,9 +70,9 @@ export default {
 				),
 			);
 		}
-		// Every tick, but cheap: one indexed read each when nothing has ended or expired.
+		// Every tick, but cheap: one indexed read each when nothing has started or expired.
 		if (env.FEATURE_GALLERY === "true") {
-			// Each event gets its album once it has ended; the first run after release backfills every past event.
+			// Each event gets its album once it starts; the first run after release backfills every past event.
 			ctx.waitUntil(
 				ensureEventAlbums(db, new Date()).then(
 					(made) => {

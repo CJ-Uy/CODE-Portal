@@ -35,6 +35,7 @@ export function GalleryHome({ home, folderOptions }: { home: GalleryHomeView; fo
 	const target = useRef<string | null>(null);
 	const [sheet, setSheet] = useState<"pick" | "new" | null>(null);
 	const [showAllAlbums, setShowAllAlbums] = useState(false);
+	const [lastAlbum, setLastAlbum] = useState<string | null>(null);
 
 	function pickAlbum(id: string) {
 		target.current = id;
@@ -152,10 +153,12 @@ export function GalleryHome({ home, folderOptions }: { home: GalleryHomeView; fo
 				onChange={(event) => {
 					const files = [...(event.target.files ?? [])];
 					event.target.value = "";
-					if (files.length && target.current) queue.add(files, target.current);
+					if (!files.length || !target.current) return;
+					setLastAlbum(target.current);
+					queue.add(files, target.current);
 				}}
 			/>
-			<UploadPanel queue={queue} />
+			<UploadPanel queue={queue} viewHref={lastAlbum ? `/portal/gallery/${lastAlbum}` : undefined} />
 
 			<Sheet open={sheet !== null} onOpenChange={(open) => !open && setSheet(null)}>
 				<SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Check, ChevronDown, RotateCcw, X } from "lucide-react";
 import { formatBytes, LARGE_UPLOAD_BYTES } from "@/lib/gallery/view";
@@ -59,7 +60,8 @@ export function useUploadQueue() {
 	return { uploads, add, retry, clearFinished, active };
 }
 
-export function UploadPanel({ queue }: { queue: ReturnType<typeof useUploadQueue> }) {
+/** `viewHref` adds a link to where the files went, for pages that upload somewhere else (the front page). */
+export function UploadPanel({ queue, viewHref }: { queue: ReturnType<typeof useUploadQueue>; viewHref?: string }) {
 	const [collapsed, setCollapsed] = useState(false);
 	const { uploads } = queue;
 	if (uploads.length === 0) return null;
@@ -77,6 +79,11 @@ export function UploadPanel({ queue }: { queue: ReturnType<typeof useUploadQueue
 				<p className="flex-1 text-sm font-semibold" aria-live="polite">
 					{title}
 				</p>
+				{viewHref && !queue.active && done ? (
+					<Link href={viewHref} className="text-sm font-medium text-accent underline-offset-4 hover:underline">
+						View album
+					</Link>
+				) : null}
 				<button type="button" onClick={() => setCollapsed((value) => !value)} className="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={collapsed ? "Show uploads" : "Hide uploads"} aria-expanded={!collapsed}>
 					<ChevronDown className={cn("size-4 transition-transform", collapsed && "rotate-180")} />
 				</button>

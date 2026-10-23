@@ -141,7 +141,7 @@ export type GalleryRepository = {
 	restore(actor: Actor, input: { itemIds: string[]; folderIds: string[] }): Promise<void>;
 	homeView(actor: Actor, now?: Date): Promise<GalleryHomeView>;
 	browse(actor: Actor, input: GalleryBrowseInput): Promise<GalleryBrowseView>;
-	/** The event's own album, made first if the event has ended. Null for an event that has not ended or does not get one. */
+	/** The event's own album, made first if the event has started. Null for an event that has not started or does not get one. */
 	eventAlbum(actor: Actor, eventId: string, now?: Date): Promise<{ id: string } | null>;
 	recordView(actor: Actor, itemId: string): Promise<void>;
 	setHeart(actor: Actor, itemId: string, on: boolean): Promise<{ heartCount: number }>;
@@ -370,8 +370,9 @@ export function createGalleryRepository(db: Db): GalleryRepository {
 	const tagCount = sql<number>`(select count(*) from ${galleryTags} where ${galleryTags.itemId} = ${galleryItems.id})`;
 
 	/**
-	 * Photos across every album. Search matches captions, topics, tagged people (by their current name) and the
-	 * photo's own event; album names and event titles match albums, returned separately.
+	 * Photos across every album. Search matches captions, topics, tagged people (by their current name), the
+	 * photo's own event, and its album's name or event, so "summit" finds the Summit album's photos too. Matching
+	 * albums are also returned separately.
 	 * ponytail: LIKE scans; add an FTS table if the gallery reaches tens of thousands of photos.
 	 */
 	async function browseItems(actor: Actor, input: GalleryBrowseInput): Promise<GalleryBrowseView> {
@@ -391,6 +392,9 @@ export function createGalleryRepository(db: Db): GalleryRepository {
 					where ${galleryTags.itemId} = ${galleryItems.id}
 					and (lower(coalesce(${members.fullName}, '')) like ${pattern} or lower(coalesce(${members.name}, '')) like ${pattern} or lower(coalesce(${members.nickname}, '')) like ${pattern}))
 				or exists (select 1 from ${crsEvents} where ${crsEvents.id} = ${galleryItems.eventId} and lower(${crsEvents.title}) like ${pattern})
+				or exists (select 1 from ${galleryFolders} left join ${crsEvents} on ${crsEvents.id} = ${galleryFolders.eventId}
+					where ${galleryFolders.id} = ${galleryItems.folderId}
+					and (lower(${galleryFolders.name}) like ${pattern} or lower(coalesce(${crsEvents.title}, '')) like ${pattern}))
 			)`);
 		}
 		const order =
@@ -1020,7 +1024,7 @@ export async function purgeExpiredGallery(
 }
 
 /**
- * Gives every event that has ended its own album, so members always have somewhere to put its photos. Runs from the
+ * Gives every event that has started its own album, so members always have somewhere to put its photos. Runs from the
  * cron and from the gallery's front page; idempotent (one album per event, enforced by a unique index). Birthdays and
  * informational events get none. An album someone deleted is not remade while it waits in Recently deleted.
  */
@@ -1035,7 +1039,8 @@ export async function ensureEventAlbums(db: Db, now = new Date(), onlyEventId?: 
 				eq(crsEvents.status, "approved"),
 				eq(crsEvents.readOnly, false),
 				sql`${crsEvents.type} <> 'birthday'`,
-				sql`coalesce(${crsEvents.endsAt}, ${crsEvents.startsAt}) < ${now.getTime()}`,
+				// From the moment it starts, so photos can go up during the event itself.
+				sql`${crsEvents.startsAt} <= ${now.getTime()}`,
 				sql`not exists (select 1 from ${galleryFolders} where ${galleryFolders.eventId} = ${crsEvents.id} and ${galleryFolders.isEventAlbum} = 1)`,
 			),
 		)

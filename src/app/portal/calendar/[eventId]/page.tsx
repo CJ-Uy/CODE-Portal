@@ -51,8 +51,8 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 	const surveysOn = isFeatureEnabled("surveys");
 	// Started now, awaited below, so the photo row adds no round trip to the page.
 	const photosLoad = isFeatureEnabled("gallery") ? repositories.gallery.eventItems(actor, eventId).catch(() => []) : Promise.resolve([]);
-	// A past event always has an album to add photos to; the gallery makes it on first ask.
-	const albumLoad = isFeatureEnabled("gallery") && isPast ? repositories.gallery.eventAlbum(actor, eventId).catch(() => null) : Promise.resolve(null);
+	// An event that has started always has an album to add photos to; the gallery makes it on first ask.
+	const albumLoad = isFeatureEnabled("gallery") && new Date(event.startsAt).getTime() <= Date.now() ? repositories.gallery.eventAlbum(actor, eventId).catch(() => null) : Promise.resolve(null);
 	// The event's owner and staff admins; the repository checks this again for every read below.
 	const isOrganizer = managed ? managed.myRole === "owner" || managed.myRole === "admin" : false;
 	const [pointTypeLoad, staff, attendance, invites, signups, terms, feedback, organizerFeedback, debrief] = await Promise.all([
