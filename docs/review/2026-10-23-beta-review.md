@@ -24,8 +24,8 @@ Commits on `beta`: 42daa08, 50548c4, 85929f3, 299bd22, 6a60faa, 243449d, a549cbd
 12. **Forms list** is grouped into Drafts to send, Open now and Closed.
 13. **Copy:** "Results appear at 3 responses to protect anonymity" became "Results appear once 3 people have answered, so no single answer stands out", because answers are no longer anonymous to CRS. The email button now says Give feedback, the same as the app.
 14. **Admin event archive** no longer scrolls sideways on phones. Admin event feedback no longer nests cards.
-16. **Debrief boxes** show a short example answer while empty. **Template rows** end in a chevron like the forms list. **Rating legends** put each value's count and share on one line.
-15. **Guides** reshot: give-feedback, organizer-feedback, send-form, read-results. Pins come from measured element positions, four per image at most.
+15. **Debrief boxes** show a short example answer while empty. **Template rows** end in a chevron like the forms list. **Rating legends** put each value's count and share on one line.
+16. **Guides** reshot: give-feedback, organizer-feedback, send-form, read-results. Pins come from measured element positions, four per image at most.
 
 ### Check by hand
 
