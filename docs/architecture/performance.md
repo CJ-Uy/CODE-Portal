@@ -72,13 +72,29 @@ The drop is `qrcode` and `jsqr` leaving the initial load. The links page keeps i
 
 The remaining waves on the event page, the points page and the admin survey page are page-level chains in files other sessions own. They are listed in the hand-over notes for those sessions.
 
+### Second pass: routes not covered above
+
+Measured later the same day while other work loaded the machine, so these use a 200 ms simulated round trip (a new wave starts after a 120 ms gap) to keep CPU noise from splitting waves. Same tree before and after, toggled in place.
+
+| Route | Waves before | Waves after | ms before | ms after |
+| --- | ---: | ---: | ---: | ---: |
+| `/portal/library/[id]` (member) | 5 | 3 | 1854 | 973 |
+| `/portal/admin/members/[id]` | 7 | 4 | 2702 | 1337 |
+| `/portal/admin/data/members` | 6 | 5 | 1940 | 1654 |
+| `/portal/admin/data` | 6 | 5 | 1986 | 2267 |
+
+Wall time on the last row went the wrong way because of machine load; the wave count is the reliable figure. `/portal/admin/data/events/[id]` also loads its event row with the rest now (one wave fewer). Routes already at two or three waves were left alone: announcements, notifications, mail, guides, Ments, library lists and My library, link stats, Important links, and the admin announcements, email, templates, audit and point-type pages.
+
+The Links pages also stopped shipping `jsqr` (about 45 KB gzip). It only checks that an exported QR scans, so it now loads when the QR dialog draws.
+
 ## What changed
 
 - `getActor()` is wrapped in React `cache`, so it runs once per server render.
 - `src/auth.ts`: the adapter's `getSessionAndUser` reads the roles beside the session (keyed on the session token), and the session callback reuses the member row the adapter already joined. One round trip per request instead of three. Missing role keys fail closed to a plain member.
 - Independent repository reads now go out together (`Promise.all`). No query changed shape. `events.listPublished` reads the viewer's staff rows once instead of once per event.
 - Admin data filters use `next/form`, so a filter change is a client navigation.
-- `qrcode` loads when a QR is first drawn, and `jsqr` loads only when the browser has no BarcodeDetector.
+- `qrcode` loads when a QR is first drawn, and `jsqr` loads only when the browser has no BarcodeDetector or when a link QR export is checked.
+- Second pass: the library item page starts its id-only reads (comments, lists, stats, related) with the item read; attendance reports (`eventRoster`, `memberAttendance`, `termMemberSummaries`) run their independent reads together; the admin member and event detail pages load their main row with everything else.
 
 ## Caching decision
 

@@ -114,17 +114,17 @@ export function createAttendanceReports(db: Db) {
 				await Promise.all([
 					db
 						.select({
-							eventId: crsEvents.id,
-							title: crsEvents.title,
-							type: crsEvents.type,
-							status: crsEvents.status,
-							place: crsEvents.place,
-							startsAt: crsEvents.startsAt,
-							endsAt: crsEvents.endsAt,
-							graceMinutes: crsEvents.graceMinutes,
-							attendedCount: sql<number>`count(${crsAttendance.memberId})`,
-							lateCount: sql<number>`sum(case when ${lateExpr} then 1 else 0 end)`,
-						})
+								eventId: crsEvents.id,
+								title: crsEvents.title,
+								type: crsEvents.type,
+								status: crsEvents.status,
+								place: crsEvents.place,
+								startsAt: crsEvents.startsAt,
+								endsAt: crsEvents.endsAt,
+								graceMinutes: crsEvents.graceMinutes,
+								attendedCount: sql<number>`count(${crsAttendance.memberId})`,
+								lateCount: sql<number>`sum(case when ${lateExpr} then 1 else 0 end)`,
+							})
 						.from(crsEvents)
 						.leftJoin(crsAttendance, eq(crsAttendance.eventId, crsEvents.id))
 						.where(and(gte(crsEvents.startsAt, term.startsAt), lte(crsEvents.startsAt, term.endsAt), isNull(crsEvents.deletedAt)))
@@ -136,20 +136,20 @@ export function createAttendanceReports(db: Db) {
 						.innerJoin(crsEvents, eq(crsEvents.id, eventRsvps.eventId))
 						.leftJoin(crsAttendance, and(eq(crsAttendance.eventId, eventRsvps.eventId), eq(crsAttendance.memberId, eventRsvps.memberId)))
 						.where(
-							and(
-								eq(eventRsvps.state, "going"),
-								isNull(crsAttendance.memberId),
-								gte(crsEvents.startsAt, term.startsAt),
-								lte(crsEvents.startsAt, term.endsAt),
-								isNull(crsEvents.deletedAt),
-							),
-						)
+								and(
+									eq(eventRsvps.state, "going"),
+									isNull(crsAttendance.memberId),
+									gte(crsEvents.startsAt, term.startsAt),
+									lte(crsEvents.startsAt, term.endsAt),
+									isNull(crsEvents.deletedAt),
+								),
+							)
 						.groupBy(eventRsvps.eventId),
 					db
 						.select({
-							eventId: retentionRecords.eventId,
-							points: sql<number>`coalesce(sum(coalesce(${retentionRecords.points}, 0)), 0)`,
-						})
+								eventId: retentionRecords.eventId,
+								points: sql<number>`coalesce(sum(coalesce(${retentionRecords.points}, 0)), 0)`,
+							})
 						.from(retentionRecords)
 						.where(and(eq(retentionRecords.termId, termId), sql`${retentionRecords.eventId} is not null`))
 						.groupBy(retentionRecords.eventId),
@@ -176,34 +176,39 @@ export function createAttendanceReports(db: Db) {
 
 		async eventRoster(actor: Actor, eventId: string): Promise<EventRosterReportRow[]> {
 			requireReporting(actor);
-			const [event] = await db
-				.select({ startsAt: crsEvents.startsAt, graceMinutes: crsEvents.graceMinutes })
-				.from(crsEvents)
-				.where(eq(crsEvents.id, eventId))
-				.limit(1);
+			// All three reads need only the event id, so they share one round trip.
+			const [[event], rsvps, attendance]: [
+				{ startsAt: Date; graceMinutes: number | null }[],
+				{ memberId: string; memberEmail: string; memberName: string | null; rsvpState: string }[],
+				{ memberId: string; memberEmail: string; memberName: string | null; scannedAt: Date; scannedById: string; scannedByName: string | null; scannedByFallbackName: string | null; scannedByEmail: string | null }[],
+			] = await Promise.all([
+				db
+					.select({ startsAt: crsEvents.startsAt, graceMinutes: crsEvents.graceMinutes })
+					.from(crsEvents)
+					.where(eq(crsEvents.id, eventId))
+					.limit(1),
+				db
+					.select({ memberId: members.id, memberEmail: members.email, memberName: members.fullName, rsvpState: eventRsvps.state })
+					.from(eventRsvps)
+					.innerJoin(members, eq(members.id, eventRsvps.memberId))
+					.where(and(eq(eventRsvps.eventId, eventId), eq(eventRsvps.state, "going"))),
+				db
+					.select({
+						memberId: members.id,
+						memberEmail: members.email,
+						memberName: members.fullName,
+						scannedAt: crsAttendance.scannedAt,
+						scannedById: crsAttendance.scannedBy,
+						scannedByName: scannerMember.fullName,
+						scannedByFallbackName: scannerMember.name,
+						scannedByEmail: scannerMember.email,
+					})
+					.from(crsAttendance)
+					.innerJoin(members, eq(members.id, crsAttendance.memberId))
+					.leftJoin(scannerMember, eq(scannerMember.id, crsAttendance.scannedBy))
+					.where(eq(crsAttendance.eventId, eventId)),
+			]);
 			if (!event) return [];
-
-			const rsvps: { memberId: string; memberEmail: string; memberName: string | null; rsvpState: string }[] = await db
-				.select({ memberId: members.id, memberEmail: members.email, memberName: members.fullName, rsvpState: eventRsvps.state })
-				.from(eventRsvps)
-				.innerJoin(members, eq(members.id, eventRsvps.memberId))
-				.where(and(eq(eventRsvps.eventId, eventId), eq(eventRsvps.state, "going")));
-
-			const attendance: { memberId: string; memberEmail: string; memberName: string | null; scannedAt: Date; scannedById: string; scannedByName: string | null; scannedByFallbackName: string | null; scannedByEmail: string | null }[] = await db
-				.select({
-					memberId: members.id,
-					memberEmail: members.email,
-					memberName: members.fullName,
-					scannedAt: crsAttendance.scannedAt,
-					scannedById: crsAttendance.scannedBy,
-					scannedByName: scannerMember.fullName,
-					scannedByFallbackName: scannerMember.name,
-					scannedByEmail: scannerMember.email,
-				})
-				.from(crsAttendance)
-				.innerJoin(members, eq(members.id, crsAttendance.memberId))
-				.leftJoin(scannerMember, eq(scannerMember.id, crsAttendance.scannedBy))
-				.where(eq(crsAttendance.eventId, eventId));
 
 			const rows = new Map<string, EventRosterReportRow>();
 			for (const row of rsvps) {
@@ -265,37 +270,43 @@ export function createAttendanceReports(db: Db) {
 			const memberIds = memberRows.map((row) => row.memberId);
 			if (memberIds.length === 0) return [];
 
-			const attendance: { memberId: string; attendedCount: number; lateCount: number }[] = [];
-			for (const ids of chunkIds(memberIds)) {
-				const rows = await db
-					.select({
-						memberId: crsAttendance.memberId,
-						attendedCount: sql<number>`count(${crsAttendance.eventId})`,
-						lateCount: sql<number>`sum(case when ${lateExpr} then 1 else 0 end)`,
-					})
-					.from(crsAttendance)
-					.innerJoin(crsEvents, eq(crsEvents.id, crsAttendance.eventId))
-					.where(
-						and(inArray(crsAttendance.memberId, ids), gte(crsEvents.startsAt, term.startsAt), lte(crsEvents.startsAt, term.endsAt), isNull(crsEvents.deletedAt)),
-					)
-					.groupBy(crsAttendance.memberId);
-				attendance.push(...rows);
-			}
-
-			const points: { memberId: string; pointTypeId: string; points: number }[] = [];
-			for (const ids of chunkIds(memberIds)) {
-				const rows = await db
-					.select({
-						memberId: retentionRecords.memberId,
-						pointTypeId: retentionRecords.pointTypeId,
-						points: sql<number>`coalesce(sum(coalesce(${retentionRecords.points}, 0)), 0)`,
-					})
-					.from(retentionRecords)
-					.innerJoin(pointTypes, eq(pointTypes.id, retentionRecords.pointTypeId))
-					.where(and(inArray(retentionRecords.memberId, ids), eq(retentionRecords.termId, termId)))
-					.groupBy(retentionRecords.memberId, retentionRecords.pointTypeId);
-				points.push(...rows);
-			}
+			// Attendance and points per chunk are independent, so every chunk of both goes out at once.
+			const chunks = chunkIds(memberIds);
+			const [attendanceChunks, pointChunks]: [
+				{ memberId: string; attendedCount: number; lateCount: number }[][],
+				{ memberId: string; pointTypeId: string; points: number }[][],
+			] = await Promise.all([
+				Promise.all(
+					chunks.map((ids) =>
+						db
+							.select({
+								memberId: crsAttendance.memberId,
+								attendedCount: sql<number>`count(${crsAttendance.eventId})`,
+								lateCount: sql<number>`sum(case when ${lateExpr} then 1 else 0 end)`,
+							})
+							.from(crsAttendance)
+							.innerJoin(crsEvents, eq(crsEvents.id, crsAttendance.eventId))
+							.where(and(inArray(crsAttendance.memberId, ids), gte(crsEvents.startsAt, term.startsAt), lte(crsEvents.startsAt, term.endsAt), isNull(crsEvents.deletedAt)))
+							.groupBy(crsAttendance.memberId),
+					),
+				),
+				Promise.all(
+					chunks.map((ids) =>
+						db
+							.select({
+								memberId: retentionRecords.memberId,
+								pointTypeId: retentionRecords.pointTypeId,
+								points: sql<number>`coalesce(sum(coalesce(${retentionRecords.points}, 0)), 0)`,
+							})
+							.from(retentionRecords)
+							.innerJoin(pointTypes, eq(pointTypes.id, retentionRecords.pointTypeId))
+							.where(and(inArray(retentionRecords.memberId, ids), eq(retentionRecords.termId, termId)))
+							.groupBy(retentionRecords.memberId, retentionRecords.pointTypeId),
+					),
+				),
+			]);
+			const attendance = attendanceChunks.flat();
+			const points = pointChunks.flat();
 
 			const attendanceByMember = new Map(attendance.map((row) => [row.memberId, row]));
 			const pointsByMember = new Map<string, Record<string, number>>();
@@ -323,21 +334,28 @@ export function createAttendanceReports(db: Db) {
 			const [term] = await db.select().from(terms).where(eq(terms.id, termId)).limit(1);
 			if (!term) return [];
 
-			const attendance: { eventId: string; eventTitle: string; startsAt: Date; graceMinutes: number | null; scannedAt: Date }[] = await db
-				.select({ eventId: crsEvents.id, eventTitle: crsEvents.title, startsAt: crsEvents.startsAt, graceMinutes: crsEvents.graceMinutes, scannedAt: crsAttendance.scannedAt })
-				.from(crsAttendance)
-				.innerJoin(crsEvents, eq(crsEvents.id, crsAttendance.eventId))
-				.where(and(eq(crsAttendance.memberId, memberId), gte(crsEvents.startsAt, term.startsAt), lte(crsEvents.startsAt, term.endsAt), isNull(crsEvents.deletedAt)));
-			const rsvps: { eventId: string; eventTitle: string; startsAt: Date; graceMinutes: number | null; rsvpState: string }[] = await db
-				.select({ eventId: crsEvents.id, eventTitle: crsEvents.title, startsAt: crsEvents.startsAt, graceMinutes: crsEvents.graceMinutes, rsvpState: eventRsvps.state })
-				.from(eventRsvps)
-				.innerJoin(crsEvents, eq(crsEvents.id, eventRsvps.eventId))
-				.where(and(eq(eventRsvps.memberId, memberId), eq(eventRsvps.state, "going"), gte(crsEvents.startsAt, term.startsAt), lte(crsEvents.startsAt, term.endsAt), isNull(crsEvents.deletedAt)));
-			const points: { eventId: string | null; points: number }[] = await db
-				.select({ eventId: retentionRecords.eventId, points: sql<number>`coalesce(sum(coalesce(${retentionRecords.points}, 0)), 0)` })
-				.from(retentionRecords)
-				.where(and(eq(retentionRecords.memberId, memberId), eq(retentionRecords.termId, termId), sql`${retentionRecords.eventId} is not null`))
-				.groupBy(retentionRecords.eventId);
+			// The three reads only need the term's dates, so they share one round trip.
+			const [attendance, rsvps, points]: [
+				{ eventId: string; eventTitle: string; startsAt: Date; graceMinutes: number | null; scannedAt: Date }[],
+				{ eventId: string; eventTitle: string; startsAt: Date; graceMinutes: number | null; rsvpState: string }[],
+				{ eventId: string | null; points: number }[],
+			] = await Promise.all([
+				db
+					.select({ eventId: crsEvents.id, eventTitle: crsEvents.title, startsAt: crsEvents.startsAt, graceMinutes: crsEvents.graceMinutes, scannedAt: crsAttendance.scannedAt })
+					.from(crsAttendance)
+					.innerJoin(crsEvents, eq(crsEvents.id, crsAttendance.eventId))
+					.where(and(eq(crsAttendance.memberId, memberId), gte(crsEvents.startsAt, term.startsAt), lte(crsEvents.startsAt, term.endsAt), isNull(crsEvents.deletedAt))),
+				db
+					.select({ eventId: crsEvents.id, eventTitle: crsEvents.title, startsAt: crsEvents.startsAt, graceMinutes: crsEvents.graceMinutes, rsvpState: eventRsvps.state })
+					.from(eventRsvps)
+					.innerJoin(crsEvents, eq(crsEvents.id, eventRsvps.eventId))
+					.where(and(eq(eventRsvps.memberId, memberId), eq(eventRsvps.state, "going"), gte(crsEvents.startsAt, term.startsAt), lte(crsEvents.startsAt, term.endsAt), isNull(crsEvents.deletedAt))),
+				db
+					.select({ eventId: retentionRecords.eventId, points: sql<number>`coalesce(sum(coalesce(${retentionRecords.points}, 0)), 0)` })
+					.from(retentionRecords)
+					.where(and(eq(retentionRecords.memberId, memberId), eq(retentionRecords.termId, termId), sql`${retentionRecords.eventId} is not null`))
+					.groupBy(retentionRecords.eventId),
+			]);
 
 			const pointsByEvent = new Map(points.map((row) => [row.eventId, quantizePoints(Number(row.points))]));
 			const rows = new Map<string, MemberAttendanceRow>();

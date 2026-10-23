@@ -1,7 +1,8 @@
-import { LoadingScreen, PageHeaderSkeleton, Skeleton } from "@/components/ui/skeleton";
+import { RouteFallback } from "@/components/portal/route-fallback";
+import { LoadingScreen, PageHeaderSkeleton, PageLoading, Skeleton } from "@/components/ui/skeleton";
 
 /** Mirrors the library home (page.tsx): header and actions, pitch banner, search, filters beside the shelves. */
-export default function LibraryLoading() {
+function LibraryHomeLoading() {
 	return (
 		<LoadingScreen label="Loading library" className="mx-auto max-w-6xl">
 			<div className="flex min-w-0 flex-wrap items-end justify-between gap-3">
@@ -49,4 +50,9 @@ export default function LibraryLoading() {
 			</div>
 		</LoadingScreen>
 	);
+}
+
+/** The library home's shape on the library home; a plain page for lists, My library and the rest. */
+export default function LibraryLoading() {
+	return <RouteFallback path="/portal/library" match={<LibraryHomeLoading />} other={<PageLoading />} />;
 }

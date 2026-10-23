@@ -66,6 +66,15 @@ export default async function LibraryItemPage({ params }: { params: Promise<{ id
 	const { id } = await params;
 
 	const repositories = await getRepositories();
+	// The extras may fail without taking the item down with them. Those that need only the id start
+	// with the item read; on a hidden or missing item they are simply thrown away.
+	const extras = Promise.all([
+		repositories.library.listComments(actor, id).catch((): LibraryCommentView[] => []),
+		repositories.libraryActivity.statsFor([id]).then((all) => all.get(id) ?? null).catch(() => null),
+		repositories.libraryLists.myLists(actor).catch(() => ({ owned: [], editable: [] })),
+		repositories.libraryLists.savedIn(actor, id).catch((): string[] => []),
+		loadRelated(actor, repositories, id).catch((): LibraryCard[] => []),
+	]);
 	// A hidden item and a missing one look the same: nothing here says which it was.
 	const item = await repositories.library.getItem(actor, id).catch(() => null);
 	if (!item) notFound();
@@ -75,15 +84,8 @@ export default async function LibraryItemPage({ params }: { params: Promise<{ id
 	const isOwner = item.createdBy === actor.memberId;
 	const live = item.status === "published";
 
-	// The extras may fail without taking the item down with them.
-	const [comments, stats, lists, savedIn, related, embeds] = await Promise.all([
-		repositories.library.listComments(actor, id).catch((): LibraryCommentView[] => []),
-		live ? repositories.libraryActivity.statsFor([id]).then((all) => all.get(id) ?? null).catch(() => null) : Promise.resolve(null),
-		repositories.libraryLists.myLists(actor).catch(() => ({ owned: [], editable: [] })),
-		repositories.libraryLists.savedIn(actor, id).catch((): string[] => []),
-		loadRelated(actor, repositories, id),
-		loadEmbeds(actor, repositories, item),
-	]);
+	const [[comments, liveStats, lists, savedIn, related], embeds] = await Promise.all([extras, loadEmbeds(actor, repositories, item)]);
+	const stats = live ? liveStats : null;
 
 	const topLevel = comments.filter((comment) => !comment.parentId);
 	const visibleComments = comments.filter((comment) => !comment.hidden).length;

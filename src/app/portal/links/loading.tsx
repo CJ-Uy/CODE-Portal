@@ -1,7 +1,8 @@
-import { LoadingScreen, PageHeaderSkeleton, Skeleton } from "@/components/ui/skeleton";
+import { RouteFallback } from "@/components/portal/route-fallback";
+import { LoadingScreen, PageHeaderSkeleton, PageLoading, Skeleton } from "@/components/ui/skeleton";
 
 /** Mirrors LinksWorkspace: header and actions, help line, toolbar, then link cards. */
-export default function LinksLoading() {
+function LinksListLoading() {
 	return (
 		<LoadingScreen label="Loading links" className="gap-5">
 			<div className="flex flex-wrap items-end justify-between gap-3">
@@ -34,4 +35,9 @@ export default function LinksLoading() {
 			</div>
 		</LoadingScreen>
 	);
+}
+
+/** The link list's shape on the list; a plain page for a link's stats. */
+export default function LinksLoading() {
+	return <RouteFallback path="/portal/links" match={<LinksListLoading />} other={<PageLoading />} />;
 }
