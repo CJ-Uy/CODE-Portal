@@ -15,8 +15,8 @@ The older `open design` folder split the member area into many static pages and 
 
 ## Main modules
 
-- Overview: member status, retention progress, survey requests, saved content, short link activity, and quick actions.
-- Profile: member details include full name, nickname, pronouns, roles, retention points, and guided tour status.
+- Overview: member status, the retention verdict line with its slot strip, survey requests, saved content, short link activity, and quick actions.
+- Profile: member details include full name, nickname, pronouns, roles, retention status with requirements met, and guided tour status.
 - Private library: confidential case studies, public-plus resources, tools, comments, favorites, saved lists, filters, and a future graph search path.
 - Short links: official slugs, destination URLs, ownership, shared statistics, admin moderation, QR export, logo placement, light mode, dark mode, and transparent export.
 - CRS: event creation, QR attendance, archive proof, forum discussion, random survey selection, approval, point assignment, and audit history.
@@ -68,6 +68,16 @@ The member tree uses one bordered canvas for the complete forest and every gener
 The first view centers the signed-in member at 50% zoom when an account link or a unique normalized name identifies their person. Name matching locates the view without changing account links. Find me returns to the same centered 50% view. A valid shared person link takes precedence; unmatched members see the whole forest and guidance to search or request an account link. Whole-forest fit shows structure; selecting or searching for a person restores a readable local view.
 
 The selected person's lineage follows the canvas. Statistics use an open definition list, followed by divided rows for the largest trees. The mobile statistics grid has two columns. Members choose and save their own informal Pments directly in a searchable checkbox list below the statistics. Official relationship editing stays in Members & Access, with an Explore tree link back to the member view.
+
+### Member retention
+
+The retention page reads as a school-year report card. Retention is 8 parts with 1 point per slot, 12 slots a year, so the page tracks requirements met, not a points total. A verdict line opens the page in Source Sans: the status in semibold, then "5 of 12 requirements met" in tabular numerals, then the next deadline and the parts it closes. Below the verdict, a 12-slot strip shows the yearly slots, a gap, then the semester slots. Each slot is a short bar: CODE blue (#0C315C) for earned points, the pending hatch for an unanswered feedback share, a dashed outline for a semester that has not opened, and a dimmed flat bar for a missed slot. A small key names Met, Part done, Waiting on a form and Not open yet. The home tile reuses the same verdict and strip at a smaller size, with a link to the full page.
+
+The pending hatch is one shared pattern: diagonal stripes in the ring blue (#4986AC) on a light ground. It marks points a member can still unlock by answering a feedback form. The same hatch appears on the strip, in grid cells, in the pending feedback panel, and in the notes on event and form pages. The pending feedback panel and both notes use the same frame, a light-blue fill with a ring-blue border. The panel lists one row per event with its points, its closing time and an Answer button. The event note explains the 75/25 split to everyone. The form note names the viewer's own points that are waiting on their answer.
+
+The requirements grid has a part label column and two semester columns, and each semester head shows its dates. Yearly parts sit under "Once this school year" and their cells span both semesters. Semester parts sit under "Once each semester" with one cell per semester. Met cells fill CODE blue with a check and the word Met, and they drop the progress bar. Open cells show "0.75 of 1" with a bar, plus the hatch for any pending share. Overflow is a dashed chip that reads "extra, not counted". Upcoming cells are short dashed cells that read "Opens" and a date. Missed cells go flat with an x and say what the slot closed with. State comes from fill, icon and words, never from red or green. On mobile the part label moves above its cells and the two columns stay down to 320 px. A native "How retention works" disclosure sits under the grid.
+
+"Not counted toward retention" lists other point types in a dashed frame, so they read as outside the requirements. Milestones sit beside it on desktop: each point type gets a thin rail with round markers, a label under each marker that is clamped at the rail's edges, and a check on reached milestones. Milestones count every point, extra points included. Activity history comes last: a divided list of records, newest first, filtered by point type with a count of shown records. A retention part gets a filled type chip; any other type gets a dashed chip that reads "not counted".
 
 ### Email templates and personalization
 
