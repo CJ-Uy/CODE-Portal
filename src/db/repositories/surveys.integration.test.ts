@@ -958,10 +958,10 @@ describe("surveys repository on D1", () => {
 				.bind("mem_out", "out@example.com", "Out", "active")
 				.run();
 
-			await expect(repo.openFeedbackForEvent(walkIn, "evt_1", LATE)).resolves.toEqual({ surveyId: survey.id, state: "open" });
-			await expect(repo.openFeedbackForEvent(invited, "evt_1", LATE)).resolves.toEqual({ surveyId: survey.id, state: "open" });
+			await expect(repo.openFeedbackForEvent(walkIn, "evt_1", LATE)).resolves.toEqual({ surveyId: survey.id, state: "open", closesAt: in72h });
+			await expect(repo.openFeedbackForEvent(invited, "evt_1", LATE)).resolves.toEqual({ surveyId: survey.id, state: "open", closesAt: in72h });
 			await repo.submitResponse(walkIn, answer(), LATE);
-			await expect(repo.openFeedbackForEvent(walkIn, "evt_1", LATE)).resolves.toEqual({ surveyId: survey.id, state: "answered" });
+			await expect(repo.openFeedbackForEvent(walkIn, "evt_1", LATE)).resolves.toEqual({ surveyId: survey.id, state: "answered", closesAt: in72h });
 
 			await expect(repo.openFeedbackForEvent(asMember("mem_out"), "evt_1", LATE)).resolves.toBeNull();
 			await expect(repo.openFeedbackForEvent(admin, "evt_1", LATE)).resolves.toBeNull();

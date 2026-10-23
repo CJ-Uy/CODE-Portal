@@ -41,7 +41,7 @@ const detailTitles: Record<string, string> = {
 	"/portal/calendar": "Event details",
 	"/portal/library": "Library item",
 	"/portal/links": "Link stats",
-	"/portal/surveys": "Survey",
+	"/portal/surveys": "Feedback",
 	"/portal/admin/content/surveys": "Survey details",
 };
 

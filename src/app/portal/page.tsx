@@ -139,10 +139,10 @@ export default async function PortalOverviewPage() {
 						href={`/portal/surveys/${encodeURIComponent(summary.oldestPendingSurveyId)}`}
 						className="block min-w-0 rounded-lg transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 					>
-						<MetricCard label="Surveys" value={String(summary.pendingSurveys)} description="Pending responses. Open the next one." icon={MessageSquare} />
+						<MetricCard label="Feedback forms" value={String(summary.pendingSurveys)} description="Waiting for your answers. Open the next one." icon={MessageSquare} />
 					</Link>
 				) : flags.surveys ? (
-					<MetricCard label="Surveys" value={String(summary.pendingSurveys)} description="Pending responses" icon={MessageSquare} />
+					<MetricCard label="Feedback forms" value={String(summary.pendingSurveys)} description="None waiting for you" icon={MessageSquare} />
 				) : null}
 				<MetricCard label="Events" value={String(summary.upcomingEvents)} description="Upcoming approved events" icon={CalendarDays} />
 				<MetricCard label="Links" value={String(summary.linkClicks)} description="Clicks on your short links" icon={Link2} />

@@ -6,8 +6,11 @@ import { tokens } from "@/lib/feedback/words";
 
 // Pure helpers behind the results view. Client-safe: nothing here reads the database or the environment.
 
-export const BELOW_THRESHOLD_NOTE = `Results appear at ${RESULTS_MIN_RESPONSES} responses to protect anonymity.`;
+export const BELOW_THRESHOLD_NOTE = `Results appear once ${RESULTS_MIN_RESPONSES} people have answered, so no single answer stands out.`;
 export const LOW_RESPONSE_NOTE = "Low response rate. Read these as a rough signal.";
+
+/** The stored status is "running"; people read that as "Open". */
+export const FORM_STATUS_LABELS = { draft: "Draft", running: "Open", closed: "Closed" } as const;
 
 const plural = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
 

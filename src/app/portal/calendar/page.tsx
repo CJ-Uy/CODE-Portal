@@ -6,6 +6,8 @@ import { allowedEventTypes } from "@/db/repositories/eventTypeRules";
 import { Button } from "@/components/ui/button";
 import { CalendarMonth } from "@/components/calendar-month";
 import { loadEventTypes } from "@/lib/event-type-load";
+import { formatEstimate } from "@/lib/feedback/editor-input";
+import { estimateSeconds } from "@/lib/feedback/stats";
 import { utc8Parts } from "@/lib/date-slots";
 import { requireActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
@@ -129,13 +131,22 @@ export default async function CalendarPage({
 async function CreateEventControl() {
 	const actor = await requireActor();
 	const repositories = await getRepositories();
-	const typeLoad = await loadEventTypes(() => repositories.eventTypeRules.list());
+	// Feedback forms belong to CRS (survey:configure), so only they get the "attach a form" option. A failed read hides it.
+	const offerFeedback = isFeatureEnabled("surveys") && can(actor, "survey:configure");
+	const [typeLoad, templates] = await Promise.all([
+		loadEventTypes(() => repositories.eventTypeRules.list()),
+		offerFeedback ? repositories.surveys.listTemplates(actor).catch(() => []) : Promise.resolve([]),
+	]);
 	return (
 		<CreateEventSheet
 			allowedTypes={typeLoad.ok ? allowedEventTypes(actor, typeLoad.rows) : []}
 			typesUnavailable={!typeLoad.ok}
 			canSetReadOnly={can(actor, "event:moderate")}
 			canViewArchive={canViewFeedbackArchive(actor)}
+			feedbackTemplates={templates.map((template) => ({
+				id: template.id,
+				label: `${template.name} (${template.questionsJson.length} ${template.questionsJson.length === 1 ? "question" : "questions"}, ${formatEstimate(estimateSeconds(template.questionsJson)).toLowerCase()})`,
+			}))}
 		/>
 	);
 }

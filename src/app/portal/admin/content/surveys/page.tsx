@@ -3,9 +3,9 @@ import { loadEventList } from "@/app/portal/calendar/load-events";
 import { AdminIntro } from "@/components/portal/admin-intro";
 import { notFound, redirect } from "next/navigation";
 import { signInPath } from "@/server/auth/sign-in";
-import { ListChecks } from "lucide-react";
+import { ChevronRight, ListChecks } from "lucide-react";
 import { getRepositories } from "@/db";
-import { Badge } from "@/components/ui/badge";
+import { FormStatusBadge } from "@/components/feedback/results";
 import { Button } from "@/components/ui/button";
 import type { EventFeedbackRow } from "@/db/types";
 import { formatUtc8DateTime, toLocalDate } from "@/lib/date-slots";
@@ -107,7 +107,7 @@ export default async function AdminSurveysPage() {
 									<Link
 										key={survey.id}
 										href={`/portal/admin/content/surveys/${survey.id}`}
-										className="grid min-w-0 gap-2 rounded-xl px-4 py-4 text-sm hover:bg-secondary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-4"
+										className="group grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-4 py-4 text-sm first:rounded-t-xl last:rounded-b-xl hover:bg-secondary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:gap-4"
 									>
 										<span className="grid min-w-0 gap-1">
 											<span className="min-w-0 font-medium [overflow-wrap:anywhere]">{survey.title}</span>
@@ -115,8 +115,12 @@ export default async function AdminSurveysPage() {
 												{survey.eventId ? (eventTitles.get(survey.eventId) ?? "Event no longer listed") : "General form"}
 											</span>
 										</span>
-										<span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground">
-											<Badge variant="outline">{status}</Badge>
+										<ChevronRight
+											aria-hidden="true"
+											className="col-start-2 row-span-2 size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 sm:col-start-3 sm:row-span-1"
+										/>
+										<span className="col-start-1 row-start-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground sm:col-start-2 sm:row-start-1">
+											<FormStatusBadge status={status} />
 											{status === "draft" ? null : (
 												<>
 													<span>
