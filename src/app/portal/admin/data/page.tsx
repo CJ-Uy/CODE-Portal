@@ -127,7 +127,7 @@ export default async function DataGroupPage({
 					<AttentionList title="Approved ended with no scans" rows={endedNoAttendance.map((event) => ({ href: `/portal/admin/data/events/${event.eventId}`, label: event.title, meta: formatDateTime(event.startsAt) }))} />
 					<AttentionList title="Awarded events with no scans" rows={awardsNoScans.map((event) => ({ href: `/portal/admin/data/events/${event.eventId}`, label: event.title, meta: formatDateTime(event.startsAt) }))} />
 					<AttentionList title="Missed a retention requirement" rows={missedRequirement.map((member) => ({ href: `/portal/admin/members/${member.memberId}?termId=${selectedTerm?.id ?? ""}`, label: member.memberName ?? member.memberEmail, meta: `${member.missed} missed` }))} />
-					<AttentionList title="Feedback form not sent" rows={unsentForms.map((form) => ({ href: `/portal/admin/content/surveys/${form.surveyId}`, label: form.title, meta: `Event ${formatDateTime(form.startsAt)}. Attendees are waiting on 25% of its points.` }))} />
+					<AttentionList title="Feedback form not sent" rows={unsentForms.map((form) => ({ href: `/portal/admin/content/surveys/${form.surveyId}`, label: form.title, meta: `${formatDateTime(form.startsAt)} · attendees still owed 25%` }))} />
 				</div>
 			</section>
 

@@ -88,7 +88,7 @@ export default async function AdminMemberProfilePage({
 			{summary ? (
 				<section className="grid gap-3">
 					{sectionTitle("Retention progress")}
-					<Card><CardContent className="grid gap-5 p-4"><RetentionVerdict progress={summary} /><RetentionGrid progress={summary} /></CardContent></Card>
+					<Card><CardContent className="grid gap-5 p-4"><RetentionVerdict progress={summary} plain /><RetentionGrid progress={summary} /></CardContent></Card>
 				</section>
 			) : null}
 

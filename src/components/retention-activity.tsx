@@ -8,6 +8,18 @@ import { formatPoints } from "@/lib/points";
 import { sourceLabel } from "@/lib/retention-categories";
 import { cn } from "@/lib/utils";
 
+const FIRST_ROWS = 5;
+
+/** What the row adds beyond its title and source: nothing for a plain check-in, a short note for a split one. */
+function recordDetail(record: MyHistoryRecord): string {
+	if (record.source === "feedback_share") return "";
+	if (!record.eventTitle) return "";
+	const attended = `Attended ${record.eventTitle}`;
+	if (record.reason === attended) return "";
+	if (record.reason.startsWith(`${attended} (75%`)) return "75% at check-in";
+	return record.reason;
+}
+
 function displayDate(date: string): string {
 	return new Date(`${date}T00:00:00+08:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "Asia/Manila" });
 }
@@ -15,11 +27,13 @@ function displayDate(date: string): string {
 /** Every record behind the numbers, newest first, filterable by point type. Part types read "Retention", the rest "Not counted". */
 export function RetentionActivity({ records, partIds }: { records: MyHistoryRecord[]; partIds: string[] }) {
 	const [typeId, setTypeId] = useState("all");
+	const [showAll, setShowAll] = useState(false);
 	const types = Array.from(new Map(records.map((record) => [record.pointTypeId, record.pointTypeLabel])), ([id, label]) => ({ id, label })).sort((a, b) =>
 		a.label.localeCompare(b.label),
 	);
 	const visible = records.filter((record) => typeId === "all" || record.pointTypeId === typeId);
 	const parts = new Set(partIds);
+	const shown = showAll ? visible : visible.slice(0, FIRST_ROWS);
 	return (
 		<section aria-labelledby="activity-history" className="grid min-w-0 gap-3">
 			<div className="flex min-w-0 flex-wrap items-end justify-between gap-3">
@@ -27,9 +41,7 @@ export function RetentionActivity({ records, partIds }: { records: MyHistoryReco
 					<h2 id="activity-history" className="font-heading text-2xl">
 						Activity history
 					</h2>
-					<p className="text-sm text-muted-foreground">
-						Every record this school year, newest first. {visible.length} of {records.length}.
-					</p>
+					<p className="text-sm text-muted-foreground">Newest first.</p>
 				</div>
 				<label className="grid min-w-0 gap-1 text-xs text-muted-foreground">
 					Point type
@@ -49,7 +61,7 @@ export function RetentionActivity({ records, partIds }: { records: MyHistoryReco
 				</p>
 			) : (
 				<ul className="grid min-w-0 divide-y divide-border/60 rounded-lg border border-border bg-card">
-					{visible.map((record) => {
+					{shown.map((record) => {
 						const counts = parts.has(record.pointTypeId);
 						return (
 							<li key={record.id} className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-1 px-4 py-3 sm:grid-cols-[7rem_minmax(0,1fr)_auto]">
@@ -70,7 +82,7 @@ export function RetentionActivity({ records, partIds }: { records: MyHistoryReco
 										</span>
 										<span className="[overflow-wrap:anywhere]">
 											{sourceLabel(record.source)}
-											{record.eventTitle && record.reason !== `Attended ${record.eventTitle}` ? ` · ${record.reason}` : ""}
+											{recordDetail(record) ? ` · ${recordDetail(record)}` : ""}
 										</span>
 									</p>
 								</div>
@@ -86,6 +98,20 @@ export function RetentionActivity({ records, partIds }: { records: MyHistoryReco
 					})}
 				</ul>
 			)}
+			<div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2">
+				{visible.length > FIRST_ROWS ? (
+					<button
+						type="button"
+						onClick={() => setShowAll((value) => !value)}
+						className="text-sm font-medium text-accent underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					>
+						{showAll ? "Show fewer" : `Show all ${visible.length}`}
+					</button>
+				) : (
+					<span />
+				)}
+				<p className="text-xs text-muted-foreground">Something missing? An officer can add it.</p>
+			</div>
 		</section>
 	);
 }

@@ -1,4 +1,5 @@
-import { Check, ChevronDown } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Check, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { RetentionActivity } from "@/components/retention-activity";
@@ -17,12 +18,12 @@ function HowItWorks() {
 				<ChevronDown className="size-4 shrink-0 transition-transform duration-200 group-open:rotate-180" aria-hidden />
 			</summary>
 			<ul className="grid max-w-prose gap-2 px-4 pb-4 text-sm text-muted-foreground">
-				<li>Retention has 8 parts. You are retained when every part is met for the school year.</li>
-				<li>Training Seminar, Project Team, Advocacy-Related and Engagement Team need 1 point each, any time in the school year.</li>
-				<li>General Membership Activity, Human Resources Event, Community Building Team Bonding and Knowledge-Sharing Activity need 1 point in each semester. A 1st-semester slot cannot be made up in the 2nd.</li>
-				<li>Points past 1 in a slot are extra. They never count toward retention, but they still count toward milestones.</li>
-				<li>When an event has a feedback form, checking in gives 75% of its points. Answering the form gives the other 25%.</li>
-				<li>Other point types, like Feedback or eligibility points, are tracked on their own and never count toward retention.</li>
+				<li>You are retained when all 12 boxes are met by the end of the school year.</li>
+				<li>4 parts need 1 point any time in the year. The other 4 need 1 point in each semester.</li>
+				<li>A 1st-semester box cannot be filled by a 2nd-semester event.</li>
+				<li>Points past 1 are extra. They count toward milestones, not retention.</li>
+				<li>If an event has a feedback form, check-in gives 75% of its points and answering gives the rest.</li>
+				<li>Other points, like Feedback, are kept but do not count toward retention.</li>
 			</ul>
 		</details>
 	);
@@ -36,7 +37,6 @@ function OtherPoints({ types, totals }: { types: PointTypeRow[]; totals: Map<str
 				<h2 id="other-points" className="font-heading text-2xl">
 					Not counted toward retention
 				</h2>
-				<p className="text-sm text-muted-foreground">Points from other activities. They are yours to keep, but no retention part uses them.</p>
 			</div>
 			{rows.length === 0 ? (
 				<p className="rounded-md border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">No other points this school year.</p>
@@ -63,7 +63,7 @@ function Milestones({ types, totals }: { types: PointTypeRow[]; totals: Map<stri
 				<h2 id="milestones" className="font-heading text-2xl">
 					Milestones
 				</h2>
-				<p className="text-sm text-muted-foreground">Every point of a type this school year counts here, extra points included.</p>
+				<p className="text-sm text-muted-foreground">Extra points count here too.</p>
 			</div>
 			<ul className="grid min-w-0 divide-y divide-border/60 rounded-lg border border-border bg-card">
 				{rows.map((type) => {
@@ -188,9 +188,18 @@ export function RetentionHistory({
 						<h2 id="requirements" className="font-heading text-2xl">
 							Retention requirements
 						</h2>
-						<p className="text-sm text-muted-foreground">Each box needs 1 point. Points from the matching events land in the box for the semester the event was in.</p>
+						<p className="text-sm text-muted-foreground">Each box needs 1 point.</p>
 					</div>
-					<RetentionGrid progress={progress} nextEvents={nextEvents} />
+					{records.length === 0 ? (
+						<p className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-dashed border-border px-4 py-3 text-sm">
+							<span className="text-muted-foreground">Nothing yet. Check in at an event to fill your first box.</span>
+							<Link href="/portal/calendar" className="inline-flex items-center gap-1 font-medium text-accent underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+								See events
+								<ArrowRight className="size-4" aria-hidden />
+							</Link>
+						</p>
+					) : null}
+					<RetentionGrid progress={progress} nextEvents={nextEvents} pendingHref={pendingShares.length > 0 ? "#pending-feedback" : undefined} />
 					<HowItWorks />
 				</section>
 			) : summary ? (

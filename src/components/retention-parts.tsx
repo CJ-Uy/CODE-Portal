@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Check, X } from "lucide-react";
+import { ArrowRight, Check, CircleCheck, X } from "lucide-react";
 import type { PendingShare } from "@/db/repositories/retention";
 import { formatPoints } from "@/lib/points";
 import type { RetentionPart, RetentionProgress, RetentionSlot, RetentionStatus } from "@/lib/retention-parts";
@@ -47,7 +47,7 @@ function StripCell({ part, slot }: { part: RetentionPart; slot: RetentionSlot })
 }
 
 /** The whole year at a glance: the yearly slots, a gap, then the semester slots, with a key. Readable without color. */
-export function SlotStrip({ progress, className }: { progress: RetentionProgress; className?: string }) {
+export function SlotStrip({ progress, showKey = true, className }: { progress: RetentionProgress; showKey?: boolean; className?: string }) {
 	const group = (period: RetentionPart["period"]) => progress.parts.filter((part) => part.period === period).flatMap((part) => part.slots.map((slot) => ({ part, slot })));
 	const groups = [group("year"), group("semester")].filter((cells) => cells.length > 0);
 	return (
@@ -61,45 +61,71 @@ export function SlotStrip({ progress, className }: { progress: RetentionProgress
 					</ol>
 				))}
 			</div>
-			<ul className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-hidden>
+			{showKey ? <ul className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-hidden>
 				<li className="flex items-center gap-1.5"><span className="h-2 w-3.5 rounded-sm bg-accent" />Met</li>
 				<li className="flex items-center gap-1.5"><span className="flex h-2 w-3.5 overflow-hidden rounded-sm bg-secondary"><span className="w-1/2 bg-accent" /></span>Part done</li>
 				<li className="flex items-center gap-1.5"><span className="h-2 w-3.5 rounded-sm" style={PENDING_HATCH} />Waiting on a form</li>
 				<li className="flex items-center gap-1.5"><span className="h-2 w-3.5 rounded-sm border border-dashed border-border" />Not open yet</li>
-			</ul>
+			</ul> : null}
 		</div>
 	);
 }
 
-/** "On track. 5 of 12 requirements met in SY 2026-2027." plus the strip and the next deadline. */
-export function RetentionVerdict({ progress, termName, compact = false }: { progress: RetentionProgress; termName?: string; compact?: boolean }) {
+const pendingTotal = (progress: RetentionProgress) =>
+	progress.parts.reduce((sum, part) => sum + part.slots.reduce((inner, slot) => inner + (slot.state === "open" ? slot.pending : 0), 0), 0);
+
+/** "On track. 5 of 12 requirements met in SY 2026-2027." plus the strip and one line on what to do next. */
+/** plain drops the lines spoken to the member ("Nice work"), for officers reading someone else's progress. */
+export function RetentionVerdict({ progress, termName, compact = false, plain = false }: { progress: RetentionProgress; termName?: string; compact?: boolean; plain?: boolean }) {
 	const deadline = progress.nextDeadline;
+	const waiting = pendingTotal(progress);
 	return (
 		<div className="grid min-w-0 gap-3">
-			<p className={cn("min-w-0 text-pretty", compact ? "text-base" : "text-lg sm:text-xl")}>
-				<span className="font-semibold">{STATUS_LABEL[progress.status]}.</span>{" "}
-				<span className="tabular-nums">
-					{progress.met} of {progress.required} requirements met
-					{termName ? (
-						<>
-							{" in "}
-							<span className="whitespace-nowrap">{termName}</span>
-						</>
-					) : null}
+			<p className={cn("flex min-w-0 items-start gap-2 text-pretty", compact ? "text-base" : "text-lg sm:text-xl")}>
+				{progress.status === "retained" ? <CircleCheck className={cn("shrink-0 text-accent", compact ? "mt-0.5 size-5" : "mt-1 size-6")} aria-hidden /> : null}
+				<span className="min-w-0">
+					<span className="font-semibold">{STATUS_LABEL[progress.status]}.</span>{" "}
+					<span className="tabular-nums">
+						{progress.met} of {progress.required} requirements met
+						{termName ? (
+							<>
+								{" in "}
+								<span className="whitespace-nowrap">{termName}</span>
+							</>
+						) : null}
+					</span>
+					{progress.missed > 0 ? <span className="text-muted-foreground"> ({progress.missed} missed)</span> : null}
 				</span>
-				{progress.missed > 0 ? <span className="text-muted-foreground"> ({progress.missed} missed)</span> : null}
 			</p>
-			<SlotStrip progress={progress} />
-			{deadline && progress.status !== "not_retained" ? (
-				<p className="min-w-0 text-sm text-muted-foreground [overflow-wrap:anywhere]">
-					<span className="font-medium text-foreground">Next deadline {shortDate(deadline.at)}:</span> {deadline.parts.join(", ")}
+			{/* Once every box is full there is nothing left to decode, so the key goes. */}
+			<SlotStrip progress={progress} showKey={!compact && progress.status !== "retained"} />
+			{progress.status === "on_track" ? (
+				deadline ? (
+					<p className="min-w-0 text-sm text-muted-foreground [overflow-wrap:anywhere]">
+						<span className="font-medium text-foreground">Next deadline {shortDate(deadline.at)}:</span>{" "}
+						{compact ? `${deadline.parts.length} ${deadline.parts.length === 1 ? "part" : "parts"} still open` : deadline.parts.join(", ")}
+					</p>
+				) : null
+			) : plain ? null : (
+				<p className="text-sm text-muted-foreground">
+					{progress.status === "retained"
+						? "Every requirement is met for this school year. Nice work."
+						: "A requirement closed before it was met. If a record is missing, an officer can add it."}
+				</p>
+			)}
+			{compact && waiting > 0 ? (
+				<p className="flex min-w-0 items-center gap-2 text-sm">
+					<span className="size-3 shrink-0 rounded-sm border border-ring/60" style={PENDING_HATCH} aria-hidden />
+					<span>
+						<span className="font-medium tabular-nums">+{formatPoints(waiting)}</span> waiting on your feedback forms
+					</span>
 				</p>
 			) : null}
 		</div>
 	);
 }
 
-function SlotCell({ slot, spans }: { slot: RetentionSlot; spans: boolean }) {
+function SlotCell({ slot, spans, pendingHref }: { slot: RetentionSlot; spans: boolean; pendingHref?: string }) {
 	const open = Math.max(0, 1 - slot.counted);
 	const pending = Math.min(slot.pending, open);
 	const met = slot.state === "met";
@@ -124,7 +150,7 @@ function SlotCell({ slot, spans }: { slot: RetentionSlot; spans: boolean }) {
 					{slot.state === "missed" ? <X className="size-4 shrink-0 text-muted-foreground" aria-hidden /> : null}
 					{met ? "Met" : slot.state === "missed" ? "Missed" : `${formatPoints(slot.counted)} of 1`}
 				</span>
-				<span className={cn("text-xs", met ? "text-accent-foreground/80" : "text-muted-foreground")}>Counts until {shortDate(slot.countsUntil)}</span>
+				{met ? null : <span className="text-xs text-muted-foreground">Counts until {shortDate(slot.countsUntil)}</span>}
 			</div>
 			{/* A met cell is its own full bar. */}
 			{met ? null : (
@@ -144,16 +170,25 @@ function SlotCell({ slot, spans }: { slot: RetentionSlot; spans: boolean }) {
 			{slot.overflow > 0 || pending > 0 || slot.state === "missed" ? (
 				<div className="flex min-w-0 flex-wrap gap-1.5 text-xs">
 					{pending > 0 ? (
-						<span className="inline-flex items-center gap-1.5 font-medium">
-							<span className="size-3 shrink-0 rounded-sm border border-ring/60" style={PENDING_HATCH} aria-hidden />+{formatPoints(pending)} when you answer the feedback form
-						</span>
+						pendingHref ? (
+							<a
+								href={pendingHref}
+								className="inline-flex items-center gap-1.5 font-medium text-accent underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+							>
+								<span className="size-3 shrink-0 rounded-sm border border-ring/60" style={PENDING_HATCH} aria-hidden />+{formatPoints(pending)} after the form
+							</a>
+						) : (
+							<span className="inline-flex items-center gap-1.5 font-medium">
+								<span className="size-3 shrink-0 rounded-sm border border-ring/60" style={PENDING_HATCH} aria-hidden />+{formatPoints(pending)} after the form
+							</span>
+						)
 					) : null}
 					{slot.overflow > 0 ? (
 						<span className={cn("rounded-sm border border-dashed px-1.5 py-0.5", met ? "border-accent-foreground/50 text-accent-foreground/85" : "border-border text-muted-foreground")}>
 							+{formatPoints(slot.overflow)} extra, not counted
 						</span>
 					) : null}
-					{slot.state === "missed" ? <span className="text-muted-foreground">This slot closed with {formatPoints(Math.max(0, slot.earned))} of 1.</span> : null}
+					{slot.state === "missed" ? <span className="text-muted-foreground">Closed at {formatPoints(Math.max(0, slot.earned))} of 1</span> : null}
 				</div>
 			) : null}
 		</div>
@@ -166,7 +201,7 @@ export type NextEvent = { eventId: string; title: string; startsAt: Date };
  * The report card: two semester columns, a row per part. A yearly part's cell spans both columns. Below md the part
  * name moves above its cells and the two columns stay.
  */
-export function RetentionGrid({ progress, nextEvents }: { progress: RetentionProgress; nextEvents?: Map<string, NextEvent> }) {
+export function RetentionGrid({ progress, nextEvents, pendingHref }: { progress: RetentionProgress; nextEvents?: Map<string, NextEvent>; pendingHref?: string }) {
 	const yearly = progress.parts.filter((part) => part.period === "year");
 	const semestral = progress.parts.filter((part) => part.period === "semester");
 	const [firstSemester, secondSemester] = semestral[0]?.slots ?? [];
@@ -190,7 +225,7 @@ export function RetentionGrid({ progress, nextEvents }: { progress: RetentionPro
 					) : null}
 				</div>
 				{part.slots.map((slot) => (
-					<SlotCell key={slot.key} slot={slot} spans={part.period === "year"} />
+					<SlotCell key={slot.key} slot={slot} spans={part.period === "year"} pendingHref={pendingHref} />
 				))}
 			</div>
 		);
@@ -216,9 +251,9 @@ export function RetentionGrid({ progress, nextEvents }: { progress: RetentionPro
 					</p>
 				</div>
 			) : null}
-			{yearly.length > 0 ? groupHeading("Once this school year", "1 point each, any time in the year") : null}
+			{yearly.length > 0 ? groupHeading("Once this school year", "1 point, any time") : null}
 			{yearly.map(row)}
-			{semestral.length > 0 ? groupHeading("Once each semester", "1 point each semester; extra points do not carry over") : null}
+			{semestral.length > 0 ? groupHeading("Once each semester", "1 point in each") : null}
 			{semestral.map(row)}
 		</div>
 	);
@@ -232,14 +267,15 @@ export function PendingFeedback({ shares }: { shares: PendingShare[] }) {
 	if (events.length === 0) return null;
 	const total = shares.reduce((sum, share) => sum + share.points, 0);
 	return (
-		<section aria-labelledby="pending-feedback" className="grid min-w-0 gap-3 rounded-lg border border-ring/60 bg-secondary/50 p-4">
+		<section id="pending-feedback" aria-labelledby="pending-feedback-heading" className="grid min-w-0 scroll-mt-24 gap-3 rounded-lg border border-ring/60 bg-secondary/50 p-4">
 			<div className="min-w-0">
-				<h2 id="pending-feedback" className="font-heading text-xl">
-					{formatPoints(total)} {total === 1 ? "point is" : "points are"} waiting on feedback forms
-				</h2>
-				<p className="mt-1 max-w-prose text-sm text-muted-foreground">
-					An event with a feedback form gives 75% of its points when you check in. Answer its form to get the other 25%. If the form closes first, that 25% is gone.
-				</p>
+				<div className="flex min-w-0 items-baseline justify-between gap-3">
+					<h2 id="pending-feedback-heading" className="font-heading text-xl">
+						Feedback forms waiting on you
+					</h2>
+					<span className="shrink-0 font-semibold tabular-nums">+{formatPoints(total)}</span>
+				</div>
+				<p className="mt-1 text-sm text-muted-foreground">Check-in gave you 75%. Answer before the form closes to get the rest.</p>
 			</div>
 			<ul className="grid min-w-0 divide-y divide-border/60 border-t border-border/60">
 				{events.map((rows) => {
@@ -251,7 +287,7 @@ export function PendingFeedback({ shares }: { shares: PendingShare[] }) {
 								<p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
 									{rows.map((row) => `+${formatPoints(row.points)} ${row.pointTypeLabel}`).join(", ")}
 									{" · "}
-									{first.surveyStatus === "draft" ? "The form opens after the event" : first.closesAt ? `Closes ${dateTime(first.closesAt)}` : "Open now"}
+									{first.surveyStatus === "draft" ? "Opens after the event" : first.closesAt ? `Closes ${dateTime(first.closesAt)}` : "Open now"}
 								</p>
 							</div>
 							{first.surveyStatus === "running" ? (
