@@ -46,15 +46,12 @@ export default async function ImportantLinksAdminPage() {
 	const allLinks = [...directory.categories.flatMap((category) => category.links), ...directory.uncategorized];
 	const archivedLinks = allLinks.filter((link) => link.archivedAt);
 	const activeOther = directory.uncategorized.filter((link) => !link.archivedAt);
+	const pinnedCount = [...categories.flatMap((category) => category.links), ...activeOther].filter((link) => !link.archivedAt && link.showInSidebar).length;
 	const liveCount = categories.reduce((total, category) => total + category.links.filter((link) => !link.archivedAt).length, 0) + activeOther.length;
 
 	return (
 		<div className="grid min-w-0 gap-8">
-			<AdminIntro
-				title="Important links"
-				whoFor="Choose the sheets, folders and forms members see on Important links"
-				effect="Links with Show in sidebar on also appear under Pinned links in every member's sidebar and mobile menu"
-			/>
+			<AdminIntro title="Important links" whoFor="Choose the sheets, folders and forms members see on Important links" />
 
 			<div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
 				<section aria-labelledby="add-link" className="grid min-w-0 gap-4 rounded-xl border border-border/60 bg-card p-4 sm:p-5">
@@ -69,7 +66,7 @@ export default async function ImportantLinksAdminPage() {
 				<section aria-labelledby="add-category" className="grid min-w-0 gap-4 rounded-xl border border-border/60 bg-card p-4 sm:p-5">
 					<div>
 						<h2 id="add-category" className="text-xl font-semibold text-primary">Add a category</h2>
-						<p className="mt-1 text-sm leading-5 text-muted-foreground">Members see categories as headings, in the order set below. New ones go last.</p>
+						<p className="mt-1 text-sm leading-5 text-muted-foreground">Members see these as headings.</p>
 					</div>
 					<form action={createCategoryAction} className="grid min-w-0 gap-3">
 						<label className="grid min-w-0 gap-1.5 text-sm">
@@ -88,7 +85,7 @@ export default async function ImportantLinksAdminPage() {
 					<div className="min-w-0">
 						<h2 id="directory" className="text-2xl font-semibold text-primary">What members see</h2>
 						<p className="mt-1 text-sm text-muted-foreground">
-							{liveCount} {liveCount === 1 ? "link" : "links"} in {categories.length} {categories.length === 1 ? "category" : "categories"}. Use the arrows to reorder; open a row to edit or archive it.
+							{liveCount} {liveCount === 1 ? "link" : "links"} in {categories.length} {categories.length === 1 ? "category" : "categories"}, {pinnedCount} in the sidebar
 						</p>
 					</div>
 					<Button asChild variant="outline" className="min-h-10">
@@ -103,7 +100,7 @@ export default async function ImportantLinksAdminPage() {
 					<div className="grid justify-items-start gap-2 rounded-xl border border-dashed border-border px-5 py-8">
 						<h3 className="text-lg font-semibold">Nothing to show members yet</h3>
 						<p className="max-w-xl text-sm leading-5 text-muted-foreground">
-							Start with a category such as Records and trackers or Forms, then add the masterfile and the forms members ask for most. A link without a category lists under Other links.
+							Start with a category such as Forms, then add links to it. Links without a category list under Other links.
 						</p>
 					</div>
 				) : null}
@@ -131,11 +128,11 @@ export default async function ImportantLinksAdminPage() {
 											</label>
 											<SubmitButton icon={<Save aria-hidden />}>Save name</SubmitButton>
 										</form>
-										<ArchiveForm action={archiveCategoryAction} id={category.id} label="Archive category" note="Hides the category and its links from members until you restore it." />
+										<ArchiveForm action={archiveCategoryAction} id={category.id} label="Archive category" note="Hides it and its links from members. Restore it anytime." />
 									</div>
 								</details>
 							</div>
-							<LinkList links={links} options={options} empty={`No links in ${category.name} yet. Add one above and pick this category.`} />
+							<LinkList links={links} options={options} empty={`No links here yet. Add one above and pick ${category.name}.`} />
 						</section>
 					);
 				})}
@@ -155,7 +152,7 @@ export default async function ImportantLinksAdminPage() {
 				<section aria-labelledby="archived" className="grid min-w-0 gap-3">
 					<div>
 						<h2 id="archived" className="text-2xl font-semibold text-primary">Archived</h2>
-						<p className="mt-1 text-sm text-muted-foreground">Members cannot see these. Restoring puts each one back where it was.</p>
+						<p className="mt-1 text-sm text-muted-foreground">Hidden from members. Restore puts each back where it was.</p>
 					</div>
 					<ul className="divide-y divide-border/50 rounded-xl border border-border/60 bg-card">
 						{archivedCategories.map((category) => {
@@ -221,7 +218,7 @@ function LinkList({ links, options, empty }: { links: ImportantLink[]; options: 
 									<SubmitButton icon={<Save aria-hidden />}>Save changes</SubmitButton>
 								</div>
 							</form>
-							<ArchiveForm action={archiveLinkAction} id={link.id} label="Archive link" note="Members stop seeing it, here and in the sidebar, until you restore it." />
+							<ArchiveForm action={archiveLinkAction} id={link.id} label="Archive link" note="Hides it from members and the sidebar. Restore it anytime." />
 						</div>
 					</details>
 				</li>
@@ -282,7 +279,7 @@ function LinkFields({ categories, link }: { categories: CategoryOption[]; link?:
 				<input type="checkbox" name="showInSidebar" defaultChecked={link?.showInSidebar} className="mt-0.5 size-4 shrink-0 accent-primary" />
 				<span className="min-w-0">
 					<span className="block font-medium">Show in sidebar</span>
-					<span className="text-muted-foreground">Also pin it under Pinned links in every member&apos;s sidebar and mobile menu.</span>
+					<span className="text-muted-foreground">Also pin it in every member&apos;s sidebar and menu.</span>
 				</span>
 			</label>
 		</div>
