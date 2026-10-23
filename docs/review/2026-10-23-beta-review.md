@@ -157,3 +157,34 @@ CJ asked for Pments to go. The tree shows official Ments only: no Show Pments sw
 
 - [ ] Ments Tree: no Pments anywhere. Stats show People, Ments trees and Deepest tree.
 - [ ] Admin > Members & Access > Ments Tree: only the official editor.
+
+## 8. Member pages polish (session member-polish, merged 2ae8bc9)
+
+### Decisions
+
+1. **Home leads with the next action:** a waiting feedback form comes first, event rows say Today, and the check-in code link shows on event days. The four number tiles are gone.
+2. **Names match everywhere:** the rail says Home, like the page and the phone tab. The desktop top bar names only the section and links back to it from deeper pages.
+3. **Notifications:** a divided list split into New and Earlier, with times and mark-as-read.
+4. **Calendar:** a shared header, Month and List tabs, a phone agenda under the month that says Today, and past events behind a disclosure.
+5. **Profile:** a compact header with the check-in code right under it. Details show as text, with "Not set" until you edit them.
+6. **Create event** opens with Title, Type, Place, When and Description, and the rest sits under More options. A disabled button names the fields still missing.
+7. **Link shortener:** calmer filters, no Refresh button, and a short "What these words mean" glossary.
+8. **Shell:** the + button is named "Check-in code and quick actions", labels are at least 11 px, and the bell badge has readable contrast.
+
+### Check by hand
+
+- [ ] Home on a phone with a form waiting: the form card is first.
+- [ ] Create event: the short form, More options, and the disabled button saying what's missing.
+- [ ] Notifications: New and Earlier.
+
+## 9. Fixes made while merging (main session)
+
+1. **Global styles:** the default border colour and heading font now sit in `@layer base`. Before, they silently overrode every Tailwind border colour (`border-primary` and so on) and `font-sans` on headings across the whole app. Selected and active states that were meant to be navy now are. The `!` workarounds three sessions had added are removed.
+2. **A flaky events test** assumed two rows land in the same millisecond. It now checks membership instead of order.
+3. **Session follow-ups merged:** retention calm pass, email autosave fix and sheet download, library item and editor pages, Important links search, copy and New labels, and speed's second pass (library item, admin member and records pages, lighter Links).
+4. **The graph** keeps beta's larger graphify output. A session's refresh would have shrunk it.
+
+## 10. Needs CJ: data and access
+
+- [ ] **School year dates (important for retention):** beta's only school year, "Term 1 2026", runs 18 Jun to 1 Nov. The new model treats a school year as two semesters, so the 2nd-semester date could not be guessed and the page splits the year at its midpoint. In Admin > School years, give it the real school-year end and the real 2nd-semester start. Or tell me the dates and I'll set them.
+- [ ] **Signed-in checks:** your browser was connected at first, then dropped (the Claude extension disconnected), so the signed-in checks above are still to do. Reconnect the extension and I'll run them, or tick the lists yourself.
