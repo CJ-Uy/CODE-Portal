@@ -18,7 +18,7 @@ function rememberedRoute(): string | null {
  * list it is a real Back, so the browser's history stays tidy; from anywhere else it opens that list and asks it to restore.
  * The server and the first render link to the plain library, so nothing differs at hydration.
  */
-export function BackToLibrary({ className }: { className?: string }) {
+export function BackToLibrary({ className, label = "Library" }: { className?: string; label?: string }) {
 	const router = useRouter();
 	const pathname = usePathname();
 	const route = useSyncExternalStore(subscribe, rememberedRoute, () => null);
@@ -39,7 +39,7 @@ export function BackToLibrary({ className }: { className?: string }) {
 				}
 			}}
 		>
-			Library
+			{label}
 		</Link>
 	);
 }

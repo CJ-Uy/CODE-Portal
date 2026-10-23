@@ -7,7 +7,7 @@ describe("libraryPageTitle", () => {
 		["/portal/library/", "Library"],
 		["/portal/library/lists", "Lists"],
 		["/portal/library/lists/lst_1", "Lists"],
-		["/portal/library/mine", "My library"],
+		["/portal/library/mine", "My items"],
 		["/portal/library/new", "Add to the library"],
 		["/portal/library/about", "About the library"],
 		["/portal/library/lib_1", "Library item"],

@@ -7,6 +7,7 @@ CJ's brief: the library works but feels overwhelming and easy to get lost in. Sh
 Screenshots, before and after, at 1440 px and 390 px, are in the side-session notes folder:
 `C:\Users\charl\AppData\Roaming\Claude\side-session-notes\local_fdf3e589-62db-4f00-9eae-6ce53e2d1f41\library-scroll\before\` and `...\after\`.
 Each folder has one file per page: `home`, `search`, `item`, `lists`, `list`, `mine`, `new`, `edit` and `about`, each as `-desktop.png` and `-390.png`. They were taken signed in as a regular member, on a local copy of the 209 beta items.
+The second pass (item, lists, My items, editor) has its own `before-pass2\` and `after-pass2\` folders. Those shots show the demo member with their own drafts, a waiting item, published items and lists. `editor-sticky-*.png` shows the editor scrolled down with the status bar still in view.
 
 ## 1. Audit: what made it overwhelming
 
@@ -98,6 +99,31 @@ Two separate reviews ran: a design review, and the Impeccable detector with a br
     - Restoring the scroll position jumps there instantly, without the page's smooth scrolling.
 30. **No migration, no new flag, no permission change.**
 
+### Second pass: item, lists, My items, new and edit (2026-10-23, later)
+
+31. **The item page puts the title first.** One quiet line under the title says what the item is: type, source, reading time, and, when set, "Confidential" and the readiness label. Those pill badges above the title are gone.
+32. **The type and tags on the item page are links.** The type opens the library filtered to that type, and each tag opens everything with that tag. A topic is one tap from everything else on it, and the chips now do what they look like they do.
+33. **The item page's action row holds what readers do:** Save, Download or Open site, Copy link (new), and Edit for whoever can edit. Copy link is for sending a module to a co-facilitator. Report and "Flag client data" are rare, so they moved to the foot of the page.
+34. **Related comes before the discussion.** Most readers finish reading and look for the next thing; few comment.
+35. **The discussion opens gently when empty.** The heading drops "(0)", a line invites a question or a note on how it was used, and the comment box sits below any comments.
+36. **The item page ends with a foot row:** "Back to the library" (the same remembered way back as the breadcrumb) and Report. A long page no longer means scrolling to the top to leave.
+37. **Copy link is one shared component**, used by the item page and both list controls.
+38. **List detail: an item with no note shows "Add a note".** An empty note box no longer sits under every item, so an editor's list is no longer a column of empty boxes. A note that exists still shows its box.
+39. **List detail tells editors how to add what already exists:** "Already in the library? Open it and use Save to add it to this list." Before, only "Add new item" was visible.
+40. **On a phone, the Share control's Copy link drops below the words** instead of squeezing them.
+41. **Lists: a collection shows "Collection" alone.** A collection is always shared, so "Shared" next to it said nothing new.
+42. **My items explains each state in one line:**
+    - Drafts: "Only you and the library moderators can see these until you publish them."
+    - Waiting: "A library moderator checks these before members can see them."
+    - Published: "Every member can find these in the library."
+    - Taken down: "Hidden from members until a library moderator restores them."
+43. **My items: a draft's button says "Continue editing", and a published item gets View next to Edit.** Numbers show only when there can be some (published, or a waiting item that was published before), not zeros on a draft.
+44. **My items keeps actions in a steady place:** top right on a wide screen, last in the card on a phone, so every card reads title, note, numbers, then what to do. The type is plain text, not a pill. The intro is one sentence.
+45. **The top bar on My items says "My items",** matching the tab. Before, it said "My library".
+46. **The editor keeps its status bar under the app bar while scrolling.** The bar holds the status badge, the save state ("Saves as you go", "Saving...", "Saved", "Not saved"), View and Publish. The form is several screens long, so whether the work is saved, and the way to publish, never scroll out of sight. The bar is solid, with no glass effect.
+47. **The editor's tag group names are in sentence case**, like the library filters. Before, they were small capitals.
+48. **The new-item page stays as it was.** Its three clear starting points already match the principles.
+
 ## 3. Manual checks for CJ (beta, after the merge)
 
 1. On a laptop and a phone, open Library and scroll All items to the end. Rows keep coming with no clicks, and the last row says "You've reached the end" with the total.
@@ -111,6 +137,15 @@ Two separate reviews ran: a design review, and the Impeccable detector with a br
 9. Visit the Lists, My items and About tabs. "Add to the library" is on every one of them.
 10. As a regular member, confidential items stay hidden. As a library manager, they show with a lock.
 11. The member dashboard's library cards look right with the new card style.
+12. On an item:
+    - Tap its type or a tag. The library opens filtered to it.
+    - Copy link, then paste it in a new tab.
+    - Scroll to the bottom and use "Back to the library". You land back on the row you came from.
+13. On a list you edit:
+    - Items without a note show "Add a note". Add one, and it saves when you click away.
+    - Up, Down and Remove still work.
+14. In My items, a draft says "Continue editing", and a published item has View and Edit.
+15. In the editor, scroll down a long page. The status bar with "Saved" and Publish stays under the top bar, on both a phone and a laptop.
 
 ## 4. For the merge, and follow-ups
 

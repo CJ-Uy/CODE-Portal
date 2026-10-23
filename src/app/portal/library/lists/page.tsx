@@ -28,7 +28,8 @@ function ListRow({ list }: { list: LibraryListSummary }) {
 						<span>
 							{list.itemCount} {list.itemCount === 1 ? "item" : "items"}
 						</span>
-						{list.takenDownAt ? <Badge variant="warn">Taken down</Badge> : list.shared ? <Badge variant="secondary">Shared</Badge> : null}
+						{/* A collection is always shared, so it says Collection alone. */}
+						{list.takenDownAt ? <Badge variant="warn">Taken down</Badge> : list.shared && !list.pinned ? <Badge variant="secondary">Shared</Badge> : null}
 						{list.pinned && !list.takenDownAt ? <Badge variant="info">Collection</Badge> : null}
 					</div>
 				</div>

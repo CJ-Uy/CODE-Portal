@@ -12,7 +12,7 @@ export function libraryPageTitle(pathname: string): string | null {
 		case "lists":
 			return second === undefined || rest.length === 0 ? "Lists" : null;
 		case "mine":
-			return second === undefined ? "My library" : null;
+			return second === undefined ? "My items" : null;
 		case "new":
 			return second === undefined ? "Add to the library" : null;
 		case "about":

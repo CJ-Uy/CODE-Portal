@@ -218,7 +218,7 @@ function TagPicker({ options, selected, onChange, onCreated }: { options: TagOpt
 			</p>
 			{[...groups].map(([group, tags]) => (
 				<fieldset key={group} className="grid min-w-0 gap-2">
-					<legend className="mb-1 text-xs font-semibold uppercase text-muted-foreground">{group}</legend>
+					<legend className="mb-1 text-sm font-medium text-muted-foreground">{group}</legend>
 					<div className="flex flex-wrap gap-2">
 						{tags.map((tag) => {
 							const on = chosen.has(tag.id);
@@ -433,7 +433,7 @@ export function ItemEditor({ item, tags, itemPicker, isOwner }: { item: EditorIt
 	];
 	const canPublish = isOwner && item.status === "draft";
 	const status = STATUS_BADGE[item.status];
-	const saveLabel = state === "saving" ? "Saving..." : state === "saved" ? "Saved" : state === "error" ? "Not saved" : "";
+	const saveLabel = state === "saving" ? "Saving..." : state === "saved" ? "Saved" : state === "error" ? "Not saved" : "Saves as you go";
 	const fileExtension = file ? (file.key.split(".").pop()?.toLowerCase() ?? "") : "";
 
 	return (
@@ -446,26 +446,24 @@ export function ItemEditor({ item, tags, itemPicker, isOwner }: { item: EditorIt
 				]}
 			/>
 
-			<div className="flex flex-wrap items-start justify-between gap-3">
-				<div className="min-w-0">
-					<h1 className="font-heading text-3xl">Edit {KIND_LABELS[kind]}</h1>
-				</div>
-				<div className="flex flex-wrap items-center gap-2">
-					<Badge variant={status.variant}>{status.label}</Badge>
-					<span role="status" aria-live="polite" className="min-w-16 text-sm text-muted-foreground">
-						{saveLabel}
-					</span>
-					{item.status !== "draft" ? (
-						<Button asChild variant="outline" size="sm">
-							<Link href={`/portal/library/${item.id}`}>View</Link>
-						</Button>
-					) : null}
-					{canPublish ? (
-						<Button type="button" onClick={() => setPublishOpen(true)}>
-							Publish
-						</Button>
-					) : null}
-				</div>
+			<h1 className="font-heading text-3xl">Edit {KIND_LABELS[kind]}</h1>
+			{/* Stays under the app bar (64px, 68px on wide screens) through the long form, so whether the work is saved, and the way to publish, never scroll out of sight. */}
+			<div className="sticky top-16 z-20 -mx-4 flex min-w-0 flex-wrap items-center gap-2 border-b border-border bg-background px-4 py-2 sm:-mx-6 sm:px-6 lg:top-[68px] lg:-mx-8 lg:px-8">
+				<Badge variant={status.variant}>{status.label}</Badge>
+				<span role="status" aria-live="polite" className="min-w-16 text-sm text-muted-foreground">
+					{saveLabel}
+				</span>
+				<span className="flex-1" />
+				{item.status !== "draft" ? (
+					<Button asChild variant="outline" size="sm" className="min-h-9">
+						<Link href={`/portal/library/${item.id}`}>View</Link>
+					</Button>
+				) : null}
+				{canPublish ? (
+					<Button type="button" className="min-h-9" onClick={() => setPublishOpen(true)}>
+						Publish
+					</Button>
+				) : null}
 			</div>
 
 			<StatusNote item={item} isOwner={isOwner} />
