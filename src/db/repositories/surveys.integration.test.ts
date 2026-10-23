@@ -1007,8 +1007,8 @@ describe("surveys repository on D1", () => {
 		const CHECKED_IN = new Date("2026-10-15T10:00:00.000Z");
 		const ANSWERED = new Date("2026-10-17T00:00:00.000Z");
 		const TERMS = [
-			{ id: "term_a", name: "A", retainedAt: 20, probationBelow: 10, startsAt: new Date("2026-06-01T00:00:00Z"), endsAt: new Date("2026-10-16T12:00:00Z") },
-			{ id: "term_b", name: "B", retainedAt: 20, probationBelow: 10, startsAt: new Date("2026-10-16T12:00:01Z"), endsAt: new Date("2027-03-31T00:00:00Z") },
+			{ id: "term_a", name: "A", startsAt: new Date("2026-06-01T00:00:00Z"), endsAt: new Date("2026-10-16T12:00:00Z") },
+			{ id: "term_b", name: "B", startsAt: new Date("2026-10-16T12:00:01Z"), endsAt: new Date("2027-03-31T00:00:00Z") },
 		];
 		const setActive = (active: boolean) => env.DB.prepare("UPDATE point_types SET active = ? WHERE id = 'pt_feedback'").bind(active ? 1 : 0).run();
 

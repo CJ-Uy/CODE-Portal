@@ -129,7 +129,7 @@ export const seedMemberRoles: InferInsertModel<typeof memberRoles>[] = [
 ];
 
 export const seedTerms: InferInsertModel<typeof terms>[] = [
-	{ id: "term_2026_1", name: "Term 1 2026", retainedAt: 20, probationBelow: 10, startsAt: now, endsAt: new Date("2027-05-15T00:00:00.000Z") },
+	{ id: "term_2026_1", name: "Term 1 2026", startsAt: now, endsAt: new Date("2027-05-15T00:00:00.000Z") },
 ];
 
 export const seedTermMemberRoster: InferInsertModel<typeof termMemberRoster>[] = [

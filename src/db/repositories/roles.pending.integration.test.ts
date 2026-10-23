@@ -40,9 +40,9 @@ describe("pending roles for invited people", () => {
 				.run();
 		}
 		await env.DB.prepare(
-			"INSERT INTO terms (id, name, retained_at, probation_below, starts_at, ends_at) VALUES (?, ?, ?, ?, ?, ?)",
+			"INSERT INTO terms (id, name, starts_at, ends_at) VALUES (?, ?, ?, ?)",
 		)
-			.bind(TERM, "Term", 10, 5, Date.now(), Date.now() + 86_400_000)
+			.bind(TERM, "Term", Date.now(), Date.now() + 86_400_000)
 			.run();
 		// One invite with no member row, and one roster row already linked to a member.
 		await env.DB.prepare(

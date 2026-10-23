@@ -38,9 +38,9 @@ describe("overview repository on D1", () => {
 				('pt_frontliner', 'frontliner', 'Frontliner', 1, 1, 'mem_admin')
 		`).run();
 		await env.DB.prepare(
-			"INSERT INTO terms (id, name, retained_at, probation_below, starts_at, ends_at) VALUES (?, ?, ?, ?, ?, ?)",
+			"INSERT INTO terms (id, name, starts_at, ends_at) VALUES (?, ?, ?, ?)",
 		)
-			.bind("term_now", "Term 1", 20, 10, NOW.getTime() - 1000, NOW.getTime() + 1000 * 60 * 60 * 24 * 60)
+			.bind("term_now", "Term 1", NOW.getTime() - 1000, NOW.getTime() + 1000 * 60 * 60 * 24 * 60)
 			.run();
 	});
 

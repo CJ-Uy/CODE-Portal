@@ -81,9 +81,9 @@ describe("school year management", () => {
 
 	it("edits a seed-era school year whose id predates createId", async () => {
 		await env.DB.prepare(
-			"INSERT INTO terms (id, name, retained_at, probation_below, starts_at, ends_at) VALUES (?, ?, ?, ?, ?, ?)",
+			"INSERT INTO terms (id, name, starts_at, ends_at) VALUES (?, ?, ?, ?)",
 		)
-			.bind("term_2026_1", "Term 1 2026", 20, 10, day("2026-06-18").getTime(), day("2026-10-31").getTime())
+			.bind("term_2026_1", "Term 1 2026", day("2026-06-18").getTime(), day("2026-10-31").getTime())
 			.run();
 
 		const edited = await repo().upsertTerm(

@@ -27,8 +27,8 @@ async function seedFixture() {
 	await insertMember("mem_late", "late@example.com", "Late", "Late Member");
 	await insertMember("mem_absent", "absent@example.com", "Absent", "Absent Member");
 
-	await env.DB.prepare("INSERT INTO terms (id, name, retained_at, probation_below, starts_at, ends_at) VALUES (?, ?, ?, ?, ?, ?)")
-		.bind("term_1", "Term 1", 20, 10, TERM_START.getTime(), TERM_END.getTime())
+	await env.DB.prepare("INSERT INTO terms (id, name, starts_at, ends_at) VALUES (?, ?, ?, ?)")
+		.bind("term_1", "Term 1", TERM_START.getTime(), TERM_END.getTime())
 		.run();
 	await env.DB.prepare("INSERT INTO point_types (id, key, label, active, position, updated_by) VALUES (?, ?, ?, ?, ?, ?)")
 		.bind(RETENTION_POINT_TYPE_ID, "retention", "Retention", 1, 0, "mem_admin")

@@ -29,9 +29,9 @@ describe("calendar repository on D1", () => {
 			.bind("mem_admin", "admin@example.com", "Admin", "1995-06-20", 1)
 			.run();
 		await env.DB.prepare(
-			"INSERT INTO terms (id, name, retained_at, probation_below, starts_at, ends_at) VALUES (?, ?, ?, ?, ?, ?)",
+			"INSERT INTO terms (id, name, starts_at, ends_at) VALUES (?, ?, ?, ?)",
 		)
-			.bind("term_1", "Term 1", 20, 10, Date.UTC(2026, 5, 1), Date.UTC(2026, 5, 30))
+			.bind("term_1", "Term 1", Date.UTC(2026, 5, 1), Date.UTC(2026, 5, 30))
 			.run();
 		await env.DB.prepare(
 			"INSERT INTO crs_events (id, title, type, status, place, starts_at, description, created_by, checkin_secret) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",

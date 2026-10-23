@@ -141,7 +141,7 @@ check("smart search defaults on", one("SELECT library_smart_search AS v FROM mem
 // out was sent without points and keeps 0, and its old response stays unlinked from any member.
 db.exec(`INSERT INTO surveys (id, title, created_by, status) VALUES ('srv_fix2', 'Sent', 'mem_fix1', 'running')`);
 db.exec(`INSERT INTO survey_responses (id, survey_id, submitted_at) VALUES ('srvr_fix1', 'srv_fix2', 6000)`);
-for (const file of files.filter((f) => f >= "0014")) applyOne(file);
+for (const file of files.filter((f) => f >= "0014" && f < "0015")) applyOne(file);
 check("feedback point type seeded", one("SELECT key || ',' || label || ',' || active AS v FROM point_types WHERE id='pt_feedback'"), "feedback,Feedback,1");
 check(
 	"feedback point type placed last",
@@ -155,6 +155,34 @@ check("sent form keeps 0 points", one("SELECT points_award AS v FROM surveys WHE
 check("sent form has no point type", one("SELECT point_type_id AS v FROM surveys WHERE id='srv_fix2'"), null);
 check("old response stays unlinked", one("SELECT member_id AS v FROM survey_responses WHERE id='srvr_fix1'"), null);
 check("old response keeps its time", one("SELECT submitted_at AS v FROM survey_responses WHERE id='srvr_fix1'"), 6000);
+
+// 0015 marks the 8 retention parts, adding any a database lacks, and guesses each school year's 2nd semester start.
+// pt_gma stands in for prod's own row: retired here, with an officer's label that must survive.
+db.exec(`INSERT INTO point_types (id, key, label, milestones_json, active, position) VALUES ('pt_gma', 'gma', 'GMA (officer label)', '[]', 0, 7)`);
+db.exec(
+	`INSERT INTO terms (id, name, retained_at, probation_below, starts_at, ends_at) VALUES
+	 ('term_fix_sy', 'SY 2026-2027', 20, 10, 1780848000000, 1810396799999),
+	 ('term_fix_short', 'Short', 5, 1, 1780329600000, 1797350400000)`,
+);
+for (const file of files.filter((f) => f >= "0015")) applyOne(file);
+check("8 retention parts marked", one("SELECT COUNT(*) AS v FROM point_types WHERE retention_period IS NOT NULL"), 8);
+check(
+	"yearly parts",
+	one("SELECT group_concat(key, ',') AS v FROM (SELECT key FROM point_types WHERE retention_period = 'year' ORDER BY key)"),
+	"advo,egmt_team,proj_team,ts",
+);
+check(
+	"semestral parts",
+	one("SELECT group_concat(key, ',') AS v FROM (SELECT key FROM point_types WHERE retention_period = 'semester' ORDER BY key)"),
+	"cbtb,gma,hre,ksa",
+);
+check("existing part keeps its label", one("SELECT label AS v FROM point_types WHERE id='pt_gma'"), "GMA (officer label)");
+check("retired part comes back", one("SELECT active AS v FROM point_types WHERE id='pt_gma'"), 1);
+check("Retention is not a part", one("SELECT retention_period AS v FROM point_types WHERE id='pt_retention'"), null);
+check("Feedback is not a part", one("SELECT retention_period AS v FROM point_types WHERE id='pt_feedback'"), null);
+check("2nd semester guessed at 11 January Manila", one("SELECT second_semester_starts_at AS v FROM terms WHERE id='term_fix_sy'"), 1799596800000);
+check("a school year without 11 January keeps NULL", one("SELECT second_semester_starts_at AS v FROM terms WHERE id='term_fix_short'"), null);
+check("thresholds dropped", one("SELECT COUNT(*) AS v FROM pragma_table_info('terms') WHERE name IN ('retained_at', 'probation_below')"), 0);
 db.close();
 rmSync(work, { recursive: true, force: true });
 

@@ -10,7 +10,7 @@ import type { MemberOption } from "./member-checklist";
 
 export async function loadRetentionPickers(actor: Actor): Promise<{
 	members: MemberOption[];
-	terms: { id: string; label: string; startsAt: Date; endsAt: Date; retainedAt: number; probationBelow: number }[];
+	terms: { id: string; label: string; startsAt: Date; endsAt: Date }[];
 	events: { id: string; label: string; detail: string; startsAt: Date; status: string; type: string; place: string }[];
 	pointTypes: { id: string; key: string; label: string }[];
 }> {
@@ -27,7 +27,7 @@ export async function loadRetentionPickers(actor: Actor): Promise<{
 		.limit(500);
 
 	const termRows = await db
-		.select({ id: terms.id, name: terms.name, startsAt: terms.startsAt, endsAt: terms.endsAt, retainedAt: terms.retainedAt, probationBelow: terms.probationBelow })
+		.select({ id: terms.id, name: terms.name, startsAt: terms.startsAt, endsAt: terms.endsAt })
 		.from(terms)
 		.orderBy(desc(terms.startsAt))
 		.limit(50);
@@ -58,7 +58,7 @@ export async function loadRetentionPickers(actor: Actor): Promise<{
 			label: row.fullName ?? row.name ?? "Member",
 			sublabel: row.id,
 		})),
-		terms: termRows.map((row) => ({ id: row.id, label: row.name, startsAt: row.startsAt, endsAt: row.endsAt, retainedAt: row.retainedAt, probationBelow: row.probationBelow })),
+		terms: termRows.map((row) => ({ id: row.id, label: row.name, startsAt: row.startsAt, endsAt: row.endsAt })),
 		events: eventRows.map((row) => ({
 			id: row.id,
 			label: row.title,

@@ -64,9 +64,9 @@ describe("retention repository on D1", () => {
 			.bind("mem_admin", "admin@example.com", "Admin")
 			.run();
 		await env.DB.prepare(
-			"INSERT INTO terms (id, name, retained_at, probation_below, starts_at, ends_at) VALUES (?, ?, ?, ?, ?, ?)",
+			"INSERT INTO terms (id, name, starts_at, ends_at) VALUES (?, ?, ?, ?)",
 		)
-			.bind("term_1", "Term 1", 20, 10, TERM_START.getTime(), TERM_END.getTime())
+			.bind("term_1", "Term 1", TERM_START.getTime(), TERM_END.getTime())
 			.run();
 		await env.DB.prepare(`
 			INSERT INTO point_types
@@ -443,9 +443,9 @@ describe("retention repository on D1", () => {
 
 		beforeEach(async () => {
 			await env.DB.prepare(
-				"INSERT INTO terms (id, name, retained_at, probation_below, starts_at, ends_at) VALUES (?, ?, ?, ?, ?, ?)",
+				"INSERT INTO terms (id, name, starts_at, ends_at) VALUES (?, ?, ?, ?)",
 			)
-				.bind("term_past", "Past Term", 20, 10, Date.UTC(2025, 4, 1), Date.UTC(2025, 6, 30))
+				.bind("term_past", "Past Term", Date.UTC(2025, 4, 1), Date.UTC(2025, 6, 30))
 				.run();
 		});
 

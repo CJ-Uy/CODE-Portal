@@ -70,8 +70,6 @@ async function ensureE2eData(db: ReturnType<typeof getDb>): Promise<void> {
 		.values({
 			id: "term_2026_1",
 			name: "Term 1 2026",
-			retainedAt: 20,
-			probationBelow: 10,
 			startsAt: now,
 			endsAt: new Date("2027-05-15T00:00:00.000Z"),
 		})
