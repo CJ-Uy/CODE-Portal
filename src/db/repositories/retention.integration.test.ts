@@ -171,6 +171,26 @@ describe("retention repository on D1", () => {
 		await expect(repo.eventFeedbackShare(plainMember, "evt_none")).resolves.toEqual({ hasForm: false, pending: [] });
 	});
 
+	it("finds the soonest upcoming approved event for each retention part", async () => {
+		const { repo } = makeRepo();
+		await addParts();
+		const insert = (id: string, startsAt: number, status = "approved") =>
+			env.DB.prepare("INSERT INTO crs_events (id, title, type, status, place, starts_at, description, created_by, checkin_secret) VALUES (?, ?, 'casual', ?, 'Room', ?, 'd', 'mem_admin', ?)")
+				.bind(id, id, status, startsAt, `s_${id}`)
+				.run();
+		const day = 86_400_000;
+		await insert("evt_past", EARLY.getTime() - day);
+		await insert("evt_later", EARLY.getTime() + 9 * day);
+		await insert("evt_soon", EARLY.getTime() + 2 * day);
+		await insert("evt_pending", EARLY.getTime() + day, "pending");
+		await insert("evt_other", EARLY.getTime() + day);
+		for (const [eventId, pointTypeId] of [["evt_past", "pt_gma"], ["evt_later", "pt_gma"], ["evt_soon", "pt_gma"], ["evt_pending", "pt_gma"], ["evt_other", "pt_frontliner"], ["evt_later", "pt_ts"]]) {
+			await env.DB.prepare("INSERT INTO event_point_awards (event_id, point_type_id, points) VALUES (?, ?, 1)").bind(eventId, pointTypeId).run();
+		}
+		const next = await repo.nextPartEvents(plainMember, EARLY);
+		expect(Object.fromEntries([...next].map(([type, event]) => [type, event.eventId]))).toEqual({ pt_gma: "evt_soon", pt_ts: "evt_later" });
+	});
+
 	it("quantizes fractional leaderboard totals", async () => {
 		const { repo } = makeRepo();
 		await insertRecord({ id: "ret_fraction_a", points: 0.1 });

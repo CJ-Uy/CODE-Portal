@@ -95,6 +95,9 @@ export type PendingShare = {
 
 export type EventFeedbackShare = { hasForm: boolean; pending: PendingShare[] };
 
+/** The soonest approved, upcoming event that awards a retention part, keyed by that part's point type. */
+export type NextPartEvent = { eventId: string; title: string; startsAt: Date };
+
 /** One calendar day of the viewer's own points, keyed the way the month grid labels cells. */
 export type PointsDay = { date: string; points: number; records: number };
 
@@ -122,6 +125,7 @@ export type RetentionRepository = {
 	memberProgress(actor: Actor, input: MemberTermSummaryInput, now?: Date): Promise<RetentionProgress | null>;
 	termProgress(actor: Actor, termId: string, memberIds: string[], now?: Date): Promise<Map<string, RetentionProgress>>;
 	eventFeedbackShare(actor: Actor, eventId: string): Promise<EventFeedbackShare>;
+	nextPartEvents(actor: Actor, now?: Date): Promise<Map<string, NextPartEvent>>;
 	leaderboard(actor: Actor, input: LeaderboardInput): Promise<LeaderboardRow[]>;
 	publicLeaderboard(actor: Actor, input: PublicLeaderboardInput): Promise<LeaderboardRow[]>;
 	createManual(actor: Actor, input: CreateManualRetentionRecordInput): Promise<{ recordIds: string[] }>;
@@ -328,6 +332,31 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 		async termProgress(actor, termId, memberIds, now = new Date()) {
 			if (!can(actor, "retention:record")) throw new Error("Not authorized to read retention reports.");
 			return loadProgress(db, memberIds, termId, now);
+		},
+
+		// Approved events are on every member's calendar, so any signed-in member may read this.
+		async nextPartEvents(_actor, now = new Date()) {
+			// ponytail: the next 100 awarded events cover every part in practice; page through if a calendar ever holds more.
+			const rows: Array<NextPartEvent & { pointTypeId: string }> = await db
+				.select({ pointTypeId: eventPointAwards.pointTypeId, eventId: crsEvents.id, title: crsEvents.title, startsAt: crsEvents.startsAt })
+				.from(eventPointAwards)
+				.innerJoin(crsEvents, eq(crsEvents.id, eventPointAwards.eventId))
+				.innerJoin(pointTypes, eq(pointTypes.id, eventPointAwards.pointTypeId))
+				.where(
+					and(
+						gt(crsEvents.startsAt, now),
+						eq(crsEvents.status, "approved"),
+						eq(crsEvents.readOnly, false),
+						isNull(crsEvents.deletedAt),
+						eq(pointTypes.active, true),
+						sql`${pointTypes.retentionPeriod} is not null`,
+					),
+				)
+				.orderBy(crsEvents.startsAt)
+				.limit(100);
+			const next = new Map<string, NextPartEvent>();
+			for (const { pointTypeId, ...event } of rows) if (!next.has(pointTypeId)) next.set(pointTypeId, event);
+			return next;
 		},
 
 		// The viewer's own share only, so no permission check beyond being signed in.

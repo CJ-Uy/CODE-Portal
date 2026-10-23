@@ -160,17 +160,18 @@ export function SendPanel(props: SendPanelProps & { unsaved: boolean }) {
 
 					<fieldset className="grid min-w-0 gap-3 border-0 p-0">
 						<legend className="mb-1 text-sm font-medium">Options</legend>
-						{hasEvent ? (
-							<>
-								<CheckOption name="allowWalkIn" label="Other attendees can answer from the event page" />
-								<CheckOption name="shareWithOrganizers" label="Share results with organizers" />
-							</>
-						) : null}
+						{hasEvent ? <CheckOption name="shareWithOrganizers" label="Share results with organizers" /> : null}
 						{email === "ready" ? <CheckOption name="emailInvitees" label="Also email invitees" /> : null}
 						{email === "no_sender" ? (
 							<p className="min-w-0 text-sm text-muted-foreground">Email invites are unavailable. Set a default sender for the Feedback requests email category.</p>
 						) : null}
 						<CheckOption name="remind" label="Remind people who haven't answered, 24 hours before closing" />
+						{hasEvent ? (
+							// An event's form pays the rest of the event's points (75% at check-in, 25% for answering), so it takes no points of its own.
+							<p className="min-w-0 rounded-md bg-secondary/60 px-3 py-2 text-sm">
+								Every attendee can answer, sampled or not. They got 75% of the event&apos;s points at check-in and get the other 25% when they answer.
+							</p>
+						) : (
 						<div className="grid min-w-0 gap-1.5 text-sm">
 							<div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
 								<label htmlFor="send-pointsAward" className="min-w-0">
@@ -198,6 +199,7 @@ export function SendPanel(props: SendPanelProps & { unsaved: boolean }) {
 							</div>
 							<p className="min-w-0 text-xs text-muted-foreground">Everyone who answers gets them, whatever they answer. 0 turns them off.</p>
 						</div>
+						)}
 					</fieldset>
 
 					<label className="grid min-w-0 gap-2 text-sm font-medium sm:max-w-xs">

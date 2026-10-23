@@ -18,7 +18,7 @@ import type { OverviewSummary } from "@/db/repositories/overview";
 export const dynamic = "force-dynamic";
 
 const EMPTY_SUMMARY: OverviewSummary = {
-	retention: { points: 0, retainedAt: null, termName: null },
+	retention: null,
 	pendingSurveys: 0,
 	oldestPendingSurveyId: null,
 	upcomingEvents: 0,
@@ -99,10 +99,10 @@ export default async function PortalOverviewPage() {
 					<Card>
 						<CardHeader>
 							<CardTitle>Retention path</CardTitle>
-							<CardDescription>{summary.retention.termName ?? "Current term"}</CardDescription>
+							<CardDescription>{summary.retention?.termName ?? "No school year running"}</CardDescription>
 						</CardHeader>
 						<CardContent>
-							<RetentionProgress points={summary.retention.points} retainedAt={summary.retention.retainedAt} />
+							<RetentionProgress retention={summary.retention} />
 						</CardContent>
 					</Card>
 				) : null}
@@ -128,8 +128,8 @@ export default async function PortalOverviewPage() {
 				{flags.retention ? (
 					<MetricCard
 						label="Retention"
-						value={summary.retention.termName ? String(summary.retention.points) : "0"}
-						description={summary.retention.termName ?? "No active term"}
+						value={summary.retention ? `${summary.retention.progress.met} of ${summary.retention.progress.required}` : "0"}
+						description={summary.retention ? `Requirements met, ${summary.retention.termName}` : "No active term"}
 						icon={ClipboardCheck}
 					/>
 				) : null}

@@ -9,6 +9,7 @@ export function createUnavailableRetentionRepository(): RetentionRepository {
 		memberProgress: unavailable,
 		termProgress: unavailable,
 		eventFeedbackShare: unavailable,
+		nextPartEvents: unavailable,
 		leaderboard: unavailable,
 		publicLeaderboard: unavailable,
 		listForTerm: unavailable,
