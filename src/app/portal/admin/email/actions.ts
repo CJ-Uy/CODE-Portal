@@ -86,8 +86,9 @@ export async function moveCategoryAction(id: string, direction: "up" | "down") {
 export async function saveTemplateAction(input: TemplateInput) {
 	return runAction(async () => {
 		const { actor, email } = await context();
+		// No revalidatePath: it refreshes the current route, which after the editor's /new to /[id] URL swap remounts the
+		// editor mid-typing. Every email page is force-dynamic, so the next visit to a list fetches fresh rows anyway.
 		const row = await email.templates.save(actor, input);
-		revalidatePath(`${BASE}/templates`);
 		return row.id;
 	});
 }
@@ -116,8 +117,8 @@ export async function saveCampaignAction(input: CampaignInput) {
 		const refs = z
 			.object({ id: idSchema.optional(), templateId: idSchema.nullable(), categoryId: idSchema.nullable(), senderId: idSchema.nullable() })
 			.parse(input);
+		// Autosave: no revalidatePath, for the same reason as saveTemplateAction.
 		const row = await email.campaigns.saveDraft(actor, { ...input, ...refs });
-		revalidatePath(BASE);
 		return { id: row.id, status: row.status };
 	});
 }
@@ -144,6 +145,13 @@ export async function previewPersonalizationAction(input: PersonalizationInput) 
 			overrides: mergeOverridesSchema, sheet: mergeSheetSchema.optional(), q: z.string().max(80).optional(), missingOnly: z.boolean().optional(), page: z.number().int().min(0).max(10000).optional(),
 		}).parse(input);
 		return email.campaigns.previewPersonalization(actor, parsed);
+	});
+}
+
+export async function sheetRecipientsAction(audience: Audience, categoryId: string | null) {
+	return runAction(async () => {
+		const { actor, email } = await context();
+		return email.campaigns.sheetRecipients(actor, audienceSchema.parse(audience), categoryId ? idSchema.parse(categoryId) : null);
 	});
 }
 

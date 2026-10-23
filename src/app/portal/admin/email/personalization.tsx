@@ -8,9 +8,10 @@ import { Textarea } from "@/components/ui/textarea";
 import type { PersonalizationPreview } from "@/db/repositories/email-campaigns";
 import { isMergeTag, mergeLabel, type MergeOverrides, type MergeSheet } from "@/lib/email/merge";
 import { renderEmail, valueResolver, type FooterInput } from "@/lib/email/render";
+import { recipientsCsv } from "@/lib/email/sheet";
 import type { Audience, EmailBlock } from "@/lib/email/types";
 import { cn } from "@/lib/utils";
-import { previewPersonalizationAction } from "./actions";
+import { previewPersonalizationAction, sheetRecipientsAction } from "./actions";
 import { MergeSheetPanel } from "./merge-sheet";
 
 type Person = PersonalizationPreview["rows"][number];
@@ -56,6 +57,21 @@ export function Personalization({ audience, categoryId, tags, overrides, onChang
 		if (!selected || tag === "email") return;
 		onChange({ ...overrides, [key]: { ...overrides[key], [tag]: value } });
 	};
+	const download = async () => {
+		try {
+			const response = await sheetRecipientsAction(audience, categoryId);
+			if (!response.ok) return response.error;
+			if (!response.data.length) return "No one receives this email yet. Choose an audience first.";
+			// The byte-order mark makes Excel read the file as UTF-8, so names with ñ survive.
+			const url = URL.createObjectURL(new Blob(["﻿", recipientsCsv(response.data, sheet, tags)], { type: "text/csv;charset=utf-8" }));
+			const link = Object.assign(document.createElement("a"), { href: url, download: `${(subject.replace(/\{\{[^}]*\}\}/g, "").trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "email")}-recipients.csv` });
+			link.click();
+			URL.revokeObjectURL(url);
+			return null;
+		} catch {
+			return "Could not prepare the recipient list. Try again.";
+		}
+	};
 	const reset = () => {
 		if (!selected) return;
 		const next = { ...overrides };
@@ -67,13 +83,13 @@ export function Personalization({ audience, categoryId, tags, overrides, onChang
 		<div className="grid gap-6">
 			<section className="grid gap-3" aria-labelledby="sheet-heading">
 				<h3 id="sheet-heading" className="font-medium">Values from a sheet</h3>
-				<MergeSheetPanel sheet={sheet} onChange={onSheetChange} match={result?.sheet ?? null} tags={tags} />
+				<MergeSheetPanel sheet={sheet} onChange={onSheetChange} match={result?.sheet ?? null} tags={tags} onDownload={download} />
 			</section>
 
 			<section className="grid gap-4 border-t border-border pt-5" aria-labelledby="recipients-heading">
 				<div className="grid gap-1">
 					<h3 id="recipients-heading" className="font-medium">Recipients</h3>
-					<p className="text-sm text-muted-foreground">Check the actual values for your receiving audience. Corrections save with this draft and leave member profiles and the sheet unchanged. <code>{"{{firstname}}"}</code> and <code>{"{{first_name}}"}</code> both work.</p>
+					<p className="text-sm text-muted-foreground">Check each person&apos;s values before sending. Edits stay in this email.</p>
 				</div>
 				{result?.unknown.length ? (
 					<p role="alert" className="flex items-start gap-2 rounded-lg border border-[#90B4CC] bg-secondary/50 p-3 text-sm">

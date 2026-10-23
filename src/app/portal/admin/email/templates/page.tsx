@@ -5,6 +5,7 @@ import { AdminIntro } from "@/components/portal/admin-intro";
 import { Button } from "@/components/ui/button";
 import { getRepositories } from "@/db";
 import { Input } from "@/components/ui/input";
+import { htmlBodyOf } from "@/lib/email/html";
 import { SAMPLE_MERGE_VALUES } from "@/lib/email/merge";
 import { renderEmail, valueResolver } from "@/lib/email/render";
 import { emailStarters } from "@/lib/email/starters";
@@ -25,7 +26,7 @@ export default async function TemplatesPage({ searchParams }: { searchParams: Pr
 	const starters = emailStarters(publicBaseUrl).filter((t) => `${t.name} ${t.description}`.toLowerCase().includes(q.toLowerCase()));
 	const items = [
 		...starters.map((t) => ({ ...t, categoryName: "CODE", meta: t.description, href: `/portal/admin/email/templates/new?starter=${t.id}`, useHref: `/portal/admin/email/new?starter=${t.id}`, builtIn: true })),
-		...templates.map((t) => ({ ...t, meta: `Updated ${formatManila(t.updatedAt).split(",")[0]} · used ${t.usedCount} times`, href: `/portal/admin/email/templates/${t.id}`, useHref: `/portal/admin/email/new?template=${t.id}`, builtIn: false })),
+		...templates.map((t) => ({ ...t, meta: `${htmlBodyOf(t.blocks) !== null ? "HTML · " : ""}Updated ${formatManila(t.updatedAt).split(",")[0]} · used ${t.usedCount} times`, href: `/portal/admin/email/templates/${t.id}`, useHref: `/portal/admin/email/new?template=${t.id}`, builtIn: false })),
 	];
 
 	return (

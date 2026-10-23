@@ -1,9 +1,11 @@
+import { baseHtmlTemplate } from "./base-html";
 import type { EmailBlock } from "./types";
 
 const heading = (text: string, level: 1 | 2 = 1): EmailBlock => ({ id: "h", type: "heading", props: { text, level } });
 const text = (text: string): EmailBlock => ({ id: "t", type: "text", props: { text } });
 const button = (label: string, href: string): EmailBlock => ({ id: "b", type: "button", props: { label, href } });
 const divider: EmailBlock = { id: "d", type: "divider", props: {} };
+const htmlBody = (html: string): EmailBlock => ({ id: "html", type: "html", props: { html } });
 
 /** Built-in starters work immediately, without seeding or modifying saved templates. */
 export function emailStarters(baseUrl: string) {
@@ -53,6 +55,11 @@ export function emailStarters(baseUrl: string) {
 			id: "ments", name: "Meet your Ments Tree", description: "Help members discover their connections in the tree.",
 			subject: "Where do you fit in the Ments Tree, {{first_name}}?", preheader: "Explore CODE’s connections, one generation at a time.",
 			blocks: [heading("Every connection has a story."), text("Hi {{first_name}},\n\nExplore the Ments Tree to see the people and generations that connect CODE. Follow a branch, find a familiar name, or zoom out to see the whole picture."), button("Find your connections", `${portal}/ments`), text("See you in the tree,\nCODE")],
+		},
+		{
+			id: "html", name: "Your own HTML design", description: "A table-based layout with dark mode. Swap in what your AI tool or designer writes.",
+			subject: "An update from CODE, {{first_name}}", preheader: "",
+			blocks: [htmlBody(baseHtmlTemplate(baseUrl))],
 		},
 	].map((starter) => ({ ...starter, blocks: starter.blocks.map((block, i) => ({ ...block, id: `${starter.id}_${i}` })) }));
 }

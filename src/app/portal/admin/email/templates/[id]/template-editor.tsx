@@ -10,7 +10,6 @@ import { TaggedField } from "@/components/email/tagged-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
-import { baseHtmlTemplate } from "@/lib/email/base-html";
 import { newHtmlBlock } from "@/lib/email/blocks";
 import { htmlBodyOf } from "@/lib/email/html";
 import { blocksToHtml } from "@/lib/email/render";
@@ -53,7 +52,7 @@ export function TemplateEditor({
 		if ((mode === "html") === (htmlSource !== null)) return;
 		if (mode === "html") {
 			stash.current.blocks = blocks;
-			setBlocks(stash.current.html.length ? stash.current.html : [newHtmlBlock(blocks.length ? blocksToHtml(blocks, baseUrl) : baseHtmlTemplate(baseUrl))]);
+			setBlocks(stash.current.html.length ? stash.current.html : [newHtmlBlock(blocks.length ? blocksToHtml(blocks, baseUrl) : "")]);
 		} else {
 			stash.current.html = blocks;
 			setBlocks(stash.current.blocks);

@@ -22,10 +22,12 @@ type Props = {
 	fields?: SheetField[];
 	/** HTML source: monospace, no wrapping, and "{" types a brace instead of opening the menu. */
 	code?: boolean;
+	/** Extra controls beside Insert field. */
+	actions?: React.ReactNode;
 };
 
 /** Text input that inserts {{tags}}. Type "{" or use the Insert field button. */
-export function TaggedField({ label, value, onChange, multiline, rows = 5, maxLength, hint, placeholder, fields = [], code }: Props) {
+export function TaggedField({ label, value, onChange, multiline, rows = 5, maxLength, hint, placeholder, fields = [], code, actions }: Props) {
 	const id = useId();
 	const ref = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
 	const caret = useRef<{ start: number; end: number }>({ start: value.length, end: value.length });
@@ -114,21 +116,24 @@ export function TaggedField({ label, value, onChange, multiline, rows = 5, maxLe
 				<label htmlFor={id} className="text-sm font-medium">
 					{label}
 				</label>
-				<button
-					type="button"
-					className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-accent transition-colors hover:bg-secondary"
-					onMouseDown={(e) => e.preventDefault()}
-					onClick={() => {
-						remember();
-						viaBrace.current = false;
-						setActive(0);
-						setOpen((o) => !o);
-					}}
-					aria-expanded={open}
-				>
-					<Braces className="size-3.5" aria-hidden />
-					Insert field
-				</button>
+				<span className="flex items-center gap-1">
+					{actions}
+					<button
+						type="button"
+						className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-accent transition-colors hover:bg-secondary"
+						onMouseDown={(e) => e.preventDefault()}
+						onClick={() => {
+							remember();
+							viaBrace.current = false;
+							setActive(0);
+							setOpen((o) => !o);
+						}}
+						aria-expanded={open}
+					>
+						<Braces className="size-3.5" aria-hidden />
+						Insert field
+					</button>
+				</span>
 			</div>
 			{field}
 			{open ? (
