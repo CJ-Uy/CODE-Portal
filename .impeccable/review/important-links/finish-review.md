@@ -11,3 +11,11 @@ Measured: `scrollWidth` equals 390 on both pages at 390, with every editor discl
 DESIGN.md: the member rail paragraph and a new Important links section were updated by hand from the built pages (ordinary extension, no token change), so no documenter run.
 
 Captures (not committed): `.impeccable/review/important-links/*.jpg`.
+
+## Polish pass (2026-10-23, afternoon)
+
+Added search (from six links), a copy button per link with a toast and an in-app-browser fallback, a New pill for links from the last two weeks, a sidebar-pin count in the editor, and shorter copy on both pages.
+
+Round 1 disposition: fix. Six items: keep the copy-failure toast up for 6 seconds, carry the row hover tint behind the copy button, replace the browser's search cancel glyph with an in-field Clear search button, quote the query in the no-match heading, sit the count beside the field, and match the New pill to the editor badge. A shell-wide "PORTAL" kicker above page titles was noted as out of scope (portal-shell.tsx).
+
+Round 2 verdict: five resolved, one partial (the empty-state Clear search did not return focus to the field). Fixed by routing both clear buttons through one handler that refocuses the input.
