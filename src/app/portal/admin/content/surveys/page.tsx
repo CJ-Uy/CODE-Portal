@@ -18,6 +18,12 @@ import { NewForm } from "./new-form";
 
 export const dynamic = "force-dynamic";
 
+const FORM_GROUPS = [
+	{ status: "draft", heading: "Drafts to send" },
+	{ status: "running", heading: "Open now" },
+	{ status: "closed", heading: "Closed" },
+] as const;
+
 export default async function AdminSurveysPage() {
 	// The portal layout already redirects signed-out visitors to /signin, so this guard is
 	// what a signed-in member hits. Kept above the data loading so a disabled surface
@@ -94,51 +100,64 @@ export default async function AdminSurveysPage() {
 					/>
 				</section>
 
-				<section aria-labelledby="existing-surveys" className="grid gap-3">
+				<section aria-labelledby="existing-surveys" className="grid gap-4">
 					<h2 id="existing-surveys" className="text-xl font-semibold text-primary">Existing forms</h2>
-					<div className="divide-y divide-border/50 rounded-xl border border-border/60 bg-card">
-						{surveys.length === 0 ? (
-							<p className="px-4 py-5 text-sm text-muted-foreground">No forms yet.</p>
-						) : (
-							surveys.map((survey) => {
-								const status = effectiveStatus(survey, now);
-								const responses = survey.eventId ? (eventFeedback.get(survey.eventId)?.responses ?? 0) : generalResponses.get(survey.id);
-								return (
-									<Link
-										key={survey.id}
-										href={`/portal/admin/content/surveys/${survey.id}`}
-										className="group grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-4 py-4 text-sm first:rounded-t-xl last:rounded-b-xl hover:bg-secondary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:gap-4"
-									>
-										<span className="grid min-w-0 gap-1">
-											<span className="min-w-0 font-medium [overflow-wrap:anywhere]">{survey.title}</span>
-											<span className="min-w-0 text-muted-foreground [overflow-wrap:anywhere]">
-												{survey.eventId ? (eventTitles.get(survey.eventId) ?? "Event no longer listed") : "General form"}
-											</span>
-										</span>
-										<ChevronRight
-											aria-hidden="true"
-											className="col-start-2 row-span-2 size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 sm:col-start-3 sm:row-span-1"
-										/>
-										<span className="col-start-1 row-start-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground sm:col-start-2 sm:row-start-1">
-											<FormStatusBadge status={status} />
-											{status === "draft" ? null : (
-												<>
-													<span>
-														{responses ?? "-"} {responses === 1 ? "response" : "responses"}
+					{surveys.length === 0 ? (
+						<p className="rounded-xl border border-border/60 bg-card px-4 py-5 text-sm text-muted-foreground">
+							No forms yet. Start one above, or tick Attach a feedback form when you create an event.
+						</p>
+					) : null}
+					{/* Grouped by what needs doing: drafts wait to be sent, open forms are collecting, closed ones are for reading. */}
+					{FORM_GROUPS.map(({ status: groupStatus, heading }) => {
+						const group = surveys.filter((survey) => effectiveStatus(survey, now) === groupStatus);
+						if (group.length === 0) return null;
+						return (
+							<div key={groupStatus} className="grid min-w-0 gap-2">
+								<h3 className="text-sm font-semibold text-muted-foreground">
+									{heading} <span className="tabular-nums">({group.length})</span>
+								</h3>
+								<div className="divide-y divide-border/50 rounded-xl border border-border/60 bg-card">
+									{group.map((survey) => {
+										const status = groupStatus;
+										const responses = survey.eventId ? (eventFeedback.get(survey.eventId)?.responses ?? 0) : generalResponses.get(survey.id);
+										return (
+											<Link
+												key={survey.id}
+												href={`/portal/admin/content/surveys/${survey.id}`}
+												className="group grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-4 py-4 text-sm first:rounded-t-xl last:rounded-b-xl hover:bg-secondary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:gap-4"
+											>
+												<span className="grid min-w-0 gap-1">
+													<span className="min-w-0 font-medium [overflow-wrap:anywhere]">{survey.title}</span>
+													<span className="min-w-0 text-muted-foreground [overflow-wrap:anywhere]">
+														{survey.eventId ? (eventTitles.get(survey.eventId) ?? "Event no longer listed") : "General form"}
 													</span>
-													{survey.closesAt ? (
-														<span>
-															{status === "closed" ? "Closed" : "Closes"} {formatUtc8DateTime(survey.closesAt)}
-														</span>
-													) : null}
-												</>
-											)}
-										</span>
-									</Link>
-								);
-							})
-						)}
-					</div>
+												</span>
+												<ChevronRight
+													aria-hidden="true"
+													className="col-start-2 row-span-2 size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 sm:col-start-3 sm:row-span-1"
+												/>
+												<span className="col-start-1 row-start-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground sm:col-start-2 sm:row-start-1">
+													<FormStatusBadge status={status} />
+													{status === "draft" ? null : (
+														<>
+															<span>
+																{responses ?? "-"} {responses === 1 ? "response" : "responses"}
+															</span>
+															{survey.closesAt ? (
+																<span>
+																	{status === "closed" ? "Closed" : "Closes"} {formatUtc8DateTime(survey.closesAt)}
+																</span>
+															) : null}
+														</>
+													)}
+												</span>
+											</Link>
+										);
+									})}
+								</div>
+							</div>
+						);
+					})}
 				</section>
 			</div>
 		</div>

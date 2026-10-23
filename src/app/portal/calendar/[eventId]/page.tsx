@@ -101,8 +101,9 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 		: [];
 	// Points attach to a term; resolve the active one server-side, same as markPresentAction.
 	const currentTerm = terms.find((t) => t.isCurrent);
+	// A debrief reviews what happened, so before the event it only shows once CRS has made a form for it.
 	const organizerPanel =
-		isOrganizer && surveysOn ? (
+		isOrganizer && surveysOn && (isPast || (organizerFeedback !== null && organizerFeedback.state !== "none")) ? (
 			<OrganizerFeedback eventId={event.id} feedback={organizerFeedback} debrief={debrief?.ok ? debrief.view : null} />
 		) : null;
 

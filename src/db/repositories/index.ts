@@ -15,7 +15,7 @@ import { createLinksRepository, createUnavailableLinksRepository, type LinkDb } 
 import { createMembersRepository } from "./members";
 import { createMentsRepository } from "./ments";
 import { createSharedMentsRepository } from "./ments-shared";
-import { createNavPinsRepository } from "./navPins";
+import { createImportantLinksRepository, createUnavailableImportantLinksRepository } from "./important-links";
 import { createNotificationsRepository, type NotificationsRepository } from "./notifications";
 import { createOverviewRepository, type OverviewRepository } from "./overview";
 import { createPointTypesRepository } from "./pointTypes";
@@ -74,7 +74,7 @@ export function createDrizzleRepositories(db: DrizzleDb) {
 		eventTypeRules: createEventTypeRulesRepository(db, audit),
 		pointTypes: createPointTypesRepository(db, audit),
 		retention,
-		navPins: createNavPinsRepository(db, audit),
+		importantLinks: createImportantLinksRepository(d1, audit),
 		quickLinks: createQuickLinksRepository(db, audit),
 		roster: createRosterRepository(db, audit),
 		roles: createRolesRepository(d1),
@@ -157,7 +157,7 @@ export function createSharedRepositories(adapter: DatabaseAdapter): Repositories
 		eventTypeRules: new Proxy({}, { get: () => unavailable }) as ReturnType<typeof createEventTypeRulesRepository>,
 		pointTypes: new Proxy({}, { get: () => unavailable }) as ReturnType<typeof createPointTypesRepository>,
 		retention: createUnavailableRetentionRepository(),
-		navPins: new Proxy({}, { get: () => unavailable }) as ReturnType<typeof createNavPinsRepository>,
+		importantLinks: createUnavailableImportantLinksRepository(),
 		quickLinks: new Proxy({}, { get: () => unavailable }) as ReturnType<typeof createQuickLinksRepository>,
 		roster: new Proxy({}, { get: () => unavailable }) as ReturnType<typeof createRosterRepository>,
 		roles: new Proxy({}, { get: () => unavailable }) as ReturnType<typeof createRolesRepository>,

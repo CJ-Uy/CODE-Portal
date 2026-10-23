@@ -539,9 +539,9 @@ export const GUIDES: Guide[] = [
 					device: "desktop",
 					callouts: [
 						{ x: 32.0, y: 10.6, label: "Share who rated 4 or 5, the mean, and n, the number of answers" },
-						{ x: 25.2, y: 42.9, label: "Common words. Tap one to filter." },
-						{ x: 35.4, y: 64.8, label: "Search the comments" },
-						{ x: 65.5, y: 76.9, label: "Hide a comment from organizers" },
+						{ x: 25.2, y: 38.4, label: "Common words. Tap one to filter." },
+						{ x: 35.4, y: 60.3, label: "Search the comments" },
+						{ x: 65.5, y: 72.4, label: "Hide a comment from organizers" },
 					],
 				},
 				tip: "Organizers see the comments without names. A hidden comment disappears from their view only. You still see it here.",

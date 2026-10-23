@@ -156,7 +156,22 @@ check("sent form has no point type", one("SELECT point_type_id AS v FROM surveys
 check("old response stays unlinked", one("SELECT member_id AS v FROM survey_responses WHERE id='srvr_fix1'"), null);
 check("old response keeps its time", one("SELECT submitted_at AS v FROM survey_responses WHERE id='srvr_fix1'"), 6000);
 
-// 0015 marks the 8 retention parts, adding any a database lacks, and guesses each school year's 2nd semester start.
+// 0015 copies each sidebar pin into important_links under the same id, still shown in the sidebar.
+db.exec(
+	`INSERT INTO nav_pins (id, label, url, icon, position, created_by, created_at)
+	 VALUES ('nav_fix1', 'Masterfile', 'https://example.com/master.xlsx', 'Table2', 3, 'mem_fix1', 7000)`,
+);
+for (const file of files.filter((f) => f >= "0015" && f < "0016")) applyOne(file);
+check(
+	"pin copied to important links",
+	one("SELECT title || ',' || url || ',' || show_in_sidebar || ',' || position || ',' || created_by AS v FROM important_links WHERE id='nav_fix1'"),
+	"Masterfile,https://example.com/master.xlsx,1,3,mem_fix1",
+);
+check("copied pin keeps its date", one("SELECT created_at AS v FROM important_links WHERE id='nav_fix1'"), 7000);
+check("copied pin detects its type", one("SELECT kind AS v FROM important_links WHERE id='nav_fix1'"), null);
+check("copied pin is uncategorized", one("SELECT category_id AS v FROM important_links WHERE id='nav_fix1'"), null);
+
+// 0016 marks the 8 retention parts, adding any a database lacks, and guesses each school year's 2nd semester start.
 // pt_gma stands in for prod's own row: retired here, with an officer's label that must survive.
 db.exec(`INSERT INTO point_types (id, key, label, milestones_json, active, position) VALUES ('pt_gma', 'gma', 'GMA (officer label)', '[]', 0, 7)`);
 db.exec(
@@ -164,7 +179,7 @@ db.exec(
 	 ('term_fix_sy', 'SY 2026-2027', 20, 10, 1780848000000, 1810396799999),
 	 ('term_fix_short', 'Short', 5, 1, 1780329600000, 1797350400000)`,
 );
-for (const file of files.filter((f) => f >= "0015")) applyOne(file);
+for (const file of files.filter((f) => f >= "0016")) applyOne(file);
 check("8 retention parts marked", one("SELECT COUNT(*) AS v FROM point_types WHERE retention_period IS NOT NULL"), 8);
 check(
 	"yearly parts",

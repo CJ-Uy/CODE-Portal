@@ -22,6 +22,7 @@ import { emailDbFromEnv } from "@/server/email/db";
 import { isFeatureEnabled } from "@/server/features";
 import { getSummarizer } from "@/server/feedback/ai";
 import { feedbackEmailReady } from "@/server/feedback/email";
+import { CopyFormLink } from "./copy-form-link";
 import { DraftWorkspace } from "./draft-workspace";
 import { RunningControls } from "./running-controls";
 import { ShareToggle } from "./share-toggle";
@@ -198,6 +199,7 @@ export default async function AdminSurveyDetailPage({
 								) : null}
 								{/* Works on a closed form too: an admin can stop sharing with organizers at any time after sending. */}
 								{detail.survey.eventId ? <ShareToggle surveyId={detail.survey.id} shared={detail.survey.shareWithOrganizers} /> : null}
+								{running && !timeClosed ? <CopyFormLink surveyId={detail.survey.id} /> : null}
 							</aside>
 						) : null}
 

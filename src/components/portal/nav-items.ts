@@ -1,4 +1,4 @@
-import { CalendarDays, CircleUserRound, House, Bell, BookOpen, Link2, Award, Megaphone, ShieldCheck, Mail, GitBranch, LifeBuoy } from "lucide-react";
+import { CalendarDays, CircleUserRound, House, Bell, BookOpen, Bookmark, Link2, Award, Megaphone, ShieldCheck, Mail, GitBranch, LifeBuoy } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 // Type-only, so no server module reaches the client bundle.
 import type { FeatureFlags } from "@/server/features";
@@ -20,6 +20,7 @@ export const primaryNav: NavItem[] = [
 	{ id: "retention", label: "Retention", href: "/portal/retention", icon: Award, feature: "retention" },
 	{ id: "ments", label: "Ments Tree", href: "/portal/ments", icon: GitBranch, feature: "ments" },
 	{ id: "links", label: "Link shortener", href: "/portal/links", icon: Link2 },
+	{ id: "important-links", label: "Important links", href: "/portal/important-links", icon: Bookmark },
 	{ id: "mail", label: "Mail", href: "/portal/mail", icon: Mail, feature: "email" },
 	{ id: "notifications", label: "Notifications", href: "/portal/notifications", icon: Bell, feature: "notifications" },
 	{ id: "profile", label: "Profile", href: "/portal/profile", icon: CircleUserRound },
