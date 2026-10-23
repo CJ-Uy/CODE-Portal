@@ -469,7 +469,7 @@ describe("surveys repository on D1", () => {
 			expect(notes[0]).toMatchObject({
 				kind: "survey_assigned",
 				title: "How was Study Jam?",
-				body: "Share quick feedback.",
+				body: "Share quick feedback. Answer to get the other 25% of this event's points.",
 				href: `/portal/surveys/${survey.id}`,
 			});
 			const [row] = await db.select().from(surveys).where(eq(surveys.id, survey.id));
@@ -832,13 +832,12 @@ describe("surveys repository on D1", () => {
 			await expect(repo.submitResponse(invited, answer(), LATE)).rejects.toThrow("You've already answered this form.");
 		});
 
-		it("blocks walk-ins when the admin turned them off", async () => {
+		it("lets every attendee answer an event's form, even with walk-ins turned off", async () => {
+			// Answering pays the rest of the event's points, so no attendee may be shut out by the sample.
 			const { repo, survey, answer, walkIn, invited } = await eventForm({ allowWalkIn: false });
 
-			expect((await repo.getForRespondent(walkIn, survey.id, LATE))!.state).toBe("ineligible");
-			await expect(repo.submitResponse(walkIn, answer(), LATE)).rejects.toThrow("This form is not open to you.");
-			await expect(repo.openFeedbackForEvent(walkIn, "evt_1", LATE)).resolves.toBeNull();
-			// Invitees are unaffected.
+			expect((await repo.getForRespondent(walkIn, survey.id, LATE))!.state).toBe("open");
+			await expect(repo.submitResponse(walkIn, answer(), LATE)).resolves.toEqual({ ok: true });
 			expect((await repo.getForRespondent(invited, survey.id, LATE))!.state).toBe("open");
 		});
 
@@ -1078,8 +1077,8 @@ describe("surveys repository on D1", () => {
 			expect(offRow).toMatchObject({ pointsAward: 0, pointTypeId: null });
 		});
 
-		it("awards an invitee once, in the term of their check-in, recorded by the form's creator", async () => {
-			const { db, repo, answer, invited } = await pointsForm();
+		it("awards an invitee once, recorded by the form's creator, on a form with no event", async () => {
+			const { db, repo, answer, invited } = await pointsForm({ eventId: null });
 
 			await repo.submitResponse(invited, answer("Loved it"), ANSWERED);
 			await expect(repo.submitResponse(invited, answer("Again"), ANSWERED)).rejects.toThrow("You've already answered this form.");
@@ -1088,30 +1087,25 @@ describe("surveys repository on D1", () => {
 			expect(records).toHaveLength(1);
 			expect(records[0]).toMatchObject({
 				memberId: invited.memberId,
-				termId: "term_a",
-				eventId: "evt_1",
+				eventId: null,
 				pointTypeId: "pt_feedback",
 				points: 1.5,
 				source: "survey_response",
 				recordedBy: "mem_admin",
-				reason: "Answered the feedback form for Study Jam",
 			});
 			expect(records[0].recordedAt.getTime()).toBe(ANSWERED.getTime());
 		});
 
-		it("awards a walk-in the same points whatever they answered", async () => {
+		it("gives no points for answering on an event's form: it pays the rest of the event's points instead", async () => {
+			// evt_1 awards no points here, so there is no share either; feedback-share.integration.test.ts covers the share.
 			const { db, repo, answer, invited, walkIn } = await pointsForm();
 
 			await repo.submitResponse(invited, answer("Great"), ANSWERED);
 			await repo.submitResponse(walkIn, answer("Terrible, honestly"), ANSWERED);
 
-			const records = await db.select().from(schema.retentionRecords);
-			expect(records.map((record) => [record.memberId, record.points, record.source]).sort()).toEqual(
-				[
-					[invited.memberId, 1.5, "survey_response"],
-					[walkIn.memberId, 1.5, "survey_response"],
-				].sort(),
-			);
+			expect(await db.select().from(schema.retentionRecords)).toHaveLength(0);
+			const [row] = await db.select().from(surveys);
+			expect(row).toMatchObject({ pointsAward: 0, pointTypeId: null });
 		});
 
 		it("awards nothing when the form gives 0 points", async () => {

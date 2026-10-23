@@ -23,7 +23,7 @@ import { can } from "@/server/auth/permissions";
 import { runAtomic } from "./atomic";
 import { auditInsertValues } from "./audit";
 import type { AuditRepository } from "./audit";
-import { buildExistingAttendanceAwardUpsert, buildScanAwardUpsert } from "./event-awards";
+import { buildExistingAttendanceAwardUpsert, buildFeedbackShareUpsert, buildScanAwardUpsert } from "./event-awards";
 import { canCreateType, createEventTypeRulesRepository } from "./eventTypeRules";
 import { notify } from "./notifications";
 import { validateEventSignupAnswers, type EventSignupAnswers, type EventSignupField } from "@/lib/event-signup-form";
@@ -515,11 +515,13 @@ export function createEventsRepository(db: Db, audit: AuditRepository): EventsRe
 			}
 			queries.push(
 				buildExistingAttendanceAwardUpsert(db, eventId),
+				// After the attendance upsert, so members who answered the form are topped up to the new awards.
+				buildFeedbackShareUpsert(db, eventId),
 				db
 					.delete(retentionRecords)
 					.where(
 						and(
-							eq(retentionRecords.source, "event_attendance"),
+							inArray(retentionRecords.source, ["event_attendance", "feedback_share"]),
 							eq(retentionRecords.eventId, eventId),
 							inArray(retentionRecords.pointTypeId, activePointTypeIds),
 							notInArray(retentionRecords.pointTypeId, configuredPointTypeIds),
@@ -804,7 +806,8 @@ export function createEventsRepository(db: Db, audit: AuditRepository): EventsRe
 						and(
 							eq(retentionRecords.eventId, input.eventId),
 							eq(retentionRecords.memberId, input.memberId),
-							eq(retentionRecords.source, "event_attendance"),
+							// Their feedback share goes too: it is the rest of the points this check-in paid.
+							inArray(retentionRecords.source, ["event_attendance", "feedback_share"]),
 						),
 					),
 				db.insert(auditLogs).values(
