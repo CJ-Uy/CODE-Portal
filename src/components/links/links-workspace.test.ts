@@ -34,5 +34,6 @@ it("keeps link actions visible in the mobile list", () => {
 	expect(html).toContain('aria-label="Copy Membership form short link"');
 	expect(html).toContain('aria-label="View Membership form details and QR code"');
 	expect(html.match(/aria-label="Delete Membership form"/g)).toHaveLength(2);
-	expect(html).toContain("Showing 1–1 of 1 link");
+	// One page reads as a plain count; "Showing x–y of n" appears only when there are more pages.
+	expect(html).toContain(">1 link</p>");
 });
