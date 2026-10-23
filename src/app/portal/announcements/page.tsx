@@ -25,6 +25,7 @@ function AnnouncementCard({ item }: { item: AnnouncementFeedItem }) {
 					<span className="inline-flex items-center gap-1 font-semibold text-accent">
 						<Pin className="size-3" aria-hidden />
 						Pinned
+						<span className="font-normal text-muted-foreground" aria-hidden>·</span>
 					</span>
 				) : null}
 				<span className="font-semibold text-foreground/80">{item.tag}</span>

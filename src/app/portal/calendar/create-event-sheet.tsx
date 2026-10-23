@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CalendarPlus } from "lucide-react";
+import { CalendarPlus, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -147,8 +147,13 @@ export function CreateEventSheet({
 	const datesFilled = allDay ? Boolean(startDay && endDay) : Boolean(startsAt && endsAt);
 	const selectedType = allowedTypes.find((option) => option.type === type);
 	const preview = colourClasses(selectedType?.colour ?? "slate");
-	const canSubmit =
-		title.trim() && place.trim() && description.trim() && datesFilled && !endBeforeStart && !noAllowedTypes && !typesUnavailable;
+	const missing = [
+		title.trim() ? null : "a title",
+		place.trim() ? null : "a place",
+		datesFilled ? null : "a date",
+		description.trim() ? null : "a description",
+	].filter((part): part is string => part !== null);
+	const canSubmit = missing.length === 0 && !endBeforeStart && !noAllowedTypes && !typesUnavailable;
 
 	return (
 		<Sheet
@@ -270,86 +275,13 @@ export function CreateEventSheet({
 						/>
 					)}
 					<p className="-mt-2 text-xs text-muted-foreground">
-						{allDay ? "All-day events cover whole days in UTC+8." : "Times are saved and shown in UTC+8."}
+						{allDay ? "All-day events cover whole days, Manila time." : "Times are in Manila time."}
 					</p>
 					{endBeforeStart ? (
 						<p className="-mt-2 text-xs text-destructive">
 							{allDay ? "End date cannot be before the start date." : "End must be after the start."}
 						</p>
 					) : null}
-
-					{canSetReadOnly ? (
-						<div className="flex items-start gap-3 rounded-lg border border-border bg-secondary/30 p-3 text-sm">
-							<Checkbox
-								id="create-read-only"
-								checked={readOnly}
-								onCheckedChange={(checked) => setReadOnly(checked === true)}
-								className="mt-0.5"
-							/>
-							<label htmlFor="create-read-only" className="grid gap-1">
-								<span className="font-medium">Informational only (read-only)</span>
-								<span className="text-xs text-muted-foreground">
-									Shows on the calendar with no signup, check-in, attendance or points. For things like &ldquo;Finals week&rdquo;
-									or &ldquo;Campus closed&rdquo;.
-								</span>
-							</label>
-						</div>
-					) : null}
-
-					{/* Interaction settings are meaningless on an informational event, and the repository
-					    clears them on write regardless — so hide rather than show dead controls. */}
-					{readOnly ? null : (
-						<>
-							<div className="flex items-start gap-3 rounded-lg border border-border bg-secondary/30 p-3 text-sm">
-								<Checkbox
-									id="create-rsvp-responses-public"
-									checked={rsvpResponsesPublic}
-									onCheckedChange={(checked) => setRsvpResponsesPublic(checked === true)}
-									className="mt-0.5"
-								/>
-								<label htmlFor="create-rsvp-responses-public" className="grid gap-1">
-									<span className="font-medium">Let members see signup answers</span>
-									<span className="text-xs text-muted-foreground">
-										When off, only organizers can see who is going and how they answered the form.
-									</span>
-								</label>
-							</div>
-
-							<EventSignupFormEditor value={rsvpForm} onChange={setRsvpForm} />
-
-							{feedbackTemplates.length > 0 ? (
-								<div className="grid gap-3 rounded-lg border border-border bg-secondary/30 p-3 text-sm">
-									<div className="flex items-start gap-3">
-										<Checkbox
-											id="create-attach-feedback"
-											checked={attachFeedback}
-											onCheckedChange={(checked) => setAttachFeedback(checked === true)}
-											className="mt-0.5"
-										/>
-										<label htmlFor="create-attach-feedback" className="grid gap-1">
-											<span className="font-medium">Attach a feedback form</span>
-											<span className="text-xs text-muted-foreground">
-												Makes a draft form for this event from a template. Nothing goes out yet: you check the questions and send it from the
-												event&apos;s admin page.
-											</span>
-										</label>
-									</div>
-									{attachFeedback ? (
-										<label className="grid gap-1.5 pl-7">
-											<span className="text-xs font-medium">Template</span>
-											<select className={FIELD} value={feedbackTemplateId} onChange={(e) => setFeedbackTemplateId(e.target.value)}>
-												{feedbackTemplates.map((template) => (
-													<option key={template.id} value={template.id}>
-														{template.label}
-													</option>
-												))}
-											</select>
-										</label>
-									) : null}
-								</div>
-							) : null}
-						</>
-					)}
 
 					<label className="grid gap-1.5 text-sm">
 						<span className="font-medium">Description</span>
@@ -363,44 +295,132 @@ export function CreateEventSheet({
 						/>
 					</label>
 
-					{readOnly ? null : (
-						<>
-							<label className="grid gap-1.5 text-sm">
-								<span className="font-medium">
-									Capacity <span className="font-normal text-muted-foreground">· optional</span>
+					{/* Everything a first-time host can skip lives here, so the form opens short. */}
+					<details className="group rounded-lg border border-border">
+						<summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 px-3 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+							<ChevronRight className="size-4 shrink-0 transition-transform group-open:rotate-90" aria-hidden />
+							<span className="grid">
+								More options
+								<span className="text-xs font-normal text-muted-foreground">
+									{readOnly ? "Informational only is on" : "Capacity, late time, signup questions, feedback form"}
 								</span>
-								<input
-									type="number"
-									min={1}
-									max={100000}
-									className={FIELD}
-									value={capacity}
-									onChange={(e) => setCapacity(e.target.value)}
-									placeholder="No limit"
-								/>
-							</label>
+							</span>
+						</summary>
+						<div className="grid gap-4 border-t border-border p-3">
+							{canSetReadOnly ? (
+								<div className="flex items-start gap-3 rounded-lg border border-border bg-secondary/30 p-3 text-sm">
+									<Checkbox
+										id="create-read-only"
+										checked={readOnly}
+										onCheckedChange={(checked) => setReadOnly(checked === true)}
+										className="mt-0.5"
+									/>
+									<label htmlFor="create-read-only" className="grid gap-1">
+										<span className="font-medium">Informational only (read-only)</span>
+										<span className="text-xs text-muted-foreground">
+											Shows on the calendar with no signup, check-in, attendance or points. For things like &ldquo;Finals week&rdquo;
+											or &ldquo;Campus closed&rdquo;.
+										</span>
+									</label>
+								</div>
+							) : null}
 
-							<label className="grid gap-1.5 text-sm">
-								<span className="font-medium">Grace period (minutes)</span>
-								<input
-									type="number"
-									min={0}
-									max={240}
-									className={FIELD}
-									value={graceMinutes}
-									onChange={(e) => setGraceMinutes(e.target.value)}
-									placeholder="15"
-								/>
-								<span className="text-xs text-muted-foreground">
-									Members scanned after this many minutes are marked late. Blank uses 15.
-								</span>
-							</label>
-						</>
-					)}
+							{/* Interaction settings are meaningless on an informational event, and the repository
+							    clears them on write regardless — so hide rather than show dead controls. */}
+							{readOnly ? null : (
+								<>
+									<div className="flex items-start gap-3 rounded-lg border border-border bg-secondary/30 p-3 text-sm">
+										<Checkbox
+											id="create-rsvp-responses-public"
+											checked={rsvpResponsesPublic}
+											onCheckedChange={(checked) => setRsvpResponsesPublic(checked === true)}
+											className="mt-0.5"
+										/>
+										<label htmlFor="create-rsvp-responses-public" className="grid gap-1">
+											<span className="font-medium">Let members see signup answers</span>
+											<span className="text-xs text-muted-foreground">
+												When off, only organizers can see who is going and how they answered the form.
+											</span>
+										</label>
+									</div>
 
+									<EventSignupFormEditor value={rsvpForm} onChange={setRsvpForm} />
+
+									{feedbackTemplates.length > 0 ? (
+										<div className="grid gap-3 rounded-lg border border-border bg-secondary/30 p-3 text-sm">
+											<div className="flex items-start gap-3">
+												<Checkbox
+													id="create-attach-feedback"
+													checked={attachFeedback}
+													onCheckedChange={(checked) => setAttachFeedback(checked === true)}
+													className="mt-0.5"
+												/>
+												<label htmlFor="create-attach-feedback" className="grid gap-1">
+													<span className="font-medium">Attach a feedback form</span>
+													<span className="text-xs text-muted-foreground">
+														Makes a draft form for this event from a template. Nothing goes out yet: you check the questions and send it from the
+														event&apos;s admin page.
+													</span>
+												</label>
+											</div>
+											{attachFeedback ? (
+												<label className="grid gap-1.5 pl-7">
+													<span className="text-xs font-medium">Template</span>
+													<select className={FIELD} value={feedbackTemplateId} onChange={(e) => setFeedbackTemplateId(e.target.value)}>
+														{feedbackTemplates.map((template) => (
+															<option key={template.id} value={template.id}>
+																{template.label}
+															</option>
+														))}
+													</select>
+												</label>
+											) : null}
+										</div>
+									) : null}
+								</>
+							)}
+							{readOnly ? null : (
+								<>
+									<label className="grid gap-1.5 text-sm">
+										<span className="font-medium">
+											Capacity <span className="font-normal text-muted-foreground">· optional</span>
+										</span>
+										<input
+											type="number"
+											min={1}
+											max={100000}
+											className={FIELD}
+											value={capacity}
+											onChange={(e) => setCapacity(e.target.value)}
+											placeholder="No limit"
+										/>
+									</label>
+
+									<label className="grid gap-1.5 text-sm">
+										<span className="font-medium">Late after (minutes)</span>
+										<input
+											type="number"
+											min={0}
+											max={240}
+											className={FIELD}
+											value={graceMinutes}
+											onChange={(e) => setGraceMinutes(e.target.value)}
+											placeholder="15"
+										/>
+										<span className="text-xs text-muted-foreground">
+											Members scanned after this many minutes are marked late. Blank uses 15.
+										</span>
+									</label>
+								</>
+							)}
+						</div>
+					</details>
 				</div>
 
-				<SheetFooter className="sticky bottom-0 z-10 mt-0 flex-row gap-2 border-t bg-background pb-[max(1rem,env(safe-area-inset-bottom))]">
+				<SheetFooter className="sticky bottom-0 z-10 mt-0 flex-row flex-wrap gap-2 border-t bg-background pb-[max(1rem,env(safe-area-inset-bottom))]">
+					{missing.length && !endBeforeStart && !noAllowedTypes && !typesUnavailable ? (
+						<p className="basis-full text-xs text-muted-foreground" aria-live="polite">Add {listOf(missing)} to create the event.</p>
+					) : null}
 					<Button type="button" variant="outline" className="flex-1 sm:flex-none" onClick={() => changeOpen(false)} disabled={pending}>
 						Cancel
 					</Button>
@@ -411,4 +431,8 @@ export function CreateEventSheet({
 			</SheetContent>
 		</Sheet>
 	);
+}
+
+function listOf(parts: string[]): string {
+	return parts.length < 2 ? parts.join("") : `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;
 }

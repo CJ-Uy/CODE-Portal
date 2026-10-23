@@ -56,7 +56,7 @@ export function EditProfileForm({ values }: { values: ProfileFormValues }) {
 				</fieldset>
 			) : (
 				<div className="grid gap-4">
-					<dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+					<dl className="grid grid-cols-2 gap-x-6 gap-y-4">
 						<Detail label="Full name" value={values.fullName} />
 						<Detail label="Nickname" value={values.nickname} />
 						<Detail label="Pronouns" value={values.pronouns} />

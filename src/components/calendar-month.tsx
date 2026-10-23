@@ -195,8 +195,9 @@ function MonthAgenda({ items, year, month, todayIso }: { items: CalendarItem[]; 
 					{rows.map((item) => {
 						const past = item.endDate < todayIso;
 						const colour = colourClasses(item.colour);
+						const day = (iso: string) => (iso === todayIso ? "Today" : dayLabel(iso));
 						const when = [
-							item.endDate !== item.date ? `${dayLabel(item.date)} to ${dayLabel(item.endDate)}` : dayLabel(item.date),
+							item.endDate !== item.date ? `${day(item.date)} to ${day(item.endDate)}` : day(item.date),
 							item.startsAt ? formatUtc8Time(new Date(item.startsAt)) : null,
 						]
 							.filter(Boolean)
@@ -207,7 +208,7 @@ function MonthAgenda({ items, year, month, todayIso }: { items: CalendarItem[]; 
 								<span className="min-w-0 flex-1">
 									<span className="block font-medium [overflow-wrap:anywhere]">{item.title}</span>
 									<span className="block text-sm text-muted-foreground">
-										{item.date === todayIso ? `Today · ${when}` : when}
+										{when}
 									</span>
 								</span>
 							</>

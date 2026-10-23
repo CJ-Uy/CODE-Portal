@@ -119,7 +119,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 					{/* eslint-disable-next-line @next/next/no-img-element */}
 					<img src="/code-falcon-white.png" alt="" className="h-9 w-auto" />
 					<span className="flex flex-col leading-none">
-						<span className="text-[0.6rem] font-medium uppercase tracking-[0.24em] text-primary-foreground/70">
+						<span className="text-[0.6875rem] font-medium uppercase tracking-[0.2em] text-primary-foreground/70">
 							Ateneo
 						</span>
 						<span className="font-heading text-xl font-bold leading-tight tracking-tight">CODE</span>
@@ -195,7 +195,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 						{/* eslint-disable-next-line @next/next/no-img-element */}
 						<img src="/code-falcon-white.png" alt="" className="h-8 w-auto" />
 						<span className="flex flex-col leading-none">
-							<span className="text-[0.55rem] font-medium uppercase tracking-[0.22em] text-primary-foreground/70">
+							<span className="text-[0.6875rem] font-medium uppercase tracking-[0.18em] text-primary-foreground/70">
 								Ateneo
 							</span>
 							<span className="font-heading text-lg font-bold leading-tight tracking-tight">CODE</span>
@@ -247,7 +247,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 						<SheetTrigger asChild>
 							<button
 								type="button"
-								aria-label="Open menu"
+								aria-label="Check-in code and quick actions"
 								aria-expanded={menuOpen}
 								className={cn(
 									"absolute -top-6 left-1/2 grid size-14 -translate-x-1/2 place-items-center rounded-full bg-secondary text-primary shadow-lg ring-4 ring-background transition-transform duration-200 active:scale-90",
@@ -407,7 +407,7 @@ function BarTab({ item, pathname }: { item: NavItem; pathname: string }) {
 			href={item.href}
 			aria-current={on ? "page" : undefined}
 			className={cn(
-				"flex flex-1 flex-col items-center gap-1 py-2 text-[0.65rem] font-medium transition-colors",
+				"flex min-h-14 flex-1 flex-col items-center justify-center gap-1 text-xs font-medium transition-colors",
 				on ? "text-secondary" : "text-primary-foreground/55",
 			)}
 		>
