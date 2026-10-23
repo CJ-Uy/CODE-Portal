@@ -127,6 +127,17 @@ describe("gallery uploads", () => {
 		expect(storage.objects.has(key)).toBe(false);
 	});
 
+	it("answers 400, not 500, when the parts list is not JSON", async () => {
+		const { handlers } = setup(ana);
+		const created = await handlers.create(post({ name: "a.jpg", type: "image/jpeg", size: 8 }));
+		const { key, uploadId } = (await created.json()) as { key: string; uploadId: string };
+		const form = new FormData();
+		form.set("key", key);
+		form.set("uploadId", uploadId);
+		form.set("parts", "{not json");
+		expect((await handlers.complete(new Request("https://example.com/x", { method: "POST", body: form }))).status).toBe(400);
+	});
+
 	it("rejects signed-out uploads and types the gallery does not take", async () => {
 		expect((await setup(null).handlers.create(post({ name: "a.jpg", type: "image/jpeg", size: 1 }))).status).toBe(401);
 		expect((await setup(ana).handlers.create(post({ name: "a.pdf", type: "application/pdf", size: 1 }))).status).toBe(415);

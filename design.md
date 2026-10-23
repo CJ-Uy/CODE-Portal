@@ -59,7 +59,7 @@ The navy desktop rail includes Overview, expandable sections and Back to portal.
 
 On mobile, the navy app bar remains above a separate breadcrumb strip. A fixed bottom bar provides Portal, Overview and Menu. Menu opens a scrollable bottom sheet with the same grouped tools and closes after navigation. Reserve bottom space for the bar and respect the device's safe area.
 
-The member rail orders Overview, Calendar, Retention, Ments Tree, Link shortener, Mail, Notifications and Profile. Library and Announcements sit under Resources & updates. Release flags hide unavailable destinations. The member mobile bar keeps four core destinations: Home, Calendar, Retention and Profile, with Link shortener filling the Retention slot when that feature is unavailable. The center plus opens a bottom sheet with the expanded event check-in QR first, followed by Create event and New short link above the remaining destinations. Its fixed handle supports drag-to-close.
+The member rail orders Overview, Calendar, Retention, Ments Tree, Link shortener, Mail, Notifications and Profile. Library, Gallery and Announcements sit under Resources & updates. Release flags hide unavailable destinations. The member mobile bar keeps four core destinations: Home, Calendar, Retention and Profile, with Link shortener filling the Retention slot when that feature is unavailable. The center plus opens a bottom sheet with the expanded event check-in QR first, followed by Create event and New short link above the remaining destinations. Its fixed handle supports drag-to-close.
 
 ### Ments Tree
 
@@ -78,6 +78,18 @@ Image blocks offer a public upload or an image URL, a description for screen rea
 The email allowance tooltip distinguishes the account's billing-cycle allowance, shared across beta, staged and live, from this workspace's calendar-month counter and daily sending cap. It shows the extra sending rate with an automatically refreshed approximate PHP quote, its date and sources; unavailable conversion leaves the USD rate readable.
 
 Personalization is a dedicated composer step for the actual receiving audience. A searchable, paginated recipient list exposes missing fields and uses light blue selection. Selecting a recipient shows their merge values, rendered subject, preview text and message. The list and preview sit side by side when space allows and stack on narrower screens. Corrections are marked and saved with the email draft; the email address remains read-only, and Use profile values clears that recipient's corrections. Keep draft corrections separate from member profile editing. Confirmation values wrap at word boundaries, with long addresses breaking only when needed. On mobile, Test and Review sit above the admin navigation bar with space reserved for both.
+
+## Gallery
+
+A folder reads as a dated roll of film. Square tiles sit edge to edge with 2px gutters and no radius, in 3, 4, 5 and 6 columns as the screen widens. The roll groups photos by Manila calendar day, newest first, and photos without a date taken fall back to their upload time. Each day header pairs an Unna date with a Source Sans count and sticks under the portal header (56px on phones, 68px at lg) while its photos scroll past. Folders nest, and each shows a 4:3 cover with its name and count beneath. A level with no photos lays its folders out as a grid; above a roll they become a sideways strip so the photos stay in the first view.
+
+Select mode turns tiles into checkboxes. A selected tile gets a light blue wash, its image scales down, and a navy check disc marks its corner. A floating navy bar with Select all, Move and Delete sits above the mobile bar and clear of the desktop rail. Delete acts at once and offers Restore in a toast. Deleted photos and folders stay in Recently deleted for 30 days, where the roll groups by days left, each tile carries a days badge, and deleted folders appear as bordered rows naming who deleted them.
+
+The lightbox opens full screen on navy with white Source Sans. Arrows, swipes and arrow keys move between photos, Escape closes and I toggles details. The next photo's preview loads ahead, and results show inside the viewer rather than behind it. Details list Taken, Event (the photo's own or the one inherited from its folder), Folder, Uploaded by and File. Tiles and covers load a 480px webp preview from the storage proxy, the lightbox a 1600px one, and Download returns the original.
+
+Uploads go up in parts, three files at a time, with a progress panel at the bottom right and a warning for files over 1 GB. Files can be dropped anywhere on the page. On phones, a round Upload button floats once the toolbar scrolls away. The folder settings sheet edits the name and event tag; the public switch is visible to everyone but only photo gallery admins can change it, and a public parent makes its children public.
+
+Public folders appear at `/gallery` inside the public site header and footer, under a short navy band with breadcrumbs, title and counts. They use the same roll and lightbox without uploader names. Event pages show up to eight of the event's photos in one row with a See all link to the event's gallery view.
 
 ## Writing rules
 

@@ -136,7 +136,7 @@ export function createGalleryUploadHandlers(dependencies: Dependencies) {
 			const mp = multipart();
 			if (!mp) return json({ error: "Gallery uploads need R2 or local file storage." }, 501);
 			const { actor, parsed } = check;
-			const parts = partsSchema.safeParse(JSON.parse(String(form.get("parts") ?? "null")));
+			const parts = partsSchema.safeParse(parseJson(form.get("parts")));
 			const uploadId = String(form.get("uploadId") ?? "");
 			if (!parts.success || !uploadId) return json({ error: "Bad parts." }, 400);
 
@@ -201,6 +201,14 @@ export function createGalleryUploadHandlers(dependencies: Dependencies) {
 			return new Response(null, { status: 204 });
 		},
 	};
+}
+
+function parseJson(value: FormDataEntryValue | null): unknown {
+	try {
+		return JSON.parse(String(value));
+	} catch {
+		return null;
+	}
 }
 
 function startsLike(head: Uint8Array, magic: Magic): boolean {
