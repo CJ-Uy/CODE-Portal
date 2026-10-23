@@ -1,5 +1,4 @@
 import type { PointTypeRow } from "@/db/repositories/pointTypes";
-import { RETENTION_POINT_TYPE_ID } from "@/lib/point-types";
 
 type TypedPoints = { pointTypeId: string; points: number | null };
 
@@ -22,6 +21,6 @@ export function buildPointBreakdown(types: PointTypeRow[], records: TypedPoints[
 			pointTypeId: type.id,
 			label: type.label,
 			totalPoints: totals.get(type.id) ?? 0,
-			retention: type.id === RETENTION_POINT_TYPE_ID,
+			retention: Boolean(type.retentionPeriod),
 		}));
 }

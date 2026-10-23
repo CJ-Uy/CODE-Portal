@@ -2,7 +2,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { AttendanceStatusCell } from "@/components/portal/attendance-status-cell";
-import { RetentionProgress } from "@/components/portal/overview-metrics";
+import { RetentionGrid, RetentionVerdict } from "@/components/retention-parts";
 import { Card, CardContent } from "@/components/ui/card";
 import { getRepositories } from "@/db";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
@@ -54,7 +54,7 @@ export default async function AdminMemberProfilePage({
 					.innerJoin(roles, eq(roles.id, memberRoles.roleId))
 					.where(eq(memberRoles.memberId, id))
 					.orderBy(asc(roles.label)),
-				repositories.retention.getMemberTermSummary(actor, { memberId: id, termId: selectedTerm.id }),
+				repositories.retention.memberProgress(actor, { memberId: id, termId: selectedTerm.id }),
 				db
 					.select({ pointTypeId: retentionRecords.pointTypeId, label: pointTypes.label, total: sql<number>`coalesce(sum(coalesce(${retentionRecords.points}, 0)), 0)` })
 					.from(retentionRecords)
@@ -88,7 +88,7 @@ export default async function AdminMemberProfilePage({
 			{summary ? (
 				<section className="grid gap-3">
 					{sectionTitle("Retention progress")}
-					<Card><CardContent className="p-4"><RetentionProgress points={summary.totalPoints} retainedAt={summary.retainedAt} /><p className="mt-2 text-sm text-muted-foreground tabular-nums">Probation below {summary.probationBelow} points. Current status: {summary.status.replaceAll("_", " ")}.</p></CardContent></Card>
+					<Card><CardContent className="grid gap-5 p-4"><RetentionVerdict progress={summary} /><RetentionGrid progress={summary} /></CardContent></Card>
 				</section>
 			) : null}
 

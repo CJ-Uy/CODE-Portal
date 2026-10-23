@@ -49,9 +49,9 @@ describe("read-only events on D1", () => {
 			.bind("casual", null, "Casual", "emerald", 0)
 			.run();
 		await env.DB.prepare(
-			"INSERT INTO terms (id, name, retained_at, probation_below, starts_at, ends_at) VALUES (?, ?, ?, ?, ?, ?)",
+			"INSERT INTO terms (id, name, starts_at, ends_at) VALUES (?, ?, ?, ?)",
 		)
-			.bind("term_1", "Term 1", 20, 10, new Date("2026-06-01").getTime(), new Date("2026-10-31").getTime())
+			.bind("term_1", "Term 1", new Date("2026-06-01").getTime(), new Date("2026-10-31").getTime())
 			.run();
 	});
 

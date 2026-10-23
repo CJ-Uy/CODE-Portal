@@ -304,7 +304,7 @@ describe("library activity: termStart", () => {
 	const now = new Date("2026-10-16T02:00:00Z");
 	const noTermWindow = 120 * 86_400_000;
 	const term = (id: string, startsAt: string, endsAt: string) =>
-		db.insert(schema.terms).values({ id, name: id, retainedAt: 100, probationBelow: 20, startsAt: new Date(startsAt), endsAt: new Date(endsAt) });
+		db.insert(schema.terms).values({ id, name: id, startsAt: new Date(startsAt), endsAt: new Date(endsAt) });
 
 	beforeEach(async () => {
 		await env.DB.prepare("DELETE FROM terms").run();

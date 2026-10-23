@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { signInPath } from "@/server/auth/sign-in";
 import Link from "next/link";
-import { ArrowRight, BookOpen, CalendarDays, ClipboardCheck, Link2, Megaphone, MessageSquare } from "lucide-react";
+import { ArrowRight, BookOpen, CalendarDays, Link2, Megaphone, MessageSquare } from "lucide-react";
 import { getRepositories } from "@/db";
 import { EventScanPanel } from "@/components/event-scan-panel";
 import { LibraryItemCard } from "@/components/library/library-card";
@@ -18,7 +18,7 @@ import type { OverviewSummary } from "@/db/repositories/overview";
 export const dynamic = "force-dynamic";
 
 const EMPTY_SUMMARY: OverviewSummary = {
-	retention: { points: 0, retainedAt: null, termName: null },
+	retention: null,
 	pendingSurveys: 0,
 	oldestPendingSurveyId: null,
 	upcomingEvents: 0,
@@ -99,10 +99,10 @@ export default async function PortalOverviewPage() {
 					<Card>
 						<CardHeader>
 							<CardTitle>Retention path</CardTitle>
-							<CardDescription>{summary.retention.termName ?? "Current term"}</CardDescription>
+							<CardDescription>{summary.retention?.termName ?? "No school year running"}</CardDescription>
 						</CardHeader>
 						<CardContent>
-							<RetentionProgress points={summary.retention.points} retainedAt={summary.retention.retainedAt} />
+							<RetentionProgress retention={summary.retention} />
 						</CardContent>
 					</Card>
 				) : null}
@@ -124,15 +124,7 @@ export default async function PortalOverviewPage() {
 
 			{/* Metrics for flagged-off surfaces drop out rather than showing a zero the member
 			    cannot act on. The grid reflows on its own at two or three cards. */}
-			<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-				{flags.retention ? (
-					<MetricCard
-						label="Retention"
-						value={summary.retention.termName ? String(summary.retention.points) : "0"}
-						description={summary.retention.termName ?? "No active term"}
-						icon={ClipboardCheck}
-					/>
-				) : null}
+			<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 				{/* A member who signed in from a feedback email lands here, so a pending form is one tap away. */}
 				{flags.surveys && summary.oldestPendingSurveyId ? (
 					<Link

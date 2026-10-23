@@ -7,6 +7,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MemberAvatar } from "@/components/portal/member-avatar";
 import { MemberCodeCard } from "@/components/member-code-card";
+import { STATUS_LABEL } from "@/components/retention-parts";
 import { getActor } from "@/server/auth/actor";
 import type { OverviewSummary } from "@/db/repositories/overview";
 import { EditProfileForm } from "./edit-profile-form";
@@ -15,18 +16,13 @@ import { buildPointBreakdown } from "./point-breakdown";
 export const dynamic = "force-dynamic";
 
 const EMPTY_SUMMARY: OverviewSummary = {
-	retention: { points: 0, retainedAt: null, termName: null },
+	retention: null,
 	pendingSurveys: 0,
 	oldestPendingSurveyId: null,
 	upcomingEvents: 0,
 	linkClicks: 0,
 };
 
-const STATUS_LABEL = {
-	retained: "Retained",
-	on_track: "On track",
-	probation: "Probation",
-} as const;
 
 function initialsFrom(name: string): string {
 	const parts = name.trim().split(/\s+/).slice(0, 2);
@@ -45,7 +41,7 @@ export default async function ProfilePage() {
 		repositories.retention.myHistory(actor, {}).catch(() => null),
 		repositories.pointTypes.list().catch(() => null),
 	]);
-	const history = loadedHistory ?? { summary: null, records: [] };
+	const history = loadedHistory ?? { summary: null, records: [], progress: null };
 	const pointRows = loadedHistory && pointTypes ? buildPointBreakdown(pointTypes, loadedHistory.records) : null;
 
 	const displayName = member.nickname ?? member.fullName ?? member.name ?? member.email;
@@ -84,16 +80,16 @@ export default async function ProfilePage() {
 			<Card>
 				<CardHeader>
 					<div className="flex items-center justify-between gap-3">
-						<CardTitle>Points this term</CardTitle>
-						{history.summary ? (
-							<Badge variant={history.summary.status === "probation" ? "warn" : "secondary"}>
-								{STATUS_LABEL[history.summary.status]}
+						<CardTitle>Points this school year</CardTitle>
+						{history.progress && history.progress.required > 0 ? (
+							<Badge variant={history.progress.status === "not_retained" ? "warn" : "secondary"}>
+								{STATUS_LABEL[history.progress.status]}
 							</Badge>
 						) : null}
 					</div>
-					{history.summary ? (
+					{history.progress && history.progress.required > 0 ? (
 						<CardDescription>
-							{history.summary.totalPoints} retention points · retained at {history.summary.retainedAt}
+							{history.progress.met} of {history.progress.required} retention requirements met
 						</CardDescription>
 					) : null}
 				</CardHeader>

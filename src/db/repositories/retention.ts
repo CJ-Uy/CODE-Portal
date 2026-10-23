@@ -1,11 +1,24 @@
-import { and, desc, eq, gte, like, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, isNull, like, lte, or, sql } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import { createId } from "@/lib/ids";
-import { crsAttendance, crsEvents, eventRsvps, eventTypeRules, members, pointTypes, retentionRecords, terms } from "@/db/schema";
+import {
+	crsAttendance,
+	crsEvents,
+	eventPointAwards,
+	eventRsvps,
+	eventTypeRules,
+	members,
+	pointTypes,
+	retentionRecords,
+	surveyAssignments,
+	surveys,
+	terms,
+} from "@/db/schema";
 import type { RetentionRecordSource } from "@/db/schema";
 import { fromLocalInput } from "@/lib/date-slots";
 import { quantizePoints } from "@/lib/points";
 import { RETENTION_POINT_TYPE_ID } from "@/lib/point-types";
+import { buildRetentionProgress, type PartRecord, type PartType, type RetentionProgress } from "@/lib/retention-parts";
 import type { Actor } from "@/server/auth/permissions";
 import { can } from "@/server/auth/permissions";
 import type { CreateManualRetentionRecordInput } from "../types";
@@ -15,6 +28,8 @@ export type RetentionRecord = InferSelectModel<typeof retentionRecords>;
 export type TypedRetentionRecord = RetentionRecord & { pointTypeId: string; pointTypeLabel: string };
 export type MyHistoryRecord = TypedRetentionRecord & {
 	eventTitle: string | null;
+	/** Decides the record's semester when it is linked to an event; otherwise recordedAt does. */
+	eventStartsAt: Date | null;
 	eventType: string | null;
 	eventTypeLabel: string | null;
 	eventColour: string | null;
@@ -48,14 +63,6 @@ export type EventRosterRow = {
 
 export type ListForMemberInput = { memberId: string; termId: string; limit?: number; offset?: number };
 export type MemberTermSummaryInput = { memberId: string; termId: string };
-export type RetentionStatus = "retained" | "on_track" | "probation";
-export type RetentionSummary = {
-	totalPoints: number;
-	recordCount: number;
-	retainedAt: number;
-	probationBelow: number;
-	status: RetentionStatus;
-};
 export type LeaderboardInput = { termId: string; limit?: number; offset?: number };
 export type PublicLeaderboardInput = LeaderboardInput & { pointTypeId: string };
 export type LedgerListOptions = { q?: string; limit?: number; offset?: number };
@@ -64,14 +71,32 @@ export type LeaderboardRow = { memberId: string; fullName: string | null; name: 
 export type MyHistorySummary = {
 	termId: string;
 	termName: string;
-	totalPoints: number;
-	retainedAt: number;
-	probationBelow: number;
-	status: RetentionStatus;
 	recordCount: number;
 	startsAt: Date;
 	endsAt: Date;
+	secondSemesterStartsAt: Date | null;
 };
+
+/**
+ * The rest of an event's points a member can still earn by answering its feedback form. A draft form has not opened
+ * yet; a running one is open until closesAt.
+ */
+export type PendingShare = {
+	eventId: string;
+	eventTitle: string;
+	eventStartsAt: Date;
+	surveyId: string;
+	surveyStatus: "draft" | "running";
+	closesAt: Date | null;
+	pointTypeId: string;
+	pointTypeLabel: string;
+	points: number;
+};
+
+export type EventFeedbackShare = { hasForm: boolean; pending: PendingShare[] };
+
+/** The soonest approved, upcoming event that awards a retention part, keyed by that part's point type. */
+export type NextPartEvent = { eventId: string; title: string; startsAt: Date };
 
 /** One calendar day of the viewer's own points, keyed the way the month grid labels cells. */
 export type PointsDay = { date: string; points: number; records: number };
@@ -81,25 +106,26 @@ export type TermOption = { id: string; name: string; isCurrent: boolean };
 export type TermAdminRow = {
 	id: string;
 	name: string;
-	retainedAt: number;
-	probationBelow: number;
 	startsAt: Date;
 	endsAt: Date;
+	secondSemesterStartsAt: Date | null;
 	isCurrent: boolean;
 };
 
 export type TermUpsertInput = {
 	id: string | null;
 	name: string;
-	retainedAt: number;
-	probationBelow: number;
 	startsAt: Date;
 	endsAt: Date;
+	secondSemesterStartsAt: Date;
 };
 
 export type RetentionRepository = {
 	listForMember(actor: Actor, input: ListForMemberInput): Promise<TypedRetentionRecord[]>;
-	getMemberTermSummary(actor: Actor, input: MemberTermSummaryInput): Promise<RetentionSummary>;
+	memberProgress(actor: Actor, input: MemberTermSummaryInput, now?: Date): Promise<RetentionProgress | null>;
+	termProgress(actor: Actor, termId: string, memberIds: string[], now?: Date): Promise<Map<string, RetentionProgress>>;
+	eventFeedbackShare(actor: Actor, eventId: string): Promise<EventFeedbackShare>;
+	nextPartEvents(actor: Actor, now?: Date): Promise<Map<string, NextPartEvent>>;
 	leaderboard(actor: Actor, input: LeaderboardInput): Promise<LeaderboardRow[]>;
 	publicLeaderboard(actor: Actor, input: PublicLeaderboardInput): Promise<LeaderboardRow[]>;
 	createManual(actor: Actor, input: CreateManualRetentionRecordInput): Promise<{ recordIds: string[] }>;
@@ -110,7 +136,7 @@ export type RetentionRepository = {
 		actor: Actor,
 		input: { termId?: string },
 		now?: Date,
-	): Promise<{ summary: MyHistorySummary | null; records: MyHistoryRecord[] }>;
+	): Promise<{ summary: MyHistorySummary | null; records: MyHistoryRecord[]; pendingShares: PendingShare[]; progress: RetentionProgress | null }>;
 	myPointsByDay(actor: Actor, input: { year: number; month: number }): Promise<PointsDay[]>;
 	listTerms(actor: Actor, now?: Date): Promise<TermOption[]>;
 	listTermsAdmin(actor: Actor, now?: Date): Promise<TermAdminRow[]>;
@@ -122,12 +148,6 @@ const UTC8_OFFSET_MS = 8 * 60 * 60 * 1000;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
 
-function statusFor(totalPoints: number, retainedAt: number, probationBelow: number): RetentionStatus {
-	if (totalPoints >= retainedAt) return "retained";
-	if (totalPoints < probationBelow) return "probation";
-	return "on_track";
-}
-
 /** The term whose window holds `now`, the latest-starting one if terms overlap. Attendance points use the same rule. */
 export async function getCurrentTermId(db: Db, now: Date): Promise<string | null> {
 	const [term] = await db
@@ -137,6 +157,107 @@ export async function getCurrentTermId(db: Db, now: Date): Promise<string | null
 		.orderBy(desc(terms.startsAt))
 		.limit(1);
 	return term?.id ?? null;
+}
+
+async function partTypes(db: Db): Promise<PartType[]> {
+	return db
+		.select({ id: pointTypes.id, label: pointTypes.label, retentionPeriod: pointTypes.retentionPeriod, position: pointTypes.position })
+		.from(pointTypes);
+}
+
+/** A record's semester follows its event's date, so a late manual entry for a 1st-semester event still counts there. */
+const toPartRecord = (row: { pointTypeId: string; points: number | null; eventStartsAt: Date | null; recordedAt: Date }): PartRecord => ({
+	pointTypeId: row.pointTypeId,
+	points: row.points,
+	countsOn: row.eventStartsAt ?? row.recordedAt,
+});
+
+const pendingToPartRecord = (row: PendingShare): PartRecord => ({ pointTypeId: row.pointTypeId, points: row.points, countsOn: row.eventStartsAt });
+
+/**
+ * What answering an event's form would still pay each member: the award minus their check-in's share, for forms that
+ * have not opened yet or are still open, and that the member has not answered. Organizers were paid in full, so they
+ * never appear.
+ */
+async function pendingShares(
+	db: Db,
+	filter: { memberIds: string[]; termId?: string; eventId?: string },
+	now: Date,
+): Promise<Array<PendingShare & { memberId: string }>> {
+	if (filter.memberIds.length === 0) return [];
+	const remainder = sql<number>`round(${eventPointAwards.points} - ${retentionRecords.points}, 2)`;
+	const rows = await db
+		.select({
+			memberId: retentionRecords.memberId,
+			eventId: crsEvents.id,
+			eventTitle: crsEvents.title,
+			eventStartsAt: crsEvents.startsAt,
+			surveyId: surveys.id,
+			surveyStatus: surveys.status,
+			closesAt: surveys.closesAt,
+			pointTypeId: pointTypes.id,
+			pointTypeLabel: pointTypes.label,
+			points: remainder,
+		})
+		.from(retentionRecords)
+		.innerJoin(crsEvents, and(eq(crsEvents.id, retentionRecords.eventId), isNull(crsEvents.deletedAt)))
+		.innerJoin(eventPointAwards, and(eq(eventPointAwards.eventId, retentionRecords.eventId), eq(eventPointAwards.pointTypeId, retentionRecords.pointTypeId)))
+		.innerJoin(pointTypes, and(eq(pointTypes.id, eventPointAwards.pointTypeId), eq(pointTypes.active, true)))
+		.innerJoin(surveys, eq(surveys.eventId, retentionRecords.eventId))
+		.where(
+			and(
+				eq(retentionRecords.source, "event_attendance"),
+				inArray(retentionRecords.memberId, filter.memberIds),
+				filter.termId ? eq(retentionRecords.termId, filter.termId) : undefined,
+				filter.eventId ? eq(retentionRecords.eventId, filter.eventId) : undefined,
+				or(eq(surveys.status, "draft"), and(eq(surveys.status, "running"), or(isNull(surveys.closesAt), gt(surveys.closesAt, now)))),
+				sql`${remainder} > 0`,
+				sql`not exists (select 1 from ${surveyAssignments} where ${surveyAssignments.surveyId} = ${surveys.id} and ${surveyAssignments.memberId} = ${retentionRecords.memberId} and ${surveyAssignments.completedAt} is not null)`,
+			),
+		)
+		.orderBy(crsEvents.startsAt, pointTypes.position);
+	return rows.map((row: PendingShare & { memberId: string }) => ({ ...row, points: quantizePoints(Number(row.points)) }));
+}
+
+/** Part progress for several members in one school year: one query for their records, one for their pending shares. */
+export async function loadProgress(db: Db, memberIds: string[], termId: string, now: Date): Promise<Map<string, RetentionProgress>> {
+	const [term] = await db
+		.select({ startsAt: terms.startsAt, endsAt: terms.endsAt, secondSemesterStartsAt: terms.secondSemesterStartsAt })
+		.from(terms)
+		.where(eq(terms.id, termId))
+		.limit(1);
+	const progress = new Map<string, RetentionProgress>();
+	if (!term || memberIds.length === 0) return progress;
+	const types = await partTypes(db);
+	const partIds = types.filter((type) => type.retentionPeriod !== null).map((type) => type.id);
+	const rows: Array<{ memberId: string; pointTypeId: string; points: number | null; eventStartsAt: Date | null; recordedAt: Date }> =
+		partIds.length === 0
+			? []
+			: await db
+					.select({
+						memberId: retentionRecords.memberId,
+						pointTypeId: retentionRecords.pointTypeId,
+						points: retentionRecords.points,
+						eventStartsAt: crsEvents.startsAt,
+						recordedAt: retentionRecords.recordedAt,
+					})
+					.from(retentionRecords)
+					.leftJoin(crsEvents, eq(crsEvents.id, retentionRecords.eventId))
+					.where(and(eq(retentionRecords.termId, termId), inArray(retentionRecords.memberId, memberIds), inArray(retentionRecords.pointTypeId, partIds)));
+	const pending = await pendingShares(db, { memberIds, termId }, now);
+	for (const memberId of memberIds) {
+		progress.set(
+			memberId,
+			buildRetentionProgress(
+				types,
+				term,
+				rows.filter((row) => row.memberId === memberId).map(toPartRecord),
+				pending.filter((row) => row.memberId === memberId).map(pendingToPartRecord),
+				now,
+			),
+		);
+	}
+	return progress;
 }
 
 const reportBaseColumns = {
@@ -199,40 +320,48 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 				.offset(input.offset ?? 0);
 		},
 
-		async getMemberTermSummary(actor, input) {
+		async memberProgress(actor, input, now = new Date()) {
 			if (actor.memberId !== input.memberId && !can(actor, "retention:record")) {
 				throw new Error("Not authorized to read this retention summary.");
 			}
-			const [agg] = await db
-				.select({
-					totalPoints: sql<number>`coalesce(sum(${retentionRecords.points}), 0)`,
-					recordCount: sql<number>`count(*)`,
-				})
-				.from(retentionRecords)
-				.innerJoin(pointTypes, eq(pointTypes.id, retentionRecords.pointTypeId))
+			return (await loadProgress(db, [input.memberId], input.termId, now)).get(input.memberId) ?? null;
+		},
+
+		async termProgress(actor, termId, memberIds, now = new Date()) {
+			if (!can(actor, "retention:record")) throw new Error("Not authorized to read retention reports.");
+			return loadProgress(db, memberIds, termId, now);
+		},
+
+		// Approved events are on every member's calendar, so any signed-in member may read this.
+		async nextPartEvents(_actor, now = new Date()) {
+			// ponytail: the next 100 awarded events cover every part in practice; page through if a calendar ever holds more.
+			const rows: Array<NextPartEvent & { pointTypeId: string }> = await db
+				.select({ pointTypeId: eventPointAwards.pointTypeId, eventId: crsEvents.id, title: crsEvents.title, startsAt: crsEvents.startsAt })
+				.from(eventPointAwards)
+				.innerJoin(crsEvents, eq(crsEvents.id, eventPointAwards.eventId))
+				.innerJoin(pointTypes, eq(pointTypes.id, eventPointAwards.pointTypeId))
 				.where(
 					and(
-						eq(retentionRecords.memberId, input.memberId),
-						eq(retentionRecords.termId, input.termId),
-						eq(retentionRecords.pointTypeId, RETENTION_POINT_TYPE_ID),
+						gt(crsEvents.startsAt, now),
+						eq(crsEvents.status, "approved"),
+						eq(crsEvents.readOnly, false),
+						isNull(crsEvents.deletedAt),
+						eq(pointTypes.active, true),
+						sql`${pointTypes.retentionPeriod} is not null`,
 					),
-				);
-			const [term] = await db
-				.select({ retainedAt: terms.retainedAt, probationBelow: terms.probationBelow })
-				.from(terms)
-				.where(eq(terms.id, input.termId))
-				.limit(1);
-			const retainedAt = term?.retainedAt ?? 0;
-			const probationBelow = term?.probationBelow ?? 0;
-			const totalPoints = quantizePoints(Number(agg?.totalPoints ?? 0));
-			const recordCount = Number(agg?.recordCount ?? 0);
-			return {
-				totalPoints,
-				recordCount,
-				retainedAt,
-				probationBelow,
-				status: statusFor(totalPoints, retainedAt, probationBelow),
-			};
+				)
+				.orderBy(crsEvents.startsAt)
+				.limit(100);
+			const next = new Map<string, NextPartEvent>();
+			for (const { pointTypeId, ...event } of rows) if (!next.has(pointTypeId)) next.set(pointTypeId, event);
+			return next;
+		},
+
+		// The viewer's own share only, so no permission check beyond being signed in.
+		async eventFeedbackShare(actor, eventId) {
+			const [form] = await db.select({ id: surveys.id }).from(surveys).where(eq(surveys.eventId, eventId)).limit(1);
+			if (!form) return { hasForm: false, pending: [] };
+			return { hasForm: true, pending: (await pendingShares(db, { memberIds: [actor.memberId], eventId }, new Date())) };
 		},
 
 		async leaderboard(actor, input) {
@@ -417,26 +546,26 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 
 		async myHistory(actor, input, now = new Date()) {
 			const termId = input.termId ?? (await getCurrentTermId(db, now));
-			if (!termId) return { summary: null, records: [] };
+			if (!termId) return { summary: null, records: [], pendingShares: [], progress: null };
 
 			const [term] = await db
 				.select({
 					id: terms.id,
 					name: terms.name,
-					retainedAt: terms.retainedAt,
-					probationBelow: terms.probationBelow,
 					startsAt: terms.startsAt,
 					endsAt: terms.endsAt,
+					secondSemesterStartsAt: terms.secondSemesterStartsAt,
 				})
 				.from(terms)
 				.where(eq(terms.id, termId))
 				.limit(1);
-			if (!term) return { summary: null, records: [] };
+			if (!term) return { summary: null, records: [], pendingShares: [], progress: null };
 
 			const rows: MyHistoryRecord[] = await db
 				.select({
 					...typedRecordColumns,
 					eventTitle: crsEvents.title,
+					eventStartsAt: crsEvents.startsAt,
 					eventType: crsEvents.type,
 					eventTypeLabel: eventTypeRules.label,
 					eventColour: eventTypeRules.colour,
@@ -448,22 +577,13 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 				.where(and(eq(retentionRecords.memberId, actor.memberId), eq(retentionRecords.termId, termId)))
 				.orderBy(desc(retentionRecords.recordedAt));
 
-			const totalPoints = quantizePoints(
-				rows.reduce(
-					(sum: number, row) => sum + (row.pointTypeId === RETENTION_POINT_TYPE_ID ? (row.points ?? 0) : 0),
-					0,
-				),
-			);
 			const summary: MyHistorySummary = {
 				termId: term.id,
 				termName: term.name,
-				totalPoints,
-				retainedAt: term.retainedAt,
-				probationBelow: term.probationBelow,
-				status: statusFor(totalPoints, term.retainedAt, term.probationBelow),
 				recordCount: rows.length,
 				startsAt: term.startsAt,
 				endsAt: term.endsAt,
+				secondSemesterStartsAt: term.secondSemesterStartsAt,
 			};
 			const records: MyHistoryRecord[] = rows.map((row) => ({
 				id: row.id,
@@ -473,6 +593,7 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 				pointTypeId: row.pointTypeId,
 				pointTypeLabel: row.pointTypeLabel,
 				eventTitle: row.eventTitle,
+				eventStartsAt: row.eventStartsAt,
 				eventType: row.eventType,
 				eventTypeLabel: row.eventTypeLabel || row.eventType,
 				eventColour: row.eventColour,
@@ -482,7 +603,9 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 				recordedBy: row.recordedBy,
 				recordedAt: row.recordedAt,
 			}));
-			return { summary, records };
+			const pending = (await pendingShares(db, { memberIds: [actor.memberId], termId }, now));
+			const progress = buildRetentionProgress(await partTypes(db), term, rows.map(toPartRecord), pending.map(pendingToPartRecord), now);
+			return { summary, records, pendingShares: pending, progress };
 		},
 
 		/**
@@ -547,8 +670,8 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 			const name = input.name.trim();
 			if (!name || name.length > 80) throw new Error("School year name is required.");
 			if (input.endsAt <= input.startsAt) throw new Error("The end date must be after the start date.");
-			if (input.probationBelow > input.retainedAt) {
-				throw new Error("Probation threshold cannot be higher than the retained threshold.");
+			if (input.secondSemesterStartsAt <= input.startsAt || input.secondSemesterStartsAt > input.endsAt) {
+				throw new Error("The 2nd semester must start after the school year starts and on or before it ends.");
 			}
 
 			// Scans resolve their term by date range and take the latest match, so overlapping
@@ -562,10 +685,9 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 
 			const values = {
 				name,
-				retainedAt: input.retainedAt,
-				probationBelow: input.probationBelow,
 				startsAt: input.startsAt,
 				endsAt: input.endsAt,
+				secondSemesterStartsAt: input.secondSemesterStartsAt,
 			};
 			const isCurrent = input.startsAt <= now && now <= input.endsAt;
 

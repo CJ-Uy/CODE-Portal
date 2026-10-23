@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import type { TermAdminRow } from "@/db/repositories/retention";
 import { toLocalDate } from "@/lib/date-slots";
+import { semesterBoundary } from "@/lib/retention-parts";
 import { upsertTermAction } from "./actions";
 
 function TermFields({ row }: { row?: TermAdminRow }) {
@@ -25,29 +26,16 @@ function TermFields({ row }: { row?: TermAdminRow }) {
 				<label className="grid gap-1.5 text-sm">
 					<span className="font-medium">Last day</span>
 					<Input type="date" name="endsOn" required defaultValue={row && toLocalDate(row.endsAt)} />
-					<span className="text-xs text-muted-foreground">Inclusive — the year runs to 11:59 PM on this day.</span>
+					<span className="text-xs text-muted-foreground">Inclusive: the year runs to 11:59 PM on this day.</span>
 				</label>
 			</div>
-			<div className="grid gap-4 sm:grid-cols-2">
-				<label className="grid gap-1.5 text-sm">
-					<span className="font-medium">Retained at</span>
-					<Input type="number" inputMode="numeric" name="retainedAt" required min={0} max={100000} defaultValue={row?.retainedAt ?? 20} />
-					<span className="text-xs text-muted-foreground">Points that count a member as retained.</span>
-				</label>
-				<label className="grid gap-1.5 text-sm">
-					<span className="font-medium">Probation below</span>
-					<Input
-						type="number"
-						inputMode="numeric"
-						name="probationBelow"
-						required
-						min={0}
-						max={100000}
-						defaultValue={row?.probationBelow ?? 10}
-					/>
-					<span className="text-xs text-muted-foreground">Under this total, a member is on probation.</span>
-				</label>
-			</div>
+			<label className="grid gap-1.5 text-sm sm:max-w-[calc(50%-0.5rem)]">
+				<span className="font-medium">2nd semester starts</span>
+				<Input type="date" name="secondSemesterStartsOn" required defaultValue={row && toLocalDate(semesterBoundary(row))} />
+				<span className="text-xs text-muted-foreground">
+					Semestral retention parts need 1 point before this day and 1 point from this day on. Intersession counts as the 1st semester.
+				</span>
+			</label>
 		</>
 	);
 }
@@ -91,7 +79,7 @@ export function SchoolYearsManager({ rows }: { rows: TermAdminRow[] }) {
 					<CardTitle>School years</CardTitle>
 					<CardDescription>
 						Attendance and points attach to the school year covering the day they happen. Dates cannot overlap, and
-						school years are never deleted here — removing one would erase every scan and point recorded against it.
+						school years are never deleted here: removing one would erase every scan and point recorded against it.
 					</CardDescription>
 				</CardHeader>
 				<CardContent>
@@ -119,7 +107,7 @@ export function SchoolYearsManager({ rows }: { rows: TermAdminRow[] }) {
 			<Card>
 				<CardHeader>
 					<CardTitle>Add school year</CardTitle>
-					<CardDescription>Set the span and the point thresholds members are measured against.</CardDescription>
+					<CardDescription>Set the span and when the 2nd semester starts. Retention parts are measured against these dates.</CardDescription>
 				</CardHeader>
 				<CardContent>
 					<TermForm />

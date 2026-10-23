@@ -39,7 +39,10 @@ export type AuditCategory =
 	| "announcement"
 	| "library"
 	| "email";
-export type RetentionRecordSource = "event_attendance" | "manual" | "survey_response";
+/** feedback_share is the rest of an event's points, earned by answering its feedback form; survey_response is points for answering a form with no event. */
+export type RetentionRecordSource = "event_attendance" | "manual" | "survey_response" | "feedback_share";
+/** How often a retention part needs its point: once a school year, or once each semester. */
+export type RetentionPeriod = "year" | "semester";
 
 const nowMs = sql`(unixepoch() * 1000)`;
 
@@ -422,10 +425,10 @@ export const terms = sqliteTable(
 	{
 		id: text("id").primaryKey(),
 		name: text("name").notNull(),
-		retainedAt: integer("retained_at").notNull(),
-		probationBelow: integer("probation_below").notNull(),
 		startsAt: integer("starts_at", { mode: "timestamp_ms" }).notNull(),
 		endsAt: integer("ends_at", { mode: "timestamp_ms" }).notNull(),
+		// Nullable so a row written by an older Worker mid-deploy still reads; readers fall back to the midpoint.
+		secondSemesterStartsAt: integer("second_semester_starts_at", { mode: "timestamp_ms" }),
 	},
 	(table) => [index("terms_starts_ends_idx").on(table.startsAt, table.endsAt)],
 );
@@ -457,6 +460,8 @@ export const pointTypes = sqliteTable(
 		key: text("key").notNull().unique(),
 		label: text("label").notNull(),
 		milestonesJson: text("milestones_json", { mode: "json" }).$type<PointMilestone[]>().notNull().default([]),
+		// Set only on the 8 retention parts, by migration 0016. NULL: the type never counts toward retention.
+		retentionPeriod: text("retention_period").$type<RetentionPeriod>(),
 		active: integer("active", { mode: "boolean" }).notNull().default(true),
 		position: integer("position").notNull().default(0),
 		updatedBy: text("updated_by").references(() => members.id, { onDelete: "set null" }),
@@ -506,6 +511,10 @@ export const retentionRecords = sqliteTable(
 		uniqueIndex("retention_records_survey_event_member_type_idx")
 			.on(table.eventId, table.memberId, table.pointTypeId)
 			.where(sql`source = 'survey_response'`),
+		// One feedback share per member per point type per event; re-upserted when the event's awards change.
+		uniqueIndex("retention_records_share_event_member_type_idx")
+			.on(table.eventId, table.memberId, table.pointTypeId)
+			.where(sql`source = 'feedback_share'`),
 	],
 );
 

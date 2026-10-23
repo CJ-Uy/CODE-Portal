@@ -2,6 +2,8 @@ import { z } from "zod";
 import { createManualRetentionRecordInputSchema } from "@/db/types";
 import { operation } from "./common";
 
+const retentionSourceSchema = z.enum(["event_attendance", "manual", "survey_response", "feedback_share"]);
+
 export const retentionRecordOutputSchema = z.object({
 	id: z.string(),
 	memberId: z.string(),
@@ -11,17 +13,49 @@ export const retentionRecordOutputSchema = z.object({
 	pointTypeLabel: z.string(),
 	points: z.number().nullable(),
 	reason: z.string(),
-	source: z.enum(["event_attendance", "manual", "survey_response"]),
+	source: retentionSourceSchema,
 	recordedBy: z.string(),
 	recordedAt: z.coerce.date(),
 });
 
-export const retentionSummaryOutputSchema = z.object({
-	totalPoints: z.number(),
-	recordCount: z.number().int(),
-	retainedAt: z.number().int(),
-	probationBelow: z.number().int(),
-	status: z.enum(["retained", "on_track", "probation"]),
+const retentionSlotOutputSchema = z.object({
+	key: z.string(),
+	label: z.string(),
+	startsAt: z.coerce.date(),
+	countsUntil: z.coerce.date(),
+	earned: z.number(),
+	counted: z.number(),
+	overflow: z.number(),
+	pending: z.number(),
+	state: z.enum(["met", "open", "missed", "upcoming"]),
+});
+
+export const retentionProgressOutputSchema = z.object({
+	status: z.enum(["retained", "on_track", "not_retained"]),
+	met: z.number().int(),
+	required: z.number().int(),
+	missed: z.number().int(),
+	parts: z.array(
+		z.object({
+			pointTypeId: z.string(),
+			label: z.string(),
+			period: z.enum(["year", "semester"]),
+			slots: z.array(retentionSlotOutputSchema),
+		}),
+	),
+	nextDeadline: z.object({ at: z.coerce.date(), parts: z.array(z.string()) }).nullable(),
+});
+
+export const pendingShareOutputSchema = z.object({
+	eventId: z.string(),
+	eventTitle: z.string(),
+	eventStartsAt: z.coerce.date(),
+	surveyId: z.string(),
+	surveyStatus: z.enum(["draft", "running"]),
+	closesAt: z.coerce.date().nullable(),
+	pointTypeId: z.string(),
+	pointTypeLabel: z.string(),
+	points: z.number(),
 });
 
 export const leaderboardRowOutputSchema = z.object({
@@ -34,13 +68,10 @@ export const leaderboardRowOutputSchema = z.object({
 export const myHistorySummaryOutputSchema = z.object({
 	termId: z.string(),
 	termName: z.string(),
-	totalPoints: z.number(),
-	retainedAt: z.number().int(),
-	probationBelow: z.number().int(),
-	status: z.enum(["retained", "on_track", "probation"]),
 	recordCount: z.number().int(),
 	startsAt: z.coerce.date(),
 	endsAt: z.coerce.date(),
+	secondSemesterStartsAt: z.coerce.date().nullable(),
 });
 
 export const termOptionOutputSchema = z.object({
@@ -60,7 +91,7 @@ export const termMasterRowOutputSchema = z.object({
 	pointTypeLabel: z.string(),
 	points: z.number().nullable(),
 	reason: z.string(),
-	source: z.enum(["event_attendance", "manual", "survey_response"]),
+	source: retentionSourceSchema,
 	recordedAt: z.coerce.date(),
 });
 
@@ -89,7 +120,7 @@ export const retentionContract = {
 	}),
 	memberTermSummary: operation({
 		input: z.object({ memberId: z.string().min(1), termId: z.string().min(1) }),
-		output: z.object({ summary: retentionSummaryOutputSchema }),
+		output: z.object({ progress: retentionProgressOutputSchema.nullable() }),
 		auth: "member",
 		sharedDev: "allow",
 	}),
@@ -116,10 +147,13 @@ export const retentionContract = {
 			summary: myHistorySummaryOutputSchema.nullable(),
 			records: z.array(retentionRecordOutputSchema.extend({
 				eventTitle: z.string().nullable().default(null),
+				eventStartsAt: z.coerce.date().nullable().default(null),
 				eventType: z.string().nullable().default(null),
 				eventTypeLabel: z.string().nullable().default(null),
 				eventColour: z.string().nullable().default(null),
 			})),
+			pendingShares: z.array(pendingShareOutputSchema).default([]),
+			progress: retentionProgressOutputSchema.nullable().default(null),
 		}),
 		auth: "member",
 		sharedDev: "allow",

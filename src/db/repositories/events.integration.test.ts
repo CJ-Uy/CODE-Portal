@@ -77,9 +77,9 @@ describe("events repository on D1", () => {
 				.run();
 		}
 		await env.DB.prepare(
-			"INSERT INTO terms (id, name, retained_at, probation_below, starts_at, ends_at) VALUES (?, ?, ?, ?, ?, ?)",
+			"INSERT INTO terms (id, name, starts_at, ends_at) VALUES (?, ?, ?, ?)",
 		)
-			.bind("term_1", "Term 1", 20, 10, TERM_START.getTime(), TERM_END.getTime())
+			.bind("term_1", "Term 1", TERM_START.getTime(), TERM_END.getTime())
 			.run();
 		for (const [type, permission, label, colour, position] of [
 			["official", "event:create_restricted", "Official", "primary", 0],
@@ -787,9 +787,9 @@ describe("events repository on D1", () => {
 		const event = await makeApprovedEvent();
 		const { repo, db } = makeRepos();
 		await env.DB.prepare(
-			"INSERT INTO terms (id, name, retained_at, probation_below, starts_at, ends_at) VALUES (?, ?, ?, ?, ?, ?)",
+			"INSERT INTO terms (id, name, starts_at, ends_at) VALUES (?, ?, ?, ?)",
 		)
-			.bind("term_old", "Old Term", 20, 10, new Date("2025-01-01").getTime(), new Date("2025-06-01").getTime())
+			.bind("term_old", "Old Term", new Date("2025-01-01").getTime(), new Date("2025-06-01").getTime())
 			.run();
 
 		await expect(repo.recordScan(owner, { eventId: event.id, memberId: "mem_a", termId: "term_old" })).rejects.toThrow(

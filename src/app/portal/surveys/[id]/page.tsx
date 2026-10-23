@@ -13,6 +13,7 @@ import { formatEstimate } from "@/lib/feedback/editor-input";
 import { parseOptions, safeFeedbackError, scaleLabels } from "@/lib/feedback/form";
 import { estimateSeconds } from "@/lib/feedback/stats";
 import { pointsPhrase } from "@/lib/points";
+import { FeedbackShareNote } from "@/components/feedback-share-note";
 import { getActor } from "@/server/auth/actor";
 import { can, type Actor } from "@/server/auth/permissions";
 import { isFeatureEnabled } from "@/server/features";
@@ -47,11 +48,13 @@ export default async function MemberSurveyPage({
 	const { survey, questions, eventTitle, state } = detail;
 	const backHref = isPreview ? `/portal/admin/content/surveys/${survey.id}` : survey.eventId ? `/portal/calendar/${survey.eventId}` : "/portal";
 	// Points are only promised while their point type is active, which is also when answering awards them.
+	// An event's form pays the rest of the event's points instead of points for answering.
 	const pointType =
-		survey.pointsAward > 0
+		survey.pointsAward > 0 && !survey.eventId
 			? (await repositories.pointTypes.list().catch(() => [])).find((type) => type.id === survey.pointTypeId && type.active)
 			: undefined;
 	const points = pointType ? pointsPhrase(survey.pointsAward, pointType.label) : null;
+	const share = survey.eventId && !isPreview ? await repositories.retention.eventFeedbackShare(actor, survey.eventId).catch(() => null) : null;
 
 	return (
 		<div className="mx-auto grid w-full min-w-0 max-w-2xl gap-6">
@@ -79,6 +82,7 @@ export default async function MemberSurveyPage({
 							) : null}
 						</p>
 						{points ? <p className="min-w-0 text-sm font-medium [overflow-wrap:anywhere]">You&apos;ll get {points} for answering.</p> : null}
+						<FeedbackShareNote share={share} on="form" />
 						<p className="flex min-w-0 items-start gap-2 rounded-lg bg-secondary/60 p-3 text-sm text-secondary-foreground">
 							<Eye className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
 							<span className="grid min-w-0 gap-0.5">
@@ -114,7 +118,7 @@ export default async function MemberSurveyPage({
 			) : (
 				<StateCard
 					message={
-						done && state === "answered" ? `Thanks, feedback sent.${points ? ` You got ${points}.` : ""}` : RESPONDENT_STATE_MESSAGES[state]
+						done && state === "answered" ? `Thanks, feedback sent.${points ? ` You got ${points}.` : survey.eventId ? " Any points this event still owed you are on your retention page." : ""}` : RESPONDENT_STATE_MESSAGES[state]
 					}
 					hint={done && state === "answered" ? null : stateHint(state, survey.closesAt)}
 					thanked={state === "answered"}

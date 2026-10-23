@@ -161,7 +161,7 @@ db.exec(
 	`INSERT INTO nav_pins (id, label, url, icon, position, created_by, created_at)
 	 VALUES ('nav_fix1', 'Masterfile', 'https://example.com/master.xlsx', 'Table2', 3, 'mem_fix1', 7000)`,
 );
-for (const file of files.filter((f) => f >= "0015")) applyOne(file);
+for (const file of files.filter((f) => f >= "0015" && f < "0016")) applyOne(file);
 check(
 	"pin copied to important links",
 	one("SELECT title || ',' || url || ',' || show_in_sidebar || ',' || position || ',' || created_by AS v FROM important_links WHERE id='nav_fix1'"),
@@ -170,6 +170,34 @@ check(
 check("copied pin keeps its date", one("SELECT created_at AS v FROM important_links WHERE id='nav_fix1'"), 7000);
 check("copied pin detects its type", one("SELECT kind AS v FROM important_links WHERE id='nav_fix1'"), null);
 check("copied pin is uncategorized", one("SELECT category_id AS v FROM important_links WHERE id='nav_fix1'"), null);
+
+// 0016 marks the 8 retention parts, adding any a database lacks, and guesses each school year's 2nd semester start.
+// pt_gma stands in for prod's own row: retired here, with an officer's label that must survive.
+db.exec(`INSERT INTO point_types (id, key, label, milestones_json, active, position) VALUES ('pt_gma', 'gma', 'GMA (officer label)', '[]', 0, 7)`);
+db.exec(
+	`INSERT INTO terms (id, name, retained_at, probation_below, starts_at, ends_at) VALUES
+	 ('term_fix_sy', 'SY 2026-2027', 20, 10, 1780848000000, 1810396799999),
+	 ('term_fix_short', 'Short', 5, 1, 1780329600000, 1797350400000)`,
+);
+for (const file of files.filter((f) => f >= "0016")) applyOne(file);
+check("8 retention parts marked", one("SELECT COUNT(*) AS v FROM point_types WHERE retention_period IS NOT NULL"), 8);
+check(
+	"yearly parts",
+	one("SELECT group_concat(key, ',') AS v FROM (SELECT key FROM point_types WHERE retention_period = 'year' ORDER BY key)"),
+	"advo,egmt_team,proj_team,ts",
+);
+check(
+	"semestral parts",
+	one("SELECT group_concat(key, ',') AS v FROM (SELECT key FROM point_types WHERE retention_period = 'semester' ORDER BY key)"),
+	"cbtb,gma,hre,ksa",
+);
+check("existing part keeps its label", one("SELECT label AS v FROM point_types WHERE id='pt_gma'"), "GMA (officer label)");
+check("retired part comes back", one("SELECT active AS v FROM point_types WHERE id='pt_gma'"), 1);
+check("Retention is not a part", one("SELECT retention_period AS v FROM point_types WHERE id='pt_retention'"), null);
+check("Feedback is not a part", one("SELECT retention_period AS v FROM point_types WHERE id='pt_feedback'"), null);
+check("2nd semester guessed at 11 January Manila", one("SELECT second_semester_starts_at AS v FROM terms WHERE id='term_fix_sy'"), 1799596800000);
+check("a school year without 11 January keeps NULL", one("SELECT second_semester_starts_at AS v FROM terms WHERE id='term_fix_short'"), null);
+check("thresholds dropped", one("SELECT COUNT(*) AS v FROM pragma_table_info('terms') WHERE name IN ('retained_at', 'probation_below')"), 0);
 db.close();
 rmSync(work, { recursive: true, force: true });
 
