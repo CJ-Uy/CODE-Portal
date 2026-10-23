@@ -89,6 +89,8 @@ export const mentsPeople = sqliteTable(
 	],
 );
 
+// Retired 2026-10-23: CJ removed Pments from the Ments Tree. Nothing reads or writes this table any more; it stays so
+// no member's saved rows are lost, and a later cleanup migration can drop it.
 export const mentsPments = sqliteTable(
 	"ments_pments",
 	{
