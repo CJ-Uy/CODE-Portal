@@ -1,7 +1,8 @@
-import { LoadingScreen, Skeleton } from "@/components/ui/skeleton";
+import { RouteFallback } from "@/components/portal/route-fallback";
+import { LoadingScreen, PageLoading, Skeleton } from "@/components/ui/skeleton";
 
 /** Mirrors the guides index: centered search hero, then a grid of guide cards. */
-export default function GuidesLoading() {
+function GuidesIndexLoading() {
 	return (
 		<LoadingScreen label="Loading guides" className="gap-8">
 			<div className="grid justify-items-center gap-4 rounded-xl border border-border/60 bg-card px-5 py-10 sm:px-8 sm:py-12">
@@ -22,4 +23,9 @@ export default function GuidesLoading() {
 			</div>
 		</LoadingScreen>
 	);
+}
+
+/** The guide index's shape on the index; a plain page for a single guide. */
+export default function GuidesLoading() {
+	return <RouteFallback path="/portal/guides" match={<GuidesIndexLoading />} other={<PageLoading />} />;
 }

@@ -36,9 +36,8 @@ export default async function AdminMemberProfilePage({
 	const { id } = paramsSchema.parse(await params);
 	const query = querySchema.parse(firstParams(await searchParams));
 	const db = getDb() as unknown as DrizzleD1Database<typeof schema>;
-	const [member] = await db.select().from(members).where(eq(members.id, id)).limit(1);
+	const [[member], pickers] = await Promise.all([db.select().from(members).where(eq(members.id, id)).limit(1), loadRetentionPickers(actor)]);
 	if (!member) notFound();
-	const pickers = await loadRetentionPickers(actor);
 	const now = new Date();
 	const selectedTerm =
 		pickers.terms.find((term) => term.id === query.termId) ??

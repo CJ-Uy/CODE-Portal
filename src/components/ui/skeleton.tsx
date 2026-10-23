@@ -42,3 +42,13 @@ export function RowsSkeleton({ rows = 5, className }: { rows?: number; className
 		</div>
 	);
 }
+
+/** A neutral page: header and one panel. For pages whose own skeleton has not loaded yet. */
+export function PageLoading() {
+	return (
+		<LoadingScreen label="Loading page">
+			<PageHeaderSkeleton />
+			<div className="h-96 rounded-lg border border-border bg-card" />
+		</LoadingScreen>
+	);
+}

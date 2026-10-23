@@ -1,11 +1,17 @@
+import { RouteFallback } from "@/components/portal/route-fallback";
 import { LoadingScreen, Skeleton } from "@/components/ui/skeleton";
+import { AdminPageLoading } from "./admin-skeletons";
+
+/** The tool directory's shape on the admin overview; the plain admin page shape below it. */
+export default function AdminLoading() {
+	return <RouteFallback path="/portal/admin" match={<AdminOverviewLoading />} other={<AdminPageLoading />} />;
+}
 
 /**
  * Mirrors the admin overview (page.tsx + AdminTools): header, search and section chips, then the
- * two-column tool directory. Each admin section has its own loading.tsx, so this only stands in
- * for the overview.
+ * two-column tool directory.
  */
-export default function AdminLoading() {
+function AdminOverviewLoading() {
 	return (
 		<LoadingScreen label="Loading admin" className="gap-8">
 			<div className="grid gap-3 border-b border-border/60 pb-6">

@@ -1,11 +1,16 @@
-import { LoadingScreen, Skeleton } from "@/components/ui/skeleton";
+import { RouteFallback } from "@/components/portal/route-fallback";
+import { LoadingScreen, PageLoading, Skeleton } from "@/components/ui/skeleton";
+
+/** Home's shape on Home; a plain page shape while a deep link's own skeleton is on its way. */
+export default function PortalLoading() {
+	return <RouteFallback path="/portal" match={<HomeLoading />} other={<PageLoading />} />;
+}
 
 /**
  * Mirrors the Home page (page.tsx): title and date, upcoming events beside the retention card,
- * the metric row, then announcements beside the library. Every other portal section has its own
- * loading.tsx, so this only ever stands in for Home.
+ * the metric row, then announcements beside the library.
  */
-export default function PortalLoading() {
+function HomeLoading() {
 	return (
 		<LoadingScreen label="Loading home">
 			<div className="grid gap-2">
