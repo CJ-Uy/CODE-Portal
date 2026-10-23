@@ -86,8 +86,9 @@ export async function moveCategoryAction(id: string, direction: "up" | "down") {
 export async function saveTemplateAction(input: TemplateInput) {
 	return runAction(async () => {
 		const { actor, email } = await context();
+		// No revalidatePath: it refreshes the current route, which after the editor's /new to /[id] URL swap remounts the
+		// editor mid-typing. Every email page is force-dynamic, so the next visit to a list fetches fresh rows anyway.
 		const row = await email.templates.save(actor, input);
-		revalidatePath(`${BASE}/templates`);
 		return row.id;
 	});
 }
@@ -116,8 +117,8 @@ export async function saveCampaignAction(input: CampaignInput) {
 		const refs = z
 			.object({ id: idSchema.optional(), templateId: idSchema.nullable(), categoryId: idSchema.nullable(), senderId: idSchema.nullable() })
 			.parse(input);
+		// Autosave: no revalidatePath, for the same reason as saveTemplateAction.
 		const row = await email.campaigns.saveDraft(actor, { ...input, ...refs });
-		revalidatePath(BASE);
 		return { id: row.id, status: row.status };
 	});
 }
