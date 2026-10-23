@@ -27,7 +27,7 @@ describe("resolveAudience", () => {
 		await member("mem_off", "2027", "inactive");
 		// role_email is seeded by migration 0007.
 		await env.DB.prepare("INSERT INTO member_roles (member_id, role_id, assigned_at) VALUES ('mem_a', 'role_email', ?)").bind(Date.now()).run();
-		await env.DB.prepare("INSERT INTO terms (id, name, retained_at, probation_below, starts_at, ends_at) VALUES ('term_now', 'Now', 10, 5, ?, ?)")
+		await env.DB.prepare("INSERT INTO terms (id, name, starts_at, ends_at) VALUES ('term_now', 'Now', ?, ?)")
 			.bind(Date.parse("2026-08-01T00:00:00Z"), Date.parse("2027-05-31T00:00:00Z"))
 			.run();
 		for (const id of ["mem_a", "mem_b", "mem_off"]) {

@@ -1,10 +1,12 @@
 import { TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
+import { Badge } from "@/components/ui/badge";
 import type { ResultsQuestion, ResultsRespondents, SurveyResults } from "@/db/types";
 import {
 	BELOW_THRESHOLD_NOTE,
 	baselineLine,
 	closingLine,
+	FORM_STATUS_LABELS,
 	invitedLine,
 	isLowResponseRate,
 	LOW_RESPONSE_NOTE,
@@ -23,6 +25,11 @@ type ChoiceQuestion = Extract<ResultsQuestion, { kind: "choice" }>;
 const PROSE = "min-w-0 [overflow-wrap:anywhere]";
 
 const ratingColor = (value: number) => `var(--rating-${value})`;
+
+/** Pass the effective status, so a form past its closing time reads Closed. */
+export function FormStatusBadge({ status }: { status: keyof typeof FORM_STATUS_LABELS }) {
+	return <Badge variant={status === "running" ? "success" : status === "draft" ? "secondary" : "outline"}>{FORM_STATUS_LABELS[status]}</Badge>;
+}
 
 /** The strip above the questions. Rates are always printed next to the response count they come from. */
 export function ResultsHeader({ results }: { results: SurveyResults }) {
@@ -85,13 +92,14 @@ export function ScaleResult({ question, eventType }: { question: ScaleQuestion; 
 			{/* The same numbers as the segments, in text, so colour is never the only way to read the bar. */}
 			<ul aria-hidden="true" className="grid grid-cols-5 gap-1 text-xs tabular-nums text-muted-foreground">
 				{summary.counts.map((count, index) => (
-					<li key={index} className="grid min-w-0 gap-0.5">
+					<li key={index} className="flex min-w-0 flex-wrap items-center gap-x-1.5">
 						<span className="flex items-center gap-1">
 							<span className="size-2.5 shrink-0 rounded-sm" style={{ backgroundColor: ratingColor(index + 1) }} />
-							<span className="font-medium text-foreground">{index + 1}</span>
+							<span className="font-semibold text-foreground">{index + 1}:</span>
 						</span>
-						<span>{count}</span>
-						<span>{percentOf(count, summary.n)}%</span>
+						<span>
+							{count} &middot; {percentOf(count, summary.n)}%
+						</span>
 					</li>
 				))}
 			</ul>

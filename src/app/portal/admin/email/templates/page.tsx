@@ -5,6 +5,7 @@ import { AdminIntro } from "@/components/portal/admin-intro";
 import { Button } from "@/components/ui/button";
 import { getRepositories } from "@/db";
 import { Input } from "@/components/ui/input";
+import { htmlBodyOf } from "@/lib/email/html";
 import { SAMPLE_MERGE_VALUES } from "@/lib/email/merge";
 import { renderEmail, valueResolver } from "@/lib/email/render";
 import { emailStarters } from "@/lib/email/starters";
@@ -25,7 +26,7 @@ export default async function TemplatesPage({ searchParams }: { searchParams: Pr
 	const starters = emailStarters(publicBaseUrl).filter((t) => `${t.name} ${t.description}`.toLowerCase().includes(q.toLowerCase()));
 	const items = [
 		...starters.map((t) => ({ ...t, categoryName: "CODE", meta: t.description, href: `/portal/admin/email/templates/new?starter=${t.id}`, useHref: `/portal/admin/email/new?starter=${t.id}`, builtIn: true })),
-		...templates.map((t) => ({ ...t, meta: `Updated ${formatManila(t.updatedAt).split(",")[0]} · used ${t.usedCount} times`, href: `/portal/admin/email/templates/${t.id}`, useHref: `/portal/admin/email/new?template=${t.id}`, builtIn: false })),
+		...templates.map((t) => ({ ...t, meta: `${htmlBodyOf(t.blocks) !== null ? "HTML · " : ""}Updated ${formatManila(t.updatedAt).split(",")[0]} · used ${t.usedCount} times`, href: `/portal/admin/email/templates/${t.id}`, useHref: `/portal/admin/email/new?template=${t.id}`, builtIn: false })),
 	];
 
 	return (
@@ -41,7 +42,7 @@ export default async function TemplatesPage({ searchParams }: { searchParams: Pr
 			<p role="status" className="text-sm text-muted-foreground">{starters.length} CODE starters · {templates.length} saved templates{q ? ` matching “${q}”` : ""}</p>
 			<ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
 				{items.map((t) => {
-					const { bodyHtml } = renderEmail({
+					const { bodyHtml, html, framed } = renderEmail({
 						subject: t.subject,
 						preheader: t.preheader,
 						blocks: t.blocks,
@@ -53,7 +54,11 @@ export default async function TemplatesPage({ searchParams }: { searchParams: Pr
 					return (
 						<li key={`${t.builtIn ? "starter" : "saved"}:${t.id}`} className="grid min-w-0 content-start overflow-hidden rounded-xl border border-border bg-card">
 								<div className="pointer-events-none relative h-44 overflow-hidden bg-[#F5F5F6]" inert>
-									<div className="absolute left-1/2 top-3 w-[600px] origin-top -translate-x-1/2 scale-[0.5]" dangerouslySetInnerHTML={{ __html: bodyHtml }} />
+									{framed ? (
+										<iframe title={`${t.name} preview`} sandbox="" srcDoc={html} tabIndex={-1} className="absolute left-1/2 top-0 h-[44rem] w-[600px] origin-top -translate-x-1/2 scale-[0.5] border-0 bg-white" />
+									) : (
+										<div className="absolute left-1/2 top-3 w-[600px] origin-top -translate-x-1/2 scale-[0.5]" dangerouslySetInnerHTML={{ __html: bodyHtml }} />
+									)}
 								</div>
 								<div className="grid gap-2 border-t border-border p-4">
 									<h2 className="font-heading text-xl">{t.name}</h2>

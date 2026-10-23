@@ -8,6 +8,7 @@ import { renderEmail, valueResolver } from "@/lib/email/render";
 import type { Audience } from "@/lib/email/types";
 import { plusAddress, type EmailConfig } from "./config";
 import { EmailQuotaError, type EmailSender } from "./sender";
+import { blocksForSending } from "./inline-css";
 import { signUnsubscribeToken } from "./unsubscribe-token";
 
 export type DispatchResult = { claimed: number; sent: number; failed: number; paused: boolean };
@@ -122,6 +123,8 @@ async function drain(db: EmailDb, sender: EmailSender, config: EmailConfig, now:
 		.leftJoin(emailSenders, eq(emailSenders.id, emailCampaigns.senderId))
 		.where(inArray(emailCampaigns.id, campaignIds));
 	const campaigns = new Map(campaignRows.map((r) => [r.campaign.id, r]));
+	// CSS inlining is per campaign; merge and sanitizing stay per recipient inside renderEmail.
+	const sendBlocks = new Map(await Promise.all(campaignRows.map(async (r) => [r.campaign.id, await blocksForSending(r.campaign.blocks)] as const)));
 
 	const memberIds = due.map((d) => d.delivery.memberId).filter((id): id is string => id !== null);
 	const memberRows = [];
@@ -179,12 +182,12 @@ async function drain(db: EmailDb, sender: EmailSender, config: EmailConfig, now:
 			await fail("Member no longer exists", true);
 			continue;
 		}
-		const values = mergeValuesFor({ ...(member ?? { name: null, fullName: null, nickname: null, batch: null }), email: delivery.email }, entry.campaign.mergeOverrides);
+		const values = mergeValuesFor({ ...(member ?? { name: null, fullName: null, nickname: null, batch: null }), email: delivery.email }, entry.campaign.mergeOverrides, entry.campaign.mergeSheet);
 		const links = !member || entry.category.required ? null : await unsubscribeLinks(config, member.id, entry.category.id);
 		const rendered = renderEmail({
 			subject: entry.campaign.subject,
 			preheader: entry.campaign.preheader,
-			blocks: entry.campaign.blocks,
+			blocks: sendBlocks.get(entry.campaign.id) ?? entry.campaign.blocks,
 			resolve: valueResolver(values),
 			values,
 			baseUrl: config.publicBaseUrl,

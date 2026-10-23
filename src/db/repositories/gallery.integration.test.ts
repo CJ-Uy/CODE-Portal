@@ -375,7 +375,7 @@ describe("gallery front page", () => {
 	const now = new Date("2026-10-23T00:00:00+08:00");
 	async function schoolYear() {
 		await env.DB.prepare("DELETE FROM terms").run();
-		await env.DB.prepare("INSERT INTO terms (id, name, retained_at, probation_below, starts_at, ends_at) VALUES ('sy25', 'SY 2025-2026', 10, 5, ?, ?)")
+		await env.DB.prepare("INSERT INTO terms (id, name, starts_at, ends_at) VALUES ('sy25', 'SY 2025-2026', ?, ?)")
 			.bind(new Date("2025-08-01T00:00:00+08:00").getTime(), new Date("2026-05-31T00:00:00+08:00").getTime())
 			.run();
 	}

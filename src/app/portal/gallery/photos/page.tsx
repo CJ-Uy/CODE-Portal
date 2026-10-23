@@ -81,7 +81,7 @@ export default async function PhotosPage({ searchParams }: { searchParams: Promi
 							aria-current={option.sort === sort ? "page" : undefined}
 							className={cn(
 								"inline-flex h-9 items-center rounded-full border px-3.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-								option.sort === sort ? "border-primary! bg-primary text-primary-foreground" : "border-border bg-card hover:bg-secondary",
+								option.sort === sort ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:bg-secondary",
 							)}
 						>
 							{option.label}

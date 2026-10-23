@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { and, eq, gte, isNull, lte } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, lt, lte, sql } from "drizzle-orm";
 import { Download, Settings2 } from "lucide-react";
 import { notFound } from "next/navigation";
 import { z } from "zod";
@@ -8,9 +8,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { getDb } from "@/db/client";
 import * as schema from "@/db/schema";
-import { crsEvents, eventPointAwards } from "@/db/schema";
+import { crsEvents, eventPointAwards, surveys } from "@/db/schema";
 import { createAttendanceReports } from "@/db/repositories/attendance-reports";
-import { RETENTION_POINT_TYPE_ID } from "@/lib/point-types";
+import { loadProgress } from "@/db/repositories/retention";
 import { requireActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
 import { ManualRecordSheet } from "./manual-record-sheet";
@@ -37,7 +37,7 @@ export default async function DataGroupPage({
 		pickers.terms[0];
 	const db = getDb() as unknown as DrizzleD1Database<typeof schema>;
 	const reports = createAttendanceReports(db);
-	const [summaries, scanRows, memberRows, awardRows] = selectedTerm
+	const [summaries, scanRows, memberRows, awardRows, unsentForms] = selectedTerm
 		? await Promise.all([
 				reports.termEventSummaries(actor, selectedTerm.id),
 				reports.scanLog(actor, selectedTerm.id, { limit: 5 }),
@@ -48,17 +48,34 @@ export default async function DataGroupPage({
 					.innerJoin(crsEvents, eq(crsEvents.id, eventPointAwards.eventId))
 					.where(and(gte(crsEvents.startsAt, selectedTerm.startsAt), lte(crsEvents.startsAt, selectedTerm.endsAt), isNull(crsEvents.deletedAt)))
 					.groupBy(eventPointAwards.eventId),
+				// A draft never sent leaves every attendee at 75% of the event's points.
+				db
+					.select({ surveyId: surveys.id, title: crsEvents.title, startsAt: crsEvents.startsAt })
+					.from(surveys)
+					.innerJoin(crsEvents, eq(crsEvents.id, surveys.eventId))
+					.where(
+						and(
+							eq(surveys.status, "draft"),
+							isNull(crsEvents.deletedAt),
+							gte(crsEvents.startsAt, selectedTerm.startsAt),
+							lte(crsEvents.startsAt, selectedTerm.endsAt),
+							lt(sql`coalesce(${crsEvents.endsAt}, ${crsEvents.startsAt})`, now.getTime()),
+						),
+					)
+					.orderBy(asc(crsEvents.startsAt))
+					.limit(5),
 			])
-		: [[], [], [], []];
+		: [[], [], [], [], []];
 	const awardEventIds = new Set(awardRows.map((row) => row.eventId));
 	const endedNoAttendance = summaries
 		.filter((event) => event.status === "approved" && (event.endsAt ?? event.startsAt) < now && event.attendedCount === 0)
 		.slice(0, 5);
 	const awardsNoScans = summaries.filter((event) => awardEventIds.has(event.eventId) && event.attendedCount === 0).slice(0, 5);
-	const belowProbation = memberRows
-		.map((member) => ({ ...member, total: member.pointsByType[RETENTION_POINT_TYPE_ID] ?? 0 }))
-		.filter((member) => selectedTerm && member.total < selectedTerm.probationBelow)
-		.sort((a, b) => a.total - b.total)
+	const progress = selectedTerm ? await loadProgress(db, memberRows.map((member) => member.memberId), selectedTerm.id, now) : new Map();
+	const missedRequirement = memberRows
+		.map((member) => ({ ...member, missed: progress.get(member.memberId)?.missed ?? 0 }))
+		.filter((member) => member.missed > 0)
+		.sort((a, b) => b.missed - a.missed)
 		.slice(0, 5);
 	const totalAttended = summaries.reduce((sum, event) => sum + event.attendedCount, 0);
 	const totalLate = summaries.reduce((sum, event) => sum + event.lateCount, 0);
@@ -106,10 +123,11 @@ export default async function DataGroupPage({
 						See all
 					</Link>
 				</div>
-				<div className="grid gap-3 lg:grid-cols-3">
+				<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
 					<AttentionList title="Approved ended with no scans" rows={endedNoAttendance.map((event) => ({ href: `/portal/admin/data/events/${event.eventId}`, label: event.title, meta: formatDateTime(event.startsAt) }))} />
 					<AttentionList title="Awarded events with no scans" rows={awardsNoScans.map((event) => ({ href: `/portal/admin/data/events/${event.eventId}`, label: event.title, meta: formatDateTime(event.startsAt) }))} />
-					<AttentionList title="Below probation" rows={belowProbation.map((member) => ({ href: `/portal/admin/members/${member.memberId}?termId=${selectedTerm?.id ?? ""}`, label: member.memberName ?? member.memberEmail, meta: `${member.total} points` }))} />
+					<AttentionList title="Missed a retention requirement" rows={missedRequirement.map((member) => ({ href: `/portal/admin/members/${member.memberId}?termId=${selectedTerm?.id ?? ""}`, label: member.memberName ?? member.memberEmail, meta: `${member.missed} missed` }))} />
+					<AttentionList title="Feedback form not sent" rows={unsentForms.map((form) => ({ href: `/portal/admin/content/surveys/${form.surveyId}`, label: form.title, meta: `${formatDateTime(form.startsAt)} · attendees still owed 25%` }))} />
 				</div>
 			</section>
 

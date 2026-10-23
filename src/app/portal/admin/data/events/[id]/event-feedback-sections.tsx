@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DebriefForm } from "@/components/feedback/debrief-form";
-import { ResultsHeader, ScaleResult } from "@/components/feedback/results";
+import { FormStatusBadge, ResultsHeader, ScaleResult } from "@/components/feedback/results";
 import { StartFormCards, type TemplateCard } from "@/components/feedback/start-form-cards";
 import type { getRepositories } from "@/db";
 import type { SurveyResults } from "@/db/types";
@@ -104,10 +104,13 @@ function FeedbackBody({ eventId, feedback }: { eventId: string; feedback: EventF
 			const tracked = trackedScaleQuestions(results.questions);
 			return (
 				<div className="grid min-w-0 gap-4">
-					<div className="flex flex-wrap items-center gap-3">
-						<Badge variant="outline">{results.status}</Badge>
+					<div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+						<FormStatusBadge status={results.status} />
 						<Button asChild variant="outline" size="sm">
-							<Link href={`${SURVEYS_PATH}/${encodeURIComponent(feedback.surveyId)}`}>Full results</Link>
+							<Link href={`${SURVEYS_PATH}/${encodeURIComponent(feedback.surveyId)}`}>
+								See all answers and manage
+								<ArrowRight />
+							</Link>
 						</Button>
 					</div>
 					<ResultsHeader results={results} />
@@ -118,7 +121,7 @@ function FeedbackBody({ eventId, feedback }: { eventId: string; feedback: EventF
 					) : (
 						<ul className="grid min-w-0 gap-4 lg:grid-cols-2">
 							{tracked.map((question) => (
-								<li key={question.questionId} className="grid min-w-0 content-start gap-3 rounded-xl border border-border/60 bg-background p-4">
+								<li key={question.questionId} className="grid min-w-0 content-start gap-3 rounded-xl border border-border/60 bg-card p-4">
 									<div className="grid min-w-0 gap-0.5">
 										<h3 className="text-base font-semibold text-primary">{metricLabel(question.metricKey)}</h3>
 										<p className="min-w-0 text-sm text-muted-foreground [overflow-wrap:anywhere]">{question.prompt}</p>
@@ -140,11 +143,16 @@ export function EventFeedbackSections({ eventId, load }: { eventId: string; load
 		<>
 			<section aria-label="Feedback" className="grid min-w-0 gap-3">
 				{sectionTitle("Feedback")}
-				<Card>
-					<CardContent className="p-4">
-						<FeedbackBody eventId={eventId} feedback={load.feedback} />
-					</CardContent>
-				</Card>
+				{/* Sent results are already cards of their own; only the short states need a container. */}
+				{load.feedback.stage === "sent" ? (
+					<FeedbackBody eventId={eventId} feedback={load.feedback} />
+				) : (
+					<Card>
+						<CardContent className="p-4">
+							<FeedbackBody eventId={eventId} feedback={load.feedback} />
+						</CardContent>
+					</Card>
+				)}
 			</section>
 
 			<section aria-label="Debrief" className="grid min-w-0 gap-3">

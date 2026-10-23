@@ -17,6 +17,8 @@ const eslintConfig = defineConfig([
 		"design/**",
 		"graphify-out/**",
 		".local/**",
+		// Agent worktrees live here and are whole checkouts of other branches.
+		".claude/**",
 	]),
 ]);
 

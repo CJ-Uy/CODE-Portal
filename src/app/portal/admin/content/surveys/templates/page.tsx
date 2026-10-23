@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { signInPath } from "@/server/auth/sign-in";
-import { Plus } from "lucide-react";
+import { ChevronRight, Plus } from "lucide-react";
 import { AdminIntro } from "@/components/portal/admin-intro";
 import { Button } from "@/components/ui/button";
 import { getRepositories } from "@/db";
@@ -47,16 +47,20 @@ export default async function FeedbackTemplatesPage() {
 						<Link
 							key={template.id}
 							href={`/portal/admin/content/surveys/templates/${template.id}`}
-							className="flex items-center justify-between gap-3 rounded-xl px-4 py-4 text-sm hover:bg-secondary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+							className="group flex items-center justify-between gap-3 px-4 py-4 text-sm first:rounded-t-xl last:rounded-b-xl hover:bg-secondary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
 						>
 							<span className="grid min-w-0 gap-1">
 								<span className="min-w-0 font-medium [overflow-wrap:anywhere]">{template.name}</span>
 								{template.description ? <span className="min-w-0 text-muted-foreground [overflow-wrap:anywhere]">{template.description}</span> : null}
 								<span className="text-muted-foreground">
-									{template.questionsJson.length} {template.questionsJson.length === 1 ? "question" : "questions"}. {formatEstimate(estimateSeconds(template.questionsJson))}.
+									{template.questionsJson.length} {template.questionsJson.length === 1 ? "question" : "questions"} &middot;{" "}
+									{formatEstimate(estimateSeconds(template.questionsJson))}
 								</span>
 							</span>
-							<span className="shrink-0 text-accent">Edit</span>
+							<span className="flex shrink-0 items-center gap-1 text-muted-foreground">
+								<span className="sr-only">Edit</span>
+								<ChevronRight aria-hidden="true" className="size-4 transition-transform group-hover:translate-x-0.5" />
+							</span>
 						</Link>
 					))
 				)}

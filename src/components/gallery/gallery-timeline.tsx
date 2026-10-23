@@ -49,7 +49,7 @@ export function GalleryTimeline<T extends GalleryTileItem>({
 						className={cn("sticky z-10 -mx-1 flex flex-wrap items-baseline gap-x-3 bg-background/95 px-1 py-2.5 backdrop-blur-sm supports-[backdrop-filter]:bg-background/80", stickyTop)}
 					>
 						<span className="font-heading text-xl leading-tight">{group.label}</span>
-						<span className="font-sans! text-sm text-muted-foreground">{group.detail ?? `${group.items.length} ${group.items.length === 1 ? "item" : "items"}`}</span>
+						<span className="font-sans text-sm text-muted-foreground">{group.detail ?? `${group.items.length} ${group.items.length === 1 ? "item" : "items"}`}</span>
 					</h2>
 					<ul className="grid grid-cols-3 gap-0.5 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
 						{group.items.map((item) => (
@@ -111,7 +111,7 @@ function Tile({ item, selecting, selected, badge, onClick }: { item: GalleryTile
 					aria-hidden
 					className={cn(
 						"absolute left-2 top-2 grid size-6 place-items-center rounded-full border-2 shadow-[0_1px_3px_rgba(6,25,47,0.45)] transition-colors",
-						selected ? "border-white! bg-[#0c315c] text-white" : "border-white/90! bg-black/15 text-transparent",
+						selected ? "border-white bg-[#0c315c] text-white" : "border-white/90 bg-black/15 text-transparent",
 					)}
 				>
 					<Check className="size-3.5" strokeWidth={3} />

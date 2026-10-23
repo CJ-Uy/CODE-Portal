@@ -77,9 +77,9 @@ describe("events repository on D1", () => {
 				.run();
 		}
 		await env.DB.prepare(
-			"INSERT INTO terms (id, name, retained_at, probation_below, starts_at, ends_at) VALUES (?, ?, ?, ?, ?, ?)",
+			"INSERT INTO terms (id, name, starts_at, ends_at) VALUES (?, ?, ?, ?)",
 		)
-			.bind("term_1", "Term 1", 20, 10, TERM_START.getTime(), TERM_END.getTime())
+			.bind("term_1", "Term 1", TERM_START.getTime(), TERM_END.getTime())
 			.run();
 		for (const [type, permission, label, colour, position] of [
 			["official", "event:create_restricted", "Official", "primary", 0],
@@ -274,6 +274,11 @@ describe("events repository on D1", () => {
 			"Not authorized",
 		);
 
+		// listPublished resolves roles from one staff read, so it must agree with the per-event lookup.
+		for (const [viewer, role] of [[owner, "owner"], [adminStaff, "admin"], [scanner, "scanner"], [outsider, null]] as const) {
+			expect(await repo.listPublished(viewer, {})).toMatchObject([{ id: event.id, myRole: role }]);
+		}
+
 		const scanned = await repo.recordScan(scanner, { eventId: event.id, memberId: "mem_a", termId: "term_1" });
 		expect(scanned.alreadyPresent).toBe(false);
 		await expect(repo.softDelete(adminStaff, event.id)).rejects.toThrow("Not authorized");
@@ -296,11 +301,16 @@ describe("events repository on D1", () => {
 
 		await repo.addStaff(admin, event.id, scanner.memberId, "scanner");
 		await repo.addStaff(admin, event.id, adminStaff.memberId, "admin");
-		expect(await repo.listStaff(admin, event.id)).toMatchObject([
-			{ memberId: owner.memberId, role: "owner" },
-			{ memberId: adminStaff.memberId, role: "admin" },
-			{ memberId: scanner.memberId, role: "scanner" },
-		]);
+		const staff = await repo.listStaff(admin, event.id);
+		expect(staff[0]).toMatchObject({ memberId: owner.memberId, role: "owner" });
+		// Staff follow added_at, then name. The two adds can land in the same millisecond or not, so their order is not fixed.
+		expect(staff.slice(1)).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ memberId: adminStaff.memberId, role: "admin" }),
+				expect.objectContaining({ memberId: scanner.memberId, role: "scanner" }),
+			]),
+		);
+		expect(staff).toHaveLength(3);
 		await expect(repo.addStaff(admin, event.id, owner.memberId, "scanner")).rejects.toThrow("Owner cannot be event staff.");
 		await expect(repo.update(admin, event.id, { title: "Updated by admin" })).resolves.toMatchObject({
 			title: "Updated by admin",
@@ -782,9 +792,9 @@ describe("events repository on D1", () => {
 		const event = await makeApprovedEvent();
 		const { repo, db } = makeRepos();
 		await env.DB.prepare(
-			"INSERT INTO terms (id, name, retained_at, probation_below, starts_at, ends_at) VALUES (?, ?, ?, ?, ?, ?)",
+			"INSERT INTO terms (id, name, starts_at, ends_at) VALUES (?, ?, ?, ?)",
 		)
-			.bind("term_old", "Old Term", 20, 10, new Date("2025-01-01").getTime(), new Date("2025-06-01").getTime())
+			.bind("term_old", "Old Term", new Date("2025-01-01").getTime(), new Date("2025-06-01").getTime())
 			.run();
 
 		await expect(repo.recordScan(owner, { eventId: event.id, memberId: "mem_a", termId: "term_old" })).rejects.toThrow(

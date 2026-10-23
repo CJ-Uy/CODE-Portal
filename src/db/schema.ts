@@ -3,7 +3,7 @@ import { check, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex
 import type { EventSignupAnswers, EventSignupField } from "@/lib/event-signup-form";
 import type { PointMilestone } from "@/lib/point-milestones";
 import type { Audience, EmailBlock, EmailCampaignStatus, EmailDeliveryStatus } from "@/lib/email/types";
-import type { MergeOverrides } from "@/lib/email/merge";
+import type { MergeOverrides, MergeSheet } from "@/lib/email/merge";
 import type { LibraryBlock } from "@/lib/library/blocks";
 import type {
 	LibraryAuthor,
@@ -41,7 +41,10 @@ export type AuditCategory =
 	| "library"
 	| "email"
 	| "gallery";
-export type RetentionRecordSource = "event_attendance" | "manual" | "survey_response";
+/** feedback_share is the rest of an event's points, earned by answering its feedback form; survey_response is points for answering a form with no event. */
+export type RetentionRecordSource = "event_attendance" | "manual" | "survey_response" | "feedback_share";
+/** How often a retention part needs its point: once a school year, or once each semester. */
+export type RetentionPeriod = "year" | "semester";
 
 const nowMs = sql`(unixepoch() * 1000)`;
 
@@ -88,6 +91,8 @@ export const mentsPeople = sqliteTable(
 	],
 );
 
+// Retired 2026-10-23: CJ removed Pments from the Ments Tree. Nothing reads or writes this table any more; it stays so
+// no member's saved rows are lost, and a later cleanup migration can drop it.
 export const mentsPments = sqliteTable(
 	"ments_pments",
 	{
@@ -424,10 +429,10 @@ export const terms = sqliteTable(
 	{
 		id: text("id").primaryKey(),
 		name: text("name").notNull(),
-		retainedAt: integer("retained_at").notNull(),
-		probationBelow: integer("probation_below").notNull(),
 		startsAt: integer("starts_at", { mode: "timestamp_ms" }).notNull(),
 		endsAt: integer("ends_at", { mode: "timestamp_ms" }).notNull(),
+		// Nullable so a row written by an older Worker mid-deploy still reads; readers fall back to the midpoint.
+		secondSemesterStartsAt: integer("second_semester_starts_at", { mode: "timestamp_ms" }),
 	},
 	(table) => [index("terms_starts_ends_idx").on(table.startsAt, table.endsAt)],
 );
@@ -459,6 +464,8 @@ export const pointTypes = sqliteTable(
 		key: text("key").notNull().unique(),
 		label: text("label").notNull(),
 		milestonesJson: text("milestones_json", { mode: "json" }).$type<PointMilestone[]>().notNull().default([]),
+		// Set only on the 8 retention parts, by migration 0016. NULL: the type never counts toward retention.
+		retentionPeriod: text("retention_period").$type<RetentionPeriod>(),
 		active: integer("active", { mode: "boolean" }).notNull().default(true),
 		position: integer("position").notNull().default(0),
 		updatedBy: text("updated_by").references(() => members.id, { onDelete: "set null" }),
@@ -508,6 +515,10 @@ export const retentionRecords = sqliteTable(
 		uniqueIndex("retention_records_survey_event_member_type_idx")
 			.on(table.eventId, table.memberId, table.pointTypeId)
 			.where(sql`source = 'survey_response'`),
+		// One feedback share per member per point type per event; re-upserted when the event's awards change.
+		uniqueIndex("retention_records_share_event_member_type_idx")
+			.on(table.eventId, table.memberId, table.pointTypeId)
+			.where(sql`source = 'feedback_share'`),
 	],
 );
 
@@ -675,6 +686,8 @@ export const auditLogs = sqliteTable(
 	],
 );
 
+// Legacy: migration 0015 copied every pin into important_links (show_in_sidebar on, same ids) and
+// nothing reads this table any more. Drop it in a later migration once production runs important links.
 export const navPins = sqliteTable(
 	"nav_pins",
 	{
@@ -706,6 +719,42 @@ export const quickLinks = sqliteTable(
 		updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
 	},
 	(table) => [index("quick_links_position_idx").on(table.position)],
+);
+
+// Member-facing link directory at /portal/important-links. Archiving a category hides it and its links.
+export const linkCategories = sqliteTable(
+	"link_categories",
+	{
+		id: text("id").primaryKey(),
+		name: text("name").notNull(),
+		position: integer("position").notNull().default(0),
+		archivedAt: integer("archived_at", { mode: "timestamp_ms" }),
+		createdBy: text("created_by").references(() => members.id, { onDelete: "set null" }),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+		updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	},
+	(table) => [index("link_categories_position_idx").on(table.position)],
+);
+
+export const importantLinks = sqliteTable(
+	"important_links",
+	{
+		id: text("id").primaryKey(),
+		// Null files the link under "Other links" at the end of the directory.
+		categoryId: text("category_id").references(() => linkCategories.id, { onDelete: "set null" }),
+		title: text("title").notNull(),
+		url: text("url").notNull(),
+		description: text("description"),
+		// One of LINK_KINDS in src/lib/link-kinds.ts; null means detect it from the URL.
+		kind: text("kind"),
+		showInSidebar: integer("show_in_sidebar", { mode: "boolean" }).notNull().default(false),
+		position: integer("position").notNull().default(0),
+		archivedAt: integer("archived_at", { mode: "timestamp_ms" }),
+		createdBy: text("created_by").references(() => members.id, { onDelete: "set null" }),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+		updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	},
+	(table) => [index("important_links_category_position_idx").on(table.categoryId, table.position)],
 );
 
 export const rateLimitCounters = sqliteTable(
@@ -1068,6 +1117,8 @@ export const emailCampaigns = sqliteTable(
 		blocks: text("blocks", { mode: "json" }).$type<EmailBlock[]>().notNull().default([]),
 		audience: text("audience", { mode: "json" }).$type<Audience>().notNull(),
 		mergeOverrides: text("merge_overrides", { mode: "json" }).$type<MergeOverrides>().notNull().default({}),
+		/** Spreadsheet rows imported for this email; null when none. */
+		mergeSheet: text("merge_sheet", { mode: "json" }).$type<MergeSheet | null>(),
 		status: text("status").$type<EmailCampaignStatus>().notNull().default("draft"),
 		scheduledAt: integer("scheduled_at", { mode: "timestamp_ms" }),
 		startedAt: integer("started_at", { mode: "timestamp_ms" }),

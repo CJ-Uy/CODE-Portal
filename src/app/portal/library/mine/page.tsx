@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { signInPath } from "@/server/auth/sign-in";
-import { BookOpen, Plus } from "lucide-react";
+import { BookOpen } from "lucide-react";
 import { getRepositories } from "@/db";
 import type { LibraryItem } from "@/db/repositories/library";
 import type { LibraryItemStats, LibraryWeek } from "@/db/repositories/library-activity";
-import { Badge } from "@/components/ui/badge";
+import { LibraryHeader } from "@/components/library/library-header";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/portal/empty-state";
 import { formatHours } from "@/lib/library/activity";
@@ -15,11 +15,12 @@ import { isFeatureEnabled } from "@/server/features";
 
 export const dynamic = "force-dynamic";
 
-const GROUPS: { status: LibraryStatus; title: string }[] = [
-	{ status: "draft", title: "Drafts" },
-	{ status: "pending_review", title: "Waiting for approval" },
-	{ status: "published", title: "Published" },
-	{ status: "taken_down", title: "Taken down" },
+// Each state says what it means for the member, so nobody has to guess who can see what.
+const GROUPS: { status: LibraryStatus; title: string; hint: string }[] = [
+	{ status: "draft", title: "Drafts", hint: "Only you and the library moderators can see these until you publish them." },
+	{ status: "pending_review", title: "Waiting for approval", hint: "A library moderator checks these before members can see them." },
+	{ status: "published", title: "Published", hint: "Every member can find these in the library." },
+	{ status: "taken_down", title: "Taken down", hint: "Hidden from members until a library moderator restores them." },
 ];
 
 const UPDATED = new Intl.DateTimeFormat("en", { timeZone: "Asia/Manila", day: "numeric", month: "short", year: "numeric" });
@@ -63,24 +64,33 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 function ItemRow({ item, stats, weeks }: { item: LibraryItem; stats: LibraryItemStats; weeks: LibraryWeek[] | null }) {
-	const live = item.status !== "draft";
+	// Numbers only where there can be some: a published item, or one that was published before it went back for a check.
+	const showStats = item.status === "published" || (item.status !== "draft" && stats.opens + stats.saves > 0);
+	const published = item.status === "published";
 	return (
-		<li className="grid min-w-0 gap-3 rounded-xl border border-border bg-card p-4">
-			<div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
-				<div className="grid min-w-0 gap-1">
-					<div className="flex flex-wrap items-center gap-2">
-						<Badge variant="secondary">{KIND_LABELS[item.kind]}</Badge>
-						<span className="text-xs text-muted-foreground">Updated {UPDATED.format(item.updatedAt)}</span>
-					</div>
-					<Link
-						href={item.status === "published" ? `/portal/library/${item.id}` : `/portal/library/${item.id}/edit`}
-						className="min-w-0 [overflow-wrap:anywhere] font-heading text-lg leading-snug hover:underline"
-					>
-						{item.title || "Untitled"}
-					</Link>
-				</div>
-				<Button asChild variant="outline" size="sm">
-					<Link href={`/portal/library/${item.id}/edit`}>Edit</Link>
+		// The actions sit top right on a wide screen and last on a phone, so every row reads title, note, numbers, then what to do.
+		<li className="relative grid min-w-0 gap-3 rounded-xl border border-border bg-card p-4">
+			<div className="grid min-w-0 gap-1 sm:pr-56">
+				<p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+					<span className="font-medium text-foreground">{KIND_LABELS[item.kind]}</span>
+					<span aria-hidden>·</span>
+					<span>Updated {UPDATED.format(item.updatedAt)}</span>
+				</p>
+				<Link
+					href={published ? `/portal/library/${item.id}` : `/portal/library/${item.id}/edit`}
+					className="min-w-0 [overflow-wrap:anywhere] font-heading text-lg leading-snug hover:underline"
+				>
+					{item.title || "Untitled"}
+				</Link>
+			</div>
+			<div className="order-last flex flex-wrap gap-2 sm:absolute sm:right-4 sm:top-4 sm:order-none">
+				{published ? (
+					<Button asChild variant="ghost" size="sm" className="min-h-9">
+						<Link href={`/portal/library/${item.id}`}>View</Link>
+					</Button>
+				) : null}
+				<Button asChild variant="outline" size="sm" className="min-h-9">
+					<Link href={`/portal/library/${item.id}/edit`}>{item.status === "draft" ? "Continue editing" : "Edit"}</Link>
 				</Button>
 			</div>
 
@@ -91,9 +101,9 @@ function ItemRow({ item, stats, weeks }: { item: LibraryItem; stats: LibraryItem
 				</p>
 			) : null}
 
-			{live ? (
+			{showStats ? (
 				<div className="flex min-w-0 flex-wrap items-end justify-between gap-4">
-					<dl className="grid min-w-0 grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-5">
+					<dl className="grid min-w-0 grid-cols-3 gap-x-6 gap-y-2 sm:grid-cols-5">
 						<Stat label="Saves" value={String(stats.saves)} />
 						<Stat label="Opens" value={String(stats.opens)} />
 						<Stat label="Readers" value={String(stats.uniqueReaders)} />
@@ -128,19 +138,10 @@ export default async function MyLibraryPage() {
 	const zero: LibraryItemStats = { saves: 0, opens: 0, uniqueReaders: 0, activeSeconds: 0, downloads: 0 };
 
 	return (
-		<div className="mx-auto grid max-w-4xl gap-6">
-			<div className="flex flex-wrap items-end justify-between gap-3">
-				<div>
-					<p className="text-xs font-semibold uppercase text-primary">Member workspace</p>
-					<h1 className="font-heading text-3xl">My library</h1>
-					<p className="mt-1 max-w-2xl text-sm text-muted-foreground">Everything you have added, with how it is doing. Members see an item&apos;s opens, readers and reading time on its page. The weekly chart and download counts are only for you.</p>
-				</div>
-				<Button asChild>
-					<Link href="/portal/library/new">
-						<Plus />
-						Add to the library
-					</Link>
-				</Button>
+		<div className="mx-auto grid min-w-0 max-w-6xl gap-6">
+			<div className="grid min-w-0 gap-4">
+				<LibraryHeader current="mine" />
+				<p className="max-w-[65ch] text-sm text-muted-foreground">Everything you have added, and how each published item is doing. The weekly chart and download counts are only for you.</p>
 			</div>
 
 			{items.length === 0 ? (
@@ -155,14 +156,17 @@ export default async function MyLibraryPage() {
 					}
 				/>
 			) : (
-				GROUPS.map(({ status, title }) => {
+				GROUPS.map(({ status, title, hint }) => {
 					const group = items.filter((item) => item.status === status);
 					if (group.length === 0) return null;
 					return (
 						<section key={status} className="grid gap-3" aria-labelledby={`mine-${status}`}>
-							<h2 id={`mine-${status}`} className="font-heading text-xl">
-								{title} <span className="text-base text-muted-foreground">({group.length})</span>
-							</h2>
+							<div className="grid gap-0.5">
+								<h2 id={`mine-${status}`} className="font-heading text-xl">
+									{title} <span className="text-base text-muted-foreground">({group.length})</span>
+								</h2>
+								<p className="text-sm text-muted-foreground">{hint}</p>
+							</div>
 							<ul className="grid gap-3">
 								{group.map((item) => (
 									<ItemRow key={item.id} item={item} stats={stats.get(item.id) ?? zero} weeks={weekly.get(item.id) ?? null} />

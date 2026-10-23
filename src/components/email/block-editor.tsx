@@ -11,12 +11,12 @@ import { pillResolver, renderBlockHtml, renderFooterHtml, renderHeaderHtml, valu
 import type { EmailBlock, EmailBlockType } from "@/lib/email/types";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { TaggedField } from "./tagged-field";
+import { TaggedField, type SheetField } from "./tagged-field";
 
 export type EventOption = { id: string; title: string; when: string; place: string };
 export type PreviewPerson = { label: string; values: MergeValues };
 
-const PALETTE: { type: EmailBlockType; label: string; icon: typeof Type }[] = [
+const PALETTE: { type: Exclude<EmailBlockType, "html">; label: string; icon: typeof Type }[] = [
 	{ type: "heading", label: "Heading", icon: Heading },
 	{ type: "text", label: "Text", icon: Type },
 	{ type: "button", label: "Button", icon: MousePointerClick },
@@ -34,9 +34,11 @@ type Props = {
 	people: PreviewPerson[];
 	events: EventOption[];
 	layout?: "wide" | "compact";
+	/** Sheet columns for the Insert field menus. */
+	fields?: SheetField[];
 };
 
-function Segmented<T extends string | number>({ value, options, onChange, label }: { value: T; options: { value: T; label: React.ReactNode }[]; onChange: (v: T) => void; label: string }) {
+export function Segmented<T extends string | number>({ value, options, onChange, label }: { value: T; options: { value: T; label: React.ReactNode }[]; onChange: (v: T) => void; label: string }) {
 	return (
 		<div role="radiogroup" aria-label={label} className="inline-flex rounded-lg border border-border bg-background p-0.5">
 			{options.map((o) => (
@@ -55,7 +57,7 @@ function Segmented<T extends string | number>({ value, options, onChange, label 
 	);
 }
 
-export function BlockEditor({ blocks, onChange, baseUrl, footer, people, events, layout = "wide" }: Props) {
+export function BlockEditor({ blocks, onChange, baseUrl, footer, people, events, layout = "wide", fields }: Props) {
 	const [selectedId, setSelectedId] = useState<string | null>(blocks[0]?.id ?? null);
 	const [width, setWidth] = useState<600 | 375>(600);
 	const [person, setPerson] = useState(-1); // -1 shows fields as pills
@@ -173,7 +175,7 @@ export function BlockEditor({ blocks, onChange, baseUrl, footer, people, events,
 				<button
 					key={type}
 					type="button"
-					onClick={() => (type === "event" ? setEventPicker((o) => !o) : insert(newBlock(type as Exclude<EmailBlockType, "event">)))}
+					onClick={() => (type === "event" ? setEventPicker((o) => !o) : insert(newBlock(type)))}
 					className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm transition-[transform,border-color] hover:border-accent active:scale-[0.97]"
 				>
 					<Icon className="size-4 text-muted-foreground" aria-hidden />
@@ -339,12 +341,13 @@ export function BlockEditor({ blocks, onChange, baseUrl, footer, people, events,
 			{!selected ? <p className="text-sm text-muted-foreground">Select a block to edit it.</p> : null}
 			{selected?.type === "heading" ? (
 				<>
-					<TaggedField label="Heading" value={selected.props.text} maxLength={200} onChange={(text) => update(selected.id, { text })} />
+					<TaggedField fields={fields} label="Heading" value={selected.props.text} maxLength={200} onChange={(text) => update(selected.id, { text })} />
 					<Segmented label="Heading size" value={selected.props.level} onChange={(level) => update(selected.id, { level })} options={[{ value: 1, label: "Large" }, { value: 2, label: "Small" }]} />
 				</>
 			) : null}
 			{selected?.type === "text" ? (
 				<TaggedField
+					fields={fields}
 					label="Text"
 					multiline
 					rows={8}
@@ -356,7 +359,7 @@ export function BlockEditor({ blocks, onChange, baseUrl, footer, people, events,
 			) : null}
 			{selected?.type === "button" ? (
 				<>
-					<TaggedField label="Button label" value={selected.props.label} maxLength={80} onChange={(label) => update(selected.id, { label })} />
+					<TaggedField fields={fields} label="Button label" value={selected.props.label} maxLength={80} onChange={(label) => update(selected.id, { label })} />
 					<label className="grid gap-2 text-sm font-medium">
 						Link
 						<Input value={selected.props.href} onChange={(e) => update(selected.id, { href: e.target.value })} placeholder="https://" />

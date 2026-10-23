@@ -11,7 +11,8 @@ import {
 	linkHourlyStats,
 	members,
 	memberRoles,
-	navPins,
+	importantLinks,
+	linkCategories,
 	pointTypes,
 	quickLinks,
 	reservedSlugs,
@@ -42,7 +43,7 @@ export const seedRoles: InferInsertModel<typeof roles>[] = [
 	{ id: "role_member_admin", key: "member_admin", label: "Member admin", description: "Manages member profiles, roles, roster, and nav pins.", kind: "admin" },
 	{ id: "role_publishing", key: "publishing", label: "Publishing", description: "Manages announcements and the content library.", kind: "admin" },
 	{ id: "role_email", key: "email", label: "Email", description: "Sends member emails and manages templates, categories, and the reply inbox.", kind: "admin" },
-	{ id: "role_gallery", key: "gallery", label: "Photo gallery", description: "Restores anything deleted from the photo gallery and chooses which folders are public.", kind: "admin" },
+	{ id: "role_gallery", key: "gallery", label: "Photo gallery", description: "Restores anything deleted from the photo gallery and chooses which albums are public.", kind: "admin" },
 ];
 
 export const seedPointTypes: InferInsertModel<typeof pointTypes>[] = [
@@ -130,7 +131,7 @@ export const seedMemberRoles: InferInsertModel<typeof memberRoles>[] = [
 ];
 
 export const seedTerms: InferInsertModel<typeof terms>[] = [
-	{ id: "term_2026_1", name: "Term 1 2026", retainedAt: 20, probationBelow: 10, startsAt: now, endsAt: new Date("2027-05-15T00:00:00.000Z") },
+	{ id: "term_2026_1", name: "Term 1 2026", startsAt: now, endsAt: new Date("2027-05-15T00:00:00.000Z") },
 ];
 
 export const seedTermMemberRoster: InferInsertModel<typeof termMemberRoster>[] = [
@@ -524,21 +525,73 @@ export const seedSharedDevTokens: InferInsertModel<typeof sharedDevTokens>[] = [
 	{ tokenHash: "shared-dev-member-token-hash", memberId: "mem_demo_member", label: "Shared member token" },
 ];
 
-export const seedNavPins: InferInsertModel<typeof navPins>[] = [
+export const seedLinkCategories: InferInsertModel<typeof linkCategories>[] = [
+	{ id: "lcat_records", name: "Records and trackers", position: 0, createdBy: "mem_demo_admin" },
+	{ id: "lcat_guides", name: "Guides and policies", position: 1, createdBy: "mem_demo_admin" },
+	{ id: "lcat_forms", name: "Forms", position: 2, createdBy: "mem_demo_admin" },
+];
+
+export const seedImportantLinks: InferInsertModel<typeof importantLinks>[] = [
 	{
 		id: "nav_master",
-		label: "Masterfile",
-		url: "https://example.com/masterfile",
-		icon: "file-spreadsheet",
+		categoryId: "lcat_records",
+		title: "Masterfile",
+		url: "https://docs.google.com/spreadsheets/d/example-masterfile/edit",
+		description: "Every member, committee and contact detail in one sheet.",
+		showInSidebar: true,
+		position: 0,
+		createdBy: "mem_demo_admin",
+	},
+	{
+		id: "ilk_calendar_tracker",
+		categoryId: "lcat_records",
+		title: "Event tracker",
+		url: "https://ateneo0.sharepoint.com/:x:/s/code/event-tracker",
+		description: "Status of every event this term.",
 		position: 1,
 		createdBy: "mem_demo_admin",
 	},
 	{
-		id: "nav_guide",
-		label: "Admin guidebook",
-		url: "https://example.com/guidebook",
-		icon: "book-open",
+		id: "ilk_shared_drive",
+		categoryId: "lcat_records",
+		title: "Shared drive",
+		url: "https://drive.google.com/drive/folders/example-shared-drive",
 		position: 2,
+		createdBy: "mem_demo_admin",
+	},
+	{
+		id: "nav_guide",
+		categoryId: "lcat_guides",
+		title: "Admin guidebook",
+		url: "https://docs.google.com/document/d/example-guidebook/edit",
+		description: "How committees run events, reimbursements and turnovers.",
+		showInSidebar: true,
+		position: 0,
+		createdBy: "mem_demo_admin",
+	},
+	{
+		id: "ilk_constitution",
+		categoryId: "lcat_guides",
+		title: "Constitution and by-laws",
+		url: "https://example.com/code-constitution.pdf",
+		position: 1,
+		createdBy: "mem_demo_admin",
+	},
+	{
+		id: "ilk_reimbursement",
+		categoryId: "lcat_forms",
+		title: "Reimbursement request",
+		url: "https://forms.gle/example-reimbursement",
+		description: "Submit receipts within two weeks of the purchase.",
+		position: 0,
+		createdBy: "mem_demo_admin",
+	},
+	{
+		id: "ilk_onboarding_deck",
+		categoryId: null,
+		title: "Onboarding deck",
+		url: "https://docs.google.com/presentation/d/example-onboarding/edit",
+		position: 0,
 		createdBy: "mem_demo_admin",
 	},
 ];

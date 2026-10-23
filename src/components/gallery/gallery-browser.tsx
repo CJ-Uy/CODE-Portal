@@ -484,7 +484,7 @@ export function GalleryBrowser({
 			) : null}
 
 			{dragging ? (
-				<div aria-hidden className="pointer-events-none fixed inset-3 z-50 grid place-items-center rounded-xl border-2 border-dashed border-accent! bg-secondary/80 backdrop-blur-sm">
+				<div aria-hidden className="pointer-events-none fixed inset-3 z-50 grid place-items-center rounded-xl border-2 border-dashed border-accent bg-secondary/80 backdrop-blur-sm">
 					<p className="font-heading text-2xl text-secondary-foreground">Drop to add to {folder?.name ?? "the gallery"}</p>
 				</div>
 			) : null}
@@ -702,7 +702,7 @@ function EventSelect({ value, onChange, options, dark = false }: { value: string
 		<select
 			value={value}
 			onChange={(event) => onChange(event.target.value)}
-			className={cn("h-10 w-full min-w-0 rounded-md border px-3 text-sm font-normal", dark ? "border-white/25! bg-[#06192f] text-white" : "border-input! bg-background")}
+			className={cn("h-10 w-full min-w-0 rounded-md border px-3 text-sm font-normal", dark ? "border-white/25 bg-[#06192f] text-white" : "border-input bg-background")}
 		>
 			<option value="">No event</option>
 			{options.map((option) => (
@@ -738,7 +738,7 @@ function ItemDetails({
 	const [takenAt, setTakenAt] = useState(toManilaInput(item.takenAt));
 	const [eventId, setEventId] = useState(item.eventId ?? "");
 	const [saving, setSaving] = useState(false);
-	const field = "rounded-md border border-white/25! bg-[#06192f] text-white placeholder:text-white/45 focus-visible:ring-[#90b4cc]";
+	const field = "rounded-md border border-white/25 bg-[#06192f] text-white placeholder:text-white/45 focus-visible:ring-[#90b4cc]";
 
 	if (editing) {
 		return (
@@ -880,7 +880,7 @@ function Tags({
 					list={listId}
 					placeholder="Tag a person or topic"
 					aria-label="Tag a person or topic"
-					className="h-9 rounded-md border border-white/25! bg-[#06192f] text-sm text-white placeholder:text-white/45 focus-visible:ring-[#90b4cc]"
+					className="h-9 rounded-md border border-white/25 bg-[#06192f] text-sm text-white placeholder:text-white/45 focus-visible:ring-[#90b4cc]"
 				/>
 				<datalist id={listId}>
 					{memberOptions.map((member) => (

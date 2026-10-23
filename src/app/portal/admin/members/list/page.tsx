@@ -1,3 +1,4 @@
+import Form from "next/form";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Search, Trash2 } from "lucide-react";
 import { redirect } from "next/navigation";
@@ -46,7 +47,7 @@ export default async function MemberListPage({ searchParams }: { searchParams: P
 			<section aria-labelledby="member-directory-title" className="grid gap-4">
 				<div className="flex flex-wrap items-center justify-between gap-3">
 					<h2 id="member-directory-title" className="text-xl font-semibold text-primary">Member directory <span className="ml-1 font-sans text-sm font-normal text-muted-foreground">({total})</span></h2>
-					<form method="get" className="flex flex-wrap items-center gap-2">
+					<Form action="" className="flex flex-wrap items-center gap-2">
 						<label className="relative min-w-0 flex-1 sm:w-72">
 							<span className="sr-only">Search members</span>
 							<Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
@@ -54,7 +55,7 @@ export default async function MemberListPage({ searchParams }: { searchParams: P
 						</label>
 						<Button type="submit" size="sm"><Search className="size-4" /> Search</Button>
 						{q ? <Button asChild type="button" size="sm" variant="ghost"><Link href="/portal/admin/members/list">Clear</Link></Button> : null}
-					</form>
+					</Form>
 				</div>
 				<div className="min-w-0 rounded-xl border border-border/60 bg-card">
 					<Table>

@@ -5,7 +5,10 @@ import { getRepositories } from "@/db";
 import { allowedEventTypes } from "@/db/repositories/eventTypeRules";
 import { Button } from "@/components/ui/button";
 import { CalendarMonth } from "@/components/calendar-month";
+import { PageHeader } from "@/components/portal/page-header";
 import { loadEventTypes } from "@/lib/event-type-load";
+import { formatEstimate } from "@/lib/feedback/editor-input";
+import { estimateSeconds } from "@/lib/feedback/stats";
 import { utc8Parts } from "@/lib/date-slots";
 import { requireActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
@@ -49,24 +52,23 @@ export default async function CalendarPage({
 	const next = month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
 
 	const viewTabs = [
-		{ id: "calendar", label: "Calendar", icon: CalendarDays, href: "/portal/calendar" },
+		{ id: "calendar", label: "Month", icon: CalendarDays, href: "/portal/calendar" },
 		{ id: "list", label: "List", icon: List, href: "/portal/calendar?view=list" },
 	];
 
 	return (
 		<div className="grid gap-5">
-			<div className="flex flex-wrap items-start justify-between gap-4">
-				<div>
-					<p className="text-xs font-semibold uppercase text-primary">Member workspace</p>
-					<h1 className="font-heading text-3xl">Calendar</h1>
-				</div>
-				<Suspense fallback={<CreateEventSkeleton />}>
-					<CreateEventControl />
-				</Suspense>
-			</div>
+			<PageHeader
+				title="Calendar"
+				actions={
+					<Suspense fallback={<CreateEventSkeleton />}>
+						<CreateEventControl />
+					</Suspense>
+				}
+			/>
 
 			<div className="flex flex-wrap items-center justify-between gap-3">
-				<div className="inline-flex rounded-lg border border-border p-0.5">
+				<div className="inline-flex rounded-lg border border-border bg-card p-0.5">
 					{viewTabs.map((tab) => {
 						const Icon = tab.icon;
 						const active = view === tab.id;
@@ -79,8 +81,8 @@ export default async function CalendarPage({
 								aria-current={active ? "page" : undefined}
 								className={
 									active
-										? "inline-flex items-center gap-1.5 rounded-md bg-secondary px-3 py-1.5 text-sm font-semibold text-foreground"
-										: "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+										? "inline-flex min-h-10 items-center gap-1.5 rounded-md bg-secondary px-3 text-sm font-semibold text-foreground"
+										: "inline-flex min-h-10 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
 								}
 							>
 								<Icon className="size-4" />
@@ -129,13 +131,22 @@ export default async function CalendarPage({
 async function CreateEventControl() {
 	const actor = await requireActor();
 	const repositories = await getRepositories();
-	const typeLoad = await loadEventTypes(() => repositories.eventTypeRules.list());
+	// Feedback forms belong to CRS (survey:configure), so only they get the "attach a form" option. A failed read hides it.
+	const offerFeedback = isFeatureEnabled("surveys") && can(actor, "survey:configure");
+	const [typeLoad, templates] = await Promise.all([
+		loadEventTypes(() => repositories.eventTypeRules.list()),
+		offerFeedback ? repositories.surveys.listTemplates(actor).catch(() => []) : Promise.resolve([]),
+	]);
 	return (
 		<CreateEventSheet
 			allowedTypes={typeLoad.ok ? allowedEventTypes(actor, typeLoad.rows) : []}
 			typesUnavailable={!typeLoad.ok}
 			canSetReadOnly={can(actor, "event:moderate")}
 			canViewArchive={canViewFeedbackArchive(actor)}
+			feedbackTemplates={templates.map((template) => ({
+				id: template.id,
+				label: `${template.name} (${template.questionsJson.length} ${template.questionsJson.length === 1 ? "question" : "questions"}, ${formatEstimate(estimateSeconds(template.questionsJson)).toLowerCase()})`,
+			}))}
 		/>
 	);
 }
@@ -151,11 +162,11 @@ async function MonthBody({
 }) {
 	const actor = await requireActor();
 	const repositories = await getRepositories();
-	const items = await repositories.calendar.getMonth(actor, { year, month }).catch(() => []);
-	// A failed points read degrades to a plain calendar rather than taking the month down with it.
-	const pointsByDay = showPoints
-		? await repositories.retention.myPointsByDay(actor, { year, month }).catch(() => [])
-		: [];
+	const [items, pointsByDay] = await Promise.all([
+		repositories.calendar.getMonth(actor, { year, month }).catch(() => []),
+		// A failed points read degrades to a plain calendar rather than taking the month down with it.
+		showPoints ? repositories.retention.myPointsByDay(actor, { year, month }).catch(() => []) : [],
+	]);
 	return (
 		<CalendarMonth items={items} year={year} month={month} pointsByDay={pointsByDay} />
 	);
@@ -168,7 +179,9 @@ function monthHref(year: number, month: number): string {
 async function ListBody() {
 	const actor = await requireActor();
 	const repositories = await getRepositories();
-	const typeLoad = await loadEventTypes(() => repositories.eventTypeRules.list());
-	const events = await loadEventList(repositories, actor).catch(() => null);
+	const [typeLoad, events] = await Promise.all([
+		loadEventTypes(() => repositories.eventTypeRules.list()),
+		loadEventList(repositories, actor).catch(() => null),
+	]);
 	return <EventsList events={events ?? []} types={typeLoad.ok ? typeLoad.rows : []} loadFailed={events === null} />;
 }

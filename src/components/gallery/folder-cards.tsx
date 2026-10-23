@@ -53,7 +53,7 @@ export function FolderCards({
 							<span
 								className={cn(
 									"relative block aspect-[4/3] overflow-hidden rounded-md bg-secondary",
-									empty && "border-2 border-dashed border-[#90b4cc]! bg-card",
+									empty && "border-2 border-dashed border-[#90b4cc] bg-card",
 								)}
 							>
 								{cover ? (

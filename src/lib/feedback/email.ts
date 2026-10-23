@@ -23,7 +23,7 @@ export function feedbackEmailContent(
 	const closes = formatUtc8DateTime(closesAt);
 	const takes = estimate ? `takes ${estimate.toLowerCase()}` : null;
 	const greeting = text("fb_hi", "Hi {{first_name}},");
-	const button: EmailBlock = { id: "fb_btn", type: "button", props: { label: "Share feedback", href: link } };
+	const button: EmailBlock = { id: "fb_btn", type: "button", props: { label: "Give feedback", href: link } };
 	if (kind === "reminder") {
 		return {
 			subject: `Reminder: share feedback on ${title}`,

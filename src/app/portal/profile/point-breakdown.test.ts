@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildPointBreakdown } from "./point-breakdown";
 
 const types = [
-	{ id: "pt_retention", key: "retention", label: "Retention", active: true, position: 1 },
+	{ id: "pt_retention", key: "retention", label: "Retention", active: true, position: 1, retentionPeriod: "semester" as const },
 	{ id: "pt_frontliner", key: "frontliner", label: "Frontliner", active: true, position: 2 },
 	{ id: "pt_project_lead", key: "project_lead", label: "Project Lead", active: true, position: 3 },
 	{ id: "pt_retired", key: "retired", label: "Retired", active: false, position: 4 },
@@ -28,12 +28,12 @@ describe("buildPointBreakdown", () => {
 		expect(buildPointBreakdown(types, [{ pointTypeId: "pt_retention", points: null }])[0]?.totalPoints).toBe(0);
 	});
 
-	it("uses the permanent retention id to mark retention progress", () => {
+	it("marks the retention parts, whatever their id or key", () => {
 		const rows = buildPointBreakdown([
-			{ id: "pt_x", key: "retention", label: "Legacy label", active: true, position: 1 },
-			{ id: "pt_retention", key: "anything", label: "Retention", active: true, position: 2 },
+			{ id: "pt_retention", key: "retention", label: "Old total", active: true, position: 1, retentionPeriod: null },
+			{ id: "pt_gma", key: "gma", label: "GMA", active: true, position: 2, retentionPeriod: "semester" },
 		], []);
-		expect(rows.find((row) => row.pointTypeId === "pt_x")?.retention).toBe(false);
-		expect(rows.find((row) => row.pointTypeId === "pt_retention")?.retention).toBe(true);
+		expect(rows.find((row) => row.pointTypeId === "pt_retention")?.retention).toBe(false);
+		expect(rows.find((row) => row.pointTypeId === "pt_gma")?.retention).toBe(true);
 	});
 });

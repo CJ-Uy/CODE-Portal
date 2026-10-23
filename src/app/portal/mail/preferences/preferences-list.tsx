@@ -54,16 +54,16 @@ export function PreferencesList({ rows }: { rows: PreferenceRow[] }) {
 		<div className="grid gap-5">
 			{required.length > 0 ? (
 				<section className="grid gap-2">
-					<h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Always sent to members</h2>
+					<h2 className="font-sans text-sm font-semibold text-muted-foreground">Always sent</h2>
 					<ul className="grid divide-y divide-border rounded-xl border border-border bg-card">
 						{required.map((row) => (
 							<li key={row.id} className="flex min-w-0 items-center gap-4 px-4 py-3">
 								<div className="grid min-w-0 flex-1 gap-0.5">
 									<span className="flex min-w-0 items-center gap-1.5 font-medium">
 										<Lock className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-										<span className="min-w-0 break-all">{row.name}</span>
+										<span className="min-w-0 [overflow-wrap:anywhere]">{row.name}</span>
 									</span>
-									<span className="min-w-0 break-all text-sm text-muted-foreground">{row.description || "Official notices for members."} Required while you are a member.</span>
+									<span className="min-w-0 [overflow-wrap:anywhere] text-sm text-muted-foreground">{row.description || "Official notices for members."} Required while you are a member.</span>
 								</div>
 								<Switch checked disabled label={`${row.name} is required`} />
 							</li>
@@ -73,13 +73,13 @@ export function PreferencesList({ rows }: { rows: PreferenceRow[] }) {
 			) : null}
 			{optional.length > 0 ? (
 				<section className="grid gap-2">
-					<h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">You choose</h2>
+					<h2 className="font-sans text-sm font-semibold text-muted-foreground">Your choice</h2>
 					<ul className="grid divide-y divide-border rounded-xl border border-border bg-card">
 						{optional.map((row) => (
 							<li key={row.id} className="flex min-w-0 items-center gap-4 px-4 py-3">
 								<div className="grid min-w-0 flex-1 gap-0.5">
-									<span className="min-w-0 break-all font-medium">{row.name}</span>
-									{row.description ? <span className="min-w-0 break-all text-sm text-muted-foreground">{row.description}</span> : null}
+									<span className="min-w-0 [overflow-wrap:anywhere] font-medium">{row.name}</span>
+									{row.description ? <span className="min-w-0 [overflow-wrap:anywhere] text-sm text-muted-foreground">{row.description}</span> : null}
 								</div>
 								<Switch checked={!row.optedOut} onChange={(on) => toggle(row, !on)} label={row.name} />
 							</li>

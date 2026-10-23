@@ -64,9 +64,9 @@ describe("retention repository on D1", () => {
 			.bind("mem_admin", "admin@example.com", "Admin")
 			.run();
 		await env.DB.prepare(
-			"INSERT INTO terms (id, name, retained_at, probation_below, starts_at, ends_at) VALUES (?, ?, ?, ?, ?, ?)",
+			"INSERT INTO terms (id, name, starts_at, ends_at) VALUES (?, ?, ?, ?)",
 		)
-			.bind("term_1", "Term 1", 20, 10, TERM_START.getTime(), TERM_END.getTime())
+			.bind("term_1", "Term 1", TERM_START.getTime(), TERM_END.getTime())
 			.run();
 		await env.DB.prepare(`
 			INSERT INTO point_types
@@ -88,75 +88,124 @@ describe("retention repository on D1", () => {
 		);
 	});
 
-	it("derives a per-term summary with status from the term thresholds", async () => {
+	async function addParts() {
+		await env.DB.prepare(`
+			INSERT INTO point_types (id, key, label, retention_period, active, position, updated_by) VALUES
+				('pt_ts', 'ts', 'Training Seminar', 'year', 1, 3, 'mem_admin'),
+				('pt_gma', 'gma', 'General Membership Activity', 'semester', 1, 4, 'mem_admin')
+		`).run();
+	}
+
+	// An event awarding 1 GMA point with a feedback form: mem_a checked in for 0.75 and can still earn 0.25 by answering.
+	async function eventWithForm(status: "draft" | "running" | "closed" = "running", closesAt = TERM_END.getTime()) {
+		await env.DB.prepare(
+			"INSERT INTO crs_events (id, title, type, place, starts_at, description, created_by, checkin_secret) VALUES ('evt_gma', 'GMA Night', 'casual', 'Room', ?, 'd', 'mem_admin', 's')",
+		)
+			.bind(TERM_START.getTime() + 86_400_000)
+			.run();
+		await env.DB.prepare("INSERT INTO event_point_awards (event_id, point_type_id, points) VALUES ('evt_gma', 'pt_gma', 1)").run();
+		await env.DB.prepare(`
+			INSERT INTO retention_records (id, member_id, term_id, event_id, point_type_id, points, reason, source, recorded_by, recorded_at)
+			VALUES ('ret_att', 'mem_a', 'term_1', 'evt_gma', 'pt_gma', 0.75, 'Attended GMA Night', 'event_attendance', 'mem_admin', ?)
+		`)
+			.bind(TERM_START.getTime() + 86_400_000)
+			.run();
+		await env.DB.prepare("INSERT INTO surveys (id, event_id, title, status, created_by, closes_at) VALUES ('srv_gma', 'evt_gma', 'Feedback', ?, 'mem_admin', ?)")
+			.bind(status, closesAt)
+			.run();
+	}
+
+	const EARLY = new Date(TERM_START.getTime() + 7 * 86_400_000);
+
+	it("counts each part's slot up to 1 point and keeps other point types out of retention", async () => {
 		const { repo } = makeRepo();
-		await insertRecord({ id: "ret_summary_a", points: 12, reason: "x" });
-		await insertRecord({ id: "ret_summary_b", points: 12, reason: "y" });
-		const summary = await repo.getMemberTermSummary(plainMember, { memberId: "mem_a", termId: "term_1" });
-		expect(summary.totalPoints).toBe(24);
-		expect(summary.recordCount).toBe(2);
-		expect(summary.status).toBe("retained");
+		await addParts();
+		for (const id of ["gma_1", "gma_2", "gma_3"]) await insertRecord({ id, pointTypeId: "pt_gma", points: 1 });
+		await insertRecord({ id: "ret_old", pointTypeId: RETENTION_POINT_TYPE_ID, points: 20 });
+
+		const progress = (await repo.memberProgress(plainMember, { memberId: "mem_a", termId: "term_1" }, EARLY))!;
+		expect(progress).toMatchObject({ status: "on_track", met: 1, required: 3, missed: 0 });
+		expect(progress.parts.map((part) => part.pointTypeId)).toEqual(["pt_ts", "pt_gma"]);
+		expect(progress.parts[1].slots[0]).toMatchObject({ earned: 3, counted: 1, overflow: 2, state: "met" });
+		expect(progress.parts[1].slots[1].state).toBe("upcoming");
+		await expect(repo.memberProgress(plainMember, { memberId: "mem_b", termId: "term_1" }, EARLY)).rejects.toThrow("Not authorized");
+		await expect(repo.memberProgress(retentionAdmin, { memberId: "mem_b", termId: "term_1" }, EARLY)).resolves.toMatchObject({ met: 0 });
 	});
 
-	it("quantizes fractional aggregates before threshold checks and output", async () => {
+	it("reports progress for many members to retention admins only", async () => {
 		const { repo } = makeRepo();
-		await env.DB.prepare("UPDATE terms SET retained_at = ?, probation_below = ? WHERE id = ?")
-			.bind(0.8, 0.4, "term_1")
-			.run();
+		await addParts();
+		await insertRecord({ id: "ts_b", memberId: "mem_b", pointTypeId: "pt_ts", points: 1 });
+		const progress = await repo.termProgress(retentionAdmin, "term_1", ["mem_a", "mem_b"], EARLY);
+		expect([progress.get("mem_a")?.met, progress.get("mem_b")?.met]).toEqual([0, 1]);
+		await expect(repo.termProgress(plainMember, "term_1", ["mem_a"], EARLY)).rejects.toThrow("Not authorized");
+	});
+
+	it("shows the share a member can still earn from an open or unopened form, and drops it once answered or closed", async () => {
+		const { repo } = makeRepo();
+		await addParts();
+		await eventWithForm();
+		const open = await repo.myHistory(plainMember, { termId: "term_1" }, EARLY);
+		expect(open.pendingShares).toEqual([
+			expect.objectContaining({ eventId: "evt_gma", surveyId: "srv_gma", surveyStatus: "running", pointTypeId: "pt_gma", pointTypeLabel: "General Membership Activity", points: 0.25 }),
+		]);
+		expect(open.progress?.parts[1].slots[0]).toMatchObject({ earned: 0.75, pending: 0.25, state: "open" });
+		await expect(repo.eventFeedbackShare(plainMember, "evt_gma")).resolves.toMatchObject({ hasForm: true, pending: [expect.objectContaining({ points: 0.25 })] });
+
+		await env.DB.prepare("UPDATE surveys SET status = 'draft' WHERE id = 'srv_gma'").run();
+		expect((await repo.myHistory(plainMember, { termId: "term_1" }, EARLY)).pendingShares[0]).toMatchObject({ surveyStatus: "draft" });
+
+		await env.DB.prepare("UPDATE surveys SET status = 'running', closes_at = ? WHERE id = 'srv_gma'").bind(EARLY.getTime() - 1).run();
+		expect((await repo.myHistory(plainMember, { termId: "term_1" }, EARLY)).pendingShares).toEqual([]);
+
+		await env.DB.prepare("UPDATE surveys SET closes_at = ? WHERE id = 'srv_gma'").bind(TERM_END.getTime()).run();
+		await env.DB.prepare("INSERT INTO survey_assignments (survey_id, member_id, completed_at) VALUES ('srv_gma', 'mem_a', ?)").bind(EARLY.getTime()).run();
+		expect((await repo.myHistory(plainMember, { termId: "term_1" }, EARLY)).pendingShares).toEqual([]);
+	});
+
+	it("tells an event page whether the event has a feedback form", async () => {
+		const { repo } = makeRepo();
+		await addParts();
+		await eventWithForm("draft");
+		await expect(repo.eventFeedbackShare(plainMember, "evt_gma")).resolves.toMatchObject({ hasForm: true });
+		await expect(repo.eventFeedbackShare(plainMember, "evt_none")).resolves.toEqual({ hasForm: false, pending: [] });
+	});
+
+	it("finds the soonest upcoming approved event for each retention part", async () => {
+		const { repo } = makeRepo();
+		await addParts();
+		const insert = (id: string, startsAt: number, status = "approved") =>
+			env.DB.prepare("INSERT INTO crs_events (id, title, type, status, place, starts_at, description, created_by, checkin_secret) VALUES (?, ?, 'casual', ?, 'Room', ?, 'd', 'mem_admin', ?)")
+				.bind(id, id, status, startsAt, `s_${id}`)
+				.run();
+		const day = 86_400_000;
+		await insert("evt_past", EARLY.getTime() - day);
+		await insert("evt_later", EARLY.getTime() + 9 * day);
+		await insert("evt_soon", EARLY.getTime() + 2 * day);
+		await insert("evt_pending", EARLY.getTime() + day, "pending");
+		await insert("evt_other", EARLY.getTime() + day);
+		for (const [eventId, pointTypeId] of [["evt_past", "pt_gma"], ["evt_later", "pt_gma"], ["evt_soon", "pt_gma"], ["evt_pending", "pt_gma"], ["evt_other", "pt_frontliner"], ["evt_later", "pt_ts"]]) {
+			await env.DB.prepare("INSERT INTO event_point_awards (event_id, point_type_id, points) VALUES (?, ?, 1)").bind(eventId, pointTypeId).run();
+		}
+		const next = await repo.nextPartEvents(plainMember, EARLY);
+		expect(Object.fromEntries([...next].map(([type, event]) => [type, event.eventId]))).toEqual({ pt_gma: "evt_soon", pt_ts: "evt_later" });
+	});
+
+	it("quantizes fractional leaderboard totals", async () => {
+		const { repo } = makeRepo();
 		await insertRecord({ id: "ret_fraction_a", points: 0.1 });
 		await insertRecord({ id: "ret_fraction_b", points: 0.7 });
 
-		const summary = await repo.getMemberTermSummary(plainMember, { memberId: "mem_a", termId: "term_1" });
-		const history = await repo.myHistory(plainMember, { termId: "term_1" });
 		const adminBoard = await repo.leaderboard(retentionAdmin, { termId: "term_1" });
 		const publicBoard = await repo.publicLeaderboard(plainMember, {
 			termId: "term_1",
 			pointTypeId: RETENTION_POINT_TYPE_ID,
 		});
 
-		expect(summary).toMatchObject({ totalPoints: 0.8, status: "retained" });
-		expect(history.summary).toMatchObject({ totalPoints: 0.8, status: "retained" });
 		expect(adminBoard[0].totalPoints).toBe(0.8);
 		expect(publicBoard[0].totalPoints).toBe(0.8);
 	});
 
-	it("counts only retention-bearing point types for retention totals and status", async () => {
-		const { repo } = makeRepo();
-		await insertRecord({ id: "ret_keep", pointTypeId: "pt_retention", points: 20 });
-		await insertRecord({ id: "ret_ignore", pointTypeId: "pt_frontliner", points: -50 });
-
-		const summary = await repo.getMemberTermSummary(plainMember, {
-			memberId: "mem_a",
-			termId: "term_1",
-		});
-		const adminBoard = await repo.leaderboard(retentionAdmin, { termId: "term_1" });
-		const publicBoard = await repo.publicLeaderboard(plainMember, {
-			termId: "term_1",
-			pointTypeId: RETENTION_POINT_TYPE_ID,
-		});
-		const history = await repo.myHistory(plainMember, { termId: "term_1" });
-
-		expect(summary.totalPoints).toBe(20);
-		expect(summary.status).toBe("retained");
-		expect(adminBoard[0].totalPoints).toBe(20);
-		expect(publicBoard[0].totalPoints).toBe(20);
-		expect(history.summary?.totalPoints).toBe(20);
-		expect(history.summary?.status).toBe("retained");
-		expect(history.summary?.recordCount).toBe(2);
-		expect(history.records).toHaveLength(2);
-	});
-
-	it("counts only the retention point type toward the retention total", async () => {
-		const { repo } = makeRepo();
-		await insertRecord({ id: "rec_ret", pointTypeId: RETENTION_POINT_TYPE_ID, points: 5 });
-		await insertRecord({ id: "rec_other", pointTypeId: "pt_frontliner", points: 100 });
-
-		const summary = await repo.getMemberTermSummary(retentionAdmin, {
-			memberId: plainMember.memberId,
-			termId: "term_1",
-		});
-		expect(summary.totalPoints).toBe(5);
-	});
 	it("ranks public leaderboard rows by the selected point type", async () => {
 		const { repo } = makeRepo();
 		await insertRecord({ id: "ret_a", memberId: "mem_a", pointTypeId: "pt_retention", points: 10 });
@@ -443,9 +492,9 @@ describe("retention repository on D1", () => {
 
 		beforeEach(async () => {
 			await env.DB.prepare(
-				"INSERT INTO terms (id, name, retained_at, probation_below, starts_at, ends_at) VALUES (?, ?, ?, ?, ?, ?)",
+				"INSERT INTO terms (id, name, starts_at, ends_at) VALUES (?, ?, ?, ?)",
 			)
-				.bind("term_past", "Past Term", 20, 10, Date.UTC(2025, 4, 1), Date.UTC(2025, 6, 30))
+				.bind("term_past", "Past Term", Date.UTC(2025, 4, 1), Date.UTC(2025, 6, 30))
 				.run();
 		});
 
@@ -463,10 +512,9 @@ describe("retention repository on D1", () => {
 			await insertRecord({ id: "ret_history_past", memberId: "mem_a", termId: "term_past", points: 50, reason: "Old points" });
 			await insertRecord({ id: "ret_history_b", memberId: "mem_b", termId: "term_1", points: 99, reason: "Theirs" });
 
-			const { summary, records } = await repo.myHistory(plainMember, { termId: "term_1" }, NOW);
-			expect(summary?.totalPoints).toBe(3);
+			const { summary, records, progress } = await repo.myHistory(plainMember, { termId: "term_1" }, NOW);
 			expect(summary?.recordCount).toBe(2);
-			expect(summary?.status).toBe("probation");
+			expect(progress).toMatchObject({ required: 0 });
 			expect(records).toHaveLength(2);
 			expect(records.every((record) => record.memberId === "mem_a")).toBe(true);
 		});

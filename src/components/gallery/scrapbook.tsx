@@ -24,7 +24,7 @@ export function Scrapbook<T extends ScrapbookItem>({ groups, onOpen }: { groups:
 					{group.label ? (
 						<h2 id={`page-${group.key}`} className="flex flex-wrap items-baseline gap-x-3">
 							<span className="font-heading text-2xl leading-tight">{group.label}</span>
-							{group.detail ? <span className="font-sans! text-sm text-muted-foreground">{group.detail}</span> : null}
+							{group.detail ? <span className="font-sans text-sm text-muted-foreground">{group.detail}</span> : null}
 						</h2>
 					) : null}
 					<ul className="columns-2 gap-3 sm:columns-3 sm:gap-5 lg:columns-4">

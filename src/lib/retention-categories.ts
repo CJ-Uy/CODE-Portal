@@ -1,44 +1,15 @@
-import type { MyHistoryRecord } from "@/db/repositories/retention";
 import type { RetentionRecordSource } from "@/db/schema";
-import { toLocalDate } from "@/lib/date-slots";
-import { quantizePoints } from "@/lib/points";
-
-export type RetentionCategory = { key: string; label: string; colour: string; points: number; activities: number };
-export type CategoryFrame = { date: string | null; categories: RetentionCategory[] };
 
 /** How a record's source reads next to it. */
 export function sourceLabel(source: RetentionRecordSource): string {
-	return source === "manual" ? "Manual record" : source === "survey_response" ? "Feedback forms" : "Event attendance";
-}
-
-export function recordCategory(record: MyHistoryRecord): Pick<RetentionCategory, "key" | "label" | "colour"> {
-	// Feedback points carry the event id, but they are their own points system, not part of the event's category.
-	if (record.source === "survey_response") return { key: "source:survey_response", label: "Feedback forms", colour: "accent" };
-	if (record.eventType) return { key: record.eventType, label: record.eventTypeLabel || record.eventType, colour: record.eventColour || "slate" };
-	return record.source === "manual"
-		? { key: "source:manual", label: "Manual records", colour: "slate" }
-		: { key: "source:other", label: "Other activities", colour: "primary" };
-}
-
-/** Snapshot after each Manila recording day; attendance counts each event once. */
-export function buildCategoryTimeline(records: MyHistoryRecord[]): CategoryFrame[] {
-	const sorted = [...records].sort((a, b) => a.recordedAt.getTime() - b.recordedAt.getTime());
-	const groups = new Map<string, RetentionCategory>();
-	const attended = new Set<string>();
-	const frames: CategoryFrame[] = [{ date: null, categories: [] }];
-	for (const [index, record] of sorted.entries()) {
-		const category = recordCategory(record);
-		const group = groups.get(category.key) ?? { ...category, points: 0, activities: 0 };
-		group.points = quantizePoints(group.points + (record.points ?? 0));
-		if (record.source === "event_attendance" && record.eventId && !attended.has(record.eventId)) {
-			group.activities++;
-			attended.add(record.eventId);
-		}
-		groups.set(category.key, group);
-		const date = toLocalDate(record.recordedAt);
-		if (!sorted[index + 1] || toLocalDate(sorted[index + 1].recordedAt) !== date) {
-			frames.push({ date, categories: Array.from(groups.values(), (group) => ({ ...group })) });
-		}
+	switch (source) {
+		case "manual":
+			return "Manual record";
+		case "feedback_share":
+			return "Feedback form, the other 25%";
+		case "survey_response":
+			return "Points for answering";
+		default:
+			return "Event attendance";
 	}
-	return frames;
 }

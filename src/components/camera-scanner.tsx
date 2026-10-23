@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import jsQR from "jsqr";
 import { canUseCameraScanner } from "@/lib/camera-scanner-support";
 import { supportsTorch } from "@/lib/scan-feedback";
 import { cn } from "@/lib/utils";
@@ -59,6 +58,9 @@ export function CameraScanner({
 		} catch {
 			// Some browsers expose BarcodeDetector without QR support. jsQR remains the fallback.
 		}
+		// jsQR is only the fallback, so it loads (alongside the camera start) only when it is needed.
+		const jsQrLoad = detector ? null : import("jsqr");
+		let jsQR: typeof import("jsqr").default | null = null;
 
 		async function loop() {
 			const video = videoRef.current;
@@ -88,7 +90,7 @@ export function CameraScanner({
 		}
 
 		function scanWithJsQr(video: HTMLVideoElement) {
-			if (!video.videoWidth || !video.videoHeight) return null;
+			if (!jsQR || !video.videoWidth || !video.videoHeight) return null;
 			const canvas = (canvasRef.current ??= document.createElement("canvas"));
 			canvas.width = video.videoWidth;
 			canvas.height = video.videoHeight;
@@ -117,6 +119,7 @@ export function CameraScanner({
 				const track = stream.getVideoTracks()[0];
 				trackRef.current = track;
 				setTorchAvailable(supportsTorch(track));
+				if (jsQrLoad) jsQR = (await jsQrLoad).default;
 				loop();
 			} catch {
 				if (!cancelled) setError("Camera access was blocked. Close the scanner and use member search.");

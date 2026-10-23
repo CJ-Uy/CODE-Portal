@@ -8,9 +8,10 @@ import {
 	eventTypeRules,
 	galleryFolders,
 	galleryItems,
+	importantLinks,
 	libraryItems,
+	linkCategories,
 	members,
-	navPins,
 	pointTypes,
 	quickLinks,
 	shortLinks,
@@ -212,13 +213,24 @@ export function createAuditRepository(db: Db): AuditRepository {
 									.where(inArray(surveys.id, targetIds)),
 							);
 							break;
+						// Migration 0015 copied each nav pin into important_links under the same id.
 						case "nav_pin":
+						case "important_link":
 							rememberLabels(
 								targetType,
 								await db
-									.select({ id: navPins.id, label: navPins.label })
-									.from(navPins)
-									.where(inArray(navPins.id, targetIds)),
+									.select({ id: importantLinks.id, label: importantLinks.title })
+									.from(importantLinks)
+									.where(inArray(importantLinks.id, targetIds)),
+							);
+							break;
+						case "link_category":
+							rememberLabels(
+								targetType,
+								await db
+									.select({ id: linkCategories.id, label: linkCategories.name })
+									.from(linkCategories)
+									.where(inArray(linkCategories.id, targetIds)),
 							);
 							break;
 						case "quick_link":

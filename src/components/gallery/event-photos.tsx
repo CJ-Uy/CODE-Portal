@@ -34,7 +34,7 @@ export function EventPhotos({ eventId, items, albumId }: { eventId: string; item
 				</div>
 			</div>
 			{items.length === 0 && albumId ? (
-				<Link href={`/portal/gallery/${albumId}`} className="flex items-center gap-3 rounded-lg border-2 border-dashed border-[#90b4cc]! bg-card px-4 py-5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+				<Link href={`/portal/gallery/${albumId}`} className="flex items-center gap-3 rounded-lg border-2 border-dashed border-[#90b4cc] bg-card px-4 py-5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
 					<ImagePlus className="size-5 text-accent" aria-hidden />
 					No photos yet. Add the first ones to the event&apos;s album.
 				</Link>

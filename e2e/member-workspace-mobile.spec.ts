@@ -60,7 +60,7 @@ test("Profile reveals the check-in QR by touch and keyboard at its high-DPI disp
 		await page.goto("/portal/profile");
 		const code = page.locator("main canvas[aria-label='Member attendance QR code']");
 		await expect(code).toBeHidden();
-		await page.getByText("Show check-in code", { exact: true }).tap();
+		await page.getByText("Show my check-in code", { exact: true }).tap();
 		await expect(code).toBeVisible();
 		await expect(code).toHaveAttribute("width", "660");
 		expect((await code.boundingBox())!.width).toBe(220);

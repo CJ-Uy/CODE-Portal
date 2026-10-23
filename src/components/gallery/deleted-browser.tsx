@@ -102,7 +102,7 @@ export function DeletedBrowser({ items, folders, seesEveryone }: { items: Galler
 										aria-pressed={isSelected}
 										className={cn(
 											"flex w-full min-w-0 items-center gap-3 rounded-lg border p-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60",
-											isSelected ? "border-accent! bg-secondary" : "border-border bg-card hover:bg-secondary/50",
+											isSelected ? "border-accent bg-secondary" : "border-border bg-card hover:bg-secondary/50",
 										)}
 									>
 										<span className="relative grid size-16 shrink-0 place-items-center overflow-hidden rounded-md bg-secondary text-accent">
@@ -122,7 +122,7 @@ export function DeletedBrowser({ items, folders, seesEveryone }: { items: Galler
 										</span>
 										<span
 											aria-hidden
-											className={cn("grid size-6 shrink-0 place-items-center rounded-full border-2", isSelected ? "border-accent! bg-[#0c315c] text-white" : "border-border text-transparent")}
+											className={cn("grid size-6 shrink-0 place-items-center rounded-full border-2", isSelected ? "border-accent bg-[#0c315c] text-white" : "border-border text-transparent")}
 										>
 											<Check className="size-3.5" strokeWidth={3} />
 										</span>

@@ -8,15 +8,15 @@ import { MemberCodeCard } from "@/components/member-code-card";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { cn } from "@/lib/utils";
 import { Breadcrumb } from "./breadcrumb";
-import { libraryPageTitle } from "./library-title";
 import { AdminNavigation } from "./admin-navigation";
 import { MemberAvatar } from "./member-avatar";
-import { adminNav, primaryNav, secondaryNav, visiblePrimaryNav, visibleSecondaryNav, visibleMobileNav, type NavItem } from "./nav-items";
+import { adminNav, sectionFor, visiblePrimaryNav, visibleSecondaryNav, visibleMobileNav, type NavItem } from "./nav-items";
 import type { FeatureFlags } from "@/server/features";
 import { navPinIconFor } from "./nav-pin-icons";
-import { adminHeading, crumbFor } from "@/app/portal/admin/nav";
+import { crumbFor } from "@/app/portal/admin/nav";
 
 export type AdminNavGroup = { segment: string; label: string; href: string; pages: { href: string; label: string }[] };
 
@@ -37,51 +37,6 @@ function isActive(pathname: string, href: string): boolean {
 	return href === "/portal" ? pathname === "/portal" : pathname.startsWith(href);
 }
 
-const detailTitles: Record<string, string> = {
-	"/portal/calendar": "Event details",
-	"/portal/library": "Library item",
-	"/portal/links": "Link stats",
-	"/portal/surveys": "Survey",
-	"/portal/admin/content/surveys": "Survey details",
-};
-
-function getPageHeading(pathname: string): { section: string; title: string } {
-	const cleanPath = pathname.split("?")[0] ?? "/portal";
-	const navItems = [...primaryNav, ...secondaryNav, adminNav];
-	const activeItem = navItems
-		.filter((item) => isActive(cleanPath, item.href))
-		.sort((a, b) => b.href.length - a.href.length)[0];
-
-	if (cleanPath === "/portal") return { section: "Portal", title: "Overview" };
-	if (cleanPath === "/portal/admin") return { section: "Admin", title: "Console" };
-
-	if (cleanPath.startsWith("/portal/admin/")) {
-		// Feedback templates are not survey details; their own breadcrumbs carry the title.
-		if (cleanPath.startsWith("/portal/admin/content/surveys/templates")) {
-			return adminHeading(cleanPath) ?? { section: "Admin", title: "Console" };
-		}
-		// dynamic detail pages (e.g. content/surveys/[id]) use the generic detail title.
-		for (const [prefix, title] of Object.entries(detailTitles)) {
-			if (cleanPath.startsWith(`${prefix}/`)) {
-				const crumb = crumbFor(prefix);
-				return { section: crumb.at(-1)?.label ?? "Admin", title };
-			}
-		}
-		return adminHeading(cleanPath) ?? { section: "Admin", title: "Console" };
-	}
-
-	// Before the prefix loop: "/portal/library" would otherwise title every library subpage "Library item".
-	const libraryTitle = libraryPageTitle(cleanPath);
-	if (libraryTitle) return { section: "Library", title: libraryTitle };
-
-	for (const [prefix, title] of Object.entries(detailTitles)) {
-		if (cleanPath.startsWith(`${prefix}/`)) {
-			return { section: activeItem?.label ?? "Portal", title };
-		}
-	}
-
-	return { section: "Portal", title: activeItem?.label ?? "Overview" };
-}
 
 function RailItem({ item, pathname }: { item: NavItem; pathname: string }) {
 	const Icon = item.icon;
@@ -89,6 +44,7 @@ function RailItem({ item, pathname }: { item: NavItem; pathname: string }) {
 	return (
 		<Link
 			href={item.href}
+			aria-current={on ? "page" : undefined}
 			className={cn(
 				"relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors",
 				on ? "bg-white/10 text-primary-foreground" : "text-primary-foreground/65 hover:text-primary-foreground",
@@ -143,7 +99,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 		if (dismiss) changeMenuOpen(false);
 	}
 	const inAdmin = pathname === "/portal/admin" || pathname.startsWith("/portal/admin/");
-	const pageHeading = getPageHeading(pathname);
+	const section = sectionFor(pathname);
 
 	// Flagged-off destinations must not render a link. The pages themselves already 404,
 	// but a visible link to a 404 reads as a broken portal rather than an unshipped one.
@@ -164,7 +120,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 					{/* eslint-disable-next-line @next/next/no-img-element */}
 					<img src="/code-falcon-white.png" alt="" className="h-9 w-auto" />
 					<span className="flex flex-col leading-none">
-						<span className="text-[0.6rem] font-medium uppercase tracking-[0.24em] text-primary-foreground/70">
+						<span className="text-[0.6875rem] font-medium uppercase tracking-[0.2em] text-primary-foreground/70">
 							Ateneo
 						</span>
 						<span className="font-heading text-xl font-bold leading-tight tracking-tight">CODE</span>
@@ -197,9 +153,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 							))}
 							{navPins.length > 0 ? (
 								<>
-									<p className="px-3 pb-0.5 text-[0.6rem] font-semibold uppercase tracking-wider text-primary-foreground/45">
-										Pinned links
-									</p>
+									<p className="px-3 pb-1 pt-3 text-xs font-semibold text-primary-foreground/70">Pinned links</p>
 									{navPins.map((pin) => (
 										<PinnedNavLink key={pin.id} pin={pin} />
 									))}
@@ -222,14 +176,14 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 							{member.subtitle ? <p className="truncate text-xs text-primary-foreground/60">{member.subtitle}</p> : null}
 						</div>
 						<form action={signOutAction} className="shrink-0">
-							<button
+							<SubmitButton
 								type="submit"
 								aria-label="Sign out"
 								title="Sign out"
 								className="grid size-8 place-items-center rounded-lg text-primary-foreground/60 transition-colors hover:bg-white/10 hover:text-primary-foreground"
 							>
 								<LogOut className="size-4" />
-							</button>
+							</SubmitButton>
 						</form>
 					</div>
 				</div>
@@ -242,7 +196,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 						{/* eslint-disable-next-line @next/next/no-img-element */}
 						<img src="/code-falcon-white.png" alt="" className="h-8 w-auto" />
 						<span className="flex flex-col leading-none">
-							<span className="text-[0.55rem] font-medium uppercase tracking-[0.22em] text-primary-foreground/70">
+							<span className="text-[0.6875rem] font-medium uppercase tracking-[0.18em] text-primary-foreground/70">
 								Ateneo
 							</span>
 							<span className="font-heading text-lg font-bold leading-tight tracking-tight">CODE</span>
@@ -251,11 +205,13 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 					<div className="hidden min-w-0 flex-1 lg:block">
 						{inAdmin ? (
 							<Breadcrumb items={[{ label: "Portal", href: "/portal" }, ...crumbFor(pathname)]} />
+						) : section.atRoot ? (
+							<p className="truncate text-sm font-semibold text-muted-foreground">{section.label}</p>
 						) : (
-							<>
-								{pathname !== "/portal/ments" ? <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">{pageHeading.section}</p> : null}
-								<p className="truncate font-heading text-xl font-semibold text-foreground">{pageHeading.title}</p>
-							</>
+							<Link href={section.href} className="inline-flex min-h-11 items-center gap-1 rounded-md text-sm font-semibold text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+								<ChevronLeft className="size-4" aria-hidden />
+								{section.label}
+							</Link>
 						)}
 					</div>
 					<div className="flex items-center gap-2">
@@ -292,7 +248,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 						<SheetTrigger asChild>
 							<button
 								type="button"
-								aria-label="Open menu"
+								aria-label="Check-in code and quick actions"
 								aria-expanded={menuOpen}
 								className={cn(
 									"absolute -top-6 left-1/2 grid size-14 -translate-x-1/2 place-items-center rounded-full bg-secondary text-primary shadow-lg ring-4 ring-background transition-transform duration-200 active:scale-90",
@@ -348,7 +304,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 					</> : null}
 
 					<nav className="flex flex-col border-t border-border px-2 pt-3" aria-label="More modules">
-						{!inAdmin ? <h3 className="px-3 pb-1 text-sm font-semibold text-muted-foreground">
+						{!inAdmin ? <h3 className="px-3 pb-1 font-sans text-sm font-semibold text-muted-foreground">
 							Go to
 						</h3> : null}
 						{inAdmin ? (
@@ -384,9 +340,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 								})}
 								{navPins.length > 0 ? (
 									<div className="mt-2 border-t border-border pt-2">
-										<p className="px-3 pb-1 text-[0.6rem] font-semibold uppercase tracking-wider text-muted-foreground">
-											Pinned links
-										</p>
+										<h3 className="px-3 pb-1 font-sans text-sm font-semibold text-muted-foreground">Pinned links</h3>
 										{navPins.map((pin) => (
 											<SheetClose asChild key={pin.id}>
 												<a
@@ -410,7 +364,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 
 					<div className="mt-2 border-t border-border px-2 pt-2">
 						<form action={signOutAction}>
-							<button
+							<SubmitButton
 								type="submit"
 								className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-destructive hover:bg-muted"
 							>
@@ -418,7 +372,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 									<LogOut className="size-5" />
 								</span>
 								Sign out
-							</button>
+							</SubmitButton>
 						</form>
 					</div>
 					</div>
@@ -454,7 +408,7 @@ function BarTab({ item, pathname }: { item: NavItem; pathname: string }) {
 			href={item.href}
 			aria-current={on ? "page" : undefined}
 			className={cn(
-				"flex flex-1 flex-col items-center gap-1 py-2 text-[0.65rem] font-medium transition-colors",
+				"flex min-h-14 flex-1 flex-col items-center justify-center gap-1 text-xs font-medium transition-colors",
 				on ? "text-secondary" : "text-primary-foreground/55",
 			)}
 		>

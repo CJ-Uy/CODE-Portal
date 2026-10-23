@@ -16,6 +16,6 @@ export default async function ManageMentsPage() {
 	const actor = await requireActor();
 	if (!can(actor, "member:manage")) redirect("/portal/ments");
 	const repositories = await getRepositories();
-	const [people, reports] = await Promise.all([repositories.ments.manage(actor), repositories.ments.pments(actor)]);
-	return <div className="grid min-w-0 gap-6"><AdminIntro title="Ments Tree" whoFor="Manage official Ments relationships and review member-reported Pments" effect="Past mentors can be added without a portal account" /><Button asChild variant="outline" size="sm" className="justify-self-start"><Link href="/portal/ments"><GitBranch className="size-4" /> Explore tree</Link></Button><MentsEditor people={people} reports={reports} /></div>;
+	const people = await repositories.ments.manage(actor);
+	return <div className="grid min-w-0 gap-6"><AdminIntro title="Ments Tree" whoFor="Manage official Ments relationships" effect="Past mentors can be added without a portal account" /><Button asChild variant="outline" size="sm" className="justify-self-start"><Link href="/portal/ments"><GitBranch className="size-4" /> Explore tree</Link></Button><MentsEditor people={people} /></div>;
 }

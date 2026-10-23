@@ -250,16 +250,11 @@ export function LinksWorkspace({ initialPage, actorMemberId, canModerate }: Link
 		<div className="grid min-w-0 grid-cols-1 gap-5">
 			<div className="flex flex-wrap items-end justify-between gap-3">
 				<div className="min-w-0 basis-full sm:flex-1">
-					<p className="text-xs font-semibold uppercase text-primary">Short links</p>
-					<h1 className="font-heading text-3xl">Links</h1>
-					<p className="mt-1 max-w-xl text-sm text-muted-foreground">Turn long web addresses into tidy <span className="font-medium text-foreground">{baseLabel}/name</span> links, share them, and see how many people click.</p>
+					<h1 className="font-heading text-3xl leading-tight">Link shortener</h1>
+					<p className="mt-1 max-w-xl text-sm text-muted-foreground">Turn long web addresses into tidy <span className="font-medium text-foreground [overflow-wrap:anywhere]">{baseLabel}/name</span> links, share them, and see how many people click.</p>
 				</div>
 				<div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
 					{canModerate ? <Badge variant="info">Moderator</Badge> : null}
-					<Button variant="outline" className="min-h-11" onClick={refresh}>
-						<RefreshCw />
-						Refresh
-					</Button>
 					<CreateLinkDialog
 						triggerRef={createTriggerRef}
 						open={createOpen || createFromUrl}
@@ -273,22 +268,22 @@ export function LinksWorkspace({ initialPage, actorMemberId, canModerate }: Link
 				</div>
 			</div>
 
-			<details className="group rounded-lg border bg-card p-4 text-sm">
-				<summary className="flex cursor-pointer items-center gap-2 font-semibold text-foreground">
-					<Info className="size-4 text-primary" />
+			<details className="group text-sm">
+				<summary className="flex min-h-11 w-fit cursor-pointer list-none items-center gap-2 rounded-md font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+					<Info className="size-4" aria-hidden />
 					New here? What these words mean
 				</summary>
-				<div className="mt-3 grid max-w-3xl gap-2 text-muted-foreground">
-					<p><strong className="text-foreground">Short link</strong> - a tidy CODE web address that forwards to a longer one. Share <UrlToken>{`${baseLabel}/welcome`}</UrlToken> instead of a giant URL.</p>
-					<p><strong className="text-foreground">Slug</strong> - the custom ending you choose, the part after the slash. In <UrlToken>{`${baseLabel}/welcome`}</UrlToken> the slug is <strong className="text-foreground">welcome</strong>. Use letters, numbers, and dashes.</p>
-					<p><strong className="text-foreground">Destination</strong> - where people actually land when they open the link.</p>
-				</div>
+				<dl className="mt-2 grid max-w-2xl gap-2 rounded-lg border bg-card p-4 text-muted-foreground">
+					<div><dt className="inline font-semibold text-foreground">Short link: </dt><dd className="inline">a tidy CODE address that forwards to a longer one. Share <UrlToken>{`${baseLabel}/welcome`}</UrlToken> instead of a giant URL.</dd></div>
+					<div><dt className="inline font-semibold text-foreground">Slug: </dt><dd className="inline">the ending you choose after the slash. In <UrlToken>{`${baseLabel}/welcome`}</UrlToken> it is <strong className="text-foreground">welcome</strong>. Use letters, numbers and dashes.</dd></div>
+					<div><dt className="inline font-semibold text-foreground">Destination: </dt><dd className="inline">where people land when they open the link.</dd></div>
+				</dl>
 			</details>
 
-			<div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-3">
-				<div className="flex rounded-md border bg-background p-1">
+			<div className="flex flex-wrap items-center gap-2">
+				<div className="flex rounded-lg border bg-card p-0.5">
 					{(["all", "mine"] as ViewMode[]).map((mode) => (
-						<button key={mode} type="button" aria-pressed={view === mode} onClick={() => { setView(mode); setPage(0); }} className={cn("min-h-11 rounded px-3 text-xs font-semibold", view === mode ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>
+						<button key={mode} type="button" aria-pressed={view === mode} onClick={() => { setView(mode); setPage(0); }} className={cn("min-h-10 rounded-md px-3 text-sm", view === mode ? "bg-secondary font-semibold text-foreground" : "font-medium text-muted-foreground hover:text-foreground")}>
 							{mode === "mine" ? "My links" : "All links"}
 						</button>
 					))}
@@ -296,13 +291,13 @@ export function LinksWorkspace({ initialPage, actorMemberId, canModerate }: Link
 				<label className="relative min-w-56 flex-1">
 					<span className="sr-only">Search links</span>
 					<Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-					<Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} placeholder="Search by title, slug, or destination" className="min-h-11 pl-9" />
+					<Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} placeholder="Search by title, slug, or destination" className="min-h-11 bg-card pl-9" />
 				</label>
 				{tagOptions.length ? (
 					<div className="flex flex-wrap items-center gap-1">
 						<span className="mr-1 text-xs text-muted-foreground">Tags:</span>
 						{tagOptions.map((tag) => (
-							<button key={tag} type="button" aria-pressed={selectedTags.includes(tag)} onClick={() => { setSelectedTags((current) => current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]); setPage(0); }} className={cn("min-h-11 rounded-md px-3 text-xs font-semibold", selectedTags.includes(tag) ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground")}>
+							<button key={tag} type="button" aria-pressed={selectedTags.includes(tag)} onClick={() => { setSelectedTags((current) => current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]); setPage(0); }} className={cn("min-h-11 rounded-md border px-3 text-xs font-semibold", selectedTags.includes(tag) ? "border-accent bg-secondary text-foreground" : "bg-card text-muted-foreground hover:text-foreground")}>
 								{tag}
 							</button>
 						))}
@@ -395,7 +390,7 @@ export function LinksWorkspace({ initialPage, actorMemberId, canModerate }: Link
 			</div>
 			{!links.length && !linksLoading ? <div className="grid justify-items-center gap-3 rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground"><p>{emptyMessage}</p>{hasFilters ? <Button type="button" variant="outline" size="sm" className="min-h-11" onClick={() => { setView("all"); setSearch(""); setSelectedTags([]); setPage(0); }}>Clear filters</Button> : null}</div> : null}
 			<div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
-				<p aria-live="polite">{linksLoading ? "Loading links..." : total ? `Showing ${page * PAGE_SIZE + 1}–${page * PAGE_SIZE + links.length} of ${total} ${total === 1 ? "link" : "links"}` : "0 links"}</p>
+				<p aria-live="polite">{linksLoading ? "Loading links..." : total ? (pageCount > 1 ? `Showing ${page * PAGE_SIZE + 1}–${page * PAGE_SIZE + links.length} of ${total} links` : `${total} ${total === 1 ? "link" : "links"}`) : "0 links"}</p>
 				{pageCount > 1 ? <nav aria-label="Links pages" className="flex items-center gap-2">
 					<Button type="button" variant="outline" className="min-h-11" onClick={() => setPage((current) => current - 1)} disabled={page === 0 || linksLoading}>Previous</Button>
 					<span className="whitespace-nowrap tabular-nums">Page {page + 1} of {pageCount}</span>

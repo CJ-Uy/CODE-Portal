@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import type { InferInsertModel, InferSelectModel, SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
@@ -18,6 +18,7 @@ import {
 import { createId } from "@/lib/ids";
 import { blocksToPlainText, buildSearchText, readMinutes } from "@/lib/library/blocks";
 import type { LibraryBlock } from "@/lib/library/blocks";
+import { decodeCursor, encodeCursor } from "@/lib/library/cursor";
 import { allowedFormats, defaultFormat, defaultPublicReadiness, defaultSource, REPORT_REASONS } from "@/lib/library/taxonomy";
 import type {
 	LibraryAuthor,
@@ -86,12 +87,18 @@ export type LibrarySearchInput = {
 	subtype?: string;
 	formatDetail?: string;
 	engagementType?: string;
-	sort?: "relevance" | "newest" | "most_saved" | "most_read";
+	/** "title" is A to Z. */
+	sort?: "relevance" | "title" | "newest" | "most_saved" | "most_read";
 	limit?: number;
 	offset?: number;
+	/** A `nextCursor` from the previous page of the same search: this page starts right after its last row. */
+	cursor?: string;
 	/** Smart search: restrict to these, and keep their order when sort = relevance. */
 	onlyIds?: string[];
 };
+
+/** `nextCursor` is null on the last page. `total` counts the whole search, whichever page this is. */
+export type LibrarySearchPage = { cards: LibraryCard[]; total: number; nextCursor: string | null };
 
 export type LibraryItemView = LibraryItem & {
 	tags: { id: string; name: string }[];
@@ -127,7 +134,9 @@ export type LibraryModerationHook = (event: LibraryModerationEvent) => Promise<v
 export type Db = DrizzleD1Database<typeof schema>;
 
 export type LibraryRepository = {
-	search(actor: Actor, input: LibrarySearchInput): Promise<{ cards: LibraryCard[]; total: number }>;
+	search(actor: Actor, input: LibrarySearchInput): Promise<LibrarySearchPage>;
+	/** Published items this actor can browse, per type. A type with none is left out, so the type chips never lead to an empty list. */
+	kindCounts(actor: Actor): Promise<Partial<Record<LibraryKind, number>>>;
 	getItem(actor: Actor, id: string): Promise<LibraryItemView | null>;
 	createDraft(actor: Actor, input: LibraryItemDraftInput): Promise<LibraryItem>;
 	updateItem(actor: Actor, id: string, input: Partial<LibraryItemDraftInput>): Promise<LibraryItem>;
@@ -298,12 +307,28 @@ const cardColumns = {
 	saves: savesOf.mapWith(Number),
 };
 
+function toCard<Row extends { tagNamesJson: string | null }>({ tagNamesJson, ...card }: Row): Omit<Row, "tagNamesJson"> & { tagNames: string[] } {
+	return { ...card, tagNames: (JSON.parse(tagNamesJson ?? "[]") as string[]).sort() };
+}
+
 async function selectCardsFrom(db: Db, where: SQL | undefined, order: SQL[], limit: number, offset: number): Promise<LibraryCard[]> {
 	const rows = await db.select(cardColumns).from(libraryItems).where(where).orderBy(...order).limit(limit).offset(offset);
-	return rows.map(({ tagNamesJson, ...card }) => ({
-		...card,
-		tagNames: (JSON.parse(tagNamesJson ?? "[]") as string[]).sort(),
-	}));
+	return rows.map(toCard);
+}
+
+/** One key of the order a list is read in. Every order ends with the item id, so no two rows tie and a cursor is exact. */
+type SortKey = { expr: SQL; desc?: boolean };
+
+/** Rows strictly after the row whose keys are `values`: equal on every earlier key, then past it on one. */
+function pastCursor(keys: SortKey[], values: (string | number)[]): SQL | undefined {
+	return or(
+		...keys.map((key, index) =>
+			and(
+				...keys.slice(0, index).map((earlier, at) => sql`${earlier.expr} = ${values[at]}`),
+				key.desc ? sql`${key.expr} < ${values[index]}` : sql`${key.expr} > ${values[index]}`,
+			),
+		),
+	);
 }
 
 /**
@@ -477,24 +502,60 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 			);
 
 			const phrase = likePattern(words.join(" "));
-			const newest = [desc(libraryItems.publishedAt), asc(libraryItems.id)];
-			let order: SQL[];
-			if (sort === "most_saved") order = [desc(savesOf), ...newest];
-			else if (sort === "most_read") order = [desc(secondsReadOf), ...newest];
+			const id: SortKey = { expr: sql`${libraryItems.id}` };
+			const newest: SortKey[] = [{ expr: sql`${libraryItems.publishedAt}`, desc: true }, id];
+			// `order` names the key list, so a cursor from one order is never read against another.
+			let order: string;
+			let keys: SortKey[];
+			if (sort === "most_saved") [order, keys] = ["most_saved", [{ expr: savesOf, desc: true }, ...newest]];
+			else if (sort === "most_read") [order, keys] = ["most_read", [{ expr: secondsReadOf, desc: true }, ...newest]];
+			// ponytail: SQLite's lower() folds ASCII only, so a title starting with "É" sorts after "Z"; a stored sort key fixes it if that matters.
+			else if (sort === "title") [order, keys] = ["title", [{ expr: sql`lower(${libraryItems.title})` }, id]];
 			else if (sort === "relevance" && input.onlyIds)
-				order = [sql`(SELECT CAST(key AS INTEGER) FROM json_each(${JSON.stringify(input.onlyIds)}) WHERE value = ${libraryItems.id})`, ...newest];
+				[order, keys] = ["relevance_ids", [{ expr: sql`(SELECT CAST(key AS INTEGER) FROM json_each(${JSON.stringify(input.onlyIds)}) WHERE value = ${libraryItems.id})` }, ...newest]];
 			else if (sort === "relevance" && words.length)
-				order = [
-					sql`CASE WHEN lower(${libraryItems.title}) LIKE ${phrase} ${LIKE_ESCAPE} THEN 0 WHEN lower(${libraryItems.dek}) LIKE ${phrase} ${LIKE_ESCAPE} THEN 1 ELSE 2 END`,
-					...newest,
+				[order, keys] = [
+					"relevance",
+					[
+						{ expr: sql`CASE WHEN lower(${libraryItems.title}) LIKE ${phrase} ${LIKE_ESCAPE} THEN 0 WHEN lower(${libraryItems.dek}) LIKE ${phrase} ${LIKE_ESCAPE} THEN 1 ELSE 2 END` },
+						...newest,
+					],
 				];
-			else order = newest;
+			else [order, keys] = ["newest", newest];
 
-			const [cards, [count]] = await Promise.all([
-				selectCards(where, order, limit, offset),
+			const after = input.cursor === undefined ? null : decodeCursor(input.cursor);
+			if (input.cursor !== undefined && (after?.order !== order || after.keys.length !== keys.length)) {
+				throw new Error("The library list changed. Reload it to start from the top.");
+			}
+
+			// One row past the page says whether there is a next one, without a second count.
+			// ponytail: every load also counts the whole search (one parallel query); skip it on cursor loads if D1 time ever shows it.
+			const [rows, [count]] = await Promise.all([
+				db
+					.select({ card: cardColumns, cursorKeys: sql<string>`json_array(${sql.join(keys.map((key) => key.expr), sql`, `)})` })
+					.from(libraryItems)
+					.where(after ? and(where, pastCursor(keys, after.keys)) : where)
+					.orderBy(...keys.map((key) => (key.desc ? desc(key.expr) : asc(key.expr))))
+					.limit(limit + 1)
+					.offset(offset),
 				db.select({ total: sql<number>`count(*)`.mapWith(Number) }).from(libraryItems).where(where),
 			]);
-			return { cards, total: count?.total ?? 0 };
+			const page = rows.slice(0, limit);
+			const last = page.at(-1);
+			return {
+				cards: page.map((row) => toCard(row.card)),
+				total: count?.total ?? 0,
+				nextCursor: rows.length > limit && last ? encodeCursor({ order, keys: JSON.parse(last.cursorKeys) as (string | number)[] }) : null,
+			};
+		},
+
+		async kindCounts(actor) {
+			const rows = await db
+				.select({ kind: libraryItems.kind, count: sql<number>`count(*)`.mapWith(Number) })
+				.from(libraryItems)
+				.where(publishedVisibleWhere(actor))
+				.groupBy(libraryItems.kind);
+			return Object.fromEntries(rows.map((row) => [row.kind, row.count]));
 		},
 
 		async getItem(actor, id) {
@@ -943,6 +1004,7 @@ export function createUnavailableLibraryRepository(): LibraryRepository {
 	};
 	return {
 		search: unavailable,
+		kindCounts: unavailable,
 		getItem: unavailable,
 		createDraft: unavailable,
 		updateItem: unavailable,

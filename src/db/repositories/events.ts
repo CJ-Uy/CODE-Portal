@@ -23,7 +23,7 @@ import { can } from "@/server/auth/permissions";
 import { runAtomic } from "./atomic";
 import { auditInsertValues } from "./audit";
 import type { AuditRepository } from "./audit";
-import { buildExistingAttendanceAwardUpsert, buildScanAwardUpsert } from "./event-awards";
+import { buildExistingAttendanceAwardUpsert, buildFeedbackShareUpsert, buildScanAwardUpsert } from "./event-awards";
 import { canCreateType, createEventTypeRulesRepository } from "./eventTypeRules";
 import { notify } from "./notifications";
 import { validateEventSignupAnswers, type EventSignupAnswers, type EventSignupField } from "@/lib/event-signup-form";
@@ -355,19 +355,36 @@ export function createEventsRepository(db: Db, audit: AuditRepository): EventsRe
 
 		async listPublished(actor, input) {
 			if (!actor) throw new Error("Authentication required.");
-			const rows: Array<{ event: BaseEventRecord; scannedCount: number }> = await db
-				.select({
-					event: getTableColumns(crsEvents),
-					scannedCount: count(crsAttendance.memberId),
-				})
-				.from(crsEvents)
-				.leftJoin(crsAttendance, eq(crsAttendance.eventId, crsEvents.id))
-				.where(isNull(crsEvents.deletedAt))
-				.groupBy(crsEvents.id)
-				.orderBy(asc(crsEvents.startsAt))
-				.limit(Math.min(input?.limit ?? 50, 100))
-				.offset(input?.offset ?? 0);
-			return Promise.all(rows.map(async (row) => withCapabilities(actor, row.event, await resolveCapability(actor, row.event), row.scannedCount)));
+			const moderator = can(actor, "event:moderate");
+			// One read of the viewer's staff rows instead of a staffRole lookup per listed event.
+			const [rows, staffRows]: [Array<{ event: BaseEventRecord; scannedCount: number }>, Array<{ eventId: string; role: "admin" | "scanner" }>] =
+				await Promise.all([
+					db
+						.select({
+							event: getTableColumns(crsEvents),
+							scannedCount: count(crsAttendance.memberId),
+						})
+						.from(crsEvents)
+						.leftJoin(crsAttendance, eq(crsAttendance.eventId, crsEvents.id))
+						.where(isNull(crsEvents.deletedAt))
+						.groupBy(crsEvents.id)
+						.orderBy(asc(crsEvents.startsAt))
+						.limit(Math.min(input?.limit ?? 50, 100))
+						.offset(input?.offset ?? 0),
+					moderator
+						? Promise.resolve([])
+						: db.select({ eventId: eventStaff.eventId, role: eventStaff.role }).from(eventStaff).where(eq(eventStaff.memberId, actor.memberId)),
+				]);
+			const staffRoles = new Map(staffRows.map((row) => [row.eventId, row.role]));
+			// Same precedence as resolveCapability: owner, then moderator, then staff role.
+			return rows.map((row) =>
+				withCapabilities(
+					actor,
+					row.event,
+					row.event.createdBy === actor.memberId ? "owner" : moderator ? "admin" : (staffRoles.get(row.event.id) ?? null),
+					row.scannedCount,
+				),
+			);
 		},
 
 		async listPending(actor, input) {
@@ -515,11 +532,13 @@ export function createEventsRepository(db: Db, audit: AuditRepository): EventsRe
 			}
 			queries.push(
 				buildExistingAttendanceAwardUpsert(db, eventId),
+				// After the attendance upsert, so members who answered the form are topped up to the new awards.
+				buildFeedbackShareUpsert(db, eventId),
 				db
 					.delete(retentionRecords)
 					.where(
 						and(
-							eq(retentionRecords.source, "event_attendance"),
+							inArray(retentionRecords.source, ["event_attendance", "feedback_share"]),
 							eq(retentionRecords.eventId, eventId),
 							inArray(retentionRecords.pointTypeId, activePointTypeIds),
 							notInArray(retentionRecords.pointTypeId, configuredPointTypeIds),
@@ -804,7 +823,8 @@ export function createEventsRepository(db: Db, audit: AuditRepository): EventsRe
 						and(
 							eq(retentionRecords.eventId, input.eventId),
 							eq(retentionRecords.memberId, input.memberId),
-							eq(retentionRecords.source, "event_attendance"),
+							// Their feedback share goes too: it is the rest of the points this check-in paid.
+							inArray(retentionRecords.source, ["event_attendance", "feedback_share"]),
 						),
 					),
 				db.insert(auditLogs).values(

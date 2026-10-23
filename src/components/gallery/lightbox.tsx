@@ -139,7 +139,7 @@ export function Lightbox<T extends GalleryTileItem>({
 							</div>
 
 							{panel && showPanel ? (
-								<aside aria-label="Details" className="max-h-[45vh] shrink-0 overflow-y-auto border-t border-white/10! bg-[#0c315c] lg:max-h-none lg:w-80 lg:border-l lg:border-t-0">
+								<aside aria-label="Details" className="max-h-[45vh] shrink-0 overflow-y-auto border-t border-white/10 bg-[#0c315c] lg:max-h-none lg:w-80 lg:border-l lg:border-t-0">
 									{panel(item)}
 								</aside>
 							) : null}
