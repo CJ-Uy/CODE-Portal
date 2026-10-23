@@ -6,6 +6,8 @@ import {
 	auditLogs,
 	crsEvents,
 	eventTypeRules,
+	galleryFolders,
+	galleryItems,
 	libraryItems,
 	members,
 	navPins,
@@ -28,7 +30,8 @@ export type AuditCategory =
 	| "member"
 	| "announcement"
 	| "library"
-	| "email";
+	| "email"
+	| "gallery";
 
 export type AuditRecordInput = {
 	action: string;
@@ -162,6 +165,24 @@ export function createAuditRepository(db: Db): AuditRepository {
 									.select({ id: announcements.id, label: announcements.title })
 									.from(announcements)
 									.where(inArray(announcements.id, targetIds)),
+							);
+							break;
+						case "gallery_item":
+							rememberLabels(
+								targetType,
+								await db
+									.select({ id: galleryItems.id, label: galleryItems.originalName })
+									.from(galleryItems)
+									.where(inArray(galleryItems.id, targetIds)),
+							);
+							break;
+						case "gallery_folder":
+							rememberLabels(
+								targetType,
+								await db
+									.select({ id: galleryFolders.id, label: galleryFolders.name })
+									.from(galleryFolders)
+									.where(inArray(galleryFolders.id, targetIds)),
 							);
 							break;
 						case "library_item":

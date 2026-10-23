@@ -155,6 +155,8 @@ check("sent form keeps 0 points", one("SELECT points_award AS v FROM surveys WHE
 check("sent form has no point type", one("SELECT point_type_id AS v FROM surveys WHERE id='srv_fix2'"), null);
 check("old response stays unlinked", one("SELECT member_id AS v FROM survey_responses WHERE id='srvr_fix1'"), null);
 check("old response keeps its time", one("SELECT submitted_at AS v FROM survey_responses WHERE id='srvr_fix1'"), 6000);
+// 0015 (applied with 0014 above) seeds the photo gallery admin role.
+check("gallery role seeded", one("SELECT key || ',' || kind AS v FROM roles WHERE id='role_gallery'"), "gallery,admin");
 db.close();
 rmSync(work, { recursive: true, force: true });
 

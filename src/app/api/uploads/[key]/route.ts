@@ -5,6 +5,7 @@ import { crsEvents } from "@/db/schema";
 import { createLibraryObjectAccess } from "@/db/repositories/library-access";
 import type { Db } from "@/db/repositories/library";
 import { getActor } from "@/server/auth/actor";
+import { getOptionalCloudflareEnv } from "@/server/cloudflare";
 import { getAppConfig } from "@/server/env";
 import { assertSameOrigin } from "@/server/http/origin";
 import { proxySharedApiRequest } from "@/server/shared-api";
@@ -58,6 +59,13 @@ async function createHandlers() {
 			return links.canEditLink(actor, linkId);
 		},
 		...createLibraryObjectAccess(getDb() as unknown as Db),
+		canReadGalleryObject: async (actor, itemId) => (await getRepositories()).gallery.canReadObject(actor, itemId),
+		transformImage: async (body, width) => {
+			const images = getOptionalCloudflareEnv()?.IMAGES;
+			if (!images) return null;
+			const output = await images.input(body).transform({ width, fit: "scale-down" }).output({ format: "image/webp", quality: 80 });
+			return output.response().arrayBuffer();
+		},
 	});
 }
 
