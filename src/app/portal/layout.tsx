@@ -6,6 +6,7 @@ import { PortalShell } from "@/components/portal/portal-shell";
 import { getActor } from "@/server/auth/actor";
 import { hasAnyAdminScope } from "@/server/auth/admin";
 import { getFeatureFlags } from "@/server/features";
+import { LINK_KIND_ICONS, linkKindOf } from "@/lib/link-kinds";
 import { visibleGroups } from "./admin/nav";
 import { signOutAction } from "./actions";
 import { markAllNotificationsReadAction, markNotificationReadAction } from "./notifications/actions";
@@ -26,14 +27,15 @@ export default async function PortalLayout({ children }: { children: React.React
 	// notifications is unavailable through the shared-dev adapter until a future
 	// phase wires an internal proxy route for it; degrade to an empty feed
 	// instead of crashing every authed page.
-	const [member, feed, unreadCount, navPins] = await Promise.all([
+	const [member, feed, unreadCount, sidebarLinks] = await Promise.all([
 		repositories.members.getById(actor, actor.memberId),
 		flags.notifications ? repositories.notifications.listFeed(actor, { limit: 10 }).catch(() => []) : Promise.resolve([]),
 		flags.notifications ? repositories.notifications.unreadCount(actor).catch(() => 0) : Promise.resolve(0),
-		repositories.navPins.listVisible(actor).catch(() => []),
+		repositories.importantLinks.listSidebar(actor).catch(() => []),
 	]);
 	if (!member) redirect(await signInPath());
 
+	const navPins = sidebarLinks.map((link) => ({ id: link.id, label: link.title, url: link.url, icon: LINK_KIND_ICONS[linkKindOf(link)] }));
 	const displayName = member.nickname ?? member.fullName ?? member.name ?? member.email;
 	const showAdmin = hasAnyAdminScope(actor);
 	const adminGroups = showAdmin

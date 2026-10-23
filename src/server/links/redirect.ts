@@ -11,7 +11,7 @@ export type RedirectDependencies = {
 
 // Portal sections someone might type at the root, e.g. ateneocode.org/guides. A real short link with
 // the same slug still wins. Kept in sync with the nav by nav-items.test.ts.
-export const PORTAL_SECTIONS = new Set(["calendar", "retention", "ments", "links", "mail", "notifications", "profile", "library", "announcements", "guides", "surveys"]);
+export const PORTAL_SECTIONS = new Set(["calendar", "retention", "ments", "links", "important-links", "mail", "notifications", "profile", "library", "announcements", "guides", "surveys"]);
 
 // Route handlers cannot render app/not-found.tsx, so an unknown slug is sent to a page that can.
 export const LINK_NOT_FOUND_PATH = "/link-not-found";
