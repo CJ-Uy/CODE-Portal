@@ -303,7 +303,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 					</> : null}
 
 					<nav className="flex flex-col border-t border-border px-2 pt-3" aria-label="More modules">
-						{!inAdmin ? <h3 className="px-3 pb-1 text-sm font-semibold text-muted-foreground">
+						{!inAdmin ? <h3 className="px-3 pb-1 font-sans! text-sm font-semibold text-muted-foreground">
 							Go to
 						</h3> : null}
 						{inAdmin ? (
@@ -339,7 +339,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 								})}
 								{navPins.length > 0 ? (
 									<div className="mt-2 border-t border-border pt-2">
-										<h3 className="px-3 pb-1 text-sm font-semibold text-muted-foreground">Pinned links</h3>
+										<h3 className="px-3 pb-1 font-sans! text-sm font-semibold text-muted-foreground">Pinned links</h3>
 										{navPins.map((pin) => (
 											<SheetClose asChild key={pin.id}>
 												<a
