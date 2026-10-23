@@ -301,11 +301,16 @@ describe("events repository on D1", () => {
 
 		await repo.addStaff(admin, event.id, scanner.memberId, "scanner");
 		await repo.addStaff(admin, event.id, adminStaff.memberId, "admin");
-		expect(await repo.listStaff(admin, event.id)).toMatchObject([
-			{ memberId: owner.memberId, role: "owner" },
-			{ memberId: adminStaff.memberId, role: "admin" },
-			{ memberId: scanner.memberId, role: "scanner" },
-		]);
+		const staff = await repo.listStaff(admin, event.id);
+		expect(staff[0]).toMatchObject({ memberId: owner.memberId, role: "owner" });
+		// Staff follow added_at, then name. The two adds can land in the same millisecond or not, so their order is not fixed.
+		expect(staff.slice(1)).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ memberId: adminStaff.memberId, role: "admin" }),
+				expect.objectContaining({ memberId: scanner.memberId, role: "scanner" }),
+			]),
+		);
+		expect(staff).toHaveLength(3);
 		await expect(repo.addStaff(admin, event.id, owner.memberId, "scanner")).rejects.toThrow("Owner cannot be event staff.");
 		await expect(repo.update(admin, event.id, { title: "Updated by admin" })).resolves.toMatchObject({
 			title: "Updated by admin",
