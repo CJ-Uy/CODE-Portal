@@ -11,27 +11,19 @@ const pendingList = (share: EventFeedbackShare) => share.pending.map((row) => `+
  */
 export function FeedbackShareNote({ share, on }: { share: EventFeedbackShare | null; on: "event" | "form" }) {
 	if (!share?.hasForm || (on === "form" && share.pending.length === 0)) return null;
+	// One line, said once: what this event's form is worth to the viewer right now.
+	const text =
+		on === "form"
+			? `Answering adds ${pendingList(share)}, the last 25% of this event's points.`
+			: share.pending.length > 0
+				? `Answer the feedback form to get your last ${pendingList(share)}.`
+				: "This event has a feedback form: 75% of the points at check-in, 25% when you answer.";
 	return (
-		<div className="flex min-w-0 items-start gap-3 rounded-lg border border-ring/60 bg-secondary/50 p-3 text-sm">
-			<span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-md" style={PENDING_HATCH} aria-hidden>
-				<MessageSquareText className="size-4 rounded-sm bg-card text-accent" />
+		<p className="flex min-w-0 items-center gap-2.5 rounded-lg border border-ring/60 bg-secondary/50 px-3 py-2.5 text-sm">
+			<span className="grid size-6 shrink-0 place-items-center rounded-md" style={PENDING_HATCH} aria-hidden>
+				<MessageSquareText className="size-3.5 rounded-sm bg-card text-accent" />
 			</span>
-			<div className="grid min-w-0 gap-0.5">
-				{on === "event" ? (
-					<>
-						<p className="font-medium">This event has a feedback form.</p>
-						<p className="text-muted-foreground">You get 75% of its points when you check in, and the other 25% when you answer the form.</p>
-						{share.pending.length > 0 ? (
-							<p className="font-medium [overflow-wrap:anywhere]">Waiting on your answer: {pendingList(share)}</p>
-						) : null}
-					</>
-				) : (
-					<>
-						<p className="font-medium [overflow-wrap:anywhere]">Answering gives you the other 25% of this event&apos;s points: {pendingList(share)}.</p>
-						<p className="text-muted-foreground">They count toward retention as soon as you send. If the form closes first, they are gone.</p>
-					</>
-				)}
-			</div>
-		</div>
+			<span className="min-w-0 [overflow-wrap:anywhere]">{text}</span>
+		</p>
 	);
 }

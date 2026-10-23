@@ -33,7 +33,7 @@ function TermFields({ row }: { row?: TermAdminRow }) {
 				<span className="font-medium">2nd semester starts</span>
 				<Input type="date" name="secondSemesterStartsOn" required defaultValue={row && toLocalDate(semesterBoundary(row))} />
 				<span className="text-xs text-muted-foreground">
-					Semestral retention parts need 1 point before this day and 1 point from this day on. Intersession counts as the 1st semester.
+					Semester parts need a point before this day and another from it on. Intersession counts as 1st semester.
 				</span>
 			</label>
 		</>

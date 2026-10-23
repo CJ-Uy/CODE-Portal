@@ -64,7 +64,7 @@ export default async function RetentionHistoryPage({
 			<div>
 				<h1 className="font-heading text-3xl">Retention</h1>
 				<p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-					What you still need to stay a member this school year, and where your points came from.
+					What you still need to stay a member this school year.
 				</p>
 			</div>
 
