@@ -673,6 +673,8 @@ export const auditLogs = sqliteTable(
 	],
 );
 
+// Legacy: migration 0015 copied every pin into important_links (show_in_sidebar on, same ids) and
+// nothing reads this table any more. Drop it in a later migration once production runs important links.
 export const navPins = sqliteTable(
 	"nav_pins",
 	{
@@ -704,6 +706,42 @@ export const quickLinks = sqliteTable(
 		updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
 	},
 	(table) => [index("quick_links_position_idx").on(table.position)],
+);
+
+// Member-facing link directory at /portal/important-links. Archiving a category hides it and its links.
+export const linkCategories = sqliteTable(
+	"link_categories",
+	{
+		id: text("id").primaryKey(),
+		name: text("name").notNull(),
+		position: integer("position").notNull().default(0),
+		archivedAt: integer("archived_at", { mode: "timestamp_ms" }),
+		createdBy: text("created_by").references(() => members.id, { onDelete: "set null" }),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+		updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	},
+	(table) => [index("link_categories_position_idx").on(table.position)],
+);
+
+export const importantLinks = sqliteTable(
+	"important_links",
+	{
+		id: text("id").primaryKey(),
+		// Null files the link under "Other links" at the end of the directory.
+		categoryId: text("category_id").references(() => linkCategories.id, { onDelete: "set null" }),
+		title: text("title").notNull(),
+		url: text("url").notNull(),
+		description: text("description"),
+		// One of LINK_KINDS in src/lib/link-kinds.ts; null means detect it from the URL.
+		kind: text("kind"),
+		showInSidebar: integer("show_in_sidebar", { mode: "boolean" }).notNull().default(false),
+		position: integer("position").notNull().default(0),
+		archivedAt: integer("archived_at", { mode: "timestamp_ms" }),
+		createdBy: text("created_by").references(() => members.id, { onDelete: "set null" }),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+		updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	},
+	(table) => [index("important_links_category_position_idx").on(table.categoryId, table.position)],
 );
 
 export const rateLimitCounters = sqliteTable(

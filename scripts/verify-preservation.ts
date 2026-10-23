@@ -141,7 +141,7 @@ check("smart search defaults on", one("SELECT library_smart_search AS v FROM mem
 // out was sent without points and keeps 0, and its old response stays unlinked from any member.
 db.exec(`INSERT INTO surveys (id, title, created_by, status) VALUES ('srv_fix2', 'Sent', 'mem_fix1', 'running')`);
 db.exec(`INSERT INTO survey_responses (id, survey_id, submitted_at) VALUES ('srvr_fix1', 'srv_fix2', 6000)`);
-for (const file of files.filter((f) => f >= "0014")) applyOne(file);
+for (const file of files.filter((f) => f >= "0014" && f < "0015")) applyOne(file);
 check("feedback point type seeded", one("SELECT key || ',' || label || ',' || active AS v FROM point_types WHERE id='pt_feedback'"), "feedback,Feedback,1");
 check(
 	"feedback point type placed last",
@@ -155,6 +155,21 @@ check("sent form keeps 0 points", one("SELECT points_award AS v FROM surveys WHE
 check("sent form has no point type", one("SELECT point_type_id AS v FROM surveys WHERE id='srv_fix2'"), null);
 check("old response stays unlinked", one("SELECT member_id AS v FROM survey_responses WHERE id='srvr_fix1'"), null);
 check("old response keeps its time", one("SELECT submitted_at AS v FROM survey_responses WHERE id='srvr_fix1'"), 6000);
+
+// 0015 copies each sidebar pin into important_links under the same id, still shown in the sidebar.
+db.exec(
+	`INSERT INTO nav_pins (id, label, url, icon, position, created_by, created_at)
+	 VALUES ('nav_fix1', 'Masterfile', 'https://example.com/master.xlsx', 'Table2', 3, 'mem_fix1', 7000)`,
+);
+for (const file of files.filter((f) => f >= "0015")) applyOne(file);
+check(
+	"pin copied to important links",
+	one("SELECT title || ',' || url || ',' || show_in_sidebar || ',' || position || ',' || created_by AS v FROM important_links WHERE id='nav_fix1'"),
+	"Masterfile,https://example.com/master.xlsx,1,3,mem_fix1",
+);
+check("copied pin keeps its date", one("SELECT created_at AS v FROM important_links WHERE id='nav_fix1'"), 7000);
+check("copied pin detects its type", one("SELECT kind AS v FROM important_links WHERE id='nav_fix1'"), null);
+check("copied pin is uncategorized", one("SELECT category_id AS v FROM important_links WHERE id='nav_fix1'"), null);
 db.close();
 rmSync(work, { recursive: true, force: true });
 

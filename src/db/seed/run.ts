@@ -25,7 +25,8 @@ import {
 	seedLinkHourlyStats,
 	seedMemberRoles,
 	seedMembers,
-	seedNavPins,
+	seedImportantLinks,
+	seedLinkCategories,
 	seedPointTypes,
 	seedQuickLinks,
 	seedReservedSlugs,
@@ -98,7 +99,8 @@ async function seedLocal() {
 	await insertChunks(db, schema.surveyAnswers, seedFeedbackDemoAnswers);
 	await insertChunks(db, schema.auditLogs, seedAuditLogs);
 	await insertChunks(db, schema.sharedDevTokens, seedSharedDevTokens);
-	await insertChunks(db, schema.navPins, seedNavPins);
+	await insertChunks(db, schema.linkCategories, seedLinkCategories);
+	await insertChunks(db, schema.importantLinks, seedImportantLinks);
 	await insertChunks(db, schema.quickLinks, seedQuickLinks);
 	await insertChunks(db, schema.libraryItems, seedLibraryItems);
 	await insertChunks(db, schema.libraryTags, seedLibraryTags);
