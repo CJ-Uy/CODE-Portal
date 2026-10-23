@@ -61,7 +61,7 @@ export default async function NotificationsPage() {
 					].map((group) =>
 						group.rows.length ? (
 							<section key={group.title} className="grid gap-2" aria-label={group.title}>
-								<h2 className="font-sans! text-sm font-semibold text-muted-foreground">{group.title}</h2>
+								<h2 className="font-sans text-sm font-semibold text-muted-foreground">{group.title}</h2>
 								<ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
 									{group.rows.map((item) => (
 										<li key={item.id}>

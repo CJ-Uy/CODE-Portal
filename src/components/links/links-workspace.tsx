@@ -297,7 +297,7 @@ export function LinksWorkspace({ initialPage, actorMemberId, canModerate }: Link
 					<div className="flex flex-wrap items-center gap-1">
 						<span className="mr-1 text-xs text-muted-foreground">Tags:</span>
 						{tagOptions.map((tag) => (
-							<button key={tag} type="button" aria-pressed={selectedTags.includes(tag)} onClick={() => { setSelectedTags((current) => current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]); setPage(0); }} className={cn("min-h-11 rounded-md border px-3 text-xs font-semibold", selectedTags.includes(tag) ? "border-accent! bg-secondary text-foreground" : "bg-card text-muted-foreground hover:text-foreground")}>
+							<button key={tag} type="button" aria-pressed={selectedTags.includes(tag)} onClick={() => { setSelectedTags((current) => current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]); setPage(0); }} className={cn("min-h-11 rounded-md border px-3 text-xs font-semibold", selectedTags.includes(tag) ? "border-accent bg-secondary text-foreground" : "bg-card text-muted-foreground hover:text-foreground")}>
 								{tag}
 							</button>
 						))}

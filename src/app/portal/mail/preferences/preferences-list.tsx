@@ -54,7 +54,7 @@ export function PreferencesList({ rows }: { rows: PreferenceRow[] }) {
 		<div className="grid gap-5">
 			{required.length > 0 ? (
 				<section className="grid gap-2">
-					<h2 className="font-sans! text-sm font-semibold text-muted-foreground">Always sent</h2>
+					<h2 className="font-sans text-sm font-semibold text-muted-foreground">Always sent</h2>
 					<ul className="grid divide-y divide-border rounded-xl border border-border bg-card">
 						{required.map((row) => (
 							<li key={row.id} className="flex min-w-0 items-center gap-4 px-4 py-3">
@@ -73,7 +73,7 @@ export function PreferencesList({ rows }: { rows: PreferenceRow[] }) {
 			) : null}
 			{optional.length > 0 ? (
 				<section className="grid gap-2">
-					<h2 className="font-sans! text-sm font-semibold text-muted-foreground">Your choice</h2>
+					<h2 className="font-sans text-sm font-semibold text-muted-foreground">Your choice</h2>
 					<ul className="grid divide-y divide-border rounded-xl border border-border bg-card">
 						{optional.map((row) => (
 							<li key={row.id} className="flex min-w-0 items-center gap-4 px-4 py-3">

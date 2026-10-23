@@ -43,7 +43,7 @@ function KeywordChips({ search, chips }: { search: ParsedLibrarySearch; chips: S
 								aria-label={`Remove ${chip.label}`}
 								title="Remove"
 								scroll={false}
-								className="inline-flex min-h-8 min-w-0 max-w-full items-center [overflow-wrap:anywhere] rounded-full border border-border bg-secondary/60 px-3 py-1 text-xs font-medium text-secondary-foreground transition-colors hover:border-accent! hover:line-through focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+								className="inline-flex min-h-8 min-w-0 max-w-full items-center [overflow-wrap:anywhere] rounded-full border border-border bg-secondary/60 px-3 py-1 text-xs font-medium text-secondary-foreground transition-colors hover:border-accent hover:line-through focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 							>
 								{chip.label}
 							</Link>
@@ -60,7 +60,7 @@ function QuickLinks({ id, title, action, children }: { id: string; title: string
 	return (
 		<section aria-labelledby={id} className="grid min-w-0 gap-1">
 			<div className="flex min-w-0 items-baseline justify-between gap-3">
-				<h2 id={id} className="font-sans! text-sm font-medium text-muted-foreground">
+				<h2 id={id} className="font-sans text-sm font-medium text-muted-foreground">
 					{title}
 				</h2>
 				{action}

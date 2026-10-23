@@ -76,7 +76,7 @@ function Chip({ pressed, onClick, children }: { pressed: boolean; onClick: () =>
 			onClick={onClick}
 			className={cn(
 				"min-h-10 min-w-0 max-w-full shrink-0 [overflow-wrap:anywhere] rounded-full border px-3 py-1 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-				pressed ? "border-primary! bg-primary text-primary-foreground" : "border-border bg-background text-muted-foreground hover:border-accent! hover:text-foreground",
+				pressed ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-muted-foreground hover:border-accent hover:text-foreground",
 			)}
 		>
 			{children}

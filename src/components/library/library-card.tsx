@@ -26,7 +26,7 @@ export function LibraryItemCard({ card, compact = false, className }: { card: Li
 	return (
 		<article
 			className={cn(
-				"relative flex h-full min-w-0 flex-col gap-1 rounded-xl border border-border bg-card transition-colors hover:border-accent! has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring",
+				"relative flex h-full min-w-0 flex-col gap-1 rounded-xl border border-border bg-card transition-colors hover:border-accent has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring",
 				compact ? "p-3" : "p-4",
 				className,
 			)}

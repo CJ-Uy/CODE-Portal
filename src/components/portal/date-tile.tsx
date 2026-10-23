@@ -10,7 +10,7 @@ export function DateTile({ date, today = false }: { date: Date; today?: boolean 
 		<div
 			className={cn(
 				"flex w-11 shrink-0 flex-col items-center rounded-lg border py-1.5 leading-none",
-				today ? "border-secondary! bg-secondary" : "border-border",
+				today ? "border-secondary bg-secondary" : "border-border",
 			)}
 		>
 			<span className="text-[11px] font-semibold uppercase text-primary">{MONTHS[(month ?? 1) - 1]}</span>

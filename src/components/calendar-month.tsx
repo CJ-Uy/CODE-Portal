@@ -187,7 +187,7 @@ function MonthAgenda({ items, year, month, todayIso }: { items: CalendarItem[]; 
 		.sort((a, b) => `${a.date}${a.startsAt ?? ""}`.localeCompare(`${b.date}${b.startsAt ?? ""}`));
 	return (
 		<section aria-labelledby="month-agenda" className="grid gap-2 sm:hidden">
-			<h2 id="month-agenda" className="font-sans! text-sm font-semibold text-muted-foreground">
+			<h2 id="month-agenda" className="font-sans text-sm font-semibold text-muted-foreground">
 				{rows.length ? `${MONTHS[month - 1]} at a glance` : `Nothing on the calendar in ${MONTHS[month - 1]}`}
 			</h2>
 			{rows.length ? (

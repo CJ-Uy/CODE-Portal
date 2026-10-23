@@ -90,7 +90,7 @@ function Rows({ events, types }: { events: EventListItem[]; types: EventTypeRow[
 function Section({ title, events, types, emptyMessage }: { title: string; events: EventListItem[]; types: EventTypeRow[]; emptyMessage: string }) {
 	return (
 		<section className="grid gap-2" aria-labelledby={`events-${title.toLowerCase()}`}>
-			<h2 id={`events-${title.toLowerCase()}`} className="font-sans! text-sm font-semibold text-muted-foreground">{title}</h2>
+			<h2 id={`events-${title.toLowerCase()}`} className="font-sans text-sm font-semibold text-muted-foreground">{title}</h2>
 			{events.length ? <Rows events={events} types={types} /> : <p className="text-sm text-muted-foreground">{emptyMessage}</p>}
 		</section>
 	);

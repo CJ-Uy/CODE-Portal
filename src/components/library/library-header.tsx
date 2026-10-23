@@ -47,7 +47,7 @@ export function LibraryHeader({ current }: { current: LibraryTab }) {
 									className={cn(
 										"-mb-px inline-flex min-h-11 items-center border-b-2 px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
 										// The `!` beats the unlayered `* { border-color }` in globals.css, which otherwise wins over every border-color utility.
-										active ? "border-primary! text-foreground" : "border-transparent! text-muted-foreground hover:border-border! hover:text-foreground",
+										active ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
 									)}
 								>
 									{tab.label}
