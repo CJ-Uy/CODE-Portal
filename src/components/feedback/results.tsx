@@ -92,13 +92,14 @@ export function ScaleResult({ question, eventType }: { question: ScaleQuestion; 
 			{/* The same numbers as the segments, in text, so colour is never the only way to read the bar. */}
 			<ul aria-hidden="true" className="grid grid-cols-5 gap-1 text-xs tabular-nums text-muted-foreground">
 				{summary.counts.map((count, index) => (
-					<li key={index} className="grid min-w-0 gap-0.5">
+					<li key={index} className="flex min-w-0 flex-wrap items-center gap-x-1.5">
 						<span className="flex items-center gap-1">
 							<span className="size-2.5 shrink-0 rounded-sm" style={{ backgroundColor: ratingColor(index + 1) }} />
-							<span className="font-medium text-foreground">{index + 1}</span>
+							<span className="font-semibold text-foreground">{index + 1}:</span>
 						</span>
-						<span>{count}</span>
-						<span>{percentOf(count, summary.n)}%</span>
+						<span>
+							{count} &middot; {percentOf(count, summary.n)}%
+						</span>
 					</li>
 				))}
 			</ul>
