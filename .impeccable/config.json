@@ -26,6 +26,15 @@
         ],
         "createdAt": "2026-10-23T04:43:04.624Z",
         "reason": "Claude: sanitizer test fixtures that deliberately contain unsafe img tags"
+      },
+      {
+        "rule": "overused-font",
+        "value": "*",
+        "files": [
+          "src/lib/email/html.test.ts"
+        ],
+        "createdAt": "2026-10-23T05:49:01.557Z",
+        "reason": "Claude: fixture strings testing the email font-fallback check, not rendered UI"
       }
     ]
   }
