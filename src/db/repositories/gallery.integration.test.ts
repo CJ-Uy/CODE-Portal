@@ -16,7 +16,7 @@ const keeper: Actor = { memberId: "keeper", roles: ["gallery"] };
 const boss: Actor = { memberId: "boss", roles: ["super"] };
 
 beforeEach(async () => {
-	for (const table of ["audit_logs", "gallery_items", "gallery_folders", "crs_events", "members"]) {
+	for (const table of ["audit_logs", "notifications", "gallery_items", "gallery_folders", "crs_events", "members"]) {
 		await env.DB.prepare(`DELETE FROM ${table}`).run();
 	}
 	for (const id of ["ana", "ben", "keeper", "boss"]) {
@@ -297,6 +297,8 @@ describe("gallery hearts, views and tags", () => {
 			["gallery:tag", "ben", "ana"],
 			["gallery:untag", "ana", "ana"],
 		]);
+		const notices = await env.DB.prepare("SELECT member_id, kind, href FROM notifications WHERE kind = 'gallery_tagged'").all();
+		expect(notices.results).toEqual([{ member_id: "keeper", kind: "gallery_tagged", href: `/portal/gallery/unsorted?photo=${item.id}` }]);
 		await env.DB.prepare("UPDATE members SET status = 'inactive' WHERE id = 'boss'").run();
 		await expect(gallery.addTag(ana, item.id, { memberId: "boss" })).rejects.toThrow("not in the portal");
 	});

@@ -33,6 +33,7 @@ export default async function GalleryEventPage({ params }: { params: Promise<{ e
 			items={items}
 			folderOptions={context.folderOptions}
 			eventOptions={context.eventOptions}
+			memberOptions={context.memberOptions}
 			canManage={context.canManage}
 			inheritedEvent={{ id: eventId, title: event.title }}
 		/>

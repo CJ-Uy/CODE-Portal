@@ -51,6 +51,8 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 	const surveysOn = isFeatureEnabled("surveys");
 	// Started now, awaited below, so the photo row adds no round trip to the page.
 	const photosLoad = isFeatureEnabled("gallery") ? repositories.gallery.eventItems(actor, eventId).catch(() => []) : Promise.resolve([]);
+	// A past event always has an album to add photos to; the gallery makes it on first ask.
+	const albumLoad = isFeatureEnabled("gallery") && isPast ? repositories.gallery.eventAlbum(actor, eventId).catch(() => null) : Promise.resolve(null);
 	// The event's owner and staff admins; the repository checks this again for every read below.
 	const isOrganizer = managed ? managed.myRole === "owner" || managed.myRole === "admin" : false;
 	const [pointTypeLoad, staff, attendance, invites, signups, terms, feedback, organizerFeedback, debrief] = await Promise.all([
@@ -101,7 +103,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 			: [...allowedTypesForActor, ...rows.filter((row) => row.type === managed.type)]
 		: [];
 	// Points attach to a term; resolve the active one server-side, same as markPresentAction.
-	const photos = await photosLoad;
+	const [photos, album] = await Promise.all([photosLoad, albumLoad]);
 	const currentTerm = terms.find((t) => t.isCurrent);
 
 	// Share + calendar handoff. Built server-side so the Google URL and .ics agree on the same
@@ -188,7 +190,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 				<FeedbackCard surveyId={feedback.surveyId} state={feedback.state} />
 			) : null}
 
-			<EventPhotos eventId={event.id} items={photos} />
+			<EventPhotos eventId={event.id} items={photos} albumId={album?.id ?? null} />
 
 			{/* An informational event has no signup and no check-in, so the whole interaction column
 			    goes away rather than rendering controls that the repository would reject. */}

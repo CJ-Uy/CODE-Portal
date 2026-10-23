@@ -2,15 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, ImageOff, Play } from "lucide-react";
+import { ArrowRight, ImageOff, ImagePlus, Play } from "lucide-react";
 import type { GalleryItemView } from "@/db/repositories/gallery";
 import { countLabel, formatDuration, galleryThumbUrl } from "@/lib/gallery/view";
 
 const SHOWN = 8;
 
 /** The event page's photo row: the newest few, each opening in the event's gallery view. Renders nothing without photos. */
-export function EventPhotos({ eventId, items }: { eventId: string; items: GalleryItemView[] }) {
-	if (items.length === 0) return null;
+export function EventPhotos({ eventId, items, albumId }: { eventId: string; items: GalleryItemView[]; albumId: string | null }) {
+	if (items.length === 0 && !albumId) return null;
 	const href = `/portal/gallery/event/${eventId}`;
 	return (
 		<section aria-labelledby="event-photos" className="grid gap-3">
@@ -18,11 +18,27 @@ export function EventPhotos({ eventId, items }: { eventId: string; items: Galler
 				<h2 id="event-photos" className="font-heading text-xl">
 					Photos
 				</h2>
-				<Link href={href} className="inline-flex items-center gap-1 text-sm font-medium text-accent underline-offset-4 hover:underline">
-					See all {countLabel(items)}
-					<ArrowRight className="size-3.5" aria-hidden />
-				</Link>
+				<div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+					{albumId ? (
+						<Link href={`/portal/gallery/${albumId}`} className="inline-flex items-center gap-1 text-sm font-medium text-accent underline-offset-4 hover:underline">
+							<ImagePlus className="size-3.5" aria-hidden />
+							Add photos
+						</Link>
+					) : null}
+					{items.length ? (
+						<Link href={href} className="inline-flex items-center gap-1 text-sm font-medium text-accent underline-offset-4 hover:underline">
+							See all {countLabel(items)}
+							<ArrowRight className="size-3.5" aria-hidden />
+						</Link>
+					) : null}
+				</div>
 			</div>
+			{items.length === 0 && albumId ? (
+				<Link href={`/portal/gallery/${albumId}`} className="flex items-center gap-3 rounded-lg border-2 border-dashed border-[#90b4cc]! bg-card px-4 py-5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+					<ImagePlus className="size-5 text-accent" aria-hidden />
+					No photos yet. Add the first ones to the event&apos;s album.
+				</Link>
+			) : null}
 			<ul className="grid grid-cols-4 gap-0.5 sm:grid-cols-8">
 				{items.slice(0, SHOWN).map((item) => (
 					<li key={item.id}>

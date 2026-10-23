@@ -23,7 +23,8 @@ export type NotificationKind =
 	| "library_moderated"
 	| "library_needs_review"
 	| "library_list_editor"
-	| "library_comment";
+	| "library_comment"
+	| "gallery_tagged";
 
 export type FeedItem = {
 	id: string;

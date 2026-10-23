@@ -9,6 +9,7 @@ import type { Actor } from "@/server/auth/permissions";
 import { can } from "@/server/auth/permissions";
 import type * as schema from "../schema";
 import { auditInsertValues, type AuditRecordInput } from "./audit";
+import { notify } from "./notifications";
 
 type Db = DrizzleD1Database<typeof schema>;
 type Folder = InferSelectModel<typeof galleryFolders>;
@@ -887,6 +888,18 @@ export function createGalleryRepository(db: Db): GalleryRepository {
 					detail: `${item.originalName}: tagged ${tag.kind === "person" ? tag.label : `"${tag.label}"`}`,
 				}),
 			);
+			// Being tagged is worth knowing about; tagging yourself is not. A failed notice never fails the tag.
+			if (tag.memberId && tag.memberId !== actor.memberId) {
+				const tagger = (await namesFor(db, [actor.memberId])).get(actor.memberId) ?? "Someone";
+				const place = item.folderId ? `/portal/gallery/${item.folderId}` : "/portal/gallery/unsorted";
+				await notify(db, {
+					memberId: tag.memberId,
+					kind: "gallery_tagged",
+					title: "You were tagged in a photo",
+					body: `${tagger} tagged you in ${item.caption ? `"${item.caption.slice(0, 60)}"` : "a photo"}.`,
+					href: `${place}?photo=${itemId}`,
+				}).catch((error: unknown) => console.error("gallery tag notice failed", error));
+			}
 		},
 
 		async removeTag(actor, tagId) {

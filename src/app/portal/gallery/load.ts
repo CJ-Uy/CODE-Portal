@@ -9,6 +9,6 @@ export async function loadGalleryContext() {
 	const actor = await requireActor().catch(() => null);
 	if (!actor) redirect(await signInPath());
 	const { gallery } = await getRepositories();
-	const [folderOptions, eventOptions] = await Promise.all([gallery.folderOptions(actor), gallery.eventOptions(actor)]);
-	return { actor, gallery, folderOptions, eventOptions, canManage: canManageGallery(actor) };
+	const [folderOptions, eventOptions, memberOptions] = await Promise.all([gallery.folderOptions(actor), gallery.eventOptions(actor), gallery.memberOptions(actor)]);
+	return { actor, gallery, folderOptions, eventOptions, memberOptions, canManage: canManageGallery(actor) };
 }

@@ -82,3 +82,32 @@ export async function deleteItemsAction(input: { itemIds: string[] }) {
 export async function restoreAction(input: { itemIds: string[]; folderIds: string[] }) {
 	return run((actor, { gallery }) => gallery.restore(actor, z.object({ itemIds: z.array(id).max(GALLERY_BATCH), folderIds: z.array(id).max(GALLERY_BATCH) }).parse(input)));
 }
+
+export async function setHeartAction(input: { itemId: string; on: boolean }) {
+	return run((actor, { gallery }) => {
+		const parsed = z.object({ itemId: id, on: z.boolean() }).parse(input);
+		return gallery.setHeart(actor, parsed.itemId, parsed.on);
+	});
+}
+
+export async function addTagAction(input: { itemId: string; memberId?: string; label?: string }) {
+	return run((actor, { gallery }) => {
+		const parsed = z.object({ itemId: id, memberId: id.optional(), label: z.string().max(200).optional() }).parse(input);
+		return gallery.addTag(actor, parsed.itemId, parsed.memberId ? { memberId: parsed.memberId } : { label: parsed.label ?? "" });
+	});
+}
+
+export async function removeTagAction(input: { tagId: string }) {
+	return run((actor, { gallery }) => gallery.removeTag(actor, z.object({ tagId: id }).parse(input).tagId));
+}
+
+/** A lightbox open. Fire and forget: no refresh, no message, and a failure costs one view. */
+export async function recordViewAction(itemId: string): Promise<void> {
+	try {
+		assertFeatureEnabled("gallery");
+		const { gallery } = await getRepositories();
+		await gallery.recordView(await requireActor(), id.parse(itemId));
+	} catch {
+		// A lost view is not worth surfacing.
+	}
+}
