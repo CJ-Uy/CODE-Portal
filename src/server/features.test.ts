@@ -22,6 +22,7 @@ function configWith(flags: Partial<Record<string, boolean>>) {
 		FEATURE_EMAIL: false,
 		FEATURE_MENTS: false,
 		FEATURE_LIBRARY_SMART_SEARCH: false,
+		FEATURE_GALLERY: false,
 		...flags,
 	} as Parameters<typeof featureFlagsFromConfig>[0];
 }

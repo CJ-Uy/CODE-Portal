@@ -17,6 +17,7 @@ const allFlags: FeatureFlags = {
 	email: true,
 	ments: true,
 	librarySmartSearch: true,
+	gallery: true,
 };
 
 describe("admin nav registry", () => {

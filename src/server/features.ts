@@ -18,6 +18,7 @@ export const FEATURE_KEYS = [
 	"email",
 	"ments",
 	"librarySmartSearch",
+	"gallery",
 ] as const;
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
@@ -36,6 +37,7 @@ export function featureFlagsFromConfig(config: AppConfig): FeatureFlags {
 		email: config.FEATURE_EMAIL,
 		ments: config.FEATURE_MENTS,
 		librarySmartSearch: config.FEATURE_LIBRARY_SMART_SEARCH,
+		gallery: config.FEATURE_GALLERY,
 	};
 }
 

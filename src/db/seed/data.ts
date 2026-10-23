@@ -43,6 +43,7 @@ export const seedRoles: InferInsertModel<typeof roles>[] = [
 	{ id: "role_member_admin", key: "member_admin", label: "Member admin", description: "Manages member profiles, roles, roster, and nav pins.", kind: "admin" },
 	{ id: "role_publishing", key: "publishing", label: "Publishing", description: "Manages announcements and the content library.", kind: "admin" },
 	{ id: "role_email", key: "email", label: "Email", description: "Sends member emails and manages templates, categories, and the reply inbox.", kind: "admin" },
+	{ id: "role_gallery", key: "gallery", label: "Photo gallery", description: "Restores anything deleted from the photo gallery and chooses which albums are public.", kind: "admin" },
 ];
 
 export const seedPointTypes: InferInsertModel<typeof pointTypes>[] = [

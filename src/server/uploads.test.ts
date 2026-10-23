@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/server/auth/permissions";
-import type { StorageAdapter, StorageBody } from "@/storage/types";
-import { createUploadHandlers, MAX_UPLOAD_BYTES } from "./uploads";
+import type { StorageAdapter, StorageBody, StorageRange } from "@/storage/types";
+import { createUploadHandlers, MAX_UPLOAD_BYTES, parseRangeHeader } from "./uploads";
 
 const memberActor: Actor = { memberId: "mem_upload", roles: ["member"] };
 
@@ -442,6 +442,82 @@ describe("library file access", () => {
 	});
 });
 
+describe("gallery files", () => {
+	const photoKey = "gallery/gal_1/mem_upload/original.jpg";
+	const videoKey = "gallery/gal_2/mem_upload/original.mp4";
+	const get = (key: string, init?: RequestInit, query = "") => new Request(`https://example.com/api/uploads/${key}${query}`, init);
+	async function storageWith() {
+		const storage = new MemoryStorage();
+		await storage.putObject({ key: photoKey, body: "jpegbytes", contentType: "image/jpeg" });
+		await storage.putObject({ key: videoKey, body: "0123456789", contentType: "video/mp4" });
+		return storage;
+	}
+
+	it("hides a file with 404 from anyone the gallery says cannot read it, signed in or not", async () => {
+		const storage = await storageWith();
+		const seen: (string | null)[] = [];
+		const canReadGalleryObject = async (actor: Actor | null, itemId: string) => {
+			seen.push(actor?.memberId ?? null);
+			return itemId === "gal_1" && actor !== null;
+		};
+		expect((await createHandlers(null, { storage, canReadGalleryObject }).object(get(photoKey), photoKey)).status).toBe(404);
+		expect((await createHandlers(memberActor, { storage, canReadGalleryObject }).object(get(videoKey), videoKey)).status).toBe(404);
+		const ok = await createHandlers(memberActor, { storage, canReadGalleryObject }).object(get(photoKey), photoKey);
+		expect(ok.status).toBe(200);
+		expect(ok.headers.get("cache-control")).toBe("private, max-age=86400");
+		expect(seen).toEqual([null, "mem_upload", "mem_upload"]);
+	});
+
+	it("serves one byte range so videos can seek", async () => {
+		const response = await createHandlers(memberActor, { storage: await storageWith() }).object(get(videoKey, { headers: { Range: "bytes=2-5" } }), videoKey);
+		expect(response.status).toBe(206);
+		expect(response.headers.get("content-range")).toBe("bytes 2-5/10");
+		expect(await response.text()).toBe("2345");
+	});
+
+	it("makes a photo preview once with the Images binding and serves the stored copy after", async () => {
+		const storage = await storageWith();
+		const widths: number[] = [];
+		const transformImage = async (_body: ReadableStream, width: number) => {
+			widths.push(width);
+			return new TextEncoder().encode("webp").buffer as ArrayBuffer;
+		};
+		const handlers = createHandlers(memberActor, { storage, transformImage });
+		const first = await handlers.object(get(photoKey, undefined, "?w=480"), photoKey);
+		expect(first.headers.get("content-type")).toBe("image/webp");
+		expect(await first.text()).toBe("webp");
+		expect(storage.keys()).toContain("gallery/gal_1/mem_upload/w480.webp");
+		await handlers.object(get(photoKey, undefined, "?w=480"), photoKey);
+		expect(widths).toEqual([480]);
+		// Unlisted widths and videos ignore ?w and get the original.
+		expect(await (await handlers.object(get(photoKey, undefined, "?w=333"), photoKey)).text()).toBe("jpegbytes");
+		expect(await (await handlers.object(get(videoKey, undefined, "?w=480"), videoKey)).text()).toBe("0123456789");
+	});
+
+	it("falls back to the original when there is no Images binding", async () => {
+		const response = await createHandlers(memberActor, { storage: await storageWith() }).object(get(photoKey, undefined, "?w=1600"), photoKey);
+		expect(response.headers.get("content-type")).toBe("image/jpeg");
+		expect(await response.text()).toBe("jpegbytes");
+	});
+
+	it("never deletes gallery files directly, not even for a super admin", async () => {
+		const storage = await storageWith();
+		const response = await createHandlers({ memberId: "boss", roles: ["super"] }, storage).object(get(photoKey, { method: "DELETE" }), photoKey);
+		expect(response.status).toBe(403);
+		expect(storage.keys()).toContain(photoKey);
+	});
+
+	it("parses single byte ranges and ignores the rest", () => {
+		expect(parseRangeHeader("bytes=0-")).toEqual({ offset: 0 });
+		expect(parseRangeHeader("bytes=10-19")).toEqual({ offset: 10, length: 10 });
+		expect(parseRangeHeader("bytes=-500")).toEqual({ suffix: 500 });
+		expect(parseRangeHeader("bytes=5-1")).toBeNull();
+		expect(parseRangeHeader("bytes=0-1,4-5")).toBeNull();
+		expect(parseRangeHeader("items=0-1")).toBeNull();
+		expect(parseRangeHeader(null)).toBeNull();
+	});
+});
+
 function imageForm(): FormData {
 	const form = new FormData();
 	form.set("purpose", "avatar");
@@ -454,6 +530,8 @@ type HandlerOptions = {
 	canEditLink?: (actor: Actor, linkId: string) => Promise<boolean>;
 	canEditLibraryItem?: (actor: Actor, itemId: string) => Promise<boolean>;
 	canReadLibraryObject?: (actor: Actor, itemId: string) => Promise<boolean>;
+	canReadGalleryObject?: (actor: Actor | null, itemId: string) => Promise<boolean>;
+	transformImage?: (body: ReadableStream, width: number) => Promise<ArrayBuffer | null>;
 };
 
 function createHandlers(actor: Actor | null, options: MemoryStorage | HandlerOptions = {}) {
@@ -466,6 +544,8 @@ function createHandlers(actor: Actor | null, options: MemoryStorage | HandlerOpt
 		canEditLink,
 		canEditLibraryItem: options instanceof MemoryStorage ? async () => true : options.canEditLibraryItem ?? (async () => true),
 		canReadLibraryObject: options instanceof MemoryStorage ? async () => true : options.canReadLibraryObject ?? (async () => true),
+		canReadGalleryObject: options instanceof MemoryStorage ? async () => true : options.canReadGalleryObject ?? (async () => true),
+		transformImage: options instanceof MemoryStorage ? undefined : options.transformImage,
 	});
 }
 
@@ -485,11 +565,14 @@ class MemoryStorage implements StorageAdapter {
 		return { key: input.key };
 	}
 
-	async getObject(key: string) {
+	async getObject(key: string, options?: { range?: StorageRange }) {
 		const object = this.objects.get(key);
-		return object
-			? { body: object.body as ReadableStream, contentType: object.contentType, contentLength: sizeOf(object.body) }
-			: { body: null };
+		if (!object) return { body: null };
+		if (options?.range && typeof object.body === "string" && "offset" in options.range) {
+			const { offset, length = object.body.length - offset } = options.range;
+			return { body: new Response(object.body.slice(offset, offset + length)).body, contentType: object.contentType, contentLength: length, range: { offset, length, size: object.body.length } };
+		}
+		return { body: new Response(object.body as BodyInit).body, contentType: object.contentType, contentLength: sizeOf(object.body) };
 	}
 
 	async deleteObject(key: string) {

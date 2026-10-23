@@ -24,6 +24,7 @@ import { EventManagePanel, type SignupResponseRow } from "./event-manage-panel";
 import { EventSignupPanel } from "./event-signup-panel";
 import { FeedbackShareNote } from "@/components/feedback-share-note";
 import { FeedbackCard } from "./feedback-card";
+import { EventPhotos } from "@/components/gallery/event-photos";
 import { OrganizerFeedback } from "./organizer-feedback";
 
 export const dynamic = "force-dynamic";
@@ -50,6 +51,10 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 		: false;
 	const canViewSignupResponses = event.rsvpResponsesPublic || canManageSignupResponses;
 	const surveysOn = isFeatureEnabled("surveys");
+	// Started now, awaited below, so the photo row adds no round trip to the page.
+	const photosLoad = isFeatureEnabled("gallery") ? repositories.gallery.eventItems(actor, eventId).catch(() => []) : Promise.resolve([]);
+	// An event that has started always has an album to add photos to; the gallery makes it on first ask.
+	const albumLoad = isFeatureEnabled("gallery") && new Date(event.startsAt).getTime() <= new Date().getTime() ? repositories.gallery.eventAlbum(actor, eventId).catch(() => null) : Promise.resolve(null);
 	// The event's owner and staff admins; the repository checks this again for every read below.
 	const isOrganizer = managed ? managed.myRole === "owner" || managed.myRole === "admin" : false;
 	const [pointTypeLoad, staff, attendance, invites, signups, terms, feedback, organizerFeedback, debrief] = await Promise.all([
@@ -100,6 +105,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 			: [...allowedTypesForActor, ...rows.filter((row) => row.type === managed.type)]
 		: [];
 	// Points attach to a term; resolve the active one server-side, same as markPresentAction.
+	const [photos, album] = await Promise.all([photosLoad, albumLoad]);
 	const currentTerm = terms.find((t) => t.isCurrent);
 	// A debrief reviews what happened, so before the event it only shows once CRS has made a form for it.
 	const organizerPanel =
@@ -192,6 +198,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 				<FeedbackCard surveyId={feedback.surveyId} state={feedback.state} closesAt={feedback.closesAt} />
 			) : null}
 
+			<EventPhotos eventId={event.id} items={photos} albumId={album?.id ?? null} />
 			{/* After the event, how it went is what organizers come back for, so it leads; before, it waits at the end. */}
 			{isPast ? organizerPanel : null}
 

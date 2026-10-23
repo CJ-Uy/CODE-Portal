@@ -4,6 +4,7 @@ import * as schema from "@/db/schema";
 import { crsEvents } from "@/db/schema";
 import { uploadsContract } from "@/db/contract/uploads";
 import { createAuditRepository } from "@/db/repositories/audit";
+import { createGalleryRepository } from "@/db/repositories/gallery";
 import { createLibraryObjectAccess } from "@/db/repositories/library-access";
 import { createLinksRepository } from "@/db/repositories/links";
 import type { DeployEnv } from "@/server/env";
@@ -41,6 +42,7 @@ export function createUploadsInternalHandlers({
 			return linksRepository.canEditLink(actor, linkId);
 		},
 		...createLibraryObjectAccess(db),
+		canReadGalleryObject: (actor, itemId) => createGalleryRepository(db).canReadObject(actor, itemId),
 	});
 
 	return {

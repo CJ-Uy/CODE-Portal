@@ -7,6 +7,7 @@ import { createEventForumRepository } from "./event-forum";
 import { createEventMediaRepository } from "./event-media";
 import { createEventsRepository } from "./events";
 import { createEventTypeRulesRepository } from "./eventTypeRules";
+import { createGalleryRepository, createUnavailableGalleryRepository } from "./gallery";
 import { createLibraryRepository, createUnavailableLibraryRepository } from "./library";
 import { createLibraryActivityRepository, createUnavailableLibraryActivityRepository } from "./library-activity";
 import { createLibraryListsRepository, createUnavailableLibraryListsRepository } from "./library-lists";
@@ -86,6 +87,7 @@ export function createDrizzleRepositories(db: DrizzleDb) {
 		calendar: createCalendarRepository(d1),
 		announcements: createAnnouncementsRepository(d1, audit),
 		library: createLibraryRepository(libraryDb, audit),
+		gallery: createGalleryRepository(libraryDb),
 		libraryTags: createLibraryTagsRepository(libraryDb, audit),
 		libraryLists: createLibraryListsRepository(libraryDb, audit),
 		libraryActivity: createLibraryActivityRepository(libraryDb),
@@ -169,6 +171,7 @@ export function createSharedRepositories(adapter: DatabaseAdapter): Repositories
 		calendar: createUnavailableCalendarRepository(),
 		announcements: createUnavailableAnnouncementsRepository(),
 		library: createUnavailableLibraryRepository(),
+		gallery: createUnavailableGalleryRepository(),
 		libraryTags: createUnavailableLibraryTagsRepository(),
 		libraryLists: createUnavailableLibraryListsRepository(),
 		libraryActivity: createUnavailableLibraryActivityRepository(),

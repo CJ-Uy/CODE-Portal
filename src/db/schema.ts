@@ -28,7 +28,8 @@ export type SurveyQuestionType = "scale" | "text" | "choice";
 export type SurveySource = "invited" | "walk_in";
 /** Stable keys that let a rating question be compared across events. Values live in METRIC_KEYS (types.ts). */
 export type MetricKey = "overall" | "flow" | "content" | "venue" | "return_intent" | "learning";
-export type AuditActorContext = "session" | "shared_dev_token";
+/** "system" is the cron, which acts for nobody (the gallery purge). */
+export type AuditActorContext = "session" | "shared_dev_token" | "system";
 export type AuditCategory =
 	| "role"
 	| "event"
@@ -38,7 +39,8 @@ export type AuditCategory =
 	| "member"
 	| "announcement"
 	| "library"
-	| "email";
+	| "email"
+	| "gallery";
 /** feedback_share is the rest of an event's points, earned by answering its feedback form; survey_response is points for answering a form with no event. */
 export type RetentionRecordSource = "event_attendance" | "manual" | "survey_response" | "feedback_share";
 /** How often a retention part needs its point: once a school year, or once each semester. */
@@ -1218,5 +1220,117 @@ export const emailMessages = sqliteTable(
 	(table) => [
 		index("email_messages_message_id_idx").on(table.messageId),
 		index("email_messages_thread_created_idx").on(table.threadId, table.createdAt),
+	],
+);
+
+export type GalleryItemKind = "photo" | "video";
+
+/**
+ * The shared photo gallery. Folders nest through parent_id. A delete is soft: deleted_at hides the row
+ * (and, for a folder, everything under it) and the cron purges it, files included, 30 days later.
+ * Folder references have no ON DELETE action on purpose, so a folder row cannot be removed while
+ * anything still points at it; the purge deletes items, and their R2 files, first.
+ */
+export const galleryFolders = sqliteTable(
+	"gallery_folders",
+	{
+		id: text("id").primaryKey(),
+		parentId: text("parent_id").references((): AnySQLiteColumn => galleryFolders.id),
+		name: text("name").notNull(),
+		eventId: text("event_id").references(() => crsEvents.id, { onDelete: "set null" }),
+		/** Shows this folder and everything under it on the public site. Only gallery admins set it. */
+		isPublic: integer("is_public", { mode: "boolean" }).notNull().default(false),
+		/** Made by the gallery for an event that has ended, so there is always somewhere to put its photos. */
+		isEventAlbum: integer("is_event_album", { mode: "boolean" }).notNull().default(false),
+		createdBy: text("created_by").references(() => members.id, { onDelete: "set null" }),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+		updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+		deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
+		deletedBy: text("deleted_by").references(() => members.id, { onDelete: "set null" }),
+	},
+	(table) => [
+		index("gallery_folders_parent_idx").on(table.parentId),
+		index("gallery_folders_deleted_idx").on(table.deletedAt),
+		// One automatic album per event, even when two cron ticks race. Member-made albums may share an event.
+		uniqueIndex("gallery_folders_event_album_idx").on(table.eventId).where(sql`${table.isEventAlbum} = 1`),
+	],
+);
+
+export const galleryItems = sqliteTable(
+	"gallery_items",
+	{
+		id: text("id").primaryKey(),
+		/** Null is the gallery's top level. */
+		folderId: text("folder_id").references(() => galleryFolders.id),
+		kind: text("kind").$type<GalleryItemKind>().notNull(),
+		fileKey: text("file_key").notNull(),
+		/** A frame the uploader's browser grabbed from a video. Photos are resized on request instead. */
+		posterKey: text("poster_key"),
+		contentType: text("content_type").notNull(),
+		sizeBytes: integer("size_bytes").notNull(),
+		durationSeconds: real("duration_seconds"),
+		originalName: text("original_name").notNull(),
+		caption: text("caption"),
+		takenAt: integer("taken_at", { mode: "timestamp_ms" }),
+		eventId: text("event_id").references(() => crsEvents.id, { onDelete: "set null" }),
+		/** Who uploaded it. Never changes after upload; edits and moves only touch updated_at. */
+		uploadedBy: text("uploaded_by").references(() => members.id, { onDelete: "set null" }),
+		/** The uploader's email at upload time, so the record survives the member row being deleted. */
+		uploaderEmail: text("uploader_email").notNull(),
+		/** Lightbox opens, counted once per photo per page visit. A popularity signal, not an audit record. */
+		viewCount: integer("view_count").notNull().default(0),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+		updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+		deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
+		deletedBy: text("deleted_by").references(() => members.id, { onDelete: "set null" }),
+	},
+	(table) => [
+		index("gallery_items_folder_idx").on(table.folderId, table.deletedAt),
+		index("gallery_items_event_idx").on(table.eventId),
+		index("gallery_items_deleted_idx").on(table.deletedAt),
+		index("gallery_items_uploaded_by_idx").on(table.uploadedBy),
+		index("gallery_items_view_count_idx").on(table.viewCount),
+	],
+);
+
+/** A member's heart on a photo. "Best" sorts by how many hearts a photo has. */
+export const galleryHearts = sqliteTable(
+	"gallery_hearts",
+	{
+		itemId: text("item_id")
+			.notNull()
+			.references(() => galleryItems.id, { onDelete: "cascade" }),
+		memberId: text("member_id")
+			.notNull()
+			.references(() => members.id, { onDelete: "cascade" }),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	},
+	(table) => [primaryKey({ columns: [table.itemId, table.memberId] }), index("gallery_hearts_member_idx").on(table.memberId)],
+);
+
+export type GalleryTagKind = "person" | "topic";
+
+/**
+ * Who is in a photo (a member) or what it shows (a short topic like "awarding"). `key` is the member id or the
+ * lowercased topic, so the same person or topic cannot be tagged twice on one photo.
+ */
+export const galleryTags = sqliteTable(
+	"gallery_tags",
+	{
+		id: text("id").primaryKey(),
+		itemId: text("item_id")
+			.notNull()
+			.references(() => galleryItems.id, { onDelete: "cascade" }),
+		kind: text("kind").$type<GalleryTagKind>().notNull(),
+		key: text("key").notNull(),
+		memberId: text("member_id").references(() => members.id, { onDelete: "cascade" }),
+		label: text("label").notNull(),
+		taggedBy: text("tagged_by").references(() => members.id, { onDelete: "set null" }),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	},
+	(table) => [
+		uniqueIndex("gallery_tags_item_kind_key_idx").on(table.itemId, table.kind, table.key),
+		index("gallery_tags_member_idx").on(table.memberId),
+		index("gallery_tags_kind_key_idx").on(table.kind, table.key),
 	],
 );

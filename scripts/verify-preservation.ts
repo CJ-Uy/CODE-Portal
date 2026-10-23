@@ -198,6 +198,9 @@ check("Feedback is not a part", one("SELECT retention_period AS v FROM point_typ
 check("2nd semester guessed at 11 January Manila", one("SELECT second_semester_starts_at AS v FROM terms WHERE id='term_fix_sy'"), 1799596800000);
 check("a school year without 11 January keeps NULL", one("SELECT second_semester_starts_at AS v FROM terms WHERE id='term_fix_short'"), null);
 check("thresholds dropped", one("SELECT COUNT(*) AS v FROM pragma_table_info('terms') WHERE name IN ('retained_at', 'probation_below')"), 0);
+
+// 0018 (applied with 0016 and 0017 above) seeds the photo gallery admin role.
+check("gallery role seeded", one("SELECT key || ',' || kind AS v FROM roles WHERE id='role_gallery'"), "gallery,admin");
 db.close();
 rmSync(work, { recursive: true, force: true });
 
