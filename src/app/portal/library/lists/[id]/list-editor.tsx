@@ -246,7 +246,8 @@ export function ListEditor({ listId, rows, canEdit }: { listId: string; rows: Li
 								<div className="grid min-w-0 flex-1 gap-3">
 									{row.available ? (
 										<>
-											<LibraryItemCard card={row.card} />
+											{/* The row is already the box; the card inside it drops its own border so cards do not nest. */}
+											<LibraryItemCard card={row.card} className="rounded-lg border-0 bg-transparent p-0" />
 											{canEdit ? (
 												<NoteField listId={listId} itemId={row.id} note={row.note} />
 											) : row.note ? (

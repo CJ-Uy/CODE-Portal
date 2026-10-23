@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { signInPath } from "@/server/auth/sign-in";
-import { ArrowLeft, ExternalLink, FileText, Lock, Pencil } from "lucide-react";
+import { ExternalLink, FileText, Lock, Pencil } from "lucide-react";
 import { getRepositories } from "@/db";
 import { LINK_URL, type LibraryCard, type LibraryCommentView, type LibraryItemView } from "@/db/repositories/library";
 import { DownloadLink } from "@/components/library/download-link";
 import { LibraryItemCard } from "@/components/library/library-card";
 import { LibraryBlocks } from "@/components/library/library-blocks";
+import { LibraryCrumbs } from "@/components/library/library-header";
 import { ReadingTracker } from "@/components/library/reading-tracker";
 import { ReportButton } from "@/components/library/report-button";
 import { SavePicker } from "@/components/library/save-picker";
@@ -90,16 +91,19 @@ export default async function LibraryItemPage({ params }: { params: Promise<{ id
 
 	const file = item.format === "file" && item.fileKey ? { key: item.fileKey, name: item.fileName } : null;
 	const preview = file ? filePreview(file) : null;
-	const facts = [item.year ? String(item.year) : null, item.subtype, item.formatDetail, item.engagementType].filter(Boolean) as string[];
+	// Labelled where a bare value would not say what it is ("SLE", "C-Team", or a kind of document called "Other").
+	const facts = [
+		item.year ? String(item.year) : null,
+		item.subtype ? `Kind: ${item.subtype}` : null,
+		item.formatDetail ? `Format: ${item.formatDetail}` : null,
+		item.engagementType ? `Engagement: ${item.engagementType}` : null,
+	].filter((fact): fact is string => fact !== null);
 
 	return (
 		<div className="mx-auto grid min-w-0 max-w-4xl gap-6">
 			{live ? <ReadingTracker key={item.id} itemId={item.id} /> : null}
 
-			<Link href="/portal/library" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-				<ArrowLeft className="size-4" aria-hidden />
-				Back to library
-			</Link>
+			<LibraryCrumbs trail={[{ label: item.title }]} />
 
 			<StatusNote item={item} />
 

@@ -30,7 +30,7 @@ The older `open design` folder split the member area into many static pages and 
 - One portal shell is easier than ten member pages. Module tabs let users move quickly without losing context.
 - Admin tools stay visible only as a module in the signed-in workspace. Super admins inherit all scoped roles, while specific admins see only the queues they can act on.
 - CRS is modeled as a simple lifecycle: create, scan, archive, approve. Feedback forum access and selected surveys are treated as separate actions.
-- The private library is filter-first. Graph search is presented as an advanced assist, not the default way to find content.
+- The private library is browse-first: a short Latest row, then every item as one continuous sheet. Search and type chips narrow it; finer filters wait behind More filters. Smart search is an optional assist, not the default way to find content.
 - Guided tours are available from the header and can be replayed for both member and admin flows.
 
 ## Interface system
@@ -60,6 +60,14 @@ The navy desktop rail includes Overview, expandable sections and Back to portal.
 On mobile, the navy app bar remains above a separate breadcrumb strip. A fixed bottom bar provides Portal, Overview and Menu. Menu opens a scrollable bottom sheet with the same grouped tools and closes after navigation. Reserve bottom space for the bar and respect the device's safe area.
 
 The member rail orders Overview, Calendar, Retention, Ments Tree, Link shortener, Mail, Notifications and Profile. Library and Announcements sit under Resources & updates. Release flags hide unavailable destinations. The member mobile bar keeps four core destinations: Home, Calendar, Retention and Profile, with Link shortener filling the Retention slot when that feature is unavailable. The center plus opens a bottom sheet with the expanded event check-in QR first, followed by Create event and New short link above the remaining destinations. Its fixed handle supports drag-to-close.
+
+### Member library
+
+The library's four main pages (Browse, Lists, My items, About) share one header: the Library title, one line on what it holds, Add to the library, and an underlined tab row that marks the current page. Deeper pages (an item, a list, a new item, the editor) replace the tabs with a breadcrumb that starts at Library and wraps long titles. The Library step returns to the list the member left, with the same search, the same rows loaded and the same scroll position; Back does the same.
+
+Browse opens on one search box with Search, a row of type chips (only types that have items, plus All types), and More filters, which holds source, tags, module facets and the smart search switch. Every filter that is on but out of sight shows as a removable pill, next to Clear search and filters. Below that, a member who has opened items sees up to four in Recently opened; a member who has not sees pinned collections instead. Latest shows the four newest items as compact cards (a swipeable row on a phone), with a link to the whole list sorted newest first.
+
+All items is a white sheet with divided rows: title with a one-line summary, type, authors, year and saves (from 3), folding to one line of facts under the title on a phone. The title is the row's link. The sheet reads A to Z without a query and by relevance with one, and sort offers Newest, Most saved and Most read. Rows arrive 24 at a time as the member nears the bottom, with a visible loading row, a Load more button for keyboards and screen readers, and a closing row that gives the total and Back to top. Searching or filtering hides Recently opened and Latest and titles the sheet with the result count. Cards show the title first and type, source and tags as plain text, so nothing looks like a filter it is not.
 
 ### Ments Tree
 

@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { signInPath } from "@/server/auth/sign-in";
-import { ArrowLeft, ListPlus, Plus } from "lucide-react";
+import { ListPlus, Plus } from "lucide-react";
 import { getRepositories } from "@/db";
 import type { LibraryCommentView } from "@/db/repositories/library";
 import type { LibraryListView } from "@/db/repositories/library-lists";
+import { LibraryCrumbs } from "@/components/library/library-header";
 import { ReportButton } from "@/components/library/report-button";
 import { EmptyState } from "@/components/portal/empty-state";
 import { Badge } from "@/components/ui/badge";
@@ -59,10 +60,7 @@ export default async function LibraryListPage({ params }: { params: Promise<{ id
 
 	return (
 		<div className="mx-auto grid min-w-0 max-w-4xl gap-6">
-			<Link href="/portal/library/lists" className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-				<ArrowLeft className="size-4" aria-hidden />
-				Lists
-			</Link>
+			<LibraryCrumbs trail={[{ label: "Lists", href: "/portal/library/lists" }, { label: list.name }]} />
 
 			{takenDown ? (
 				<p role="status" className="min-w-0 rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm [overflow-wrap:anywhere]">
