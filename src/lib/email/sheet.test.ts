@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSheet, detectDelimiter, matchSheet, parseDelimited, parseXlsx, variableName } from "./sheet";
+import { buildSheet, detectDelimiter, matchSheet, parseDelimited, parseXlsx, recipientsCsv, variableName } from "./sheet";
 
 describe("parseDelimited", () => {
 	it("reads a Google Sheets paste with a quoted multi-line cell", () => {
@@ -136,5 +136,14 @@ describe("parseXlsx", () => {
 	});
 	it("rejects a file that is not a zip", async () => {
 		await expect(parseXlsx(new TextEncoder().encode("email,name\n"))).rejects.toThrow(/not a valid \.xlsx/);
+	});
+});
+
+describe("recipientsCsv", () => {
+	it("lists recipients with sheet columns and used sheet-only fields, keeping values and quoting safely", () => {
+		const { sheet } = buildSheet([["Email", "Org Role"], ["ana@x.com", 'Lead, "events"']], "s");
+		const csv = recipientsCsv([{ email: "Ana@x.com", name: "Ana Reyes" }, { email: "ben@x.com", name: "=HYPERLINK(1)" }], sheet, ["first_name", "org_role", "message"]);
+		expect(csv).toBe('Email,Name,Org Role,message\r\nAna@x.com,Ana Reyes,"Lead, ""events""",\r\nben@x.com,\'=HYPERLINK(1),,\r\n');
+		expect(buildSheet(parseDelimited(csv), "back").sheet.columns.map((c) => c.variable)).toEqual(["name", "org_role", "message"]);
 	});
 });

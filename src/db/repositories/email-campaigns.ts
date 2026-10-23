@@ -151,6 +151,12 @@ export function createEmailCampaignsRepository(db: EmailDb, audit: AuditReposito
 		return new Set(rows.map((r) => r.memberId));
 	}
 
+	/** The resolved audience minus members who turned this category off. */
+	async function receiving(audience: Audience, categoryId: string | null) {
+		const [recipients, optedOut] = await Promise.all([resolveAudience(db, audienceSchema.parse(audience), new Date()), optedOutIds(categoryId)]);
+		return recipients.filter((r) => !r.memberId || !optedOut.has(r.memberId));
+	}
+
 	return {
 		get,
 
@@ -338,12 +344,17 @@ export function createEmailCampaignsRepository(db: EmailDb, audit: AuditReposito
 			};
 		},
 
+		/** Everyone who will actually get the email, as a list to fill a sheet from. */
+		async sheetRecipients(actor: Actor, audience: Audience, categoryId: string | null): Promise<{ email: string; name: string }[]> {
+			assertEmail(actor, "email:send");
+			return (await receiving(audience, categoryId)).map((r) => ({ email: r.email, name: memberDisplayName(r) }));
+		},
+
 		async previewPersonalization(actor: Actor, input: PersonalizationInput): Promise<PersonalizationPreview> {
 			assertEmail(actor, "email:send");
 			const overrides = mergeOverridesSchema.parse(input.overrides);
 			const sheet = mergeSheetSchema.parse(input.sheet ?? null);
-			const [recipients, optedOut] = await Promise.all([resolveAudience(db, audienceSchema.parse(input.audience), new Date()), optedOutIds(input.categoryId)]);
-			const rows = recipients.filter((r) => !r.memberId || !optedOut.has(r.memberId)).map((r) => ({
+			const rows = (await receiving(input.audience, input.categoryId)).map((r) => ({
 				email: r.email, name: memberDisplayName(r), external: r.external,
 				values: mergeValuesFor(r, overrides, sheet), sourceValues: mergeValuesFor(r, {}, sheet), missing: missingMergeTags(r, input.tags, overrides, sheet),
 			}));

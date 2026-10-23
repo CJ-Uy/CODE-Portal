@@ -77,6 +77,10 @@ describe("email campaigns", () => {
 		const preview = await repos.campaigns.previewPersonalization(admin, { audience: content.audience, categoryId: ids.news.id, tags: ["first_name", "message", "batch", "points"], overrides: {}, sheet: mergeSheet });
 		expect(preview.sheet).toEqual({ rows: 2, matched: 1, unmatched: ["gone@example.com"], unmatchedCount: 1, withoutRow: 1, missing: [{ variable: "message", count: 1 }] });
 		expect(preview.unknown).toEqual(["points"]);
+		await env.DB.prepare("INSERT INTO email_optouts (member_id, category_id) VALUES ('mem_b', ?)").bind(ids.news.id).run();
+		expect(await repos.campaigns.sheetRecipients(admin, content.audience, ids.news.id)).toEqual([{ email: "mem_a@example.com", name: "mem_a" }]);
+		await env.DB.prepare("DELETE FROM email_optouts").run();
+		await expect(repos.campaigns.sheetRecipients({ memberId: "mem_a", roles: ["member"] }, content.audience, null)).rejects.toThrow();
 		const byEmail = Object.fromEntries(preview.rows.map((r) => [r.email, r]));
 		expect(byEmail["mem_a@example.com"]).toMatchObject({ values: { message: "See you Friday", batch: "2030" }, missing: ["points"] });
 		expect(byEmail["mem_b@example.com"]).toMatchObject({ values: { message: "", batch: "2027" }, missing: ["message", "points"] });

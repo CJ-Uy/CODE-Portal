@@ -198,3 +198,23 @@ export function matchSheet(sheet: MergeSheet, recipients: string[], tags: string
 		missing: used.map((variable) => ({ variable, count: [...receiving].filter((e) => !sheet.rows[e]?.[variable]?.trim()).length })),
 	};
 }
+
+/** A cell that spreadsheet apps would run as a formula gets a leading apostrophe. */
+const csvCell = (value: string) => {
+	const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+	return /[",\r\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
+};
+
+/**
+ * The receiving audience as a sheet to fill in: Email, Name, then one column per sheet field or used field that only a
+ * sheet can fill. Cells already in the sheet are kept, so the file can be edited and pasted back.
+ */
+export function recipientsCsv(people: { email: string; name: string }[], sheet: MergeSheet | null, tags: string[]): string {
+	const columns = [...(sheet?.columns ?? [])];
+	for (const tag of tags) if (!isMergeTag(tag) && !columns.some((c) => c.variable === tag)) columns.push({ header: tag, variable: tag });
+	const rows = people.map((p) => {
+		const row = sheet?.rows[p.email.trim().toLowerCase()] ?? {};
+		return [p.email, p.name, ...columns.map((c) => row[c.variable] ?? "")];
+	});
+	return [["Email", "Name", ...columns.map((c) => c.header)], ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n") + "\r\n";
+}

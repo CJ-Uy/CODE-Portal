@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
-import { FileSpreadsheet, RefreshCw, Trash2, Upload } from "lucide-react";
+import { Download, FileSpreadsheet, RefreshCw, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { isMergeTag, type MergeSheet } from "@/lib/email/merge";
@@ -10,14 +10,23 @@ import { buildSheet, parseDelimited, parseXlsx, SHEET_LIMITS, type SheetImport, 
 const DATE = new Intl.DateTimeFormat("en", { timeZone: "Asia/Manila", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 const plural = (n: number, one: string, many: string) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
 
+type Props = {
+	sheet: MergeSheet | null;
+	onChange: (sheet: MergeSheet | null) => void;
+	match: SheetMatch | null;
+	tags: string[];
+	/** Downloads the receiving audience as a CSV to fill in. Resolves to an error message, or null. */
+	onDownload: () => Promise<string | null>;
+};
+
 /** Paste or upload spreadsheet rows; each column becomes a merge field matched to recipients by email. */
-export function MergeSheetPanel({ sheet, onChange, match, tags }: { sheet: MergeSheet | null; onChange: (sheet: MergeSheet | null) => void; match: SheetMatch | null; tags: string[] }) {
+export function MergeSheetPanel({ sheet, onChange, match, tags, onDownload }: Props) {
 	const pasteId = useId();
 	const fileRef = useRef<HTMLInputElement>(null);
-	const [editing, setEditing] = useState(!sheet);
+	const [editing, setEditing] = useState(false);
 	const [paste, setPaste] = useState("");
 	const [error, setError] = useState("");
-	const [reading, setReading] = useState(false);
+	const [busy, setBusy] = useState<"" | "reading" | "downloading">("");
 	// What the last import skipped. Kept for this session only; the saved sheet holds the usable rows.
 	const [notes, setNotes] = useState<SheetImport | null>(null);
 
@@ -38,7 +47,7 @@ export function MergeSheetPanel({ sheet, onChange, match, tags }: { sheet: Merge
 	};
 
 	const readFile = async (file: File) => {
-		setReading(true);
+		setBusy("reading");
 		setError("");
 		try {
 			if (file.size > 5_000_000) throw new Error("Use a file under 5 MB.");
@@ -48,18 +57,57 @@ export function MergeSheetPanel({ sheet, onChange, match, tags }: { sheet: Merge
 		} catch (e) {
 			setError(e instanceof Error && !(e instanceof RangeError) ? e.message : "Could not read this file. Save it as .xlsx or .csv and try again.");
 		} finally {
-			setReading(false);
+			setBusy("");
 		}
 	};
 
-	if (editing || !sheet) {
+	const download = async () => {
+		setBusy("downloading");
+		setError((await onDownload()) ?? "");
+		setBusy("");
+	};
+
+	const downloadButton = (
+		<Button size="sm" variant="ghost" disabled={busy === "downloading"} onClick={download}>
+			<Download />
+			{busy === "downloading" ? "Preparing..." : sheet ? "Download to edit" : "Download recipients"}
+		</Button>
+	);
+	const errorLine = error ? (
+		<p role="alert" className="text-sm text-destructive [overflow-wrap:anywhere]">
+			{error}
+		</p>
+	) : null;
+
+	if (!sheet && !editing) {
+		return (
+			<div className="grid gap-2">
+				<div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-3 py-3">
+					<div className="flex min-w-0 items-center gap-3">
+						<FileSpreadsheet className="size-5 shrink-0 text-muted-foreground" aria-hidden />
+						<div className="grid min-w-0">
+							<span className="font-medium">Add values from a spreadsheet</span>
+							<span className="text-sm text-muted-foreground">For fields like a batch or a personal message.</span>
+						</div>
+					</div>
+					<div className="flex flex-wrap gap-2">
+						{downloadButton}
+						<Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+							Add a sheet
+						</Button>
+					</div>
+				</div>
+				{errorLine}
+			</div>
+		);
+	}
+
+	if (editing) {
 		return (
 			<div className="grid gap-3">
-				<p className="text-sm text-muted-foreground">
-					Paste cells from Google Sheets or Excel, header row included, or upload a CSV or XLSX file. One column holds email addresses. Every other column becomes a field: a column named Message becomes <code>{"{{message}}"}</code>.
-				</p>
-				<label htmlFor={pasteId} className="text-sm font-medium">
-					Cells
+				<label htmlFor={pasteId} className="grid gap-1">
+					<span className="text-sm font-medium">Paste cells, header row first</span>
+					<span className="text-sm text-muted-foreground">One column holds emails. Each other column becomes a field, like {"{{message}}"}.</span>
 				</label>
 				<Textarea
 					id={pasteId}
@@ -67,6 +115,7 @@ export function MergeSheetPanel({ sheet, onChange, match, tags }: { sheet: Merge
 					value={paste}
 					spellCheck={false}
 					wrap="off"
+					autoFocus
 					onChange={(e) => setPaste(e.target.value)}
 					onPaste={(e) => {
 						const text = e.clipboardData.getData("text/plain");
@@ -83,9 +132,9 @@ export function MergeSheetPanel({ sheet, onChange, match, tags }: { sheet: Merge
 					<Button size="sm" disabled={!paste.trim()} onClick={() => apply(parseDelimited(paste), "Pasted cells")}>
 						Use these cells
 					</Button>
-					<Button size="sm" variant="outline" disabled={reading} onClick={() => fileRef.current?.click()}>
+					<Button size="sm" variant="outline" disabled={busy === "reading"} onClick={() => fileRef.current?.click()}>
 						<Upload />
-						{reading ? "Reading file..." : "Upload CSV or XLSX"}
+						{busy === "reading" ? "Reading file..." : "Upload CSV or XLSX"}
 					</Button>
 					<input
 						ref={fileRef}
@@ -100,24 +149,24 @@ export function MergeSheetPanel({ sheet, onChange, match, tags }: { sheet: Merge
 							e.target.value = "";
 						}}
 					/>
-					{sheet ? (
-						<Button size="sm" variant="ghost" onClick={() => { setEditing(false); setError(""); }}>
-							Keep current sheet
-						</Button>
-					) : null}
+					<Button size="sm" variant="ghost" onClick={() => { setEditing(false); setError(""); }}>
+						Cancel
+					</Button>
 				</div>
-				<p className="text-xs text-muted-foreground">
-					Up to {SHEET_LIMITS.rows.toLocaleString()} rows and {SHEET_LIMITS.columns} columns. The first sheet of a workbook is read. Format date columns as text so they keep their look.
-				</p>
-				{error ? (
-					<p role="alert" className="text-sm text-destructive">
-						{error}
-					</p>
-				) : null}
+				{errorLine}
+				<details className="text-sm text-muted-foreground">
+					<summary className="w-fit cursor-pointer rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Sheet tips</summary>
+					<ul className="mt-2 grid list-disc gap-1 pl-5">
+						<li>Start from Download recipients to get every address in this audience, then fill in your columns.</li>
+						<li>Up to {SHEET_LIMITS.rows.toLocaleString()} rows and {SHEET_LIMITS.columns} columns. Only the first sheet of a workbook is read.</li>
+						<li>Format date columns as text so they keep their look. Save older .xls files as .xlsx first.</li>
+					</ul>
+				</details>
 			</div>
 		);
 	}
 
+	if (!sheet) return null;
 	const rows = Object.keys(sheet.rows).length;
 	return (
 		<div className="grid gap-4">
@@ -132,16 +181,18 @@ export function MergeSheetPanel({ sheet, onChange, match, tags }: { sheet: Merge
 					</div>
 				</div>
 				<div className="flex flex-wrap gap-2">
+					{downloadButton}
 					<Button size="sm" variant="outline" onClick={() => setEditing(true)}>
 						<RefreshCw />
 						Replace
 					</Button>
-					<Button size="sm" variant="ghost" onClick={() => { onChange(null); setNotes(null); setEditing(true); }}>
+					<Button size="sm" variant="ghost" onClick={() => { onChange(null); setNotes(null); }}>
 						<Trash2 />
 						Remove
 					</Button>
 				</div>
 			</div>
+			{errorLine}
 
 			<p role="status" className="text-sm">
 				{match ? (
@@ -184,7 +235,7 @@ export function MergeSheetPanel({ sheet, onChange, match, tags }: { sheet: Merge
 						{plural(match.unmatchedCount, "row matches", "rows match")} no one in this audience
 					</summary>
 					<div className="grid gap-2 border-t border-border px-3 py-2.5 text-sm">
-						<p className="text-muted-foreground">These people are not in the audience, have turned off this category, or use a different address in CODE. Add them under Audience or fix the address in the sheet.</p>
+						<p className="text-muted-foreground">Not in the audience, turned this category off, or a different address in CODE.</p>
 						<ul className="grid gap-0.5">
 							{match.unmatched.map((email) => (
 								<li key={email} className="break-all">{email}</li>

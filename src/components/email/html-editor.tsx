@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, ChevronDown, ClipboardCopy, Contrast, Info, Monitor, Moon, ShieldX, Smartphone, Sun, TriangleAlert } from "lucide-react";
+import { Check, ChevronDown, ClipboardCopy, Code2, Contrast, Copy, Info, Monitor, Moon, ShieldX, Smartphone, Sun, TriangleAlert } from "lucide-react";
 import { baseHtmlTemplate } from "@/lib/email/base-html";
 import { HTML_MAX, lintEmailHtml, previewDocument, type PreviewScheme } from "@/lib/email/html";
 import { isMergeTag, MERGE_TAGS } from "@/lib/email/merge";
@@ -19,9 +19,9 @@ const LEVELS = [
 ] as const;
 
 const SCHEME_NOTE: Record<PreviewScheme, string> = {
-	light: "As most inboxes show it. Web fonts and remote CSS are blocked here, as they are in Gmail and Outlook.",
-	dark: "Your prefers-color-scheme rules switched on, as Apple Mail and iOS Mail do.",
-	forced: "Colors inverted without your rules, as the Gmail app and Outlook do in dark mode. Images keep their colors.",
+	light: "How most inboxes show it.",
+	dark: "Apple Mail, using your dark-mode styles.",
+	forced: "The Gmail app, which inverts colors on its own.",
 };
 
 type Props = {
@@ -51,6 +51,7 @@ export function HtmlEditor({ html, onChange, subject, preheader, baseUrl, footer
 		return () => window.clearTimeout(timeout);
 	}, [html]);
 
+	const empty = !html.trim();
 	const issues = useMemo(() => lintEmailHtml(source), [source]);
 	const values = (people[person] ?? people[0]).values;
 	const srcDoc = useMemo(() => {
@@ -61,16 +62,16 @@ export function HtmlEditor({ html, onChange, subject, preheader, baseUrl, footer
 	const kb = new TextEncoder().encode(html).length / 1000;
 	const sheetFields = fields.filter((f) => !isMergeTag(f.variable));
 
-	const copy = async () => {
+	const copy = async (text: string, done: string) => {
 		try {
-			await navigator.clipboard.writeText(template);
-			toast({ message: "Base template copied." });
+			await navigator.clipboard.writeText(text);
+			toast({ message: done });
 		} catch {
-			toast({ message: "Could not copy. Select the template text and copy it instead." });
+			toast({ message: "Could not copy. Select the text and copy it instead." });
 		}
 	};
-	const replace = () => {
-		if (html.trim() && html !== template && !confirmReplace) return setConfirmReplace(true);
+	const useTemplate = () => {
+		if (!empty && html !== template && !confirmReplace) return setConfirmReplace(true);
 		onChange(template);
 		setConfirmReplace(false);
 	};
@@ -81,29 +82,56 @@ export function HtmlEditor({ html, onChange, subject, preheader, baseUrl, footer
 			label="HTML and CSS"
 			value={html}
 			onChange={onChange}
-			rows={layout === "wide" ? 26 : 16}
+			rows={empty ? 6 : layout === "wide" ? 24 : 14}
 			maxLength={HTML_MAX}
 			fields={fields}
-			placeholder="<!doctype html>"
-			hint={`${kb.toFixed(1)} KB of ${HTML_MAX / 1000} KB. Paste a full document or a fragment. On send, scripts, comments and unsafe links are removed and <style> rules are copied inline.`}
+			placeholder="Paste your email's HTML here"
+			hint={empty ? undefined : `${kb.toFixed(1)} KB of ${HTML_MAX / 1000} KB`}
+			actions={
+				empty ? null : (
+					<button type="button" onClick={() => copy(html, "HTML copied.")} className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-accent transition-colors hover:bg-secondary">
+						<Copy className="size-3.5" aria-hidden />
+						Copy
+					</button>
+				)
+			}
 		/>
 	);
 
-	const checks = (
-		<section aria-label="Inbox checks" className="grid gap-3 rounded-xl border border-border bg-card p-4">
-			<div className="flex flex-wrap items-baseline justify-between gap-2">
-				<h3 className="font-medium">Inbox checks</h3>
-				<span role="status" className="text-sm tabular-nums text-muted-foreground">
-					{issues.length ? `${issues.length} to review` : "Nothing to fix"}
-				</span>
+	const start = (
+		<section aria-label="Start an HTML email" className="grid justify-items-start gap-3 rounded-xl border border-dashed border-border p-5">
+			<Code2 className="size-5 text-muted-foreground" aria-hidden />
+			<div className="grid gap-1">
+				<h3 className="font-medium">Paste HTML, or start from ours</h3>
+				<p className="text-sm text-muted-foreground">The base template already works in Gmail, Outlook and dark mode.</p>
 			</div>
-			{issues.length === 0 ? (
-				<p className="flex items-start gap-2 text-sm text-muted-foreground">
-					<Check className="mt-0.5 size-4 shrink-0" aria-hidden />
-					Nothing here is removed or unsupported. Table layouts, inline styles and https links work across inboxes.
-				</p>
-			) : (
-				LEVELS.map(({ level, title, icon: Icon }) => {
+			<div className="flex flex-wrap gap-2">
+				<Button size="sm" onClick={useTemplate}>
+					Use the base template
+				</Button>
+				<Button size="sm" variant="outline" onClick={() => copy(template, "Base template copied. Paste it into your AI tool.")}>
+					<ClipboardCopy />
+					Copy it for an AI tool
+				</Button>
+			</div>
+		</section>
+	);
+
+	const checks =
+		issues.length === 0 ? (
+			<p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+				<Check className="size-4 shrink-0" aria-hidden />
+				Ready for inboxes. Nothing will be removed.
+			</p>
+		) : (
+			<section aria-label="Inbox checks" className="grid gap-3 rounded-xl border border-border bg-card p-4">
+				<div className="flex flex-wrap items-baseline justify-between gap-2">
+					<h3 className="font-medium">Inbox checks</h3>
+					<span role="status" className="text-sm tabular-nums text-muted-foreground">
+						{issues.length} to review
+					</span>
+				</div>
+				{LEVELS.map(({ level, title, icon: Icon }) => {
 					const items = issues.filter((issue) => issue.level === level);
 					if (!items.length) return null;
 					return (
@@ -119,10 +147,9 @@ export function HtmlEditor({ html, onChange, subject, preheader, baseUrl, footer
 							</ul>
 						</div>
 					);
-				})
-			)}
-		</section>
-	);
+				})}
+			</section>
+		);
 
 	const preview = (
 		<section aria-label="Preview" className="grid min-w-0 content-start gap-3">
@@ -167,23 +194,40 @@ export function HtmlEditor({ html, onChange, subject, preheader, baseUrl, footer
 		</section>
 	);
 
-	const base = (
+	const help = (
 		<details className="group rounded-xl border border-border bg-card">
 			<summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
 				<span className="grid min-w-0 gap-0.5">
 					<span className="font-medium">Base HTML template</span>
-					<span className="text-sm text-muted-foreground">A table-based starting point with dark mode, to copy into your AI tool.</span>
+					<span className="text-sm text-muted-foreground">A starting point, the fields you can use and what changes on send.</span>
 				</span>
 				<ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180" aria-hidden />
 			</summary>
-			<div className="grid gap-4 border-t border-border p-4">
-				<ol className="grid list-decimal gap-1 pl-5 text-sm">
-					<li>Copy the template and paste it into your AI tool.</li>
-					<li>Describe the email you want: the message, its sections and links. Ask the tool to follow the rules in the comment at the top.</li>
-					<li>Paste the result into the editor and check the light, dark and phone previews.</li>
-				</ol>
+			<div className="grid gap-5 border-t border-border p-4">
 				<div className="grid gap-2">
-					<h3 className="text-sm font-medium">Fields you can use</h3>
+					<h3 className="text-sm font-medium">With an AI tool</h3>
+					<ol className="grid list-decimal gap-1 pl-5 text-sm">
+						<li>Copy the base template into your AI tool.</li>
+						<li>Describe the email you want. Ask it to keep the rules at the top of the file.</li>
+						<li>Paste the result here and check Light, Dark and Phone.</li>
+					</ol>
+					<div className="flex flex-wrap items-center gap-2 pt-1">
+						<Button size="sm" onClick={() => copy(template, "Base template copied. Paste it into your AI tool.")}>
+							<ClipboardCopy />
+							Copy template
+						</Button>
+						<Button size="sm" variant="outline" onClick={useTemplate}>
+							{confirmReplace ? "Replace your HTML" : "Put it in the editor"}
+						</Button>
+						{confirmReplace ? (
+							<Button size="sm" variant="ghost" onClick={() => setConfirmReplace(false)}>
+								Keep my HTML
+							</Button>
+						) : null}
+					</div>
+				</div>
+				<div className="grid gap-2">
+					<h3 className="text-sm font-medium">Fields</h3>
 					<ul className="flex flex-wrap gap-1.5" aria-label="Merge fields">
 						{[...MERGE_TAGS, ...sheetFields.map((f) => f.variable)].map((tag) => (
 							<li key={tag}>
@@ -193,34 +237,41 @@ export function HtmlEditor({ html, onChange, subject, preheader, baseUrl, footer
 					</ul>
 					<p className="text-xs text-muted-foreground">{sheetNote}</p>
 				</div>
-				<div className="flex flex-wrap items-center gap-2">
-					<Button size="sm" onClick={copy}>
-						<ClipboardCopy />
-						Copy template
-					</Button>
-					<Button size="sm" variant="outline" onClick={replace}>
-						{confirmReplace ? "Replace your HTML" : "Put it in the editor"}
-					</Button>
-					{confirmReplace ? (
-						<Button size="sm" variant="ghost" onClick={() => setConfirmReplace(false)}>
-							Keep my HTML
-						</Button>
-					) : null}
+				<div className="grid gap-2">
+					<h3 className="text-sm font-medium">When it sends</h3>
+					<ul className="grid list-disc gap-1 pl-5 text-sm text-muted-foreground">
+						<li>Scripts, forms, comments and links that are not https or mailto are removed.</li>
+						<li>Rules in &lt;style&gt; are copied onto each element, so inboxes that drop &lt;style&gt; still get them.</li>
+						<li>CODE adds the footer with preferences and unsubscribe links.</li>
+						<li>The preview blocks web fonts, as Gmail and Outlook do.</li>
+					</ul>
 				</div>
-				<pre className="max-h-80 overflow-auto rounded-lg border border-border bg-background p-3 font-mono text-xs leading-5" tabIndex={0} aria-label="Base HTML template source">
-					<code>{template}</code>
-				</pre>
+				<details className="group/code">
+					<summary className="w-fit cursor-pointer rounded-sm text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Show the template code</summary>
+					<pre className="mt-2 max-h-80 overflow-auto rounded-lg border border-border bg-background p-3 font-mono text-xs leading-5" tabIndex={0} aria-label="Base HTML template source">
+						<code>{template}</code>
+					</pre>
+				</details>
 			</div>
 		</details>
 	);
 
+	if (empty) {
+		return (
+			<div className="grid min-w-0 gap-4">
+				{start}
+				{editor}
+				{help}
+			</div>
+		);
+	}
 	if (layout === "compact") {
 		return (
 			<div className="grid min-w-0 gap-4">
 				{editor}
 				{checks}
 				{preview}
-				{base}
+				{help}
 			</div>
 		);
 	}
@@ -229,7 +280,7 @@ export function HtmlEditor({ html, onChange, subject, preheader, baseUrl, footer
 			<div className="grid min-w-0 content-start gap-4">
 				{editor}
 				{checks}
-				{base}
+				{help}
 			</div>
 			<div className="min-w-0 xl:sticky xl:top-6 xl:self-start">{preview}</div>
 		</div>

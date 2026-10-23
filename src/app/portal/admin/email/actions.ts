@@ -147,6 +147,13 @@ export async function previewPersonalizationAction(input: PersonalizationInput) 
 	});
 }
 
+export async function sheetRecipientsAction(audience: Audience, categoryId: string | null) {
+	return runAction(async () => {
+		const { actor, email } = await context();
+		return email.campaigns.sheetRecipients(actor, audienceSchema.parse(audience), categoryId ? idSchema.parse(categoryId) : null);
+	});
+}
+
 export async function testSendAction(input: { subject: string; preheader: string; blocks: EmailBlock[]; categoryId: string | null; senderId: string | null; mergeOverrides?: MergeOverrides; mergeSheet?: MergeSheet | null }) {
 	return runAction(async () => {
 		const { actor, repos, email } = await context();

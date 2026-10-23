@@ -15,7 +15,6 @@ import type { AudienceOptions, AudiencePreview, PersonalizationPreview } from "@
 import { toLocalInput } from "@/lib/date-slots";
 import type { Audience, EmailBlock, EmailCampaignStatus } from "@/lib/email/types";
 import { newHtmlBlock } from "@/lib/email/blocks";
-import { baseHtmlTemplate } from "@/lib/email/base-html";
 import { htmlBodyOf } from "@/lib/email/html";
 import { knownVariables, usedMergeTags, type MergeOverrides, type MergeSheet } from "@/lib/email/merge";
 import { blocksToHtml } from "@/lib/email/render";
@@ -190,7 +189,7 @@ export function Composer(props: ComposerProps) {
 		if ((mode === "html") === (htmlSource !== null)) return;
 		if (mode === "html") {
 			stash.current.blocks = blocks;
-			setBlocks(stash.current.html.length ? stash.current.html : [newHtmlBlock(blocks.length ? blocksToHtml(blocks, baseUrl) : baseHtmlTemplate(baseUrl))]);
+			setBlocks(stash.current.html.length ? stash.current.html : [newHtmlBlock(blocks.length ? blocksToHtml(blocks, baseUrl) : "")]);
 		} else {
 			stash.current.html = blocks;
 			setBlocks(stash.current.blocks);
