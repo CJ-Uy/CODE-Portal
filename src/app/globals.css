@@ -210,3 +210,32 @@ dialog.email-dialog::backdrop { background: rgb(6 25 47 / 0.45); }
 	.toast-enter, .row-enter, .check-pop, dialog.email-dialog[open] { animation: none; }
 	.row-leave { transition: none; }
 }
+
+/* Navigation progress (src/components/portal/navigation-progress.tsx). It fades in only after a
+   beat, so a navigation that lands quickly never flashes it. On "done" the bar snaps full and
+   fades out. Reduced motion keeps the fade and drops the growth. */
+.nav-progress {
+	opacity: 0;
+	transition: opacity 200ms ease-out;
+}
+.nav-progress[data-state="loading"] {
+	opacity: 1;
+	transition-delay: 150ms;
+	animation: nav-progress-grow 10s cubic-bezier(0.1, 0.7, 0.2, 1) 150ms both;
+}
+@keyframes nav-progress-grow {
+	from { transform: scaleX(0.05); }
+	to { transform: scaleX(0.9); }
+}
+
+/* Loading skeletons ease in instead of popping, and a page that arrives within the delay never shows one. */
+.loading-enter {
+	animation: loading-in 200ms ease-out 80ms both;
+}
+@keyframes loading-in {
+	from { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.nav-progress[data-state="loading"] { animation: none; }
+}

@@ -274,6 +274,11 @@ describe("events repository on D1", () => {
 			"Not authorized",
 		);
 
+		// listPublished resolves roles from one staff read, so it must agree with the per-event lookup.
+		for (const [viewer, role] of [[owner, "owner"], [adminStaff, "admin"], [scanner, "scanner"], [outsider, null]] as const) {
+			expect(await repo.listPublished(viewer, {})).toMatchObject([{ id: event.id, myRole: role }]);
+		}
+
 		const scanned = await repo.recordScan(scanner, { eventId: event.id, memberId: "mem_a", termId: "term_1" });
 		expect(scanned.alreadyPresent).toBe(false);
 		await expect(repo.softDelete(adminStaff, event.id)).rejects.toThrow("Not authorized");

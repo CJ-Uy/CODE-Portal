@@ -109,49 +109,51 @@ export function createAttendanceReports(db: Db) {
 			const [term] = await db.select().from(terms).where(eq(terms.id, termId)).limit(1);
 			if (!term) return [];
 
-			const summaries: TermEventSummaryRow[] = await db
-				.select({
-					eventId: crsEvents.id,
-					title: crsEvents.title,
-					type: crsEvents.type,
-					status: crsEvents.status,
-					place: crsEvents.place,
-					startsAt: crsEvents.startsAt,
-					endsAt: crsEvents.endsAt,
-					graceMinutes: crsEvents.graceMinutes,
-					attendedCount: sql<number>`count(${crsAttendance.memberId})`,
-					lateCount: sql<number>`sum(case when ${lateExpr} then 1 else 0 end)`,
-				})
-				.from(crsEvents)
-				.leftJoin(crsAttendance, eq(crsAttendance.eventId, crsEvents.id))
-				.where(and(gte(crsEvents.startsAt, term.startsAt), lte(crsEvents.startsAt, term.endsAt), isNull(crsEvents.deletedAt)))
-				.groupBy(crsEvents.id, crsEvents.title, crsEvents.type, crsEvents.status, crsEvents.place, crsEvents.startsAt, crsEvents.endsAt, crsEvents.graceMinutes)
-				.orderBy(desc(crsEvents.startsAt), desc(crsEvents.id));
-
-			const absents: { eventId: string; count: number }[] = await db
-				.select({ eventId: eventRsvps.eventId, count: sql<number>`count(${eventRsvps.memberId})` })
-				.from(eventRsvps)
-				.innerJoin(crsEvents, eq(crsEvents.id, eventRsvps.eventId))
-				.leftJoin(crsAttendance, and(eq(crsAttendance.eventId, eventRsvps.eventId), eq(crsAttendance.memberId, eventRsvps.memberId)))
-				.where(
-					and(
-						eq(eventRsvps.state, "going"),
-						isNull(crsAttendance.memberId),
-						gte(crsEvents.startsAt, term.startsAt),
-						lte(crsEvents.startsAt, term.endsAt),
-						isNull(crsEvents.deletedAt),
-					),
-				)
-				.groupBy(eventRsvps.eventId);
-
-			const points: { eventId: string | null; points: number }[] = await db
-				.select({
-					eventId: retentionRecords.eventId,
-					points: sql<number>`coalesce(sum(coalesce(${retentionRecords.points}, 0)), 0)`,
-				})
-				.from(retentionRecords)
-				.where(and(eq(retentionRecords.termId, termId), sql`${retentionRecords.eventId} is not null`))
-				.groupBy(retentionRecords.eventId);
+			// The three aggregates only need the term's dates, so they share one round trip.
+			const [summaries, absents, points]: [TermEventSummaryRow[], { eventId: string; count: number }[], { eventId: string | null; points: number }[]] =
+				await Promise.all([
+					db
+						.select({
+							eventId: crsEvents.id,
+							title: crsEvents.title,
+							type: crsEvents.type,
+							status: crsEvents.status,
+							place: crsEvents.place,
+							startsAt: crsEvents.startsAt,
+							endsAt: crsEvents.endsAt,
+							graceMinutes: crsEvents.graceMinutes,
+							attendedCount: sql<number>`count(${crsAttendance.memberId})`,
+							lateCount: sql<number>`sum(case when ${lateExpr} then 1 else 0 end)`,
+						})
+						.from(crsEvents)
+						.leftJoin(crsAttendance, eq(crsAttendance.eventId, crsEvents.id))
+						.where(and(gte(crsEvents.startsAt, term.startsAt), lte(crsEvents.startsAt, term.endsAt), isNull(crsEvents.deletedAt)))
+						.groupBy(crsEvents.id, crsEvents.title, crsEvents.type, crsEvents.status, crsEvents.place, crsEvents.startsAt, crsEvents.endsAt, crsEvents.graceMinutes)
+						.orderBy(desc(crsEvents.startsAt), desc(crsEvents.id)),
+					db
+						.select({ eventId: eventRsvps.eventId, count: sql<number>`count(${eventRsvps.memberId})` })
+						.from(eventRsvps)
+						.innerJoin(crsEvents, eq(crsEvents.id, eventRsvps.eventId))
+						.leftJoin(crsAttendance, and(eq(crsAttendance.eventId, eventRsvps.eventId), eq(crsAttendance.memberId, eventRsvps.memberId)))
+						.where(
+							and(
+								eq(eventRsvps.state, "going"),
+								isNull(crsAttendance.memberId),
+								gte(crsEvents.startsAt, term.startsAt),
+								lte(crsEvents.startsAt, term.endsAt),
+								isNull(crsEvents.deletedAt),
+							),
+						)
+						.groupBy(eventRsvps.eventId),
+					db
+						.select({
+							eventId: retentionRecords.eventId,
+							points: sql<number>`coalesce(sum(coalesce(${retentionRecords.points}, 0)), 0)`,
+						})
+						.from(retentionRecords)
+						.where(and(eq(retentionRecords.termId, termId), sql`${retentionRecords.eventId} is not null`))
+						.groupBy(retentionRecords.eventId),
+				]);
 
 			const absentByEvent = new Map(absents.map((row) => [row.eventId, Number(row.count)]));
 			const pointsByEvent = new Map(points.map((row) => [row.eventId, quantizePoints(Number(row.points))]));

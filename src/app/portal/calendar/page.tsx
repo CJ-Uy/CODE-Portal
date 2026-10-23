@@ -162,11 +162,11 @@ async function MonthBody({
 }) {
 	const actor = await requireActor();
 	const repositories = await getRepositories();
-	const items = await repositories.calendar.getMonth(actor, { year, month }).catch(() => []);
-	// A failed points read degrades to a plain calendar rather than taking the month down with it.
-	const pointsByDay = showPoints
-		? await repositories.retention.myPointsByDay(actor, { year, month }).catch(() => [])
-		: [];
+	const [items, pointsByDay] = await Promise.all([
+		repositories.calendar.getMonth(actor, { year, month }).catch(() => []),
+		// A failed points read degrades to a plain calendar rather than taking the month down with it.
+		showPoints ? repositories.retention.myPointsByDay(actor, { year, month }).catch(() => []) : [],
+	]);
 	return (
 		<CalendarMonth items={items} year={year} month={month} pointsByDay={pointsByDay} />
 	);
@@ -179,7 +179,9 @@ function monthHref(year: number, month: number): string {
 async function ListBody() {
 	const actor = await requireActor();
 	const repositories = await getRepositories();
-	const typeLoad = await loadEventTypes(() => repositories.eventTypeRules.list());
-	const events = await loadEventList(repositories, actor).catch(() => null);
+	const [typeLoad, events] = await Promise.all([
+		loadEventTypes(() => repositories.eventTypeRules.list()),
+		loadEventList(repositories, actor).catch(() => null),
+	]);
 	return <EventsList events={events ?? []} types={typeLoad.ok ? typeLoad.rows : []} loadFailed={events === null} />;
 }

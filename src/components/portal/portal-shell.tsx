@@ -8,6 +8,7 @@ import { MemberCodeCard } from "@/components/member-code-card";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { cn } from "@/lib/utils";
 import { Breadcrumb } from "./breadcrumb";
 import { libraryPageTitle } from "./library-title";
@@ -222,14 +223,14 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 							{member.subtitle ? <p className="truncate text-xs text-primary-foreground/60">{member.subtitle}</p> : null}
 						</div>
 						<form action={signOutAction} className="shrink-0">
-							<button
+							<SubmitButton
 								type="submit"
 								aria-label="Sign out"
 								title="Sign out"
 								className="grid size-8 place-items-center rounded-lg text-primary-foreground/60 transition-colors hover:bg-white/10 hover:text-primary-foreground"
 							>
 								<LogOut className="size-4" />
-							</button>
+							</SubmitButton>
 						</form>
 					</div>
 				</div>
@@ -410,7 +411,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 
 					<div className="mt-2 border-t border-border px-2 pt-2">
 						<form action={signOutAction}>
-							<button
+							<SubmitButton
 								type="submit"
 								className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-destructive hover:bg-muted"
 							>
@@ -418,7 +419,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 									<LogOut className="size-5" />
 								</span>
 								Sign out
-							</button>
+							</SubmitButton>
 						</form>
 					</div>
 					</div>

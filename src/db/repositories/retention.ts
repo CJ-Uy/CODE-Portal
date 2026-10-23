@@ -524,8 +524,10 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 		},
 
 		async listTerms(actor, now = new Date()) {
-			const currentTermId = await getCurrentTermId(db, now);
-			const rows = await db.select({ id: terms.id, name: terms.name }).from(terms).orderBy(desc(terms.startsAt));
+			const [currentTermId, rows] = await Promise.all([
+				getCurrentTermId(db, now),
+				db.select({ id: terms.id, name: terms.name }).from(terms).orderBy(desc(terms.startsAt)),
+			]);
 			return rows.map((row: { id: string; name: string }) => ({
 				id: row.id,
 				name: row.name,

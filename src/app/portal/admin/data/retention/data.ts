@@ -19,38 +19,38 @@ export async function loadRetentionPickers(actor: Actor): Promise<{
 	}
 	const db = getDb() as unknown as DrizzleD1Database<typeof schema>;
 
-	const memberRows = await db
-		.select({ id: members.id, name: members.name, fullName: members.fullName, email: members.email })
-		.from(members)
-		.where(inArray(members.status, ["active", "pending"]))
-		.orderBy(members.email)
-		.limit(500);
-
-	const termRows = await db
-		.select({ id: terms.id, name: terms.name, startsAt: terms.startsAt, endsAt: terms.endsAt, retainedAt: terms.retainedAt, probationBelow: terms.probationBelow })
-		.from(terms)
-		.orderBy(desc(terms.startsAt))
-		.limit(50);
-
-	const eventRows = await db
-		.select({
-			id: crsEvents.id,
-			title: crsEvents.title,
-			startsAt: crsEvents.startsAt,
-			status: crsEvents.status,
-			type: crsEvents.type,
-			place: crsEvents.place,
-		})
-		.from(crsEvents)
-		.where(isNull(crsEvents.deletedAt))
-		.orderBy(desc(crsEvents.startsAt))
-		.limit(200);
-
-	const pointTypeRows = await db
-		.select({ id: pointTypes.id, key: pointTypes.key, label: pointTypes.label })
-		.from(pointTypes)
-		.where(eq(pointTypes.active, true))
-		.orderBy(asc(pointTypes.position), asc(pointTypes.label));
+	// Four independent reads: one D1 round trip, not four.
+	const [memberRows, termRows, eventRows, pointTypeRows] = await Promise.all([
+		db
+			.select({ id: members.id, name: members.name, fullName: members.fullName, email: members.email })
+			.from(members)
+			.where(inArray(members.status, ["active", "pending"]))
+			.orderBy(members.email)
+			.limit(500),
+		db
+			.select({ id: terms.id, name: terms.name, startsAt: terms.startsAt, endsAt: terms.endsAt, retainedAt: terms.retainedAt, probationBelow: terms.probationBelow })
+			.from(terms)
+			.orderBy(desc(terms.startsAt))
+			.limit(50),
+		db
+			.select({
+				id: crsEvents.id,
+				title: crsEvents.title,
+				startsAt: crsEvents.startsAt,
+				status: crsEvents.status,
+				type: crsEvents.type,
+				place: crsEvents.place,
+			})
+			.from(crsEvents)
+			.where(isNull(crsEvents.deletedAt))
+			.orderBy(desc(crsEvents.startsAt))
+			.limit(200),
+		db
+			.select({ id: pointTypes.id, key: pointTypes.key, label: pointTypes.label })
+			.from(pointTypes)
+			.where(eq(pointTypes.active, true))
+			.orderBy(asc(pointTypes.position), asc(pointTypes.label)),
+	]);
 
 	return {
 		members: memberRows.map((row) => ({

@@ -1,8 +1,14 @@
+import { cache } from "react";
 import { authContract } from "@/db/contract/auth";
 import { getAppConfig } from "@/server/env";
 import type { Actor } from "./permissions";
 
-export async function getActor(): Promise<Actor | null> {
+/**
+ * Memoized per server render. The portal layout, a nested layout, the page and each Suspense
+ * child all ask for the actor, and every uncached call is a fresh session lookup on D1.
+ * Outside a render (route handlers, server actions) `cache` passes straight through.
+ */
+export const getActor = cache(async (): Promise<Actor | null> => {
 	const config = getAppConfig();
 	if (config.APP_ENV === "shared") {
 		return getSharedActor(config.SHARED_API_BASE_URL, config.SHARED_API_TOKEN);
@@ -17,7 +23,7 @@ export async function getActor(): Promise<Actor | null> {
 		roles: session.user.roles,
 		context: "session",
 	};
-}
+});
 
 export async function requireActor(): Promise<Actor> {
 	const actor = await getActor();

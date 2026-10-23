@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
 import { notifications } from "@/db/schema";
 import { createId } from "@/lib/ids";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
@@ -109,11 +109,11 @@ export function createNotificationsRepository(db: Db): NotificationsRepository {
 		},
 
 		async unreadCount(actor) {
-			const rows = await db
-				.select({ id: notifications.id })
+			const [row] = await db
+				.select({ value: count() })
 				.from(notifications)
 				.where(and(eq(notifications.memberId, actor.memberId), isNull(notifications.readAt)));
-			return rows.length;
+			return row?.value ?? 0;
 		},
 
 		async markRead(actor, id) {
