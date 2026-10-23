@@ -9,7 +9,8 @@ import {
 	terms,
 } from "@/db/schema";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
-import { RETENTION_POINT_TYPE_ID } from "@/lib/point-types";
+import type { RetentionProgress } from "@/lib/retention-parts";
+import { loadProgress } from "./retention";
 import { quantizePoints } from "@/lib/points";
 import type { Actor } from "@/server/auth/permissions";
 import type * as schema from "@/db/schema";
@@ -22,7 +23,8 @@ import type * as schema from "@/db/schema";
 type Db = DrizzleD1Database<typeof schema>;
 
 export type OverviewSummary = {
-	retention: { points: number; retainedAt: number | null; termName: string | null };
+	/** Null when no school year is running now. */
+	retention: { termName: string; progress: RetentionProgress } | null;
 	pendingSurveys: number;
 	/** The member's oldest open invited form, so the home page can link straight to it. */
 	oldestPendingSurveyId: string | null;
@@ -34,9 +36,9 @@ export type OverviewRepository = {
 	getSummary(actor: Actor, now?: Date): Promise<OverviewSummary>;
 };
 
-async function getCurrentTerm(db: Db, now: Date): Promise<{ id: string; name: string; retainedAt: number } | null> {
+async function getCurrentTerm(db: Db, now: Date): Promise<{ id: string; name: string } | null> {
 	const [term] = await db
-		.select({ id: terms.id, name: terms.name, retainedAt: terms.retainedAt })
+		.select({ id: terms.id, name: terms.name })
 		.from(terms)
 		.where(and(lte(terms.startsAt, now), gte(terms.endsAt, now)))
 		.orderBy(desc(terms.startsAt))
@@ -49,20 +51,7 @@ export function createOverviewRepository(db: Db): OverviewRepository {
 		async getSummary(actor, now = new Date()) {
 			const term = await getCurrentTerm(db, now);
 
-			let points = 0;
-			if (term) {
-				const [row] = await db
-					.select({ total: sql<number>`coalesce(sum(${retentionRecords.points}), 0)` })
-					.from(retentionRecords)
-					.where(
-						and(
-							eq(retentionRecords.memberId, actor.memberId),
-							eq(retentionRecords.termId, term.id),
-							eq(retentionRecords.pointTypeId, RETENTION_POINT_TYPE_ID),
-						),
-					);
-				points = quantizePoints(Number(row?.total ?? 0));
-			}
+			const progress = term ? (await loadProgress(db, [actor.memberId], term.id, now)).get(actor.memberId) : undefined;
 
 			// A member has only a handful of open forms, so one list gives both the count and the oldest.
 			const pending = await db
@@ -92,11 +81,7 @@ export function createOverviewRepository(db: Db): OverviewRepository {
 				.where(eq(shortLinks.ownerMemberId, actor.memberId));
 
 			return {
-				retention: {
-					points,
-					retainedAt: term?.retainedAt ?? null,
-					termName: term?.name ?? null,
-				},
+				retention: term && progress ? { termName: term.name, progress } : null,
 				pendingSurveys: pending.length,
 				oldestPendingSurveyId: pending[0]?.surveyId ?? null,
 				upcomingEvents: Number(eventRow?.count ?? 0),
