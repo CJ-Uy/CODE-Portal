@@ -1,8 +1,9 @@
 import { and, asc, desc, eq, exists, gte, inArray, isNull, like, or, sql } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import { crsEvents, emailCampaigns, emailCategories, emailDeliveries, emailOptouts, emailSenders, members, roles, terms } from "@/db/schema";
-import { audienceSchema, emailContentSchema, mergeOverridesSchema } from "@/lib/email/blocks";
-import { mergeValuesFor, missingMergeTags, type MergeOverrides, type MergeTag, type MergeValues } from "@/lib/email/merge";
+import { audienceSchema, emailContentSchema, mergeOverridesSchema, mergeSheetSchema } from "@/lib/email/blocks";
+import { knownVariables, mergeValuesFor, missingMergeTags, usedMergeTags, type MergeOverrides, type MergeSheet, type MergeValues } from "@/lib/email/merge";
+import { matchSheet, type SheetMatch } from "@/lib/email/sheet";
 import { startOfUtc8Day } from "@/lib/date-slots";
 import { FEEDBACK_EMAIL_CATEGORY_ID } from "@/lib/feedback/email";
 import { createId } from "@/lib/ids";
@@ -23,15 +24,36 @@ export type CampaignInput = {
 	blocks: EmailBlock[];
 	audience: Audience;
 	mergeOverrides?: MergeOverrides;
+	/** Omitted leaves the stored sheet alone; null removes it. */
+	mergeSheet?: MergeSheet | null;
 };
-export type PersonalizationInput = { audience: Audience; categoryId: string | null; tags: MergeTag[]; overrides: MergeOverrides; q?: string; missingOnly?: boolean; page?: number };
+export type PersonalizationInput = {
+	audience: Audience;
+	categoryId: string | null;
+	tags: string[];
+	overrides: MergeOverrides;
+	sheet?: MergeSheet | null;
+	q?: string;
+	missingOnly?: boolean;
+	page?: number;
+};
 export type PersonalizationPreview = {
 	total: number;
 	missingCount: number;
 	filtered: number;
 	page: number;
-	rows: { email: string; name: string; external: boolean; values: MergeValues; sourceValues: MergeValues; missing: MergeTag[] }[];
+	rows: { email: string; name: string; external: boolean; values: MergeValues; sourceValues: MergeValues; missing: string[] }[];
+	/** How the imported sheet lines up with the receiving audience. */
+	sheet: SheetMatch | null;
+	/** Used tags that nothing fills: not a profile field, sheet column or correction. Scheduling refuses these. */
+	unknown: string[];
 };
+
+/** Tags in the content with no possible value. Each one would go out as empty text. */
+export function unfilledTags(content: { subject: string; preheader: string; blocks: EmailBlock[] }, sheet: MergeSheet | null, overrides: MergeOverrides): string[] {
+	const known = knownVariables(sheet, overrides);
+	return usedMergeTags(`${content.subject} ${content.preheader} ${JSON.stringify(content.blocks)}`).filter((tag) => !known.has(tag));
+}
 export type AudiencePreview = {
 	matched: number;
 	willReceive: number;
@@ -169,7 +191,8 @@ export function createEmailCampaignsRepository(db: EmailDb, audit: AuditReposito
 			const content = emailContentSchema.parse({ subject: input.subject, preheader: input.preheader, blocks: input.blocks });
 			const audience = audienceSchema.parse(input.audience);
 			const mergeOverrides = mergeOverridesSchema.parse(input.mergeOverrides ?? {});
-			const values = { templateId: input.templateId, categoryId: input.categoryId, senderId: input.senderId, ...content, audience, mergeOverrides, updatedAt: new Date() };
+			const sheet = input.mergeSheet === undefined ? {} : { mergeSheet: mergeSheetSchema.parse(input.mergeSheet) };
+			const values = { templateId: input.templateId, categoryId: input.categoryId, senderId: input.senderId, ...content, audience, mergeOverrides, ...sheet, updatedAt: new Date() };
 			const missingRef = (error: unknown): never => {
 				const cause = (error as { cause?: unknown })?.cause;
 				if (/FOREIGN KEY/i.test(`${error} ${cause}`)) throw new Error("That template, category, or sender no longer exists.");
@@ -208,6 +231,8 @@ export function createEmailCampaignsRepository(db: EmailDb, audit: AuditReposito
 			if (!campaign.subject.trim()) throw new Error("Add a subject before sending.");
 			if (campaign.blocks.length === 0) throw new Error("Add content before sending.");
 			if (campaign.audience.include.length === 0) throw new Error("Choose an audience before sending.");
+			const unfilled = unfilledTags(campaign, campaign.mergeSheet, campaign.mergeOverrides);
+			if (unfilled.length) throw new Error(`Nothing fills ${unfilled.map((t) => `{{${t}}}`).join(", ")}. Import a sheet with ${unfilled.length === 1 ? "that column" : "those columns"} in Personalization, or remove ${unfilled.length === 1 ? "it" : "them"}.`);
 			if (at.getTime() < now.getTime() - 60_000) throw new Error("Pick a time in the future.");
 			const blocks = await snapshotEvents(campaign.blocks);
 			const [row] = await db
@@ -288,6 +313,7 @@ export function createEmailCampaignsRepository(db: EmailDb, audit: AuditReposito
 					blocks: source.blocks,
 					audience: source.audience,
 					mergeOverrides: source.mergeOverrides,
+					mergeSheet: source.mergeSheet,
 					createdBy: actor.memberId,
 				})
 				.returning();
@@ -315,15 +341,25 @@ export function createEmailCampaignsRepository(db: EmailDb, audit: AuditReposito
 		async previewPersonalization(actor: Actor, input: PersonalizationInput): Promise<PersonalizationPreview> {
 			assertEmail(actor, "email:send");
 			const overrides = mergeOverridesSchema.parse(input.overrides);
+			const sheet = mergeSheetSchema.parse(input.sheet ?? null);
 			const [recipients, optedOut] = await Promise.all([resolveAudience(db, audienceSchema.parse(input.audience), new Date()), optedOutIds(input.categoryId)]);
 			const rows = recipients.filter((r) => !r.memberId || !optedOut.has(r.memberId)).map((r) => ({
 				email: r.email, name: memberDisplayName(r), external: r.external,
-				values: mergeValuesFor(r, overrides), sourceValues: mergeValuesFor(r), missing: missingMergeTags(r, input.tags, overrides),
+				values: mergeValuesFor(r, overrides, sheet), sourceValues: mergeValuesFor(r, {}, sheet), missing: missingMergeTags(r, input.tags, overrides, sheet),
 			}));
+			const known = knownVariables(sheet, overrides);
 			const q = input.q?.trim().toLowerCase() ?? "";
 			const filtered = rows.filter((r) => (!input.missingOnly || r.missing.length > 0) && `${r.name} ${r.email}`.toLowerCase().includes(q));
 			const page = Math.max(0, Math.min(Math.floor(input.page ?? 0), Math.max(0, Math.ceil(filtered.length / 25) - 1)));
-			return { total: rows.length, missingCount: rows.filter((r) => r.missing.length > 0).length, filtered: filtered.length, page, rows: filtered.slice(page * 25, (page + 1) * 25) };
+			return {
+				total: rows.length,
+				missingCount: rows.filter((r) => r.missing.length > 0).length,
+				filtered: filtered.length,
+				page,
+				rows: filtered.slice(page * 25, (page + 1) * 25),
+				sheet: sheet ? matchSheet(sheet, rows.map((r) => r.email), input.tags) : null,
+				unknown: input.tags.filter((tag) => !known.has(tag)),
+			};
 		},
 
 		async audienceOptions(actor: Actor, now = new Date()): Promise<AudienceOptions> {

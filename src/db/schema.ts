@@ -3,7 +3,7 @@ import { check, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex
 import type { EventSignupAnswers, EventSignupField } from "@/lib/event-signup-form";
 import type { PointMilestone } from "@/lib/point-milestones";
 import type { Audience, EmailBlock, EmailCampaignStatus, EmailDeliveryStatus } from "@/lib/email/types";
-import type { MergeOverrides } from "@/lib/email/merge";
+import type { MergeOverrides, MergeSheet } from "@/lib/email/merge";
 import type { LibraryBlock } from "@/lib/library/blocks";
 import type {
 	LibraryAuthor,
@@ -1066,6 +1066,8 @@ export const emailCampaigns = sqliteTable(
 		blocks: text("blocks", { mode: "json" }).$type<EmailBlock[]>().notNull().default([]),
 		audience: text("audience", { mode: "json" }).$type<Audience>().notNull(),
 		mergeOverrides: text("merge_overrides", { mode: "json" }).$type<MergeOverrides>().notNull().default({}),
+		/** Spreadsheet rows imported for this email; null when none. */
+		mergeSheet: text("merge_sheet", { mode: "json" }).$type<MergeSheet | null>(),
 		status: text("status").$type<EmailCampaignStatus>().notNull().default("draft"),
 		scheduledAt: integer("scheduled_at", { mode: "timestamp_ms" }),
 		startedAt: integer("started_at", { mode: "timestamp_ms" }),

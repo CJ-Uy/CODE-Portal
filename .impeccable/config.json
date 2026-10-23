@@ -8,6 +8,24 @@
         "value": "helvetica",
         "createdAt": "2026-10-02T10:46:59.943Z",
         "reason": "controller: email HTML needs a mail-client-safe system font stack (Helvetica, Arial, sans-serif); web fonts do not load reliably in Gmail/Outlook"
+      },
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "src/lib/email/html.ts"
+        ],
+        "createdAt": "2026-10-23T04:38:22.926Z",
+        "reason": "Claude: regex literal matching <img> tags in the email HTML linter, not rendered markup"
+      },
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "src/lib/email/html.test.ts"
+        ],
+        "createdAt": "2026-10-23T04:43:04.624Z",
+        "reason": "Claude: sanitizer test fixtures that deliberately contain unsafe img tags"
       }
     ]
   }
