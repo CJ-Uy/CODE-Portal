@@ -1,4 +1,4 @@
-import { CalendarDays, CircleUserRound, House, Bell, BookOpen, Link2, Award, Megaphone, ShieldCheck, Mail, GitBranch, LifeBuoy } from "lucide-react";
+import { CalendarDays, CircleUserRound, House, Bell, BookOpen, Link2, Award, Megaphone, ShieldCheck, Mail, GitBranch, LifeBuoy, Images } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 // Type-only, so no server module reaches the client bundle.
 import type { FeatureFlags } from "@/server/features";
@@ -28,6 +28,7 @@ export const primaryNav: NavItem[] = [
 // Resources and community updates. This grouping does not indicate release status.
 export const secondaryNav: NavItem[] = [
 	{ id: "library", label: "Library", href: "/portal/library", icon: BookOpen, feature: "library" },
+	{ id: "gallery", label: "Gallery", href: "/portal/gallery", icon: Images, feature: "gallery" },
 	{ id: "announcements", label: "Announcements", href: "/portal/announcements", icon: Megaphone, feature: "announcements" },
 	{ id: "guides", label: "Guides", href: "/portal/guides", icon: LifeBuoy },
 ];

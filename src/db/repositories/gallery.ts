@@ -43,6 +43,8 @@ export type GalleryFolderView = {
 	path: GalleryCrumb[];
 	folders: GalleryFolderCard[];
 	items: GalleryItemView[];
+	/** The event untagged photos here belong to: this folder's tag, or the nearest one above it. */
+	inheritedEvent: { id: string; title: string } | null;
 };
 
 export type GalleryDeletedItem = GalleryItemView & { deletedAt: Date; deletedByName: string; daysLeft: number; canRestore: boolean };
@@ -62,7 +64,8 @@ export type GalleryDeletedView = { items: GalleryDeletedItem[]; folders: Gallery
 export type GalleryPublicItem = Pick<GalleryItem, "id" | "kind" | "fileKey" | "posterKey" | "contentType" | "durationSeconds" | "caption" | "takenAt">;
 export type GalleryPublicView = { folder: { id: string; name: string } | null; path: GalleryCrumb[]; folders: GalleryFolderCard[]; items: GalleryPublicItem[] };
 
-export type GalleryFolderOption = { id: string; name: string; parentId: string | null; depth: number };
+/** For move pickers. `isPublic` includes public folders above it, so a picker can warn that moving there publishes. */
+export type GalleryFolderOption = { id: string; name: string; parentId: string | null; depth: number; isPublic: boolean };
 export type GalleryEventOption = { id: string; title: string; startsAt: Date };
 
 export type CreateGalleryItemInput = {
@@ -271,6 +274,7 @@ export function createGalleryRepository(db: Db): GalleryRepository {
 			const tree = await loadTree(db);
 			if (!tree.isLive(folderId)) return null;
 			const folder = folderId ? tree.get(folderId)! : null;
+			const inheritedId = tree.eventId(folderId);
 			const [rows, cards, titles] = await Promise.all([
 				db
 					.select()
@@ -278,7 +282,7 @@ export function createGalleryRepository(db: Db): GalleryRepository {
 					.where(and(folderId ? eq(galleryItems.folderId, folderId) : isNull(galleryItems.folderId), isNull(galleryItems.deletedAt)))
 					.orderBy(...newestFirst),
 				folderCards(db, tree, tree.children(folderId)),
-				eventTitles(db, [folder?.eventId ?? null]),
+				eventTitles(db, [folder?.eventId ?? null, inheritedId]),
 			]);
 			return {
 				folder: folder
@@ -295,6 +299,7 @@ export function createGalleryRepository(db: Db): GalleryRepository {
 				path: tree.path(folderId).map(({ id, name }) => ({ id, name })),
 				folders: cards,
 				items: (await decorate(db, rows)).map(toView),
+				inheritedEvent: inheritedId && titles.has(inheritedId) ? { id: inheritedId, title: titles.get(inheritedId)! } : null,
 			};
 		},
 
@@ -347,7 +352,7 @@ export function createGalleryRepository(db: Db): GalleryRepository {
 			const out: GalleryFolderOption[] = [];
 			const walk = (parentId: string | null, depth: number) => {
 				for (const folder of tree.children(parentId).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))) {
-					out.push({ id: folder.id, name: folder.name, parentId, depth });
+					out.push({ id: folder.id, name: folder.name, parentId, depth, isPublic: tree.isPublic(folder.id) });
 					walk(folder.id, depth + 1);
 				}
 			};

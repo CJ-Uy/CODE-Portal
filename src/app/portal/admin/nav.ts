@@ -41,6 +41,15 @@ export const adminGroups: AdminGroup[] = [
 	G("content", "Content", [
 		{ segment: "announcements", label: "Announcements", description: "Publish updates for the member feed.", permission: "announcement:manage", feature: "announcements" },
 		{ segment: "library", label: "Library moderation", description: "Approve submissions, handle reports and manage tags.", permission: "library:moderate", feature: "library" },
+		{
+			segment: "gallery",
+			label: "Gallery",
+			description: "Restore anyone's deleted photos and folders.",
+			permission: "gallery:manage",
+			feature: "gallery",
+			// The gallery's own Recently deleted view; admins see everyone's deletions there.
+			href: "/portal/gallery/deleted",
+		},
 		{ segment: "surveys", label: "Surveys", description: "Create questions and select survey participants.", permission: "survey:configure", feature: "surveys" },
 		{
 			segment: "submissions",
