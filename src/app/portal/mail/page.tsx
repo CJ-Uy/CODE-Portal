@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { Inbox, Settings2 } from "lucide-react";
 import { getRepositories } from "@/db";
+import { EmptyState } from "@/components/portal/empty-state";
+import { PageHeader } from "@/components/portal/page-header";
+import { Button } from "@/components/ui/button";
 import { requireActor } from "@/server/auth/actor";
 
 export const dynamic = "force-dynamic";
-const DATE = new Intl.DateTimeFormat("en", { timeZone: "Asia/Manila", month: "short", day: "numeric", year: "numeric" });
+const DATE = new Intl.DateTimeFormat("en", { timeZone: "Asia/Manila", month: "short", day: "numeric" });
 
 export default async function MailPage() {
 	const actor = await requireActor();
@@ -12,29 +15,28 @@ export default async function MailPage() {
 	const items = await email.member.listArchive(actor);
 	return (
 		<div className="grid gap-5">
-			<header className="flex flex-wrap items-end justify-between gap-3">
-				<div>
-					<h1 className="font-heading text-3xl">Mail</h1>
-					<p className="text-sm text-muted-foreground">Every CODE email sent to you, in one place.</p>
-				</div>
-				<Link href="/portal/mail/preferences" className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm transition-colors hover:border-accent">
-					<Settings2 className="size-4" aria-hidden />
-					Email preferences
-				</Link>
-			</header>
+			<PageHeader
+				title="Mail"
+				description="Every CODE email sent to you, in one place."
+				actions={
+					<Button asChild variant="outline" size="sm" className="min-h-11 sm:min-h-9">
+						<Link href="/portal/mail/preferences">
+							<Settings2 aria-hidden />
+							Email preferences
+						</Link>
+					</Button>
+				}
+			/>
 			{items.length === 0 ? (
-				<div className="grid place-items-center gap-2 rounded-xl border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
-					<Inbox className="size-6" aria-hidden />
-					No CODE emails yet. They will appear here when officers send one.
-				</div>
+				<EmptyState icon={Inbox} title="No emails yet" description="When officers email members, a copy lands here too." />
 			) : (
 				<ul className="grid divide-y divide-border rounded-xl border border-border bg-card">
 					{items.map((item, i) => (
 						<li key={item.deliveryId} className="row-enter" style={{ animationDelay: `${Math.min(i, 8) * 25}ms` }}>
 							<Link href={`/portal/mail/${item.deliveryId}`} className="grid gap-1 px-4 py-3 transition-colors hover:bg-secondary/60">
 								<span className="flex min-w-0 items-center gap-2">
-									{item.readAt ? null : <span className="size-2 shrink-0 rounded-full bg-[#4986AC]" aria-label="Unread" />}
-									<span className={item.readAt ? "min-w-0 flex-1 truncate font-medium" : "min-w-0 flex-1 truncate font-semibold"}>{item.subject}</span>
+									{item.readAt ? null : <span className="size-2 shrink-0 rounded-full bg-[#4986AC]" aria-hidden />}
+									<span className={item.readAt ? "min-w-0 flex-1 truncate font-medium" : "min-w-0 flex-1 truncate font-semibold"}>{item.subject}{item.readAt ? null : <span className="sr-only"> (unread)</span>}</span>
 									<span className="shrink-0 text-xs text-muted-foreground">{item.sentAt ? DATE.format(item.sentAt) : ""}</span>
 								</span>
 								<span className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">

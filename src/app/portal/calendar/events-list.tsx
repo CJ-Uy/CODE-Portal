@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { ArrowRight, CalendarX2 } from "lucide-react";
+import { ArrowRight, CalendarX2, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
+import { DateTile } from "@/components/portal/date-tile";
 import { EmptyState } from "@/components/portal/empty-state";
 import { type EventTypeRow, labelFor } from "@/db/repositories/eventTypeRules";
 import { colourClasses } from "@/lib/event-type-colours";
@@ -28,8 +28,6 @@ const ROLE_LABEL: Record<NonNullable<EventListItem["myRole"]>, string> = {
 	scanner: "Scanning",
 };
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
 function timeRange(start: Date, end: Date | null, allDay: boolean): string {
 	// Multi-day and all-day events need the span, not just clock times, or a three-day event reads
 	// as if it were over by the afternoon.
@@ -43,55 +41,57 @@ function timeRange(start: Date, end: Date | null, allDay: boolean): string {
 function Row({ event, types }: { event: EventListItem; types: EventTypeRow[] }) {
 	const manage = event.myRole === "owner" || event.myRole === "admin" || event.canModerate;
 	const chip = colourClasses(types.find((t) => t.type === event.type)?.colour ?? "slate").chip;
-	const [, month, day] = toLocalDate(event.startsAt).split("-").map(Number);
 	return (
 		<Link
 			href={`/portal/calendar/${event.id}`}
-			className="flex items-center gap-3 px-3 py-3 transition-colors hover:bg-secondary/40 active:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:gap-4 sm:px-4"
+			className="flex min-w-0 items-center gap-3 px-3 py-3 transition-colors hover:bg-secondary/40 active:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:gap-4 sm:px-4"
 		>
-			<div className="flex w-11 shrink-0 flex-col items-center rounded-lg border border-border py-1.5 leading-none">
-				<span className="text-[10px] font-semibold uppercase text-primary">{MONTHS[(month ?? 1) - 1]}</span>
-				<span className="font-heading text-lg tabular-nums">{day}</span>
-			</div>
+			<DateTile date={event.startsAt} today={toLocalDate(event.startsAt) === toLocalDate(new Date())} />
 			<div className="min-w-0 flex-1">
-				<div className="grid min-w-0 gap-1 sm:flex sm:items-center sm:gap-2">
-					<span className="truncate font-medium">{event.title}</span>
-					<Badge className={cn("min-w-0 w-fit max-w-full truncate sm:max-w-32", chip)}>{labelFor(types, event.type)}</Badge>
+				<div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+					<span className="min-w-0 font-medium [overflow-wrap:anywhere]">{event.title}</span>
+					{/* Official is the usual case, so only the other types earn a badge. */}
+					{event.type !== "official" ? <Badge className={cn("min-w-0 max-w-full truncate sm:max-w-32", chip)}>{labelFor(types, event.type)}</Badge> : null}
 					{event.myRole ? (
-						<Badge variant="secondary" className="w-fit shrink-0 text-[10px]">
+						<Badge variant="secondary" className="shrink-0 text-[11px]">
 							{ROLE_LABEL[event.myRole]}
 						</Badge>
 					) : null}
 					{event.readOnly ? (
-						<Badge variant="secondary" className="w-fit shrink-0 text-[10px]">
+						<Badge variant="secondary" className="shrink-0 text-[11px]">
 							Info
 						</Badge>
 					) : null}
 				</div>
-				<p className="truncate text-sm text-muted-foreground">
+				<p className="text-sm text-muted-foreground [overflow-wrap:anywhere]">
 					{timeRange(event.startsAt, event.endsAt, event.allDay)} · {event.place}
 				</p>
 			</div>
 			<span className="flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground">
-				<span className="hidden sm:inline">{manage ? "Manage" : "View"}</span>
-				<ArrowRight className="size-3.5" />
+				{manage ? <span className="hidden sm:inline">Manage</span> : null}
+				<ArrowRight className="size-3.5" aria-hidden />
 			</span>
 		</Link>
 	);
 }
 
-function Section({ title, events, types, emptyMessage }: { title: string; events: EventListItem[]; types: EventTypeRow[]; emptyMessage?: string }) {
-	if (events.length === 0 && !emptyMessage) return null;
+function Rows({ events, types }: { events: EventListItem[]; types: EventTypeRow[] }) {
+	return (
+		<ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+			{events.map((event) => (
+				<li key={event.id}>
+					<Row event={event} types={types} />
+				</li>
+			))}
+		</ul>
+	);
+}
+
+function Section({ title, events, types, emptyMessage }: { title: string; events: EventListItem[]; types: EventTypeRow[]; emptyMessage: string }) {
 	return (
 		<section className="grid gap-2" aria-labelledby={`events-${title.toLowerCase()}`}>
-			<h2 id={`events-${title.toLowerCase()}`} className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h2>
-			{events.length ? (
-				<div className="grid gap-2">
-					{events.map((event) => (
-						<Card key={event.id} className="overflow-hidden"><Row event={event} types={types} /></Card>
-					))}
-				</div>
-			) : <p className="text-sm text-muted-foreground">{emptyMessage}</p>}
+			<h2 id={`events-${title.toLowerCase()}`} className="font-sans! text-sm font-semibold text-muted-foreground">{title}</h2>
+			{events.length ? <Rows events={events} types={types} /> : <p className="text-sm text-muted-foreground">{emptyMessage}</p>}
 		</section>
 	);
 }
@@ -132,8 +132,19 @@ export function EventsList({ events, types, loadFailed = false }: { events: Even
 	return (
 		<div className="grid gap-5">
 			<Section title="Today" events={current} types={types} emptyMessage="Nothing scheduled today." />
-			<Section title="Upcoming" events={upcoming} types={types} emptyMessage="No upcoming events yet." />
-			<Section title="Past" events={past} types={types} />
+			<Section title="Upcoming" events={upcoming} types={types} emptyMessage="Nothing else coming up yet." />
+			{/* Past events grow every week; they stay one tap away instead of lengthening the page. */}
+			{past.length ? (
+				<details className="group grid gap-2">
+					<summary className="flex min-h-11 w-fit cursor-pointer list-none items-center gap-1.5 rounded-md text-sm font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+						<ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden />
+						Past events ({past.length})
+					</summary>
+					<div className="mt-2">
+						<Rows events={past} types={types} />
+					</div>
+				</details>
+			) : null}
 		</div>
 	);
 }
