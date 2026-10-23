@@ -87,34 +87,38 @@
 	--font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
-* {
-	border-color: var(--border);
-	letter-spacing: 0;
-}
+/* Defaults only. Inside @layer base so any Tailwind utility (border-primary, font-sans on a heading) still wins:
+   unlayered rules here used to beat every utility and silently grey out intended navy borders. */
+@layer base {
+	* {
+		border-color: var(--border);
+		letter-spacing: 0;
+	}
 
-html {
-	scroll-behavior: smooth;
-}
+	html {
+		scroll-behavior: smooth;
+	}
 
-body {
-	background: var(--background);
-	color: var(--foreground);
-	font-family: var(--font-source-sans), ui-sans-serif, system-ui, sans-serif;
-}
+	body {
+		background: var(--background);
+		color: var(--foreground);
+		font-family: var(--font-source-sans), ui-sans-serif, system-ui, sans-serif;
+	}
 
-h1,
-h2,
-h3,
-h4,
-.font-heading {
-	font-family: var(--font-unna), Georgia, serif;
-}
+	h1,
+	h2,
+	h3,
+	h4,
+	.font-heading {
+		font-family: var(--font-unna), Georgia, serif;
+	}
 
-button,
-input,
-select,
-textarea {
-	letter-spacing: 0;
+	button,
+	input,
+	select,
+	textarea {
+		letter-spacing: 0;
+	}
 }
 
 .sheet-motion[data-side="right"] {
