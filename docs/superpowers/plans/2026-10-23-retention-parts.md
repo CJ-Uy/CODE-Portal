@@ -17,7 +17,7 @@ Workers pool, Tailwind v4 with the local `src/components/ui` primitives.
 
 ## Global Constraints
 
-- `src/db/schema.ts` is the only schema source. One migration, `drizzle/migrations/0015_retention_parts.sql`. It stays unapplied.
+- `src/db/schema.ts` is the only schema source. One migration, `drizzle/migrations/0016_retention_parts.sql`. It stays unapplied.
 - No D1 command, no deploy, no push. Commit to `claude/retention-categories-6744d6` only. Commits get no AI co-author trailer (memory `feedback-no-claude-coauthor-trailer`).
 - Tests are `.ts` only, run with `pnpm test:workers`. No render tests.
 - The split is a fixed `ATTENDANCE_SHARE = 0.75`, rounded to 2 decimals in SQL with `round(x, 2)`. The share is `round(award - attendance, 2)`.
@@ -37,7 +37,7 @@ Workers pool, Tailwind v4 with the local `src/components/ui` primitives.
 
 ### Task 1: Schema and migration
 
-**Files:** modify `src/db/schema.ts`. Create `drizzle/migrations/0015_retention_parts.sql` (plus the drizzle-kit meta snapshot and journal). Modify `scripts/verify-preservation.ts` if it asserts seeded rows. Update every test fixture and seed that writes `retainedAt`/`probationBelow`.
+**Files:** modify `src/db/schema.ts`. Create `drizzle/migrations/0016_retention_parts.sql` (plus the drizzle-kit meta snapshot and journal). Modify `scripts/verify-preservation.ts` if it asserts seeded rows. Update every test fixture and seed that writes `retainedAt`/`probationBelow`.
 
 **Produces:**
 - `pointTypes.retentionPeriod: text("retention_period").$type<RetentionPeriod>()`, nullable.
@@ -47,7 +47,7 @@ Workers pool, Tailwind v4 with the local `src/components/ui` primitives.
 - Index `retention_records_share_event_member_type_idx` on (event_id, member_id, point_type_id) `WHERE source = 'feedback_share'`.
 - `terms.retainedAt` and `terms.probationBelow` are removed.
 
-- [ ] Edit the schema, then run `pnpm db:generate`. Review the emitted SQL and rename it `0015_retention_parts.sql` (fix the journal tag).
+- [ ] Edit the schema, then run `pnpm db:generate`. Review the emitted SQL and rename it `0016_retention_parts.sql` (fix the journal tag).
 - [ ] Hand-write the data steps below the DDL, in the 0014 style:
   - `INSERT OR IGNORE` the 8 types from spec "Builder check answers" item 1, placed at `COALESCE(MAX(position), -1) + n`.
   - `UPDATE point_types SET retention_period = 'year' WHERE id IN (...) OR key IN (...)`, and the same for `'semester'`.

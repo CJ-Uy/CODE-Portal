@@ -108,7 +108,7 @@ The split has to be prominent to members, not left in fine print:
 
 ## Data
 
-All schema changes go in `src/db/schema.ts` plus one hand-written migration, `0015_retention_parts.sql`.
+All schema changes go in `src/db/schema.ts` plus one hand-written migration, `0016_retention_parts.sql` (renumbered from 0015 after beta took 0015 for important links).
 It stays unapplied until CJ approves the `pnpm exec wrangler` command.
 
 - `point_types.retention_period`: text, nullable, either `'year'` or `'semester'`. Null means the type is

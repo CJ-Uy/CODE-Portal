@@ -460,7 +460,7 @@ export const pointTypes = sqliteTable(
 		key: text("key").notNull().unique(),
 		label: text("label").notNull(),
 		milestonesJson: text("milestones_json", { mode: "json" }).$type<PointMilestone[]>().notNull().default([]),
-		// Set only on the 8 retention parts, by migration 0015. NULL: the type never counts toward retention.
+		// Set only on the 8 retention parts, by migration 0016. NULL: the type never counts toward retention.
 		retentionPeriod: text("retention_period").$type<RetentionPeriod>(),
 		active: integer("active", { mode: "boolean" }).notNull().default(true),
 		position: integer("position").notNull().default(0),
