@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { signInPath } from "@/server/auth/sign-in";
-import { BookOpen, Plus } from "lucide-react";
+import { BookOpen } from "lucide-react";
 import { getRepositories } from "@/db";
 import type { LibraryItem } from "@/db/repositories/library";
 import type { LibraryItemStats, LibraryWeek } from "@/db/repositories/library-activity";
+import { LibraryHeader } from "@/components/library/library-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/portal/empty-state";
@@ -128,19 +129,12 @@ export default async function MyLibraryPage() {
 	const zero: LibraryItemStats = { saves: 0, opens: 0, uniqueReaders: 0, activeSeconds: 0, downloads: 0 };
 
 	return (
-		<div className="mx-auto grid max-w-4xl gap-6">
-			<div className="flex flex-wrap items-end justify-between gap-3">
-				<div>
-					<p className="text-xs font-semibold uppercase text-primary">Member workspace</p>
-					<h1 className="font-heading text-3xl">My library</h1>
-					<p className="mt-1 max-w-2xl text-sm text-muted-foreground">Everything you have added, with how it is doing. Members see an item&apos;s opens, readers and reading time on its page. The weekly chart and download counts are only for you.</p>
-				</div>
-				<Button asChild>
-					<Link href="/portal/library/new">
-						<Plus />
-						Add to the library
-					</Link>
-				</Button>
+		<div className="mx-auto grid min-w-0 max-w-6xl gap-6">
+			<div className="grid min-w-0 gap-4">
+				<LibraryHeader current="mine" />
+				<p className="max-w-[65ch] text-sm text-muted-foreground">
+					Everything you have added, drafts included. Once an item is published, its numbers show here: members see its opens, readers and reading time on its page, while the weekly chart and download counts are only for you.
+				</p>
 			</div>
 
 			{items.length === 0 ? (

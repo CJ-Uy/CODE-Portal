@@ -137,6 +137,34 @@ describe("library activity: record and stats", () => {
 	});
 });
 
+describe("library activity: recentlyOpened", () => {
+	it("lists the member's own opens, latest day first, then most read that day", async () => {
+		const older = await insertItem({ title: "Older" });
+		const light = await insertItem({ title: "Light read" });
+		const heavy = await insertItem({ title: "Heavy read" });
+		await seedDay(older, "2026-10-01", 1, 900);
+		await seedDay(older, "2026-10-03", 1, 30); // its latest open counts, not its first
+		await seedDay(light, "2026-10-05", 1, 60);
+		await seedDay(heavy, "2026-10-05", 2, 1_200);
+		const cards = await activity.recentlyOpened(actors.other, 10);
+		expect(cards.map((card) => card.title)).toEqual(["Heavy read", "Light read", "Older"]);
+		expect(await activity.recentlyOpened(actors.other, 1)).toHaveLength(1);
+		expect(await activity.recentlyOpened(actors.owner, 10)).toEqual([]);
+	});
+
+	it("skips reading-only days and items the member can no longer browse", async () => {
+		const pinged = await insertItem({ title: "Only reading time" });
+		const hidden = await insertItem({ title: "Taken down", status: "taken_down" });
+		const secret = await insertItem({ title: "Now confidential", confidentiality: "confidential" });
+		const kept = await insertItem({ title: "Kept" });
+		await seedDay(pinged, "2026-10-05", 0, 60);
+		await seedDay(hidden, "2026-10-05", 1, 60);
+		await seedDay(secret, "2026-10-05", 1, 60);
+		await seedDay(kept, "2026-10-01", 1, 60);
+		expect((await activity.recentlyOpened(actors.other, 10)).map((card) => card.title)).toEqual(["Kept"]);
+	});
+});
+
 describe("library activity: mostSavedSince", () => {
 	const since = new Date("2026-10-10T00:00:00Z");
 	const inside = new Date("2026-10-12T00:00:00Z");

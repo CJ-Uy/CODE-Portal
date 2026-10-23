@@ -30,7 +30,7 @@ The older `open design` folder split the member area into many static pages and 
 - One portal shell is easier than ten member pages. Module tabs let users move quickly without losing context.
 - Admin tools stay visible only as a module in the signed-in workspace. Super admins inherit all scoped roles, while specific admins see only the queues they can act on.
 - CRS is modeled as a simple lifecycle: create, scan, archive, approve. Feedback forum access and selected surveys are treated as separate actions.
-- The private library is filter-first. Graph search is presented as an advanced assist, not the default way to find content.
+- The private library is browse-first: a short Latest row, then every item as one continuous sheet. Search and type chips narrow it; finer filters wait behind More filters. Smart search is an optional assist, not the default way to find content.
 - Guided tours are available from the header and can be replayed for both member and admin flows.
 
 ## Interface system
@@ -66,6 +66,14 @@ The member rail orders Overview, Calendar, Retention, Ments Tree, Link shortener
 Important links is the member directory of CODE's official sheets, documents, forms and folders. Category headings, in the order admins set, sit above white lists with divided rows, two columns of sections on wide screens and one on phones. Each row is a single link that opens in a new tab: a light blue type tile, the title, an optional one-line description, and a meta line naming the type and the site it opens, such as Spreadsheet · docs.google.com. The type is set by an admin or detected from the link (Google, SharePoint and OneDrive file links, forms, Drive folders, file extensions and video sites). Links without a category list last under Other links. Admins see Edit links; with nothing published, admins get Add the first link and members learn that admins fill the page.
 
 The editor lives under Admin, Content. Add a link and Add a category sit at the top. What members see follows as the same categories and rows, each with up and down arrows to reorder and a native Edit disclosure that holds the full form, the Show in sidebar option and Archive. Archived categories and links collect in an Archived list with Restore. Pinned links are not a separate tool any more: a link with Show in sidebar on is the pin.
+
+### Member library
+
+The library's four main pages (Browse, Lists, My items, About) share one header: the Library title, one line on what it holds, Add to the library, and an underlined tab row that marks the current page. Deeper pages (an item, a list, a new item, the editor) replace the tabs with a breadcrumb that starts at Library and wraps long titles. The Library step returns to the list the member left, with the same search, the same rows loaded and the same scroll position; Back does the same.
+
+Browse opens on one search box with Search, a row of type chips (only types that have items, plus All types), and More filters, which holds source, tags, module facets and the smart search switch. Every filter that is on but out of sight shows as a removable pill, next to Clear search and filters. Below that, a member who has opened items sees up to four in Recently opened; a member who has not sees pinned collections instead. Latest shows the four newest items as compact cards (a swipeable row on a phone), with a link to the whole list sorted newest first.
+
+All items is a white sheet with divided rows: title with a one-line summary, type, authors, year and saves (from 3), folding to one line of facts under the title on a phone. The title is the row's link. The sheet reads A to Z without a query and by relevance with one, and sort offers Newest, Most saved and Most read. Rows arrive 24 at a time as the member nears the bottom, with a visible loading row, a Load more button for keyboards and screen readers, and a closing row that gives the total and Back to top. Searching or filtering hides Recently opened and Latest and titles the sheet with the result count. Cards show the title first and type, source and tags as plain text, so nothing looks like a filter it is not.
 
 ### Ments Tree
 

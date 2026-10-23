@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ExternalLink, FileText, Plus, X } from "lucide-react";
+import { ExternalLink, FileText, Plus, X } from "lucide-react";
 import { LibraryBlockEditor } from "@/components/library/library-block-editor";
+import { LibraryCrumbs } from "@/components/library/library-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -437,14 +438,16 @@ export function ItemEditor({ item, tags, itemPicker, isOwner }: { item: EditorIt
 
 	return (
 		<div className="mx-auto grid max-w-6xl gap-5">
-			<Link href="/portal/library/mine" className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-				<ArrowLeft className="size-4" aria-hidden />
-				My library
-			</Link>
+			<LibraryCrumbs
+				trail={[
+					{ label: "My items", href: "/portal/library/mine" },
+					...(item.status === "draft" ? [] : [{ label: title.trim() || "Untitled", href: `/portal/library/${item.id}` }]),
+					{ label: "Edit" },
+				]}
+			/>
 
 			<div className="flex flex-wrap items-start justify-between gap-3">
 				<div className="min-w-0">
-					<p className="text-xs font-semibold uppercase text-primary">Member workspace</p>
 					<h1 className="font-heading text-3xl">Edit {KIND_LABELS[kind]}</h1>
 				</div>
 				<div className="flex flex-wrap items-center gap-2">

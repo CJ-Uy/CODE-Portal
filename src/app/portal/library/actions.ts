@@ -3,8 +3,23 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getRepositories } from "@/db";
+import { toCardFields, type LibraryCardFields } from "@/lib/library/card-fields";
+import { effectiveSort, parseLibrarySearchParams, rawParams } from "@/lib/library/search-params";
 import { requireActor } from "@/server/auth/actor";
 import { assertFeatureEnabled } from "@/server/features";
+
+/**
+ * The next rows of the library list: the page's own search (its query string), read on from the cursor the last load
+ * ended with. Plain search only; a smart list arrives whole and never asks for more. Visibility is the repository's.
+ */
+export async function loadMoreLibraryAction(query: string, cursor: string): Promise<{ cards: LibraryCardFields[]; nextCursor: string | null }> {
+	assertFeatureEnabled("library");
+	const actor = await requireActor();
+	const search = parseLibrarySearchParams(rawParams(z.string().max(4000).parse(query)));
+	const repositories = await getRepositories();
+	const page = await repositories.library.search(actor, { ...search, sort: effectiveSort(search), cursor: z.string().min(1).max(2000).parse(cursor) });
+	return { cards: page.cards.map(toCardFields), nextCursor: page.nextCursor };
+}
 
 export async function addCommentAction(formData: FormData): Promise<void> {
 	assertFeatureEnabled("library");

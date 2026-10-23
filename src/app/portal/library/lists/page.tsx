@@ -4,6 +4,7 @@ import { signInPath } from "@/server/auth/sign-in";
 import { Bookmark, Layers, ListPlus, Users } from "lucide-react";
 import { getRepositories } from "@/db";
 import type { LibraryListSummary } from "@/db/repositories/library-lists";
+import { LibraryHeader } from "@/components/library/library-header";
 import { EmptyState } from "@/components/portal/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { getActor } from "@/server/auth/actor";
@@ -50,13 +51,10 @@ export default async function LibraryListsPage() {
 	const hasSaved = owned.some((list) => list.isDefault);
 
 	return (
-		<div className="mx-auto grid min-w-0 max-w-4xl gap-8">
-			<div className="grid min-w-0 gap-1">
-				<Link href="/portal/library" className="w-fit text-sm text-muted-foreground hover:text-foreground">
-					&larr; Library
-				</Link>
-				<h1 className="font-heading text-3xl">Lists</h1>
-				<p className="max-w-2xl text-sm text-muted-foreground">Keep library items together, share a reading pack with members, or edit one with others.</p>
+		<div className="mx-auto grid min-w-0 max-w-6xl gap-8">
+			<div className="grid min-w-0 gap-4">
+				<LibraryHeader current="lists" />
+				<p className="max-w-[65ch] text-sm text-muted-foreground">Keep library items together, share a reading pack with members, or edit one with others.</p>
 			</div>
 
 			<section aria-labelledby="my-lists-title" className="grid min-w-0 gap-3">

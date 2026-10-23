@@ -2,17 +2,17 @@
 
 import { useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useId, useOptimistic, useRef, useState, useTransition } from "react";
-import { ChevronDown, Search, SlidersHorizontal } from "lucide-react";
+import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
 import { setSmartSearchAction } from "@/app/portal/library/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { Sheet, SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import type { LibrarySearchInput } from "@/db/repositories/library";
 import { applySearchChange, effectiveSort, facetsFor, hasActiveSearch, SORT_LABELS, SORTS, toggleValue, toLibrarySearchParams } from "@/lib/library/search-params";
 import type { ParsedLibrarySearch } from "@/lib/library/search-params";
 import { ENGAGEMENT_TYPES, FORMAT_DETAILS, KIND_LABELS, LIBRARY_KINDS, LIBRARY_SOURCES, SOURCE_LABELS } from "@/lib/library/taxonomy";
+import type { LibraryKind } from "@/lib/library/taxonomy";
 import { cn } from "@/lib/utils";
 
 export type FilterTag = { id: string; name: string; groupName: string };
@@ -63,6 +63,11 @@ export function SearchProvider({ value, children }: { value: ParsedLibrarySearch
 	return <SearchContext.Provider value={{ query, pending, change }}>{children}</SearchContext.Provider>;
 }
 
+/** True while a search, filter or sort change is on its way, so the list can dim instead of showing stale rows as current. */
+export function useSearchPending(): boolean {
+	return useSearch().pending;
+}
+
 function Chip({ pressed, onClick, children }: { pressed: boolean; onClick: () => void; children: React.ReactNode }) {
 	return (
 		<button
@@ -70,8 +75,8 @@ function Chip({ pressed, onClick, children }: { pressed: boolean; onClick: () =>
 			aria-pressed={pressed}
 			onClick={onClick}
 			className={cn(
-				"min-h-10 min-w-0 max-w-full [overflow-wrap:anywhere] rounded-full border px-3 py-1 text-left text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:min-h-8",
-				pressed ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-muted-foreground hover:border-accent hover:text-foreground",
+				"min-h-10 min-w-0 max-w-full shrink-0 [overflow-wrap:anywhere] rounded-full border px-3 py-1 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+				pressed ? "border-primary! bg-primary text-primary-foreground" : "border-border bg-background text-muted-foreground hover:border-accent! hover:text-foreground",
 			)}
 		>
 			{children}
@@ -82,7 +87,7 @@ function Chip({ pressed, onClick, children }: { pressed: boolean; onClick: () =>
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
 	return (
 		<fieldset className="grid min-w-0 gap-2">
-			<legend className="mb-1 text-xs font-semibold uppercase text-muted-foreground">{title}</legend>
+			<legend className="mb-1 text-sm font-medium">{title}</legend>
 			<div className="flex min-w-0 flex-wrap gap-1.5">{children}</div>
 		</fieldset>
 	);
@@ -90,9 +95,9 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
 
 function FacetSelect({ label, value, options, onChange }: { label: string; value: string | undefined; options: readonly string[]; onChange: (value: string | undefined) => void }) {
 	return (
-		<label className="grid min-w-0 gap-1 text-xs font-semibold uppercase text-muted-foreground">
+		<label className="grid min-w-0 gap-1 text-sm font-medium">
 			{label}
-			<Select value={value ?? ""} onChange={(event) => onChange(event.target.value || undefined)} className="font-normal normal-case text-foreground">
+			<Select value={value ?? ""} onChange={(event) => onChange(event.target.value || undefined)} className="font-normal">
 				<option value="">Any</option>
 				{options.map((option) => (
 					<option key={option} value={option}>
@@ -104,8 +109,9 @@ function FacetSelect({ label, value, options, onChange }: { label: string; value
 	);
 }
 
-function activeFilterCount(value: LibrarySearchInput): number {
-	return (value.kinds?.length ?? 0) + (value.sources?.length ?? 0) + (value.tagIds?.length ?? 0) + [value.subtype, value.formatDetail, value.engagementType].filter(Boolean).length;
+/** Filters that live behind More filters (everything but the type chips), so the button can say how many are on. */
+function hiddenFilterCount(value: LibrarySearchInput): number {
+	return (value.sources?.length ?? 0) + (value.tagIds?.length ?? 0) + [value.subtype, value.formatDetail, value.engagementType].filter(Boolean).length;
 }
 
 /**
@@ -150,7 +156,8 @@ function SmartSearchSwitch({ on }: { on: boolean }) {
 	);
 }
 
-function FilterFields({ tags, smart }: { tags: FilterTag[]; smart: boolean | null }) {
+/** Everything behind More filters. Type stays out in the open as chips; these are the finer cuts. */
+function MoreFilterFields({ tags, smart }: { tags: FilterTag[]; smart: boolean | null }) {
 	const { query, change } = useSearch();
 	const facets = facetsFor(query);
 	const grouped = new Map<string, FilterTag[]>();
@@ -161,16 +168,8 @@ function FilterFields({ tags, smart }: { tags: FilterTag[]; smart: boolean | nul
 		<div className="grid min-w-0 gap-5">
 			{smart !== null ? <SmartSearchSwitch on={smart} /> : null}
 
-			<Group title="Type">
-				{LIBRARY_KINDS.map((kind) => (
-					<Chip key={kind} pressed={Boolean(query.kinds?.includes(kind))} onClick={() => change((now) => ({ kinds: toggleValue(now.kinds, kind) }))}>
-						{KIND_LABELS[kind]}
-					</Chip>
-				))}
-			</Group>
-
 			{facets.showSubtype || facets.showModuleFacets ? (
-				<div className="grid min-w-0 gap-3">
+				<div className="grid min-w-0 gap-3 sm:grid-cols-3">
 					{facets.showSubtype ? <FacetSelect label="Kind of document" value={query.subtype} options={facets.subtypes} onChange={(subtype) => change({ subtype })} /> : null}
 					{facets.showModuleFacets ? (
 						<>
@@ -191,35 +190,128 @@ function FilterFields({ tags, smart }: { tags: FilterTag[]; smart: boolean | nul
 
 			{groups.length > 0 ? (
 				<div className="grid min-w-0 gap-1">
-					<p className="mb-1 text-xs font-semibold uppercase text-muted-foreground">Tags</p>
-					{groups.map(([groupName, groupTags]) => (
-						<details key={groupName} open={groupTags.some((tag) => query.tagIds?.includes(tag.id))} className="group min-w-0 border-t border-border py-1">
-							<summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
-								<span className="min-w-0 [overflow-wrap:anywhere]">{groupName}</span>
-								<ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden />
-							</summary>
-							<div className="flex min-w-0 flex-wrap gap-1.5 pb-2 pt-1">
-								{groupTags.map((tag) => (
-									<Chip key={tag.id} pressed={Boolean(query.tagIds?.includes(tag.id))} onClick={() => change((now) => ({ tagIds: toggleValue(now.tagIds, tag.id) }))}>
-										{tag.name}
-									</Chip>
-								))}
-							</div>
-						</details>
+					<p className="mb-1 text-sm font-medium">Tags</p>
+					<div className="grid min-w-0 gap-x-6 sm:grid-cols-2">
+						{groups.map(([groupName, groupTags]) => (
+							<details key={groupName} open={groupTags.some((tag) => query.tagIds?.includes(tag.id))} className="group min-w-0 border-t border-border py-1">
+								<summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-md text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+									<span className="min-w-0 [overflow-wrap:anywhere]">{groupName}</span>
+									<ChevronDown className="size-4 shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden />
+								</summary>
+								<div className="flex min-w-0 flex-wrap gap-1.5 pb-2 pt-1">
+									{groupTags.map((tag) => (
+										<Chip key={tag.id} pressed={Boolean(query.tagIds?.includes(tag.id))} onClick={() => change((now) => ({ tagIds: toggleValue(now.tagIds, tag.id) }))}>
+											{tag.name}
+										</Chip>
+									))}
+								</div>
+							</details>
+						))}
+					</div>
+				</div>
+			) : null}
+		</div>
+	);
+}
+
+/** One applied filter that is not a type chip, with its own way off. The label is user-controlled (a tag), so it wraps anywhere. */
+function AppliedFilter({ label, onRemove }: { label: string; onRemove: () => void }) {
+	return (
+		<li className="min-w-0">
+			<button
+				type="button"
+				onClick={onRemove}
+				className="inline-flex min-h-9 min-w-0 max-w-full items-center gap-1.5 rounded-full bg-secondary px-3 text-sm text-secondary-foreground transition-colors hover:bg-secondary/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+			>
+				<span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>
+				<X className="size-3.5 shrink-0" aria-hidden />
+				<span className="sr-only">, remove this filter</span>
+			</button>
+		</li>
+	);
+}
+
+/**
+ * The filters: type chips out in the open (one row that scrolls sideways on a phone), the rest behind More filters, and
+ * every hidden filter that is on listed underneath with a way to take it off, so nothing narrows the list out of sight.
+ * `kinds` are the types with something to find (all of them when unknown); one already in the URL always shows, so it can be cleared.
+ * `smart` is whether smart search is on for this member, or null when it is not available at all (then there is no switch).
+ */
+export function FilterBar({ tags, kinds = LIBRARY_KINDS, smart = null }: { tags: FilterTag[]; kinds?: readonly LibraryKind[]; smart?: boolean | null }) {
+	const { query, pending, change } = useSearch();
+	const [open, setOpen] = useState(false);
+	const panelId = useId();
+	const hidden = hiddenFilterCount(query);
+	const tagName = new Map(tags.map((tag) => [tag.id, tag.name]));
+	const applied: { key: string; label: string; off: Patch }[] = [
+		...(query.sources ?? []).map((source) => ({ key: `source-${source}`, label: SOURCE_LABELS[source], off: (now: ParsedLibrarySearch) => ({ sources: toggleValue(now.sources, source) }) })),
+		...(query.subtype ? [{ key: "subtype", label: query.subtype, off: { subtype: undefined } }] : []),
+		...(query.formatDetail ? [{ key: "format", label: `Format: ${query.formatDetail}`, off: { formatDetail: undefined } }] : []),
+		...(query.engagementType ? [{ key: "engagement", label: `Engagement: ${query.engagementType}`, off: { engagementType: undefined } }] : []),
+		...(query.tagIds ?? []).map((id) => ({ key: `tag-${id}`, label: tagName.get(id) ?? "Tag", off: (now: ParsedLibrarySearch) => ({ tagIds: toggleValue(now.tagIds, id) }) })),
+	];
+
+	return (
+		<div className="grid min-w-0 gap-3">
+			<div className="flex min-w-0 items-start gap-2">
+				{/* On a phone the chips scroll sideways; the fade at the right edge says there are more. */}
+				<div
+					role="group"
+					aria-label="Type"
+					className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto [mask-image:linear-gradient(to_right,black_85%,transparent)] [scrollbar-width:none] sm:flex-wrap sm:overflow-visible sm:[mask-image:none]"
+				>
+					<Chip pressed={!query.kinds?.length} onClick={() => query.kinds?.length && change({ kinds: undefined })}>
+						All types
+					</Chip>
+					{LIBRARY_KINDS.filter((kind) => kinds.includes(kind) || query.kinds?.includes(kind)).map((kind) => (
+						<Chip key={kind} pressed={Boolean(query.kinds?.includes(kind))} onClick={() => change((now) => ({ kinds: toggleValue(now.kinds, kind) }))}>
+							{KIND_LABELS[kind]}
+						</Chip>
 					))}
+				</div>
+				<Button type="button" variant="outline" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen(!open)} className="min-h-10 shrink-0">
+					<SlidersHorizontal aria-hidden />
+					<span className="hidden sm:inline">More filters</span>
+					<span className="sm:hidden">Filters</span>
+					{hidden > 0 ? (
+						<span className="rounded-full bg-primary px-1.5 text-xs leading-5 text-primary-foreground">
+							<span aria-hidden>{hidden}</span>
+							<span className="sr-only">, {hidden} on</span>
+						</span>
+					) : null}
+					<ChevronDown className={cn("transition-transform motion-reduce:transition-none", open && "rotate-180")} aria-hidden />
+				</Button>
+			</div>
+
+			{open ? (
+				<div id={panelId} className={cn("min-w-0 rounded-xl border border-border bg-card p-4 transition-opacity", pending && "opacity-60")}>
+					<MoreFilterFields tags={tags} smart={smart} />
 				</div>
 			) : null}
 
-			{activeFilterCount(query) > 0 ? (
-				<Button
-					type="button"
-					variant="ghost"
-					size="sm"
-					className="justify-self-start"
-					onClick={() => change({ kinds: undefined, sources: undefined, tagIds: undefined, subtype: undefined, formatDetail: undefined, engagementType: undefined })}
-				>
-					Clear filters
-				</Button>
+			{applied.length > 0 || hasActiveSearch(query) ? (
+				<div className="flex min-w-0 flex-wrap items-center gap-2">
+					{applied.length > 0 ? (
+						<ul aria-label="Filters on" className="flex min-w-0 flex-wrap gap-1.5">
+							{applied.map((filter) => (
+								<AppliedFilter key={filter.key} label={filter.label} onRemove={() => change(filter.off)} />
+							))}
+						</ul>
+					) : null}
+					<Button
+						type="button"
+						variant="ghost"
+						className="min-h-9 px-2 text-muted-foreground hover:bg-transparent hover:text-foreground hover:underline"
+						onClick={() =>
+							change(
+								{ q: undefined, kinds: undefined, sources: undefined, tagIds: undefined, subtype: undefined, formatDetail: undefined, engagementType: undefined, without: undefined },
+								"push",
+							)
+						}
+					>
+						Clear search and filters
+					</Button>
+				</div>
 			) : null}
 		</div>
 	);
@@ -243,7 +335,7 @@ export function SearchBar() {
 			<div className="relative min-w-0 flex-1">
 				<Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
 				{/* key: a navigation that changes q (a clear, or the back button) replaces what is typed. */}
-				<Input key={query.q ?? ""} name="q" type="search" defaultValue={query.q ?? ""} maxLength={200} placeholder="Search the library" aria-label="Search the library" className="h-11 pl-9" />
+				<Input key={query.q ?? ""} name="q" type="search" enterKeyHint="search" defaultValue={query.q ?? ""} maxLength={200} placeholder="Search by title, topic, author or tag" aria-label="Search the library" className="h-11 pl-9" />
 			</div>
 			<Button type="submit" variant="secondary" className="h-11" disabled={pending}>
 				Search
@@ -252,67 +344,15 @@ export function SearchBar() {
 	);
 }
 
-/**
- * Filters: a panel beside the results on a wide screen, a sheet behind one button on a phone. `smart` is whether smart
- * search is on for this member, or null when it is not available at all (then there is no switch).
- */
-export function FilterPanel({ tags, total, smart = null }: { tags: FilterTag[]; total: number | null; smart?: boolean | null }) {
-	const { query, pending } = useSearch();
-	const count = activeFilterCount(query);
-
-	return (
-		<>
-			<div className="lg:hidden">
-				<Sheet>
-					<SheetTrigger asChild>
-						<Button type="button" variant="outline" className="h-11 w-full justify-between">
-							<span className="inline-flex items-center gap-2">
-								<SlidersHorizontal aria-hidden />
-								Filters
-							</span>
-							{count > 0 ? (
-								<span className="rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
-									<span aria-hidden>{count}</span>
-									<span className="sr-only">
-										{count} {count === 1 ? "filter" : "filters"} active
-									</span>
-								</span>
-							) : null}
-						</Button>
-					</SheetTrigger>
-					<SheetContent side="right" className="w-[88%] max-w-sm gap-0">
-						<SheetHeader className="border-b border-border pr-14">
-							<SheetTitle>Filters</SheetTitle>
-							<SheetDescription className="sr-only">Narrow the library by type, source and tag.</SheetDescription>
-						</SheetHeader>
-						<div className={cn("min-h-0 flex-1 overflow-y-auto p-4", pending && "opacity-60")}>
-							<FilterFields tags={tags} smart={smart} />
-						</div>
-						<SheetFooter className="border-t border-border">
-							<SheetClose asChild>
-								<Button type="button" className="h-11">
-									{total === null ? "Show results" : `Show ${total.toLocaleString("en-US")} ${total === 1 ? "result" : "results"}`}
-								</Button>
-							</SheetClose>
-						</SheetFooter>
-					</SheetContent>
-				</Sheet>
-			</div>
-			<div className={cn("hidden min-w-0 rounded-xl border border-border bg-card p-4 lg:block", pending && "opacity-60")}>
-				<FilterFields tags={tags} smart={smart} />
-			</div>
-		</>
-	);
-}
-
 export function SortSelect() {
 	const { query, change } = useSearch();
 	// Relevance only means something while there is a query to rank against, and the select shows the sort the results really use.
 	const options = SORTS.filter((sort) => sort !== "relevance" || query.q);
 	return (
-		<label className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
-			Sort by
-			<Select value={effectiveSort(query)} onChange={(event) => change({ sort: event.target.value as (typeof SORTS)[number] })} className="h-10 w-auto text-foreground">
+		<label className="flex min-w-0 shrink-0 items-center gap-2 text-sm text-muted-foreground">
+			Sort
+			{/* A new order of the same list, so it replaces the history entry instead of adding one. */}
+			<Select value={effectiveSort(query)} onChange={(event) => change({ sort: event.target.value as (typeof SORTS)[number] }, "replace")} className="h-10 w-auto text-foreground">
 				{options.map((sort) => (
 					<option key={sort} value={sort}>
 						{SORT_LABELS[sort]}

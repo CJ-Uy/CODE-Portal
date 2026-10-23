@@ -1,12 +1,15 @@
 import type { LibrarySearchInput } from "@/db/repositories/library";
 import { ENGAGEMENT_TYPES, FORMAT_DETAILS, LIBRARY_KINDS, LIBRARY_SOURCES, SUBTYPES } from "./taxonomy";
 
-/** The library search page and its URL: one place that decides which query values are believed. */
+// The library list and its URL: one place that decides which query values are believed.
+
+/** Rows per load: the first load comes with the page, the rest as the member scrolls. */
 export const PAGE_SIZE = 24;
 
-export const SORTS = ["relevance", "newest", "most_saved", "most_read"] as const;
+export const SORTS = ["relevance", "title", "newest", "most_saved", "most_read"] as const;
 export const SORT_LABELS: Record<(typeof SORTS)[number], string> = {
 	relevance: "Relevance",
+	title: "A to Z",
 	newest: "Newest",
 	most_saved: "Most saved",
 	most_read: "Most read",
@@ -16,12 +19,11 @@ const SUBTYPE_VALUES: readonly string[] = [...SUBTYPES.code_document, ...SUBTYPE
 const Q_MAX = 200;
 const TAG_ID = /^ltg_[A-Za-z0-9_-]{1,60}$/;
 const TAGS_MAX = 20;
-const PAGE_MAX = 10_000;
 // Smart-search chips the member removed: up to the 8 a search can show, each as long as a chip label can be.
 const WITHOUT_MAX = 8;
 const CHIP_MAX = 60;
 
-type RawParams = Record<string, string | string[] | undefined>;
+export type RawParams = Record<string, string | string[] | undefined>;
 /** `smart`: ?smart=1|0, which beats the member's switch for this request. `without`: removed chip labels, lowercase. */
 export type ParsedLibrarySearch = LibrarySearchInput & { smart: boolean | null; without?: string[] };
 
@@ -42,8 +44,6 @@ export function parseLibrarySearchParams(params: RawParams): ParsedLibrarySearch
 	const formatDetail = oneOf(many(params.format).slice(0, 1), FORMAT_DETAILS)?.[0];
 	const engagementType = oneOf(many(params.engagement).slice(0, 1), ENGAGEMENT_TYPES)?.[0];
 	const sort = oneOf(many(params.sort).slice(0, 1), SORTS)?.[0];
-	const rawPage = many(params.page)[0] ?? "";
-	const page = /^\d{1,5}$/.test(rawPage) && Number(rawPage) >= 1 && Number(rawPage) <= PAGE_MAX ? Number(rawPage) : 1;
 	const smart = many(params.smart)[0];
 	const without = [...new Set(many(params.without).map((label) => label.trim().toLowerCase()))].filter((label) => label && label.length <= CHIP_MAX).slice(0, WITHOUT_MAX);
 
@@ -57,13 +57,12 @@ export function parseLibrarySearchParams(params: RawParams): ParsedLibrarySearch
 		...(engagementType ? { engagementType } : {}),
 		...(sort ? { sort } : {}),
 		limit: PAGE_SIZE,
-		offset: (page - 1) * PAGE_SIZE,
 		smart: smart === "1" ? true : smart === "0" ? false : null,
 		...(without.length ? { without } : {}),
 	};
 }
 
-/** The URL form of a search, in a fixed key order. The page is written only past the first. */
+/** The URL form of a search, in a fixed key order. It is also the key a scrolled list is remembered by. */
 export function toLibrarySearchParams(input: LibrarySearchInput & { smart?: boolean | null; without?: string[] }): URLSearchParams {
 	const params = new URLSearchParams();
 	if (input.q) params.set("q", input.q);
@@ -74,26 +73,22 @@ export function toLibrarySearchParams(input: LibrarySearchInput & { smart?: bool
 	if (input.formatDetail) params.set("format", input.formatDetail);
 	if (input.engagementType) params.set("engagement", input.engagementType);
 	if (input.sort) params.set("sort", input.sort);
-	const page = Math.floor((input.offset ?? 0) / (input.limit ?? PAGE_SIZE)) + 1;
-	if (page > 1) params.set("page", String(page));
 	if (input.smart === true) params.set("smart", "1");
 	if (input.smart === false) params.set("smart", "0");
 	for (const label of input.without ?? []) params.append("without", label);
 	return params;
 }
 
-/** False only for the bare home. A sort or a later page counts: that is how a member browses everything. */
+/** The params of a query string the way a page receives them: a repeated key becomes a list. */
+export function rawParams(query: string): RawParams {
+	const params = new URLSearchParams(query);
+	return Object.fromEntries([...new Set(params.keys())].map((key) => [key, params.getAll(key).length > 1 ? params.getAll(key) : (params.get(key) ?? undefined)]));
+}
+
+/** Whether a query or a filter narrows the list. A sort only reorders it, so the home keeps its Latest row. */
 export function hasActiveSearch(search: LibrarySearchInput): boolean {
 	return Boolean(
-		search.q ||
-			search.kinds?.length ||
-			search.sources?.length ||
-			search.tagIds?.length ||
-			search.subtype ||
-			search.formatDetail ||
-			search.engagementType ||
-			search.sort ||
-			(search.offset ?? 0) > 0,
+		search.q || search.kinds?.length || search.sources?.length || search.tagIds?.length || search.subtype || search.formatDetail || search.engagementType,
 	);
 }
 
@@ -128,20 +123,16 @@ export function toggleValue<T extends string>(list: readonly T[] | undefined, it
 	return next.length ? next : undefined;
 }
 
-/** A filter or sort change on top of the search as it stands now: back to the first page, stale facets dropped. */
+/** A filter or sort change on top of the search as it stands now, stale facets dropped. */
 export function applySearchChange<T extends LibrarySearchInput>(current: T, patch: Partial<T>): T {
-	return { ...dropStaleFacets({ ...current, ...patch }), offset: 0 } as T;
+	return dropStaleFacets({ ...current, ...patch }) as T;
 }
 
-/** The sort the results really use: relevance has nothing to rank against without a query, so it is newest. */
+/**
+ * The sort the list really uses. With a query it is relevance; without one it is A to Z, a steady order like a sheet's,
+ * since the Latest row above the list already shows what is new. Relevance has nothing to rank without a query.
+ */
 export function effectiveSort(search: LibrarySearchInput): (typeof SORTS)[number] {
-	if (search.sort === "relevance") return search.q ? "relevance" : "newest";
-	return search.sort ?? (search.q ? "relevance" : "newest");
-}
-
-/** Where a results page sits. `prev` never points past the last real page, so a link from a page past the end lands on results. */
-export function pageInfo(total: number, offset: number, limit: number = PAGE_SIZE): { page: number; pages: number; prev: number | null; next: number | null } {
-	const page = Math.floor(Math.max(0, offset) / limit) + 1;
-	const pages = Math.max(1, Math.ceil(total / limit));
-	return { page, pages, prev: page > 1 ? Math.min(page - 1, pages) : null, next: page < pages ? page + 1 : null };
+	if (search.sort === "relevance") return search.q ? "relevance" : "title";
+	return search.sort ?? (search.q ? "relevance" : "title");
 }
