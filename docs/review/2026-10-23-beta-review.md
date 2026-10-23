@@ -76,3 +76,84 @@ CJ said to decide and list these rather than ask. Change any of them on review.
 ## Still in progress when this list was started
 
 Each of these sessions commits to its own branch, then gets merged into `beta` here, with its own section added below: retention-redesign, speed-loading, email-merge-html, photo-gallery, library-scroll and member-polish.
+
+## 3. Speed and loading (session speed-loading, merged 01920a4)
+
+Full numbers and the reasoning are in `docs/architecture/performance.md`.
+
+### Decisions
+
+1. **Biggest costs fixed first:** auth ran three serial queries several times per request (now one round trip, cached per request); independent repository reads ran one after another (now in parallel); `events.listPublished` ran one staff query per event (gone).
+2. **Results on a simulated 50 ms link:** Home 861 to 429 ms, Calendar 1068 to 525 ms, event page 1113 to 692 ms, admin events 1069 to 708 ms. About 50 KB less JavaScript per route (QR and scanner libraries now load only when used).
+3. **No KV or Durable Object.** Measured, the time went to serial database waves, not repeatable reads. A cache would add invalidation bugs for little gain. See the doc's caching section.
+4. **Loading feedback:** every section has a `loading.tsx` skeleton shaped like the real page, there is a thin top progress bar on navigation (it appears only after 150 ms), and every submit button shows a pending state automatically.
+5. **Errors and offline:** a page that fails or a lost connection shows a calm message with a way back, instead of a blank screen.
+
+### Check by hand
+
+- [ ] Click around Home, Calendar, an event, Retention and Library. Each click shows a skeleton or the top bar within a beat, never a frozen page.
+- [ ] Submit any form, such as saving a debrief. The button shows it's working.
+- [ ] Turn off Wi-Fi and click a link. You get the offline message, not a broken page.
+
+## 4. Library declutter and infinite scroll (session library-scroll, merged into beta)
+
+Full audit and 29 decisions: `docs/superpowers/specs/2026-10-23-library-browse-redesign.md`.
+
+### Highlights
+
+1. **Browse opens on Latest (a few newest items), then All items** as one A to Z sheet that loads more as you scroll. There is no Next page. A "Load more" button stays as a fallback.
+2. **Back keeps your place:** the list remembers your scroll position, search and filters.
+3. **Fewer controls up front:** one search box and a few filters, with the rest under More filters. Smart search moved into More filters.
+4. **One header with tabs:** Browse, Lists, My items, About. The pitch banner, the reading-hours strip and the duplicate Most saved shelf moved to About or were removed.
+5. **New:** Recently opened, breadcrumbs instead of six back-link styles, labeled facts on item pages, and empty states that point somewhere.
+6. **Follow-up pass:** the item page, lists, My items and the editor got the same calm treatment.
+
+### Check by hand
+
+- [ ] Library on a phone: Latest, then the list. Scroll to the bottom, and more rows arrive.
+- [ ] Open an item, then Back. You land where you were.
+- [ ] Search, filter, open an item and go back. The search is still there.
+
+## 5. Retention: 8 parts and the 75/25 feedback split (session retention-redesign, merged 07a35df)
+
+Model, data and all calls: `docs/superpowers/specs/2026-10-23-retention-parts-design.md`. Migration `0016_retention_parts` adds the 8 part point types, marks them yearly or semestral, adds a 2nd-semester start date per school year, and removes the old "retained at / probation below" thresholds. The old values were backed up first: Term 1 2026 had retained at 20 and probation below 10.
+
+### Highlights
+
+1. **Retained means all 12 slots met:** 4 yearly parts at 1 point each, plus 4 semester parts at 1 point per semester. Extra points never count toward retention, but they do count toward milestones.
+2. **The page is a report card:** "N of 12 requirements met", a 12-slot strip, a grid of parts by semester, a dashed "Not counted toward retention" group for other point types, and milestones. The old stat tiles, streak, rank and charts are gone.
+3. **Feedback split:** events with a feedback form pay 0.75 at check-in. The remaining 0.25 arrives when the member answers. Organizers and staff are paid in full. Every attendee can answer, sampled or not. The event and form pages show a one-line note about the split.
+4. **Guess to correct:** the 2nd semester was set to start on 11 January. Fix the real date in Admin > School years.
+
+### Check by hand (from the session's list)
+
+- [ ] `/portal/retention`: "N of 12 requirements met", the strip and its legend, and each part's boxes.
+- [ ] Admin > School years: set the real 2nd-semester date and save.
+- [ ] Admin > Point types: the 8 parts read "Retention: each year" or "each semester" and can't be retired. Others read "Not counted for retention".
+- [ ] On an event someone else owns that has a feedback form: check-in gives 0.75, answering gives the other 0.25, and the Ledger shows "Feedback form, the other 25%".
+- [ ] Admin > Events & points: Needs attention lists "Missed a retention requirement" and "Feedback form not sent".
+- [ ] Home: the Retention path card shows the strip and "N parts still open".
+
+## 6. Email: sheet mail merge and HTML emails (session email-merge-html, merged 01d4a2a)
+
+Migration renumbered to `0017_email_merge_sheet` (one new column).
+
+### Highlights
+
+1. **Paste from Google Sheets or Excel** (or upload a CSV or XLSX). Columns become merge variables such as `{{batch}}`, matched to recipients by email. Unmatched rows and missing values show before sending, and the sheet is saved with the draft.
+2. **HTML emails:** paste your own HTML and CSS, and a preview beside it shows light, dark and phone widths. Unsupported features get a warning, and what's sent is sanitized.
+3. **Base HTML template** with comments, to copy into your own AI agent, behind a disclosure.
+4. **Follow-up pass:** calmer steps, a download of the recipient sheet, and a fix that keeps the composer open after its first autosave.
+
+### Check by hand
+
+- [ ] New email: paste a few rows from a Sheet with an Email column and a custom column, then use `{{that column}}` in the body. The per-recipient preview fills it in.
+- [ ] Switch to HTML, paste a template, and toggle dark and phone previews.
+- [ ] Send a test to yourself only.
+
+## 7. Ments: Pments removed (main session, 46043e3)
+
+CJ asked for Pments to go. The tree shows official Ments only: no Show Pments switch, dashed lines, self-report list or admin Pment reports. Starter emails no longer mention Pments. The `ments_pments` table stays, unused, so nobody's saved rows are lost. A later cleanup migration can drop it.
+
+- [ ] Ments Tree: no Pments anywhere. Stats show People, Ments trees and Deepest tree.
+- [ ] Admin > Members & Access > Ments Tree: only the official editor.
