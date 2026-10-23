@@ -67,15 +67,15 @@ Migration `0015_important_links` is applied to beta D1. Beta had no sidebar pins
 
 CJ said to decide and list these rather than ask. Change any of them on review.
 
-1. **Pments (self-reported Ments):** kept. CJ first said remove it, then "never mind, we're not gonna do that". Removing it would delete members' data, so it waits for an explicit go-ahead.
+1. **Pments (self-reported Ments):** CJ confirmed removal later the same day, so they're gone (section 7).
 2. **"A bar for each kind of point":** read as one bar per retention part, filling toward its minimum, with overflow shown as not counting. That's built in the retention session.
 3. **"Retention point fixing tab":** read as the one-screen retention breakdown. Admins already fix wrong points in the Ledger. If CJ meant a new admin tool for corrections, that's a follow-up.
 4. **Attach a feedback form at event creation:** only CRS sees it, and it makes a draft rather than sending on its own. The 75/25 split still applies from the moment the event has a form.
 5. **Email "we'll wait for a bit":** CJ's later speedrun listed email again, so it's being built (session email-merge-html).
 
-## Still in progress when this list was started
+## Merge status
 
-Each of these sessions commits to its own branch, then gets merged into `beta` here, with its own section added below: retention-redesign, speed-loading, email-merge-html, photo-gallery, library-scroll and member-polish.
+Every session is merged into `beta` as of 23 Oct, about 19:50, and each one has its own section below.
 
 ## 3. Speed and loading (session speed-loading, merged 01920a4)
 
@@ -184,7 +184,28 @@ CJ asked for Pments to go. The tree shows official Ments only: no Show Pments sw
 3. **Session follow-ups merged:** retention calm pass, email autosave fix and sheet download, library item and editor pages, Important links search, copy and New labels, and speed's second pass (library item, admin member and records pages, lighter Links).
 4. **The graph** keeps beta's larger graphify output. A session's refresh would have shrunk it.
 
-## 10. Needs CJ: data and access
+## 10. Photo gallery (session photo-gallery, merged e843316)
+
+Migration `0018_gallery` adds the gallery tables and a "Photo gallery" admin role. `FEATURE_GALLERY` is on for beta only. The R2 bucket, the Images binding and the per-minute cron already existed on beta.
+
+### Decisions
+
+1. **Your answers, built as given:** nested folders; anyone can delete any photo; deletes are soft for 30 days, and the person who deleted, a Photo gallery admin or a super admin can restore; photos and videos with no size cap (a warning past 1 GB); folder deletes are recoverable too; the uploader is always recorded for accountability.
+2. **Scrapbook browsing:** a front page with Recent events first, then Albums, plus Most loved (hearts), Most viewed and Most tagged, and search across people, events, captions and albums.
+3. **Every event gets an album automatically,** past events included. Its call: an album appears when the event *starts*, not after it ends, so photos can go up during the event. Say if you want "after it ends" only.
+4. **Clutter control:** recent events lead, older ones stay reachable through search and the browse modes, and empty event albums show as a quiet "Add photos" tile.
+5. **Recently deleted** shows how many days are left on each item.
+6. **Public albums:** gallery admins can make a folder public at `/gallery`.
+7. **Prod note:** prod has no cron trigger, so the 30-day purge and the event-album backfill won't run there until one is added.
+
+### Check by hand
+
+- [ ] Gallery: open an event album, upload a few photos (and a short video) from your phone.
+- [ ] Heart a photo, tag someone, then search for them.
+- [ ] Delete a photo, find it in Recently deleted with its days left, and restore it.
+- [ ] Make a folder public as a gallery admin, then open `/gallery` signed out.
+
+## 11. Needs CJ: data and access
 
 - [ ] **School year dates (important for retention):** beta's only school year, "Term 1 2026", runs 18 Jun to 1 Nov. The new model treats a school year as two semesters, so the 2nd-semester date could not be guessed and the page splits the year at its midpoint. In Admin > School years, give it the real school-year end and the real 2nd-semester start. Or tell me the dates and I'll set them.
 - [ ] **Signed-in checks:** your browser was connected at first, then dropped (the Claude extension disconnected), so the signed-in checks above are still to do. Reconnect the extension and I'll run them, or tick the lists yourself.
