@@ -2,7 +2,6 @@ import { and, asc, desc, eq, gt, gte, isNull, lte, or, sql } from "drizzle-orm";
 import {
 	crsEvents,
 	linkDailyStats,
-	retentionRecords,
 	shortLinks,
 	surveyAssignments,
 	surveys,
@@ -11,7 +10,6 @@ import {
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type { RetentionProgress } from "@/lib/retention-parts";
 import { loadProgress } from "./retention";
-import { quantizePoints } from "@/lib/points";
 import type { Actor } from "@/server/auth/permissions";
 import type * as schema from "@/db/schema";
 

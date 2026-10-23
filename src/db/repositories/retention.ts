@@ -219,8 +219,6 @@ async function pendingShares(
 	return rows.map((row: PendingShare & { memberId: string }) => ({ ...row, points: quantizePoints(Number(row.points)) }));
 }
 
-const withoutMember = ({ memberId: _memberId, ...row }: PendingShare & { memberId: string }): PendingShare => row;
-
 /** Part progress for several members in one school year: one query for their records, one for their pending shares. */
 export async function loadProgress(db: Db, memberIds: string[], termId: string, now: Date): Promise<Map<string, RetentionProgress>> {
 	const [term] = await db
@@ -363,7 +361,7 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 		async eventFeedbackShare(actor, eventId) {
 			const [form] = await db.select({ id: surveys.id }).from(surveys).where(eq(surveys.eventId, eventId)).limit(1);
 			if (!form) return { hasForm: false, pending: [] };
-			return { hasForm: true, pending: (await pendingShares(db, { memberIds: [actor.memberId], eventId }, new Date())).map(withoutMember) };
+			return { hasForm: true, pending: (await pendingShares(db, { memberIds: [actor.memberId], eventId }, new Date())) };
 		},
 
 		async leaderboard(actor, input) {
@@ -605,7 +603,7 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 				recordedBy: row.recordedBy,
 				recordedAt: row.recordedAt,
 			}));
-			const pending = (await pendingShares(db, { memberIds: [actor.memberId], termId }, now)).map(withoutMember);
+			const pending = (await pendingShares(db, { memberIds: [actor.memberId], termId }, now));
 			const progress = buildRetentionProgress(await partTypes(db), term, rows.map(toPartRecord), pending.map(pendingToPartRecord), now);
 			return { summary, records, pendingShares: pending, progress };
 		},

@@ -22,6 +22,7 @@ import { canViewFeedbackArchive } from "@/server/feedback/archive-access";
 import { buildAwardEditorRows } from "./award-editor-input";
 import { EventManagePanel, type SignupResponseRow } from "./event-manage-panel";
 import { EventSignupPanel } from "./event-signup-panel";
+import { FeedbackShareNote } from "@/components/feedback-share-note";
 import { FeedbackCard } from "./feedback-card";
 import { OrganizerFeedback } from "./organizer-feedback";
 
@@ -39,6 +40,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 		loadEventTypes(() => repositories.eventTypeRules.list()),
 	]);
 	if (!event) notFound();
+	const feedbackShare = await repositories.retention.eventFeedbackShare(actor, eventId).catch(() => null);
 	const isPast = inclusiveEndDate(event.startsAt, event.endsAt) < toIsoDate(new Date());
 
 	// Management view keys off the viewer-scoped capability flags on the event record.
@@ -182,6 +184,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 					</div>
 					{awardLoad.ok ? <AwardChips awards={awardLoad.rows} /> : <p className="text-sm text-muted-foreground">Points unavailable</p>}
 				</div>
+				{awardLoad.ok && awardLoad.rows.some((award) => award.pointTypeActive) ? <FeedbackShareNote share={feedbackShare} on="event" /> : null}
 			</header>
 
 			{feedback && (feedback.state === "open" || feedback.state === "answered") ? (

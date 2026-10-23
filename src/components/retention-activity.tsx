@@ -74,7 +74,7 @@ export function RetentionActivity({ records, partIds }: { records: MyHistoryReco
 										</span>
 									</p>
 								</div>
-								<p className="row-start-2 text-right font-semibold tabular-nums sm:row-start-auto">
+								<p className="col-start-2 row-start-2 text-right font-semibold tabular-nums sm:col-start-auto sm:row-start-auto">
 									{record.points === null ? (
 										<span className="text-xs font-normal text-muted-foreground">No points</span>
 									) : (

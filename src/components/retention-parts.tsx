@@ -96,7 +96,7 @@ function SlotCell({ slot, spans }: { slot: RetentionSlot; spans: boolean }) {
 				<span className="text-xs text-muted-foreground">{slot.state === "upcoming" ? `until ${shortDate(slot.countsUntil)}` : `Counts until ${shortDate(slot.countsUntil)}`}</span>
 			</div>
 			<div
-				className="flex h-2 overflow-hidden rounded-full bg-secondary"
+				className={cn("flex h-2 overflow-hidden rounded-full bg-secondary", slot.state === "upcoming" && "hidden")}
 				role="meter"
 				aria-label={`${slot.label} progress`}
 				aria-valuemin={0}
@@ -109,7 +109,11 @@ function SlotCell({ slot, spans }: { slot: RetentionSlot; spans: boolean }) {
 			</div>
 			{slot.overflow > 0 || pending > 0 || slot.state === "missed" ? (
 				<div className="flex min-w-0 flex-wrap gap-1.5 text-xs">
-					{pending > 0 ? <span className="rounded-sm px-1.5 py-0.5 font-medium text-foreground" style={PENDING_HATCH}><span className="rounded-sm bg-card px-1">+{formatPoints(pending)} when you answer</span></span> : null}
+					{pending > 0 ? (
+						<span className="inline-flex items-center gap-1.5 font-medium">
+							<span className="size-3 shrink-0 rounded-sm border border-ring/60" style={PENDING_HATCH} aria-hidden />+{formatPoints(pending)} when you answer the feedback form
+						</span>
+					) : null}
 					{slot.overflow > 0 ? (
 						<span className="rounded-sm border border-dashed border-border px-1.5 py-0.5 text-muted-foreground">+{formatPoints(slot.overflow)} extra, not counted</span>
 					) : null}
@@ -163,6 +167,9 @@ export function RetentionGrid({ progress, nextEvents }: { progress: RetentionPro
 	);
 	return (
 		<div className="grid min-w-0 grid-cols-2 gap-x-2 gap-y-3 md:grid-cols-[minmax(0,13rem)_minmax(0,1fr)_minmax(0,1fr)] md:gap-x-3">
+			{yearly.length > 0 ? groupHeading("Once this school year", "1 point each, any time in the year") : null}
+			{yearly.map(row)}
+			{semestral.length > 0 ? groupHeading("Once each semester", "1 point each semester; extra points do not carry over") : null}
 			{firstSemester && secondSemester ? (
 				<div className="col-span-2 grid min-w-0 grid-cols-2 gap-2 text-xs text-muted-foreground md:col-span-3 md:grid-cols-subgrid">
 					<span className="hidden md:block" />
@@ -176,9 +183,6 @@ export function RetentionGrid({ progress, nextEvents }: { progress: RetentionPro
 					</p>
 				</div>
 			) : null}
-			{yearly.length > 0 ? groupHeading("Once this school year", "1 point each, any time in the year") : null}
-			{yearly.map(row)}
-			{semestral.length > 0 ? groupHeading("Once each semester", "1 point each semester; extra points do not carry over") : null}
 			{semestral.map(row)}
 		</div>
 	);
