@@ -38,6 +38,7 @@ export function CreateEventSheet({
 	typesUnavailable,
 	canSetReadOnly = false,
 	canViewArchive = false,
+	feedbackTemplates = [],
 }: {
 	allowedTypes: EventTypeRow[];
 	typesUnavailable: boolean;
@@ -45,6 +46,8 @@ export function CreateEventSheet({
 	canSetReadOnly?: boolean;
 	/** From canViewFeedbackArchive(). The archive page re-checks access; the prop only hides the link. */
 	canViewArchive?: boolean;
+	/** Offered to survey:configure holders only; empty hides the option. The repository re-checks the permission. */
+	feedbackTemplates?: Array<{ id: string; label: string }>;
 }) {
 	const router = useRouter();
 	// The mobile "+" quick action links to /portal/calendar?create=1 to open this directly.
@@ -68,6 +71,8 @@ export function CreateEventSheet({
 	const [startDay, setStartDay] = useState(() => defaultStart().slice(0, 10));
 	const [endDay, setEndDay] = useState(() => defaultStart().slice(0, 10));
 	const [readOnly, setReadOnly] = useState(false);
+	const [attachFeedback, setAttachFeedback] = useState(false);
+	const [feedbackTemplateId, setFeedbackTemplateId] = useState(feedbackTemplates[0]?.id ?? "");
 
 	function reset() {
 		setTitle("");
@@ -84,6 +89,8 @@ export function CreateEventSheet({
 		setStartDay(defaultStart().slice(0, 10));
 		setEndDay(defaultStart().slice(0, 10));
 		setReadOnly(false);
+		setAttachFeedback(false);
+		setFeedbackTemplateId(feedbackTemplates[0]?.id ?? "");
 		setError(null);
 	}
 
@@ -118,6 +125,7 @@ export function CreateEventSheet({
 					rsvpResponsesPublic,
 					allDay,
 					readOnly,
+					feedbackTemplateId: attachFeedback && !readOnly ? feedbackTemplateId : null,
 				});
 				if (!result.ok) {
 					setError(result.error);
@@ -308,6 +316,38 @@ export function CreateEventSheet({
 							</div>
 
 							<EventSignupFormEditor value={rsvpForm} onChange={setRsvpForm} />
+
+							{feedbackTemplates.length > 0 ? (
+								<div className="grid gap-3 rounded-lg border border-border bg-secondary/30 p-3 text-sm">
+									<div className="flex items-start gap-3">
+										<Checkbox
+											id="create-attach-feedback"
+											checked={attachFeedback}
+											onCheckedChange={(checked) => setAttachFeedback(checked === true)}
+											className="mt-0.5"
+										/>
+										<label htmlFor="create-attach-feedback" className="grid gap-1">
+											<span className="font-medium">Attach a feedback form</span>
+											<span className="text-xs text-muted-foreground">
+												Makes a draft form for this event from a template. Nothing goes out yet: you check the questions and send it from the
+												event&apos;s admin page.
+											</span>
+										</label>
+									</div>
+									{attachFeedback ? (
+										<label className="grid gap-1.5 pl-7">
+											<span className="text-xs font-medium">Template</span>
+											<select className={FIELD} value={feedbackTemplateId} onChange={(e) => setFeedbackTemplateId(e.target.value)}>
+												{feedbackTemplates.map((template) => (
+													<option key={template.id} value={template.id}>
+														{template.label}
+													</option>
+												))}
+											</select>
+										</label>
+									) : null}
+								</div>
+							) : null}
 						</>
 					)}
 

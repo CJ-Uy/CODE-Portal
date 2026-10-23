@@ -254,7 +254,7 @@ export type SurveysRepository = {
 	getById(actor: Actor, id: string): Promise<{ survey: Survey; questions: SurveyQuestion[] } | null>;
 	getForRespondent(actor: Actor, surveyId: string, now?: Date): Promise<RespondentView | null>;
 	submitResponse(actor: Actor, input: SubmitSurveyResponseInput, now?: Date): Promise<{ ok: true }>;
-	openFeedbackForEvent(actor: Actor, eventId: string, now?: Date): Promise<{ surveyId: string; state: RespondentState } | null>;
+	openFeedbackForEvent(actor: Actor, eventId: string, now?: Date): Promise<{ surveyId: string; state: RespondentState; closesAt: Date | null } | null>;
 };
 
 export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): SurveysRepository {
@@ -675,7 +675,7 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 			if (!survey || effectiveStatus(survey, now) !== "running") return null;
 			const { state } = await respondentState(db, actor, survey, now);
 			// Only a member who can answer, or already did, is shown the card.
-			return state === "open" || state === "answered" ? { surveyId: survey.id, state } : null;
+			return state === "open" || state === "answered" ? { surveyId: survey.id, state, closesAt: survey.closesAt } : null;
 		},
 	};
 }

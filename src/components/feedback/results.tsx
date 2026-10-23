@@ -1,10 +1,12 @@
 import { TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
+import { Badge } from "@/components/ui/badge";
 import type { ResultsQuestion, ResultsRespondents, SurveyResults } from "@/db/types";
 import {
 	BELOW_THRESHOLD_NOTE,
 	baselineLine,
 	closingLine,
+	FORM_STATUS_LABELS,
 	invitedLine,
 	isLowResponseRate,
 	LOW_RESPONSE_NOTE,
@@ -23,6 +25,11 @@ type ChoiceQuestion = Extract<ResultsQuestion, { kind: "choice" }>;
 const PROSE = "min-w-0 [overflow-wrap:anywhere]";
 
 const ratingColor = (value: number) => `var(--rating-${value})`;
+
+/** Pass the effective status, so a form past its closing time reads Closed. */
+export function FormStatusBadge({ status }: { status: keyof typeof FORM_STATUS_LABELS }) {
+	return <Badge variant={status === "running" ? "success" : status === "draft" ? "secondary" : "outline"}>{FORM_STATUS_LABELS[status]}</Badge>;
+}
 
 /** The strip above the questions. Rates are always printed next to the response count they come from. */
 export function ResultsHeader({ results }: { results: SurveyResults }) {

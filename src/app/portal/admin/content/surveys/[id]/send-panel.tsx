@@ -95,7 +95,7 @@ export function SendPanel(props: SendPanelProps & { unsaved: boolean }) {
 		<section aria-labelledby="send-heading" className="grid min-w-0 gap-5 rounded-xl border border-border/60 bg-card p-5">
 			<div className="grid min-w-0 gap-1">
 				<h2 id="send-heading" className="text-xl font-semibold text-primary">
-					Send
+					2. Send
 				</h2>
 				<p className="min-w-0 text-sm text-muted-foreground">
 					Eligible: {eligible} {who}

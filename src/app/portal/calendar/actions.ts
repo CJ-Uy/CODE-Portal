@@ -25,6 +25,7 @@ const createSchema = z
 		rsvpResponsesPublic: z.boolean().default(false),
 		allDay: z.boolean().default(false),
 		readOnly: z.boolean().default(false),
+		feedbackTemplateId: z.string().trim().min(1).max(60).nullable().default(null),
 	})
 	// Normalized BEFORE the ordering check: an all-day event spans whole UTC+8 days regardless of the
 	// times the client happened to send, and a same-day all-day event must stay valid.
@@ -41,10 +42,18 @@ export async function createEventAction(input: z.input<typeof createSchema>) {
 		return { ok: false as const, error: issue ? `${issue.path.join(".") || "Event"}: ${issue.message}` : "Check the event details." };
 	}
 	const repositories = await getRepositories();
+	const { feedbackTemplateId, ...eventInput } = parsed.data;
 	// points stays null on create — only Events-role CRS admins set the value (spec §4).
 	// readOnly is passed through and re-checked against event:moderate in the repository, which is
 	// the gate that also covers the HTTP routes.
-	const event = await repositories.events.create(actor, { ...parsed.data, points: null });
+	const event = await repositories.events.create(actor, { ...eventInput, points: null });
+	// The event is made either way. A form that can't be attached (no survey:configure, archived template) is not worth
+	// failing the event over: the admin event page still offers to start one.
+	if (feedbackTemplateId && !eventInput.readOnly) {
+		await repositories.surveys.createFromTemplate(actor, { templateId: feedbackTemplateId, eventId: event.id }).catch((error: unknown) => {
+			console.error("Could not attach a feedback form to the new event.", { eventId: event.id, error: error instanceof Error ? error.name : "unknown" });
+		});
+	}
 	revalidatePath("/portal/calendar");
 	return { ok: true as const, id: event.id };
 }

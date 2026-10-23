@@ -84,12 +84,12 @@ export default async function EventsAdminPage({ searchParams }: { searchParams: 
 				</form>
 			</div>
 
-			<section className="grid gap-3">
+			<section className="grid min-w-0 gap-3">
 					{sectionTitle("Events")}
 					<p className="text-sm text-muted-foreground sm:hidden">
 						Swipe the table to see attendance{showFeedback ? ", points and feedback" : " and points"}.
 					</p>
-				<Card>
+				<Card className="min-w-0">
 					<CardContent className="overflow-x-auto p-0">
 						<table className={`w-full text-left text-sm ${showFeedback ? "min-w-[1080px]" : "min-w-[760px]"}`}>
 							<thead className="border-b border-border text-xs uppercase tracking-[0.08em] text-muted-foreground">

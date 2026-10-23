@@ -4,8 +4,9 @@ import { signInPath } from "@/server/auth/sign-in";
 import { getRepositories } from "@/db";
 import type { ResultsFilter } from "@/db/repositories/survey-results";
 import type { SurveyQuestion, SurveyQuestionInput } from "@/db/types";
-import { Badge } from "@/components/ui/badge";
-import { ResultsList } from "@/components/feedback/results";
+import { Download } from "lucide-react";
+import { FormStatusBadge, ResultsList } from "@/components/feedback/results";
+import { Button } from "@/components/ui/button";
 import { SummaryPanel } from "@/components/feedback/summary-panel";
 import { toLocalInput } from "@/lib/date-slots";
 import { formatEstimate } from "@/lib/feedback/editor-input";
@@ -136,11 +137,20 @@ export default async function AdminSurveyDetailPage({
 		<div>
 			<div className="grid gap-6">
 				<header className="grid min-w-0 gap-2 border-b border-border/60 pb-5">
-					<h1 className="min-w-0 text-3xl font-semibold text-primary [overflow-wrap:anywhere] sm:text-4xl">{detail.survey.title}</h1>
-					{event ? <p className="min-w-0 text-sm text-muted-foreground [overflow-wrap:anywhere]">For the event {event.title}</p> : null}
-					<div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-						<Badge variant="outline">{results?.status ?? detail.survey.status}</Badge>
+					<div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+						<h1 className="min-w-0 text-3xl font-semibold text-primary [overflow-wrap:anywhere] sm:text-4xl">{detail.survey.title}</h1>
+						<FormStatusBadge status={effectiveStatus(detail.survey, now)} />
 					</div>
+					{event ? (
+						<p className="min-w-0 text-sm text-muted-foreground [overflow-wrap:anywhere]">
+							For{" "}
+							<Link href={`/portal/admin/data/events/${event.id}`} className="font-medium text-accent underline-offset-4 hover:underline">
+								{event.title}
+							</Link>
+						</p>
+					) : (
+						<p className="text-sm text-muted-foreground">General form, sent to active members</p>
+					)}
 				</header>
 
 				{notice && Object.hasOwn(NOTICES, notice) ? (
@@ -168,48 +178,75 @@ export default async function AdminSurveyDetailPage({
 						}}
 					/>
 				) : (
-					<>
-						{running ? (
-							<RunningControls
-								surveyId={detail.survey.id}
-								closesAt={toLocalInput(timeClosed || !detail.survey.closesAt ? sendDefaultClosesAt(null, now) : detail.survey.closesAt)}
-								timeClosed={timeClosed}
-								reminder={detail.survey.reminderSentAt ? "sent" : timeClosed ? "closed" : "ready"}
-							/>
-						) : null}
-
-						{/* Works on a closed form too: an admin can stop sharing with organizers at any time after sending. */}
-						{detail.survey.eventId ? <ShareToggle surveyId={detail.survey.id} shared={detail.survey.shareWithOrganizers} /> : null}
-
-						{!results || !allResults ? (
-							<p className="min-w-0 rounded-lg border border-border bg-secondary p-3 text-sm text-secondary-foreground">
-								The results couldn&apos;t be loaded. Try again in a moment.
-							</p>
-						) : (
-							<>
-								{filterOffered ? (
-									<nav aria-label="Which responses to show" className="flex flex-wrap gap-2">
-										<FilterLink href={base} current={!invitedOnly}>
-											All responses
-										</FilterLink>
-										<FilterLink href={`${base}?filter=invited`} current={invitedOnly}>
-											Invited sample only
-										</FilterLink>
-									</nav>
-								) : null}
-
-								<ResultsList results={results} mode="admin" />
-
-								{summarizerAvailable && !allResults.belowThreshold ? (
-									<SummaryPanel
+					// Results lead; the controls sit beside them on wide screens and above them on narrow ones.
+					<div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_18rem] xl:items-start">
+						{running || detail.survey.eventId ? (
+							<aside
+								aria-labelledby="manage-heading"
+								className="grid min-w-0 gap-5 rounded-xl border border-border/60 bg-card p-5 xl:sticky xl:top-6 xl:col-start-2 xl:row-start-1"
+							>
+								<h2 id="manage-heading" className="text-xl font-semibold text-primary">
+									Manage this form
+								</h2>
+								{running ? (
+									<RunningControls
 										surveyId={detail.survey.id}
-										view={summaryView(allResults.summary, allResults.responseCount, countComments(allResults.questions))}
-										canDraft={canDraftSummary(allResults)}
+										closesAt={toLocalInput(timeClosed || !detail.survey.closesAt ? sendDefaultClosesAt(null, now) : detail.survey.closesAt)}
+										timeClosed={timeClosed}
+										reminder={detail.survey.reminderSentAt ? "sent" : timeClosed ? "closed" : "ready"}
 									/>
 								) : null}
-							</>
-						)}
-					</>
+								{/* Works on a closed form too: an admin can stop sharing with organizers at any time after sending. */}
+								{detail.survey.eventId ? <ShareToggle surveyId={detail.survey.id} shared={detail.survey.shareWithOrganizers} /> : null}
+							</aside>
+						) : null}
+
+						<div className="grid min-w-0 gap-5 xl:col-start-1 xl:row-start-1">
+							{!results || !allResults ? (
+								<p className="min-w-0 rounded-lg border border-border bg-secondary p-3 text-sm text-secondary-foreground">
+									The results couldn&apos;t be loaded. Try again in a moment.
+								</p>
+							) : (
+								<>
+									{filterOffered || allResults.responseCount > 0 ? (
+										<div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+											{filterOffered ? (
+												<nav aria-label="Which responses to show" className="flex flex-wrap gap-2">
+													<FilterLink href={base} current={!invitedOnly}>
+														All responses
+													</FilterLink>
+													<FilterLink href={`${base}?filter=invited`} current={invitedOnly}>
+														Invited sample only
+													</FilterLink>
+												</nav>
+											) : (
+												<span />
+											)}
+											{allResults.responseCount > 0 ? (
+												<Button asChild variant="outline" size="sm">
+													{/* A plain link: the route streams the file, so the browser handles the download itself. */}
+													<a href={`/api/surveys/${encodeURIComponent(id)}/export`} download>
+														<Download />
+														Download responses (.xlsx)
+													</a>
+												</Button>
+											) : null}
+										</div>
+									) : null}
+
+									<ResultsList results={results} mode="admin" />
+
+									{summarizerAvailable && !allResults.belowThreshold ? (
+										<SummaryPanel
+											surveyId={detail.survey.id}
+											view={summaryView(allResults.summary, allResults.responseCount, countComments(allResults.questions))}
+											canDraft={canDraftSummary(allResults)}
+										/>
+									) : null}
+								</>
+							)}
+						</div>
+					</div>
 				)}
 			</div>
 		</div>

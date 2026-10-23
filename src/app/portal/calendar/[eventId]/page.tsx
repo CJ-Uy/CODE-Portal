@@ -99,6 +99,10 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 		: [];
 	// Points attach to a term; resolve the active one server-side, same as markPresentAction.
 	const currentTerm = terms.find((t) => t.isCurrent);
+	const organizerPanel =
+		isOrganizer && surveysOn ? (
+			<OrganizerFeedback eventId={event.id} feedback={organizerFeedback} debrief={debrief?.ok ? debrief.view : null} />
+		) : null;
 
 	// Share + calendar handoff. Built server-side so the Google URL and .ics agree on the same
 	// inclusive end date; a null public_code (row written by an older Worker) just hides the bar.
@@ -145,7 +149,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 							<Badge variant="secondary">Informational</Badge>
 						) : (
 							<Badge variant={event.iAttended ? "default" : "secondary"}>
-								{event.iAttended ? "Attended" : event.myRsvp === "going" ? "Going" : "Not going"}
+								{event.iAttended ? "Attended" : isPast ? "Didn't attend" : event.myRsvp === "going" ? "Going" : "Not going"}
 							</Badge>
 						)}
 					</div>
@@ -181,12 +185,17 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 			</header>
 
 			{feedback && (feedback.state === "open" || feedback.state === "answered") ? (
-				<FeedbackCard surveyId={feedback.surveyId} state={feedback.state} />
+				<FeedbackCard surveyId={feedback.surveyId} state={feedback.state} closesAt={feedback.closesAt} />
 			) : null}
 
+			{/* After the event, how it went is what organizers come back for, so it leads; before, it waits at the end. */}
+			{isPast ? organizerPanel : null}
+
 			{/* An informational event has no signup and no check-in, so the whole interaction column
-			    goes away rather than rendering controls that the repository would reject. */}
-			{event.readOnly ? null : (
+			    goes away rather than rendering controls that the repository would reject. An ended event
+			    drops it too: signing up means nothing then, the header badge already says whether you
+			    attended, and the check-in code stays one tap away in the plus menu. */}
+			{event.readOnly || isPast ? null : (
 			<div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
 				<EventSignupPanel
 					eventId={event.id}
@@ -220,7 +229,8 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 
 			{/* Rows collected before the event was made informational stay visible to organizers —
 			    flipping the flag hides the affordances, it does not delete history. */}
-			{event.readOnly && !canViewSignupResponses ? null : (
+			{/* An ended event nobody signed up for has nothing to show here. */}
+			{(event.readOnly && !canViewSignupResponses) || (isPast && event.attendingCount === 0) ? null : (
 				<SignupResponses
 					count={event.attendingCount}
 					form={event.rsvpForm}
@@ -265,9 +275,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 				/>
 			) : null}
 
-			{isOrganizer && surveysOn ? (
-				<OrganizerFeedback eventId={event.id} feedback={organizerFeedback} debrief={debrief?.ok ? debrief.view : null} />
-			) : null}
+			{isPast ? null : organizerPanel}
 		</div>
 	);
 }
