@@ -111,7 +111,7 @@ function Tile({ item, selecting, selected, badge, onClick }: { item: GalleryTile
 					aria-hidden
 					className={cn(
 						"absolute left-2 top-2 grid size-6 place-items-center rounded-full border-2 shadow-[0_1px_3px_rgba(6,25,47,0.45)] transition-colors",
-						selected ? "border-white bg-[#0c315c] text-white" : "border-white/90 bg-black/15 text-transparent",
+						selected ? "border-white! bg-[#0c315c] text-white" : "border-white/90! bg-black/15 text-transparent",
 					)}
 				>
 					<Check className="size-3.5" strokeWidth={3} />
