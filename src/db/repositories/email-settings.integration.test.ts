@@ -57,8 +57,8 @@ describe("email settings and templates", () => {
 
 	it("validates template content and duplicates templates", async () => {
 		await expect(
-			repos.templates.save(admin, { name: "Bad", categoryId: null, subject: "Hi {{points}}", preheader: "", blocks: [] }),
-		).rejects.toThrow(/Unknown field/);
+			repos.templates.save(admin, { name: "Bad", categoryId: null, subject: "Hi {{First Name}}", preheader: "", blocks: [] }),
+		).rejects.toThrow(/lowercase letters/);
 		const saved = await repos.templates.save(admin, {
 			name: "Weekly",
 			categoryId: null,

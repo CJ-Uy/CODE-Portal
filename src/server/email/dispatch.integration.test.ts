@@ -132,6 +132,35 @@ describe("runEmailDispatch", () => {
 		expect((await db.select().from(schema.members).where(eq(schema.members.id, "mem_a")))[0].fullName).toBe("MEM_A Person");
 	});
 
+	it("sends an HTML body with sheet values: CSS inlined, values escaped, unsafe markup removed, footer kept", async () => {
+		const html = `<style>.note{color:#06192F}</style><p class="note">{{message}}</p><a href="{{link}}">Open</a><script>x()</script>`;
+		await db
+			.update(emailCampaigns)
+			.set({
+				subject: "{{message}}",
+				blocks: [{ id: "h", type: "html", props: { html } }],
+				mergeSheet: {
+					name: "sheet.csv",
+					importedAt: "2026-10-02T00:00:00.000Z",
+					keyColumn: "Email",
+					columns: [{ header: "Message", variable: "message" }, { header: "Link", variable: "link" }],
+					rows: { "mem_a@example.com": { message: "Line 1\nBcc: x <b>", link: "javascript:alert(1)" } },
+				},
+			})
+			.where(eq(emailCampaigns.id, "ecmp_1"));
+		const { sender, sent } = fakeSender();
+		await runEmailDispatch(db, sender, config, NOW);
+		const email = sent.find((m) => m.to === "mem_a@example.com")!;
+		expect(email.subject).toBe("Line 1 Bcc: x <b>");
+		expect(email.html).toContain('<p class="note" style="color:#06192F">Line 1<br>Bcc: x &lt;b&gt;</p>');
+		expect(email.html).toContain('<a href="#">Open</a>');
+		expect(email.html).not.toMatch(/<script|javascript:/);
+		expect(email.html).toContain("Email preferences");
+		expect(email.text).toContain("Line 1\nBcc: x <b>");
+		const other = sent.find((m) => m.to !== "mem_a@example.com");
+		if (other) expect(other.html).toContain('<p class="note" style="color:#06192F"></p>');
+	});
+
 	it("claims a due campaign, skips opted-out members, sends, and finishes", async () => {
 		const { sender, sent } = fakeSender();
 		const result = await runEmailDispatch(db, sender, config, NOW);

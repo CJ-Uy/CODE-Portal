@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { audienceSchema, blocksSchema, emailContentSchema, newBlock } from "./blocks";
+import { audienceSchema, blocksSchema, emailContentSchema, newBlock, newHtmlBlock } from "./blocks";
 
 describe("blocksSchema", () => {
 	it("accepts every new block type", () => {
@@ -14,11 +14,19 @@ describe("blocksSchema", () => {
 		expect(blocksSchema.safeParse([image]).success).toBe(false);
 	});
 
-	it("rejects unknown merge tags inside text", () => {
-		const text = { id: "t1", type: "text", props: { text: "Hi {{points}}" } };
+	it("rejects malformed merge tags inside text but allows sheet variables", () => {
+		const text = { id: "t1", type: "text", props: { text: "Hi {{first-name}}" } };
 		const result = blocksSchema.safeParse([text]);
 		expect(result.success).toBe(false);
-		expect(JSON.stringify(result.error?.issues)).toContain("points");
+		expect(JSON.stringify(result.error?.issues)).toContain("first-name");
+		expect(blocksSchema.safeParse([{ ...text, props: { text: "Hi {{points}}" } }]).success).toBe(true);
+	});
+
+	it("accepts one HTML body and refuses HTML mixed with blocks", () => {
+		const html = newHtmlBlock("<p>Hi {{message}}</p>");
+		expect(blocksSchema.safeParse([html]).success).toBe(true);
+		expect(blocksSchema.safeParse([html, newBlock("divider")]).success).toBe(false);
+		expect(blocksSchema.safeParse([newHtmlBlock("<p>{{Bad Tag}}</p>")]).success).toBe(false);
 	});
 
 	it("rejects near-miss merge tags", () => {
@@ -32,8 +40,8 @@ describe("blocksSchema", () => {
 });
 
 describe("emailContentSchema", () => {
-	it("rejects unknown tags in the subject", () => {
-		expect(emailContentSchema.safeParse({ subject: "Hi {{nope}}", preheader: "", blocks: [] }).success).toBe(false);
+	it("rejects malformed tags in the subject", () => {
+		expect(emailContentSchema.safeParse({ subject: "Hi {{No Pe}}", preheader: "", blocks: [] }).success).toBe(false);
 	});
 });
 

@@ -41,7 +41,7 @@ export default async function TemplatesPage({ searchParams }: { searchParams: Pr
 			<p role="status" className="text-sm text-muted-foreground">{starters.length} CODE starters · {templates.length} saved templates{q ? ` matching “${q}”` : ""}</p>
 			<ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
 				{items.map((t) => {
-					const { bodyHtml } = renderEmail({
+					const { bodyHtml, html, framed } = renderEmail({
 						subject: t.subject,
 						preheader: t.preheader,
 						blocks: t.blocks,
@@ -53,7 +53,11 @@ export default async function TemplatesPage({ searchParams }: { searchParams: Pr
 					return (
 						<li key={`${t.builtIn ? "starter" : "saved"}:${t.id}`} className="grid min-w-0 content-start overflow-hidden rounded-xl border border-border bg-card">
 								<div className="pointer-events-none relative h-44 overflow-hidden bg-[#F5F5F6]" inert>
-									<div className="absolute left-1/2 top-3 w-[600px] origin-top -translate-x-1/2 scale-[0.5]" dangerouslySetInnerHTML={{ __html: bodyHtml }} />
+									{framed ? (
+										<iframe title={`${t.name} preview`} sandbox="" srcDoc={html} tabIndex={-1} className="absolute left-1/2 top-0 h-[44rem] w-[600px] origin-top -translate-x-1/2 scale-[0.5] border-0 bg-white" />
+									) : (
+										<div className="absolute left-1/2 top-3 w-[600px] origin-top -translate-x-1/2 scale-[0.5]" dangerouslySetInnerHTML={{ __html: bodyHtml }} />
+									)}
 								</div>
 								<div className="grid gap-2 border-t border-border p-4">
 									<h2 className="font-heading text-xl">{t.name}</h2>

@@ -59,6 +59,34 @@ describe("email campaigns", () => {
 	});
 	// Each test calls setup() itself because it needs the returned sender and category ids.
 
+	it("saves sheet rows with the draft, matches them to recipients and refuses to schedule fields nothing fills", async () => {
+		const ids = await setup();
+		const mergeSheet = {
+			name: "batch.xlsx",
+			importedAt: "2026-10-02T03:00:00.000Z",
+			keyColumn: "Email",
+			columns: [{ header: "Message", variable: "message" }, { header: "Batch", variable: "batch" }],
+			rows: { "mem_a@example.com": { message: "See you Friday", batch: "2030" }, "gone@example.com": { message: "Hi", batch: "" } },
+		};
+		const content = { ...draftInput(ids), subject: "{{first_name}}, a note", blocks: [{ id: "h", type: "html" as const, props: { html: "<p>{{message}} {{batch}} {{points}}</p>" } }] };
+		const draft = await repos.campaigns.saveDraft(admin, { ...content, mergeSheet });
+		expect(draft.mergeSheet).toEqual(mergeSheet);
+		expect((await repos.campaigns.saveDraft(admin, { ...content, id: draft.id })).mergeSheet).toEqual(mergeSheet);
+		expect((await repos.campaigns.duplicate(admin, draft.id)).mergeSheet).toEqual(mergeSheet);
+
+		const preview = await repos.campaigns.previewPersonalization(admin, { audience: content.audience, categoryId: ids.news.id, tags: ["first_name", "message", "batch", "points"], overrides: {}, sheet: mergeSheet });
+		expect(preview.sheet).toEqual({ rows: 2, matched: 1, unmatched: ["gone@example.com"], unmatchedCount: 1, withoutRow: 1, missing: [{ variable: "message", count: 1 }] });
+		expect(preview.unknown).toEqual(["points"]);
+		const byEmail = Object.fromEntries(preview.rows.map((r) => [r.email, r]));
+		expect(byEmail["mem_a@example.com"]).toMatchObject({ values: { message: "See you Friday", batch: "2030" }, missing: ["points"] });
+		expect(byEmail["mem_b@example.com"]).toMatchObject({ values: { message: "", batch: "2027" }, missing: ["message", "points"] });
+
+		await expect(repos.campaigns.schedule(admin, draft.id, new Date(Date.now() + 60_000))).rejects.toThrow(/Nothing fills \{\{points\}\}/);
+		await repos.campaigns.saveDraft(admin, { ...content, id: draft.id, mergeOverrides: { "mem_a@example.com": { points: "3" } } });
+		expect((await repos.campaigns.schedule(admin, draft.id, new Date(Date.now() + 60_000))).status).toBe("scheduled");
+		expect((await repos.campaigns.saveDraft(admin, { ...content, id: draft.id, mergeSheet: null })).mergeSheet).toBeNull();
+	});
+
 	it("previews the audience with opted-out members split out", async () => {
 		const ids = await setup();
 		await env.DB.prepare("INSERT INTO email_optouts (member_id, category_id, created_at) VALUES ('mem_b', ?, ?)").bind(ids.news.id, Date.now()).run();

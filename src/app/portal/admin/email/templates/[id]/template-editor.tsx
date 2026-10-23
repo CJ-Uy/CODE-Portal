@@ -2,13 +2,18 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Archive, Copy, Save, Send } from "lucide-react";
+import { Archive, Code2, Copy, LayoutList, Save, Send } from "lucide-react";
 import { AdminIntro } from "@/components/portal/admin-intro";
-import { BlockEditor, type EventOption, type PreviewPerson } from "@/components/email/block-editor";
+import { BlockEditor, Segmented, type EventOption, type PreviewPerson } from "@/components/email/block-editor";
+import { HtmlEditor } from "@/components/email/html-editor";
 import { TaggedField } from "@/components/email/tagged-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
+import { baseHtmlTemplate } from "@/lib/email/base-html";
+import { newHtmlBlock } from "@/lib/email/blocks";
+import { htmlBodyOf } from "@/lib/email/html";
+import { blocksToHtml } from "@/lib/email/render";
 import type { EmailBlock } from "@/lib/email/types";
 import { duplicateTemplateAction, saveTemplateAction, setTemplateArchivedAction } from "../../actions";
 import { useAutosave } from "../../use-autosave";
@@ -41,6 +46,19 @@ export function TemplateEditor({
 	const [error, setError] = useState<string | null>(null);
 	const [pending, startTransition] = useTransition();
 	const category = categories.find((c) => c.id === categoryId);
+	const htmlSource = htmlBodyOf(blocks);
+	// The body you switched away from, so switching back within this visit restores it.
+	const stash = useRef<{ blocks: EmailBlock[]; html: EmailBlock[] }>({ blocks: [], html: [] });
+	const setMode = (mode: "blocks" | "html") => {
+		if ((mode === "html") === (htmlSource !== null)) return;
+		if (mode === "html") {
+			stash.current.blocks = blocks;
+			setBlocks(stash.current.html.length ? stash.current.html : [newHtmlBlock(blocks.length ? blocksToHtml(blocks, baseUrl) : baseHtmlTemplate(baseUrl))]);
+		} else {
+			stash.current.html = blocks;
+			setBlocks(stash.current.blocks);
+		}
+	};
 
 	useEffect(() => {
 		mounted.current = true;
@@ -161,7 +179,33 @@ export function TemplateEditor({
 				<TaggedField label="Preview text" value={preheader} onChange={setPreheader} maxLength={200} hint="Shown after the subject in most inboxes." />
 			</div>
 
-			<BlockEditor blocks={blocks} onChange={setBlocks} baseUrl={baseUrl} footer={footer} people={people} events={events} layout="wide" />
+			<div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+				<Segmented
+					label="Template body"
+					value={htmlSource !== null ? "html" : "blocks"}
+					onChange={setMode}
+					options={[
+						{ value: "blocks", label: <><LayoutList className="size-3.5" aria-hidden /> Blocks</> },
+						{ value: "html", label: <><Code2 className="size-3.5" aria-hidden /> HTML</> },
+					]}
+				/>
+				<span className="text-xs text-muted-foreground">{htmlSource !== null ? "Your own HTML and CSS, checked and cleaned for inboxes." : "CODE's layout. Switch to HTML to paste your own design."}</span>
+			</div>
+			{htmlSource !== null ? (
+				<HtmlEditor
+					html={htmlSource}
+					onChange={(html) => setBlocks((current) => [{ ...current[0], type: "html", props: { html } } as EmailBlock])}
+					subject={subject}
+					preheader={preheader}
+					baseUrl={baseUrl}
+					footer={footer}
+					people={people}
+					sheetNote="Sheet columns are added per email, in the Personalization step. Any field name made of lowercase letters, numbers and underscores works here."
+					layout="wide"
+				/>
+			) : (
+				<BlockEditor blocks={blocks} onChange={setBlocks} baseUrl={baseUrl} footer={footer} people={people} events={events} layout="wide" />
+			)}
 		</div>
 	);
 }
