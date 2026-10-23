@@ -47,10 +47,9 @@ async function getCurrentTerm(db: Db, now: Date): Promise<{ id: string; name: st
 export function createOverviewRepository(db: Db): OverviewRepository {
 	return {
 		async getSummary(actor, now = new Date()) {
-			const term = await getCurrentTerm(db, now);
-
-			let points = 0;
-			if (term) {
+			// Independent reads run together: each awaited query is a full D1 round trip.
+			const termPoints = getCurrentTerm(db, now).then(async (term) => {
+				if (!term) return { term, points: 0 };
 				const [row] = await db
 					.select({ total: sql<number>`coalesce(sum(${retentionRecords.points}), 0)` })
 					.from(retentionRecords)
@@ -61,11 +60,11 @@ export function createOverviewRepository(db: Db): OverviewRepository {
 							eq(retentionRecords.pointTypeId, RETENTION_POINT_TYPE_ID),
 						),
 					);
-				points = quantizePoints(Number(row?.total ?? 0));
-			}
+				return { term, points: quantizePoints(Number(row?.total ?? 0)) };
+			});
 
 			// A member has only a handful of open forms, so one list gives both the count and the oldest.
-			const pending = await db
+			const pendingRows = db
 				.select({ surveyId: surveyAssignments.surveyId })
 				.from(surveyAssignments)
 				.innerJoin(surveys, eq(surveys.id, surveyAssignments.surveyId))
@@ -80,16 +79,18 @@ export function createOverviewRepository(db: Db): OverviewRepository {
 				)
 				.orderBy(asc(surveyAssignments.assignedAt), asc(surveyAssignments.surveyId));
 
-			const [eventRow] = await db
+			const eventRows = db
 				.select({ count: sql<number>`count(*)` })
 				.from(crsEvents)
 				.where(and(isNull(crsEvents.deletedAt), gt(crsEvents.startsAt, now)));
 
-			const [linkRow] = await db
+			const linkRows = db
 				.select({ total: sql<number>`coalesce(sum(${linkDailyStats.count}), 0)` })
 				.from(linkDailyStats)
 				.innerJoin(shortLinks, eq(shortLinks.id, linkDailyStats.linkId))
 				.where(eq(shortLinks.ownerMemberId, actor.memberId));
+
+			const [{ term, points }, pending, [eventRow], [linkRow]] = await Promise.all([termPoints, pendingRows, eventRows, linkRows]);
 
 			return {
 				retention: {

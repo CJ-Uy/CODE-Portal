@@ -95,36 +95,34 @@ async function respondentState(
 	survey: Survey,
 	now: Date,
 ): Promise<{ state: RespondentState; eventTitle: string | null; invited: boolean }> {
-	let event: { title: string; deletedAt: Date | null } | undefined;
-	if (survey.eventId) {
-		[event] = await db
-			.select({ title: crsEvents.title, deletedAt: crsEvents.deletedAt })
-			.from(crsEvents)
-			.where(eq(crsEvents.id, survey.eventId))
-			.limit(1);
-	}
+	// Every read needs only the survey row, so they share one round trip. The decisions below keep
+	// their order; a read that an earlier answer makes moot is simply unused.
+	const [[event], role, [assignment], [attended]] = await Promise.all([
+		survey.eventId
+			? db.select({ title: crsEvents.title, deletedAt: crsEvents.deletedAt }).from(crsEvents).where(eq(crsEvents.id, survey.eventId)).limit(1)
+			: Promise.resolve([]),
+		survey.eventId ? eventRole(db, survey.eventId, actor.memberId) : Promise.resolve(null),
+		db
+			.select({ completedAt: surveyAssignments.completedAt })
+			.from(surveyAssignments)
+			.where(and(eq(surveyAssignments.surveyId, survey.id), eq(surveyAssignments.memberId, actor.memberId)))
+			.limit(1),
+		survey.eventId && survey.allowWalkIn
+			? db
+					.select({ memberId: crsAttendance.memberId })
+					.from(crsAttendance)
+					.where(and(eq(crsAttendance.eventId, survey.eventId), eq(crsAttendance.memberId, actor.memberId)))
+					.limit(1)
+			: Promise.resolve([]),
+	]);
 	const eventTitle = event?.title ?? null;
 	const result = (state: RespondentState, invited = false) => ({ state, eventTitle, invited });
 
 	if (survey.status === "draft") return result("ineligible");
 	if (effectiveStatus(survey, now) === "closed" || event?.deletedAt) return result("closed");
-	if (survey.eventId && (await eventRole(db, survey.eventId, actor.memberId))) return result("staff");
-
-	const [assignment] = await db
-		.select({ completedAt: surveyAssignments.completedAt })
-		.from(surveyAssignments)
-		.where(and(eq(surveyAssignments.surveyId, survey.id), eq(surveyAssignments.memberId, actor.memberId)))
-		.limit(1);
+	if (role) return result("staff");
 	if (assignment) return assignment.completedAt ? result("answered") : result("open", true);
-
-	if (event && survey.allowWalkIn) {
-		const [attended] = await db
-			.select({ memberId: crsAttendance.memberId })
-			.from(crsAttendance)
-			.where(and(eq(crsAttendance.eventId, survey.eventId!), eq(crsAttendance.memberId, actor.memberId)))
-			.limit(1);
-		if (attended) return result("open");
-	}
+	if (event && survey.allowWalkIn && attended) return result("open");
 	return result("ineligible");
 }
 
@@ -584,23 +582,20 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 
 		async getById(actor, id) {
 			if (!can(actor, "survey:configure")) throw new Error("Not authorized to read this survey.");
-			const [survey] = await db.select().from(surveys).where(eq(surveys.id, id)).limit(1);
+			const [[survey], questions] = await Promise.all([
+				db.select().from(surveys).where(eq(surveys.id, id)).limit(1),
+				db.select().from(surveyQuestions).where(eq(surveyQuestions.surveyId, id)).orderBy(asc(surveyQuestions.position)),
+			]);
 			if (!survey) return null;
-			const questions = await db
-				.select()
-				.from(surveyQuestions)
-				.where(eq(surveyQuestions.surveyId, id))
-				.orderBy(asc(surveyQuestions.position));
 			return { survey, questions };
 		},
 
 		async getForRespondent(actor, surveyId, now = new Date()) {
 			const [survey] = await db.select().from(surveys).where(eq(surveys.id, surveyId)).limit(1);
 			if (!survey || survey.status === "draft") return null;
-			const { state, eventTitle } = await respondentState(db, actor, survey, now);
-			// Only someone who can answer gets the questions.
-			const questions = state === "open" ? await orderedQuestions(db, surveyId) : [];
-			return { survey, questions, eventTitle, state };
+			// The questions load alongside the eligibility checks, but only someone who can answer gets them.
+			const [{ state, eventTitle }, allQuestions] = await Promise.all([respondentState(db, actor, survey, now), orderedQuestions(db, surveyId)]);
+			return { survey, questions: state === "open" ? allQuestions : [], eventTitle, state };
 		},
 
 		async submitResponse(actor, input, now = new Date()) {

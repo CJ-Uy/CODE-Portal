@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { signInPath } from "@/server/auth/sign-in";
 import { getRepositories } from "@/db";
+import { NavigationProgress } from "@/components/portal/navigation-progress";
 import { NotificationBell } from "@/components/portal/notification-bell";
 import { PortalShell } from "@/components/portal/portal-shell";
 import { getActor } from "@/server/auth/actor";
@@ -49,6 +50,7 @@ export default async function PortalLayout({ children }: { children: React.React
 
 	return (
 		<>
+			<NavigationProgress />
 			<PortalShell
 				member={{ displayName, initials: initialsFrom(displayName), subtitle: member.email }}
 				memberId={actor.memberId}

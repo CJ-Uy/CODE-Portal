@@ -355,19 +355,36 @@ export function createEventsRepository(db: Db, audit: AuditRepository): EventsRe
 
 		async listPublished(actor, input) {
 			if (!actor) throw new Error("Authentication required.");
-			const rows: Array<{ event: BaseEventRecord; scannedCount: number }> = await db
-				.select({
-					event: getTableColumns(crsEvents),
-					scannedCount: count(crsAttendance.memberId),
-				})
-				.from(crsEvents)
-				.leftJoin(crsAttendance, eq(crsAttendance.eventId, crsEvents.id))
-				.where(isNull(crsEvents.deletedAt))
-				.groupBy(crsEvents.id)
-				.orderBy(asc(crsEvents.startsAt))
-				.limit(Math.min(input?.limit ?? 50, 100))
-				.offset(input?.offset ?? 0);
-			return Promise.all(rows.map(async (row) => withCapabilities(actor, row.event, await resolveCapability(actor, row.event), row.scannedCount)));
+			const moderator = can(actor, "event:moderate");
+			// One read of the viewer's staff rows instead of a staffRole lookup per listed event.
+			const [rows, staffRows]: [Array<{ event: BaseEventRecord; scannedCount: number }>, Array<{ eventId: string; role: "admin" | "scanner" }>] =
+				await Promise.all([
+					db
+						.select({
+							event: getTableColumns(crsEvents),
+							scannedCount: count(crsAttendance.memberId),
+						})
+						.from(crsEvents)
+						.leftJoin(crsAttendance, eq(crsAttendance.eventId, crsEvents.id))
+						.where(isNull(crsEvents.deletedAt))
+						.groupBy(crsEvents.id)
+						.orderBy(asc(crsEvents.startsAt))
+						.limit(Math.min(input?.limit ?? 50, 100))
+						.offset(input?.offset ?? 0),
+					moderator
+						? Promise.resolve([])
+						: db.select({ eventId: eventStaff.eventId, role: eventStaff.role }).from(eventStaff).where(eq(eventStaff.memberId, actor.memberId)),
+				]);
+			const staffRoles = new Map(staffRows.map((row) => [row.eventId, row.role]));
+			// Same precedence as resolveCapability: owner, then moderator, then staff role.
+			return rows.map((row) =>
+				withCapabilities(
+					actor,
+					row.event,
+					row.event.createdBy === actor.memberId ? "owner" : moderator ? "admin" : (staffRoles.get(row.event.id) ?? null),
+					row.scannedCount,
+				),
+			);
 		},
 
 		async listPending(actor, input) {
