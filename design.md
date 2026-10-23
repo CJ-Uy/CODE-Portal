@@ -59,7 +59,17 @@ The navy desktop rail includes Overview, expandable sections and Back to portal.
 
 On mobile, the navy app bar remains above a separate breadcrumb strip. A fixed bottom bar provides Portal, Overview and Menu. Menu opens a scrollable bottom sheet with the same grouped tools and closes after navigation. Reserve bottom space for the bar and respect the device's safe area.
 
-The member rail orders Overview, Calendar, Retention, Ments Tree, Link shortener, Important links, Mail, Notifications and Profile. Library, Announcements and Guides sit under Resources & updates, followed by Pinned links: the important links an admin marked Show in sidebar, each with its link type icon. Release flags hide unavailable destinations. The member mobile bar keeps four core destinations: Home, Calendar, Retention and Profile, with Link shortener filling the Retention slot when that feature is unavailable. The center plus opens a bottom sheet with the expanded event check-in QR first, followed by Create event and New short link above the remaining destinations, Important links among them, then the pinned links. Its fixed handle supports drag-to-close.
+The member rail orders Home, Calendar, Retention, Ments Tree, Link shortener, Important links, Mail, Notifications and Profile. Library, Announcements and Guides sit under Resources & updates, followed by Pinned links: the important links an admin marked Show in sidebar, each with its link type icon. Release flags hide unavailable destinations. The member mobile bar keeps four core destinations: Home, Calendar, Retention and Profile, with Link shortener filling the Retention slot when that feature is unavailable. The center plus, named Check-in code and quick actions for screen readers, opens a bottom sheet with the expanded event check-in QR first, followed by Create event and New short link above the remaining destinations, Important links among them, then the pinned links. Its fixed handle supports drag-to-close.
+
+### Member pages
+
+Every member page opens with the same header: the nav label as the h1, at most one short line under it, and the page's own actions on the right. There are no eyebrows. On desktop the light top bar names only the current section; from a page below it, such as an event or a library item, the name becomes a link back to that section. Pages carry their own breadcrumbs where they need them.
+
+Home leads with the next action. A waiting feedback form shows as a light blue strip with Answer, above Upcoming events. Event rows use the shared date tile (filled light blue for today) and say Today or the weekday with the time and place. On a day with an event, the card ends with Show my check-in code, which opens the code on Profile. Announcements and the newest library items follow as flat divided rows. Home has no number tiles.
+
+Calendar has Month and List tabs. Under the month grid, phones get the month as readable rows, because the grid's bars are too narrow there. The list groups Today and Upcoming as divided rows; past events sit behind a Past events disclosure. Only non-default event types get a badge. Create event shows Title, Type, Place, When and Description, with everything else under More options, and names the fields still missing beside the disabled button.
+
+Notifications, Mail and the calendar list share one row style: a divided white list, an unread dot in #4986AC with the state also said in words, and a short Manila-time stamp. Notifications groups New and Earlier, and opening one marks it read. Profile shows the member's details as text with Not set for blanks until Edit details, and keeps the check-in code in a disclosure right under the name.
 
 ### Important links
 

@@ -3,11 +3,12 @@ import { cn } from "@/lib/utils";
 import type { CalendarItem } from "@/lib/calendar";
 import { layoutMonthBars, toWeeks } from "@/lib/calendar-layout";
 import { colourClasses } from "@/lib/event-type-colours";
-import { toLocalDate } from "@/lib/date-slots";
+import { formatUtc8Time, toLocalDate } from "@/lib/date-slots";
 import { formatPoints } from "@/lib/points";
 import type { PointsDay } from "@/db/repositories/retention";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 // Three bars plus a "+N more" line is what fits a 375px cell without the grid growing unbounded.
 const MAX_LANES = 3;
@@ -49,10 +50,11 @@ export function CalendarMonth({
 	);
 
 	return (
+		<div className="grid gap-5">
 		<div className="overflow-hidden rounded-xl border border-border bg-card">
 			<div className="grid grid-cols-7 border-b border-border bg-secondary/30">
 				{WEEKDAYS.map((day) => (
-					<div key={day} className="px-2 py-2 text-center text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
+					<div key={day} className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
 						<span className="hidden sm:inline">{day}</span>
 						<span className="sm:hidden">{day[0]}</span>
 					</div>
@@ -91,7 +93,7 @@ export function CalendarMonth({
 									>
 										<div className="flex items-start justify-between gap-1">
 											{dayPoints !== 0 ? (
-												<span className="min-w-0 truncate rounded bg-accent/15 px-1 text-[10px] font-semibold tabular-nums text-accent-foreground/90 sm:text-[11px]">
+												<span className="min-w-0 truncate rounded bg-accent/15 px-1 text-[11px] font-semibold tabular-nums text-accent">
 													{dayPoints > 0 ? "+" : ""}
 													{formatPoints(dayPoints)}
 												</span>
@@ -110,7 +112,7 @@ export function CalendarMonth({
 										{/* Reserves the vertical space the absolutely-positioned bars occupy:
 										    MAX_LANES lanes of 1.0625rem plus the 0.125rem gaps between them. */}
 										<div aria-hidden className="h-[3.4375rem]" />
-										{overflow > 0 ? <span className="text-[10px] text-muted-foreground">+{overflow} more</span> : null}
+										{overflow > 0 ? <span className="text-[11px] text-muted-foreground">+{overflow} more</span> : null}
 									</div>
 								);
 							})}
@@ -128,7 +130,7 @@ export function CalendarMonth({
 								const body = (
 									<div
 										className={cn(
-											"flex h-[1.0625rem] items-center gap-1 overflow-hidden px-1 text-[10px] leading-tight sm:text-xs",
+											"flex h-[1.0625rem] items-center gap-1 overflow-hidden px-1 text-[11px] leading-tight sm:text-xs",
 											colour.chip,
 											// Square off the clipped end so a continued bar reads as continuing.
 											bar.continuesLeft ? "rounded-l-none" : "rounded-l",
@@ -168,5 +170,68 @@ export function CalendarMonth({
 			})}
 
 		</div>
+		<MonthAgenda items={items} year={year} month={month} todayIso={todayIso} />
+		</div>
 	);
+}
+
+/**
+ * Phones only: the grid's bars are too narrow to read there, so the month's items repeat below it as rows
+ * a thumb can hit. Days already over stay listed but quieter, so the month still reads whole.
+ */
+function MonthAgenda({ items, year, month, todayIso }: { items: CalendarItem[]; year: number; month: number; todayIso: string }) {
+	const first = isoFor(year, month, 1);
+	const last = isoFor(year, month, new Date(Date.UTC(year, month, 0)).getUTCDate());
+	const rows = items
+		.filter((item) => item.endDate >= first && item.date <= last)
+		.sort((a, b) => `${a.date}${a.startsAt ?? ""}`.localeCompare(`${b.date}${b.startsAt ?? ""}`));
+	return (
+		<section aria-labelledby="month-agenda" className="grid gap-2 sm:hidden">
+			<h2 id="month-agenda" className="font-sans! text-sm font-semibold text-muted-foreground">
+				{rows.length ? `${MONTHS[month - 1]} at a glance` : `Nothing on the calendar in ${MONTHS[month - 1]}`}
+			</h2>
+			{rows.length ? (
+				<ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+					{rows.map((item) => {
+						const past = item.endDate < todayIso;
+						const colour = colourClasses(item.colour);
+						const day = (iso: string) => (iso === todayIso ? "Today" : dayLabel(iso));
+						const when = [
+							item.endDate !== item.date ? `${day(item.date)} to ${day(item.endDate)}` : day(item.date),
+							item.startsAt ? formatUtc8Time(new Date(item.startsAt)) : null,
+						]
+							.filter(Boolean)
+							.join(" · ");
+						const body = (
+							<>
+								<span className={cn("mt-1.5 size-2 shrink-0 rounded-full", colour.dot)} aria-hidden />
+								<span className="min-w-0 flex-1">
+									<span className="block font-medium [overflow-wrap:anywhere]">{item.title}</span>
+									<span className="block text-sm text-muted-foreground">
+										{when}
+									</span>
+								</span>
+							</>
+						);
+						const rowClass = cn("flex min-w-0 items-start gap-3 px-4 py-3", past && "opacity-60");
+						return (
+							<li key={item.id}>
+								{item.href ? (
+									<Link href={item.href} className={cn(rowClass, "transition-colors active:bg-secondary/60")}>
+										{body}
+									</Link>
+								) : (
+									<div className={rowClass}>{body}</div>
+								)}
+							</li>
+						);
+					})}
+				</ul>
+			) : null}
+		</section>
+	);
+}
+
+function dayLabel(iso: string): string {
+	return new Intl.DateTimeFormat("en", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" }).format(new Date(`${iso}T00:00:00Z`));
 }

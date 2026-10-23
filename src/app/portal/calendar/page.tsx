@@ -5,6 +5,7 @@ import { getRepositories } from "@/db";
 import { allowedEventTypes } from "@/db/repositories/eventTypeRules";
 import { Button } from "@/components/ui/button";
 import { CalendarMonth } from "@/components/calendar-month";
+import { PageHeader } from "@/components/portal/page-header";
 import { loadEventTypes } from "@/lib/event-type-load";
 import { formatEstimate } from "@/lib/feedback/editor-input";
 import { estimateSeconds } from "@/lib/feedback/stats";
@@ -51,24 +52,23 @@ export default async function CalendarPage({
 	const next = month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
 
 	const viewTabs = [
-		{ id: "calendar", label: "Calendar", icon: CalendarDays, href: "/portal/calendar" },
+		{ id: "calendar", label: "Month", icon: CalendarDays, href: "/portal/calendar" },
 		{ id: "list", label: "List", icon: List, href: "/portal/calendar?view=list" },
 	];
 
 	return (
 		<div className="grid gap-5">
-			<div className="flex flex-wrap items-start justify-between gap-4">
-				<div>
-					<p className="text-xs font-semibold uppercase text-primary">Member workspace</p>
-					<h1 className="font-heading text-3xl">Calendar</h1>
-				</div>
-				<Suspense fallback={<CreateEventSkeleton />}>
-					<CreateEventControl />
-				</Suspense>
-			</div>
+			<PageHeader
+				title="Calendar"
+				actions={
+					<Suspense fallback={<CreateEventSkeleton />}>
+						<CreateEventControl />
+					</Suspense>
+				}
+			/>
 
 			<div className="flex flex-wrap items-center justify-between gap-3">
-				<div className="inline-flex rounded-lg border border-border p-0.5">
+				<div className="inline-flex rounded-lg border border-border bg-card p-0.5">
 					{viewTabs.map((tab) => {
 						const Icon = tab.icon;
 						const active = view === tab.id;
@@ -81,8 +81,8 @@ export default async function CalendarPage({
 								aria-current={active ? "page" : undefined}
 								className={
 									active
-										? "inline-flex items-center gap-1.5 rounded-md bg-secondary px-3 py-1.5 text-sm font-semibold text-foreground"
-										: "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+										? "inline-flex min-h-10 items-center gap-1.5 rounded-md bg-secondary px-3 text-sm font-semibold text-foreground"
+										: "inline-flex min-h-10 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
 								}
 							>
 								<Icon className="size-4" />
