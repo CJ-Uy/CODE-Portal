@@ -27,33 +27,52 @@ function slotWords(part: RetentionPart, slot: RetentionSlot): string {
 	return `${part.label}, ${slot.label.toLowerCase()}: ${state}`;
 }
 
-/** One cell per slot, in grid order: the whole year at a glance, readable without color. */
-export function SlotStrip({ progress, className }: { progress: RetentionProgress; className?: string }) {
-	const slots = progress.parts.flatMap((part) => part.slots.map((slot) => ({ part, slot })));
+/** A slot as a mini bar: earned in navy, a pending feedback share hatched, an unopened semester dashed. */
+function StripCell({ part, slot }: { part: RetentionPart; slot: RetentionSlot }) {
+	const pending = Math.min(slot.pending, Math.max(0, 1 - slot.counted));
 	return (
-		<ol className={cn("grid min-w-0 gap-1", className)} style={{ gridTemplateColumns: `repeat(${Math.max(1, slots.length)}, minmax(0, 1fr))` }} aria-label={`${progress.met} of ${progress.required} requirements met`}>
-			{slots.map(({ part, slot }) => (
-				<li
-					key={slot.key}
-					title={slotWords(part, slot)}
-					className={cn(
-						"h-2.5 rounded-sm",
-						slot.state === "met" && "bg-accent",
-						slot.state === "open" && "bg-secondary",
-						slot.state === "upcoming" && "border border-dashed border-border",
-						slot.state === "missed" && "bg-foreground/20",
-					)}
-					style={slot.state === "open" && slot.pending > 0 ? PENDING_HATCH : undefined}
-				>
-					<span className="sr-only">{slotWords(part, slot)}</span>
-				</li>
-			))}
-		</ol>
+		<li
+			title={slotWords(part, slot)}
+			className={cn(
+				"flex h-2.5 overflow-hidden rounded-sm",
+				slot.state === "upcoming" ? "border border-dashed border-border" : "bg-secondary",
+				slot.state === "missed" && "bg-foreground/20",
+			)}
+		>
+			{slot.state === "open" || slot.state === "met" ? <span className="h-full bg-accent" style={{ width: `${slot.counted * 100}%` }} /> : null}
+			{slot.state === "open" && pending > 0 ? <span className="h-full" style={{ ...PENDING_HATCH, width: `${pending * 100}%` }} /> : null}
+			<span className="sr-only">{slotWords(part, slot)}</span>
+		</li>
 	);
 }
 
-/** "On track. 5 of 12 met." plus the strip and the next deadline. */
-export function RetentionVerdict({ progress, compact = false }: { progress: RetentionProgress; compact?: boolean }) {
+/** The whole year at a glance: the yearly slots, a gap, then the semester slots, with a key. Readable without color. */
+export function SlotStrip({ progress, className }: { progress: RetentionProgress; className?: string }) {
+	const group = (period: RetentionPart["period"]) => progress.parts.filter((part) => part.period === period).flatMap((part) => part.slots.map((slot) => ({ part, slot })));
+	const groups = [group("year"), group("semester")].filter((cells) => cells.length > 0);
+	return (
+		<div className={cn("grid min-w-0 gap-2", className)}>
+			<div className="flex min-w-0 gap-3" role="list" aria-label={`${progress.met} of ${progress.required} requirements met`}>
+				{groups.map((cells, index) => (
+					<ol key={index} className="grid min-w-0 gap-1" style={{ flex: cells.length, gridTemplateColumns: `repeat(${cells.length}, minmax(0, 1fr))` }}>
+						{cells.map(({ part, slot }) => (
+							<StripCell key={slot.key} part={part} slot={slot} />
+						))}
+					</ol>
+				))}
+			</div>
+			<ul className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-hidden>
+				<li className="flex items-center gap-1.5"><span className="h-2 w-3.5 rounded-sm bg-accent" />Met</li>
+				<li className="flex items-center gap-1.5"><span className="flex h-2 w-3.5 overflow-hidden rounded-sm bg-secondary"><span className="w-1/2 bg-accent" /></span>Part done</li>
+				<li className="flex items-center gap-1.5"><span className="h-2 w-3.5 rounded-sm" style={PENDING_HATCH} />Waiting on a form</li>
+				<li className="flex items-center gap-1.5"><span className="h-2 w-3.5 rounded-sm border border-dashed border-border" />Not open yet</li>
+			</ul>
+		</div>
+	);
+}
+
+/** "On track. 5 of 12 requirements met in SY 2026-2027." plus the strip and the next deadline. */
+export function RetentionVerdict({ progress, termName, compact = false }: { progress: RetentionProgress; termName?: string; compact?: boolean }) {
 	const deadline = progress.nextDeadline;
 	return (
 		<div className="grid min-w-0 gap-3">
@@ -61,6 +80,12 @@ export function RetentionVerdict({ progress, compact = false }: { progress: Rete
 				<span className="font-semibold">{STATUS_LABEL[progress.status]}.</span>{" "}
 				<span className="tabular-nums">
 					{progress.met} of {progress.required} requirements met
+					{termName ? (
+						<>
+							{" in "}
+							<span className="whitespace-nowrap">{termName}</span>
+						</>
+					) : null}
 				</span>
 				{progress.missed > 0 ? <span className="text-muted-foreground"> ({progress.missed} missed)</span> : null}
 			</p>
@@ -77,36 +102,45 @@ export function RetentionVerdict({ progress, compact = false }: { progress: Rete
 function SlotCell({ slot, spans }: { slot: RetentionSlot; spans: boolean }) {
 	const open = Math.max(0, 1 - slot.counted);
 	const pending = Math.min(slot.pending, open);
+	const met = slot.state === "met";
+	if (slot.state === "upcoming") {
+		return (
+			<div className={cn("min-w-0 self-start rounded-md border border-dashed px-3 py-2.5 text-sm text-muted-foreground", spans ? "col-span-2" : "col-span-1")}>
+				Opens {shortDate(slot.startsAt)}
+			</div>
+		);
+	}
 	return (
 		<div
 			className={cn(
-				"grid min-w-0 content-start gap-2 rounded-md border bg-card p-3",
+				"grid min-w-0 content-start gap-2 rounded-md border p-3",
 				spans ? "col-span-2" : "col-span-1",
-				slot.state === "met" && "border-accent/50",
-				slot.state === "upcoming" && "border-dashed bg-transparent",
-				slot.state === "missed" && "bg-secondary/40",
+				met ? "border-accent bg-accent text-accent-foreground" : slot.state === "missed" ? "bg-secondary/40" : "bg-card",
 			)}
 		>
 			<div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
 				<span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold tabular-nums">
-					{slot.state === "met" ? <Check className="size-4 shrink-0 text-accent" aria-hidden /> : null}
+					{met ? <Check className="size-4 shrink-0" aria-hidden /> : null}
 					{slot.state === "missed" ? <X className="size-4 shrink-0 text-muted-foreground" aria-hidden /> : null}
-					{slot.state === "met" ? "Met" : slot.state === "missed" ? "Missed" : slot.state === "upcoming" ? `Opens ${shortDate(slot.startsAt)}` : `${formatPoints(slot.counted)} of 1`}
+					{met ? "Met" : slot.state === "missed" ? "Missed" : `${formatPoints(slot.counted)} of 1`}
 				</span>
-				<span className="text-xs text-muted-foreground">{slot.state === "upcoming" ? `until ${shortDate(slot.countsUntil)}` : `Counts until ${shortDate(slot.countsUntil)}`}</span>
+				<span className={cn("text-xs", met ? "text-accent-foreground/80" : "text-muted-foreground")}>Counts until {shortDate(slot.countsUntil)}</span>
 			</div>
-			<div
-				className={cn("flex h-2 overflow-hidden rounded-full bg-secondary", slot.state === "upcoming" && "hidden")}
-				role="meter"
-				aria-label={`${slot.label} progress`}
-				aria-valuemin={0}
-				aria-valuemax={1}
-				aria-valuenow={slot.counted}
-				aria-valuetext={`${formatPoints(slot.counted)} of 1 point`}
-			>
-				<div className={cn("h-full", slot.state === "missed" ? "bg-foreground/30" : "bg-accent")} style={{ width: `${slot.counted * 100}%` }} />
-				{pending > 0 ? <div className="h-full" style={{ ...PENDING_HATCH, width: `${pending * 100}%` }} /> : null}
-			</div>
+			{/* A met cell is its own full bar. */}
+			{met ? null : (
+				<div
+					className="flex h-2 overflow-hidden rounded-full bg-secondary"
+					role="meter"
+					aria-label={`${slot.label} progress`}
+					aria-valuemin={0}
+					aria-valuemax={1}
+					aria-valuenow={slot.counted}
+					aria-valuetext={`${formatPoints(slot.counted)} of 1 point`}
+				>
+					<div className={cn("h-full", slot.state === "missed" ? "bg-foreground/30" : "bg-accent")} style={{ width: `${slot.counted * 100}%` }} />
+					{pending > 0 ? <div className="h-full" style={{ ...PENDING_HATCH, width: `${pending * 100}%` }} /> : null}
+				</div>
+			)}
 			{slot.overflow > 0 || pending > 0 || slot.state === "missed" ? (
 				<div className="flex min-w-0 flex-wrap gap-1.5 text-xs">
 					{pending > 0 ? (
@@ -115,7 +149,9 @@ function SlotCell({ slot, spans }: { slot: RetentionSlot; spans: boolean }) {
 						</span>
 					) : null}
 					{slot.overflow > 0 ? (
-						<span className="rounded-sm border border-dashed border-border px-1.5 py-0.5 text-muted-foreground">+{formatPoints(slot.overflow)} extra, not counted</span>
+						<span className={cn("rounded-sm border border-dashed px-1.5 py-0.5", met ? "border-accent-foreground/50 text-accent-foreground/85" : "border-border text-muted-foreground")}>
+							+{formatPoints(slot.overflow)} extra, not counted
+						</span>
 					) : null}
 					{slot.state === "missed" ? <span className="text-muted-foreground">This slot closed with {formatPoints(Math.max(0, slot.earned))} of 1.</span> : null}
 				</div>
@@ -160,18 +196,15 @@ export function RetentionGrid({ progress, nextEvents }: { progress: RetentionPro
 		);
 	};
 	const groupHeading = (title: string, note: string) => (
-		<div className="col-span-2 mt-4 flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 border-b border-border pb-1.5 first:mt-0 md:col-span-3">
+		<div className="col-span-2 mt-3 flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 border-b border-border pb-1.5 md:col-span-3">
 			<h3 className="font-heading text-lg">{title}</h3>
 			<p className="text-xs text-muted-foreground">{note}</p>
 		</div>
 	);
 	return (
 		<div className="grid min-w-0 grid-cols-2 gap-x-2 gap-y-3 md:grid-cols-[minmax(0,13rem)_minmax(0,1fr)_minmax(0,1fr)] md:gap-x-3">
-			{yearly.length > 0 ? groupHeading("Once this school year", "1 point each, any time in the year") : null}
-			{yearly.map(row)}
-			{semestral.length > 0 ? groupHeading("Once each semester", "1 point each semester; extra points do not carry over") : null}
 			{firstSemester && secondSemester ? (
-				<div className="col-span-2 grid min-w-0 grid-cols-2 gap-2 text-xs text-muted-foreground md:col-span-3 md:grid-cols-subgrid">
+				<div className="col-span-2 grid min-w-0 grid-cols-2 gap-2 pb-1 text-xs text-muted-foreground md:col-span-3 md:grid-cols-subgrid">
 					<span className="hidden md:block" />
 					<p className="min-w-0">
 						<span className="block text-sm font-semibold text-foreground">1st semester</span>
@@ -183,6 +216,9 @@ export function RetentionGrid({ progress, nextEvents }: { progress: RetentionPro
 					</p>
 				</div>
 			) : null}
+			{yearly.length > 0 ? groupHeading("Once this school year", "1 point each, any time in the year") : null}
+			{yearly.map(row)}
+			{semestral.length > 0 ? groupHeading("Once each semester", "1 point each semester; extra points do not carry over") : null}
 			{semestral.map(row)}
 		</div>
 	);
@@ -205,11 +241,11 @@ export function PendingFeedback({ shares }: { shares: PendingShare[] }) {
 					An event with a feedback form gives 75% of its points when you check in. Answer its form to get the other 25%. If the form closes first, that 25% is gone.
 				</p>
 			</div>
-			<ul className="grid min-w-0 divide-y divide-border/60 rounded-md border border-border/60 bg-card">
+			<ul className="grid min-w-0 divide-y divide-border/60 border-t border-border/60">
 				{events.map((rows) => {
 					const [first] = rows;
 					return (
-						<li key={first.eventId} className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-3 py-2.5">
+						<li key={first.eventId} className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2.5">
 							<div className="min-w-0">
 								<p className="min-w-0 font-medium [overflow-wrap:anywhere]">{first.eventTitle}</p>
 								<p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">

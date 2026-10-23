@@ -79,7 +79,7 @@ export function SchoolYearsManager({ rows }: { rows: TermAdminRow[] }) {
 					<CardTitle>School years</CardTitle>
 					<CardDescription>
 						Attendance and points attach to the school year covering the day they happen. Dates cannot overlap, and
-						school years are never deleted here — removing one would erase every scan and point recorded against it.
+						school years are never deleted here: removing one would erase every scan and point recorded against it.
 					</CardDescription>
 				</CardHeader>
 				<CardContent>

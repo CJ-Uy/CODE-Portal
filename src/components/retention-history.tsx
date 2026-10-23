@@ -77,7 +77,7 @@ function Milestones({ types, totals }: { types: PointTypeRow[]; totals: Map<stri
 								<h3 className="min-w-0 text-sm font-semibold [overflow-wrap:anywhere]">{type.label}</h3>
 								<p className="text-sm tabular-nums">
 									<span className="font-semibold">{formatPoints(points)}</span>
-									<span className="text-muted-foreground"> {next ? `· ${formatPoints(next.points - points)} to ${next.title}` : "· every milestone reached"}</span>
+									<span className="text-muted-foreground"> {points === 1 ? "point" : "points"}, {next ? `${formatPoints(next.points - points)} more to ${next.title}` : "every milestone reached"}</span>
 								</p>
 							</div>
 							<div
@@ -102,14 +102,23 @@ function Milestones({ types, totals }: { types: PointTypeRow[]; totals: Map<stri
 									/>
 								))}
 							</div>
-							<ol className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-xs">
+							{/* Each milestone's label sits under its own marker, clamped at the edges.
+							    ponytail: labels can touch when milestones crowd one end of the rail; wrap to a list if that shows up. */}
+							<ol className="relative mx-1.5 -mt-1 h-8 text-xs">
 								{milestones.map((milestone) => {
+									const left = (milestone.points / scale) * 100;
 									const reached = points >= milestone.points;
 									return (
-										<li key={milestone.points} className={cn("flex min-w-0 items-center gap-1", reached ? "font-medium" : "text-muted-foreground")} title={milestone.description || undefined}>
-											{reached ? <Check className="size-3.5 shrink-0 text-accent" aria-label="Reached" /> : null}
-											<span className="tabular-nums">{milestone.points}</span>
-											<span className="min-w-0 [overflow-wrap:anywhere]">{milestone.title}</span>
+										<li
+											key={milestone.points}
+											className={cn("absolute top-0 flex max-w-[45%] items-start gap-1 leading-tight", reached ? "font-medium" : "text-muted-foreground")}
+											style={{ left: `${left}%`, transform: `translateX(${left > 85 ? "-100%" : left < 15 ? "0" : "-50%"})` }}
+											title={milestone.description || undefined}
+										>
+											{reached ? <Check className="mt-px size-3.5 shrink-0 text-accent" aria-label="Reached" /> : null}
+											<span className="min-w-0">
+												<span className="tabular-nums">{milestone.points}</span> {milestone.title}
+											</span>
 										</li>
 									);
 								})}
@@ -147,10 +156,7 @@ export function RetentionHistory({
 		<div className="flex min-w-0 flex-col gap-6">
 			<div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
 				{summary && progress ? (
-					<div className="min-w-0">
-						<p className="mb-2 text-sm text-muted-foreground">{summary.termName}</p>
-						<RetentionVerdict progress={progress} />
-					</div>
+					<RetentionVerdict progress={progress} termName={summary.termName} />
 				) : (
 					<p className="text-sm text-muted-foreground">No school year is set up for this date yet. Officers add school years in Admin.</p>
 				)}
