@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { ArrowDown, ArrowUp, GripVertical, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, GripVertical, MessageSquarePlus, Trash2 } from "lucide-react";
 import { LibraryItemCard } from "@/components/library/library-card";
 import type { LibraryCardFields } from "@/lib/library/card-fields";
 import { Button } from "@/components/ui/button";
@@ -17,8 +17,12 @@ export type ListRow =
 	| { available: true; id: string; card: LibraryCardFields; note: string; addedBy: string | null; added: string }
 	| { available: false; id: string };
 
-/** An editor's note: edited in place, saved when the field loses focus or with the Save button. */
+/**
+ * An editor's note: edited in place, saved when the field loses focus or with the Save button. A row with no note shows
+ * only an "Add a note" button, so a list being edited is not a column of empty boxes.
+ */
 function NoteField({ listId, itemId, note }: { listId: string; itemId: string; note: string }) {
+	const [open, setOpen] = useState(note.trim() !== "");
 	const [value, setValue] = useState(note);
 	const [seen, setSeen] = useState(note);
 	const [status, setStatus] = useState<"idle" | "saved">("idle");
@@ -49,9 +53,20 @@ function NoteField({ listId, itemId, note }: { listId: string; itemId: string; n
 		});
 	};
 
+	if (!open) {
+		return (
+			<Button type="button" variant="ghost" size="sm" className="min-h-9 justify-self-start px-2 text-muted-foreground" onClick={() => setOpen(true)}>
+				<MessageSquarePlus aria-hidden />
+				Add a note
+			</Button>
+		);
+	}
+
 	return (
 		<div className="grid min-w-0 gap-1.5">
 			<Textarea
+				// Opened by the button just now: the member is about to type.
+				autoFocus={note.trim() === ""}
 				value={value}
 				rows={2}
 				maxLength={NOTE_MAX}
