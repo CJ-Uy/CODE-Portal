@@ -62,3 +62,17 @@ Migration `0015_important_links` is applied to beta D1. Beta had no sidebar pins
 - [ ] Reorder, archive and restore a link and a category.
 - [ ] The member Important links page looks clean on a phone, and links open in a new tab.
 - [ ] The old Pinned Nav Links admin URL redirects to the new editor.
+
+## Assumptions made where CJ's notes were thin
+
+CJ said to decide and list these rather than ask. Change any of them on review.
+
+1. **Pments (self-reported Ments):** kept. CJ first said remove it, then "never mind, we're not gonna do that". Removing it would delete members' data, so it waits for an explicit go-ahead.
+2. **"A bar for each kind of point":** read as one bar per retention part, filling toward its minimum, with overflow shown as not counting. That's built in the retention session.
+3. **"Retention point fixing tab":** read as the one-screen retention breakdown. Admins already fix wrong points in the Ledger. If CJ meant a new admin tool for corrections, that's a follow-up.
+4. **Attach a feedback form at event creation:** only CRS sees it, and it makes a draft rather than sending on its own. The 75/25 split still applies from the moment the event has a form.
+5. **Email "we'll wait for a bit":** CJ's later speedrun listed email again, so it's being built (session email-merge-html).
+
+## Still in progress when this list was started
+
+Each of these sessions commits to its own branch, then gets merged into `beta` here, with its own section added below: retention-redesign, speed-loading, email-merge-html, photo-gallery, library-scroll and member-polish.
