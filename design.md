@@ -77,11 +77,11 @@ All items is a white sheet with divided rows: title with a one-line summary, typ
 
 ### Ments Tree
 
-The member tree uses one bordered canvas for the complete forest and every generation. Generations descend vertically through person buttons (260 by 144 px), with full names wrapping inside each cell. Solid paths represent official Ments; optional dashed paths represent self-reported Pments. People are HTML buttons with named selection and focus states. Dragging or swiping pans the canvas; scrolling zooms around the pointer. With the canvas focused, arrow keys pan, + and - zoom, and 0 resets to the whole forest. Search, Find me, whole-forest fit, branch fit, fullscreen and copied person links support exploration. Canvas controls wrap in groups on narrow screens.
+The member tree uses one bordered canvas for the complete forest and every generation. Generations descend vertically through person buttons (260 by 144 px), with full names wrapping inside each cell. Paths represent official Ments. People are HTML buttons with named selection and focus states. Dragging or swiping pans the canvas; scrolling zooms around the pointer. With the canvas focused, arrow keys pan, + and - zoom, and 0 resets to the whole forest. Search, Find me, whole-forest fit, branch fit, fullscreen and copied person links support exploration. Canvas controls wrap in groups on narrow screens.
 
 The first view centers the signed-in member at 50% zoom when an account link or a unique normalized name identifies their person. Name matching locates the view without changing account links. Find me returns to the same centered 50% view. A valid shared person link takes precedence; unmatched members see the whole forest and guidance to search or request an account link. Whole-forest fit shows structure; selecting or searching for a person restores a readable local view.
 
-The selected person's lineage follows the canvas. Statistics use an open definition list, followed by divided rows for the largest trees. The mobile statistics grid has two columns. Members choose and save their own informal Pments directly in a searchable checkbox list below the statistics. Official relationship editing stays in Members & Access, with an Explore tree link back to the member view.
+The selected person's lineage follows the canvas. Statistics use an open definition list, followed by divided rows for the largest trees. The mobile statistics grid has two columns. Official relationship editing stays in Members & Access, with an Explore tree link back to the member view.
 
 ### Member retention
 
