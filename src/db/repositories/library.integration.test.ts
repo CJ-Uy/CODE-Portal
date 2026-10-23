@@ -550,6 +550,114 @@ describe("library repository: search", () => {
 	});
 });
 
+describe("library repository: cursor pages", () => {
+	/** Every id the search returns, read `limit` at a time by following nextCursor; the totals seen along the way too. */
+	async function readAll(input: Parameters<typeof repo.search>[1], limit: number): Promise<{ ids: string[]; totals: number[] }> {
+		const ids: string[] = [];
+		const totals: number[] = [];
+		let cursor: string | undefined;
+		for (let guard = 0; guard < 20; guard++) {
+			const page = await repo.search(actors.other, { ...input, limit, cursor });
+			ids.push(...page.cards.map((card) => card.id));
+			totals.push(page.total);
+			if (!page.nextCursor) return { ids, totals };
+			cursor = page.nextCursor;
+		}
+		throw new Error("cursor never ended");
+	}
+
+	beforeEach(async () => {
+		// Ties on purpose: two items share a published time, two share a title, and saves and reading tie too.
+		const at = (minute: number) => new Date(Date.UTC(2026, 9, 1, 0, minute));
+		await insertItem({ id: "lib_a", title: "Burnout field guide", publishedAt: at(5) });
+		await insertItem({ id: "lib_b", title: "alpha module", publishedAt: at(5) });
+		await insertItem({ id: "lib_c", title: "Charter template", dek: "about burnout", publishedAt: at(3) });
+		await insertItem({ id: "lib_d", title: "Alpha module", publishedAt: at(9) });
+		await insertItem({ id: "lib_e", title: "Diagnosis IDF", publishedAt: at(1) });
+		await insertItem({ id: "lib_f", title: "Év planning ☕ burnout", publishedAt: at(7) });
+		await insertItem({ id: "lib_g", title: "Zebra framework", publishedAt: at(2) });
+		for (const [listId, member, itemId] of [
+			["l1", "owner", "lib_c"],
+			["l2", "other", "lib_c"],
+			["l1", "owner", "lib_e"],
+			["l2", "other", "lib_e"],
+			["l1", "owner", "lib_g"],
+		] as const)
+			await saveToList(listId, member, itemId);
+		for (const [itemId, seconds] of [["lib_g", 600], ["lib_a", 600], ["lib_b", 60]] as const) {
+			await db.insert(libraryItemMemberDays).values({ itemId, memberId: "other", day: "2026-10-01", opens: 1, activeSeconds: seconds });
+		}
+	});
+
+	it.each([
+		["title", { sort: "title" as const }],
+		["newest", { sort: "newest" as const }],
+		["most saved", { sort: "most_saved" as const }],
+		["most read", { sort: "most_read" as const }],
+		["relevance", { q: "burnout", sort: "relevance" as const }],
+		["only these ids", { onlyIds: ["lib_g", "lib_a", "lib_e", "lib_b"], sort: "relevance" as const }],
+	])("reads every row once, in the one-page order, by %s", async (_, input) => {
+		const whole = await repo.search(actors.other, { ...input, limit: 100 });
+		expect(whole.nextCursor).toBeNull();
+		for (const limit of [1, 2, 3]) {
+			const { ids, totals } = await readAll(input, limit);
+			expect(ids).toEqual(whole.cards.map((card) => card.id));
+			expect(new Set(totals)).toEqual(new Set([whole.total]));
+		}
+	});
+
+	it("sorts A to Z by title whatever the case, ties by id", async () => {
+		const { cards } = await repo.search(actors.other, { sort: "title" });
+		expect(cards.map((card) => card.id)).toEqual(["lib_b", "lib_d", "lib_a", "lib_c", "lib_e", "lib_g", "lib_f"]);
+	});
+
+	it("gives the last page no cursor, even when it is exactly full", async () => {
+		const first = await repo.search(actors.other, { sort: "newest", limit: 4 });
+		expect(first.cards).toHaveLength(4);
+		const second = await repo.search(actors.other, { sort: "newest", limit: 3, cursor: first.nextCursor! });
+		expect(second.cards).toHaveLength(3);
+		expect(second.nextCursor).toBeNull();
+	});
+
+	it("does not repeat a row when something is published between pages", async () => {
+		const first = await repo.search(actors.other, { sort: "newest", limit: 3 });
+		await insertItem({ id: "lib_new", title: "Fresh", publishedAt: new Date(Date.UTC(2026, 9, 2)) });
+		const rest = await repo.search(actors.other, { sort: "newest", limit: 100, cursor: first.nextCursor! });
+		const ids = [...first.cards, ...rest.cards].map((card) => card.id);
+		expect(new Set(ids).size).toBe(ids.length);
+		expect(ids).not.toContain("lib_new");
+		expect(ids).toHaveLength(7);
+	});
+
+	it("never pages into items the reader cannot see", async () => {
+		await insertItem({ id: "lib_secret", title: "Aardvark secret", confidentiality: "confidential" });
+		await insertItem({ id: "lib_draft", title: "Aardvark draft", status: "draft", createdBy: "owner" });
+		const { ids, totals } = await readAll({ sort: "title" }, 2);
+		expect(ids).not.toContain("lib_secret");
+		expect(ids).not.toContain("lib_draft");
+		expect(totals[0]).toBe(7);
+	});
+
+	it("counts each type the reader can browse, and leaves out types with nothing to find", async () => {
+		await insertItem({ id: "lib_guide", title: "Guide", kind: "guide" });
+		await insertItem({ id: "lib_secret_guide", title: "Secret guide", kind: "guide", confidentiality: "confidential" });
+		await insertItem({ id: "lib_draft_template", title: "Draft template", kind: "template", status: "draft", createdBy: "owner" });
+		// The seven untyped items from beforeEach take the column's default kind.
+		const counts = await repo.kindCounts(actors.other);
+		expect(counts.guide).toBe(1);
+		expect(counts.template).toBeUndefined();
+		expect(Object.values(counts).reduce((sum, n) => sum + n, 0)).toBe(8);
+		expect((await repo.kindCounts(actors.moderator)).guide).toBe(2);
+	});
+
+	it("refuses a cursor from another order, and one that is not a cursor", async () => {
+		const { nextCursor } = await repo.search(actors.other, { sort: "title", limit: 2 });
+		await expect(repo.search(actors.other, { sort: "newest", cursor: nextCursor! })).rejects.toThrow("changed");
+		await expect(repo.search(actors.other, { sort: "title", cursor: "garbage" })).rejects.toThrow("changed");
+		await expect(repo.search(actors.other, { sort: "title", cursor: '["title","x"]' })).rejects.toThrow("changed");
+	});
+});
+
 describe("library repository: search text refresh", () => {
 	it("refreshSearchTextMany re-indexes every item across chunks and skips unknown or repeated ids", async () => {
 		const ids: string[] = [];

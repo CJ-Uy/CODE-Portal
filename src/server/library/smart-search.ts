@@ -1,4 +1,4 @@
-import type { LibraryCard, LibraryRepository, LibrarySearchInput } from "@/db/repositories/library";
+import type { LibraryCard, LibraryRepository, LibrarySearchInput, LibrarySearchPage } from "@/db/repositories/library";
 import type { LibraryTagsRepository } from "@/db/repositories/library-tags";
 import type { MembersRepository } from "@/db/repositories/members";
 import type { ParsedLibrarySearch } from "@/lib/library/search-params";
@@ -14,9 +14,9 @@ import type { LibraryAi, LibraryVectors, SmartBindings } from "./ai";
 export type SmartRepos = { library: LibraryRepository; libraryTags: Pick<LibraryTagsRepository, "listTags"> };
 export type SmartDeps = { ai: LibraryAi; vectorize: LibraryVectors; repos: SmartRepos; timeoutMs?: number };
 export type SmartChip = { label: string; tagId?: string };
-export type SmartFilters = Omit<LibrarySearchInput, "q" | "sort" | "limit" | "offset" | "onlyIds">;
+export type SmartFilters = Omit<LibrarySearchInput, "q" | "sort" | "limit" | "offset" | "cursor" | "onlyIds">;
 
-/** How many results a smart search keeps; the page paginates over these. */
+/** How many results a smart search keeps. They all come in the first load, so a smart list never asks for more. */
 export const SMART_LIMIT = 50;
 const QUERY_MAX = 200;
 const TIMEOUT_MS = 1500;
@@ -188,14 +188,14 @@ export async function smartSearchPreference(members: Pick<MembersRepository, "ge
 
 /**
  * The library search page. Smart search runs only with bindings (the flag is on and AI + VECTORIZE exist), a query, and
- * the member's switch on (`?smart=1|0` wins over the switch for this request). It keeps the best 50 and the page
- * paginates over them; otherwise, or when it fails, this is plain search.
+ * the member's switch on (`?smart=1|0` wins over the switch for this request). It keeps the best 50 and returns them all
+ * at once; otherwise, or when it fails, this is plain search, one page at a time.
  */
 export async function searchLibrary(
 	actor: Actor,
 	search: ParsedLibrarySearch,
 	ctx: { smart: SmartBindings | null; preference: boolean; repos: SmartRepos; timeoutMs?: number },
-): Promise<{ cards: LibraryCard[]; total: number; chips: SmartChip[] }> {
+): Promise<LibrarySearchPage & { chips: SmartChip[] }> {
 	if (ctx.smart && search.q && (search.smart ?? ctx.preference)) {
 		const { kinds, sources, tagIds, subtype, formatDetail, engagementType } = search;
 		const found = await smartSearch(
@@ -205,7 +205,7 @@ export async function searchLibrary(
 			{ filters: { kinds, sources, tagIds, subtype, formatDetail, engagementType }, without: search.without },
 		);
 		if (found) {
-			const page = await ctx.repos.library.search(actor, { onlyIds: found.ids, sort: search.sort ?? "relevance", limit: search.limit, offset: search.offset });
+			const page = await ctx.repos.library.search(actor, { onlyIds: found.ids, sort: search.sort ?? "relevance", limit: SMART_LIMIT });
 			return { ...page, chips: found.chips };
 		}
 	}
