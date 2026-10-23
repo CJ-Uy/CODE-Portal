@@ -11,7 +11,7 @@ import { handleInboundEmail, MAX_INBOUND_BYTES } from "./src/server/email/inboun
 import { bindingSender } from "./src/server/email/sender";
 import { runEmailJobs, type EmailJob } from "./src/server/email/jobs";
 import { runFeedbackReminders } from "./src/server/feedback/reminders";
-import { purgeExpiredGallery } from "./src/db/repositories/gallery";
+import { ensureEventAlbums, purgeExpiredGallery } from "./src/db/repositories/gallery";
 
 // Re-export the Durable Object classes OpenNext declares so a wrapper does not drop them.
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -70,8 +70,17 @@ export default {
 				),
 			);
 		}
-		// Every tick, but cheap: one indexed read when nothing has been deleted for 30 days.
+		// Every tick, but cheap: one indexed read each when nothing has ended or expired.
 		if (env.FEATURE_GALLERY === "true") {
+			// Each event gets its album once it has ended; the first run after release backfills every past event.
+			ctx.waitUntil(
+				ensureEventAlbums(db, new Date()).then(
+					(made) => {
+						if (made) console.log("gallery event albums", made);
+					},
+					(error) => console.error("gallery event albums failed", error),
+				),
+			);
 			ctx.waitUntil(
 				purgeExpiredGallery(db, async (item) => {
 					// The original, its poster and any stored previews all live under the item's prefix.

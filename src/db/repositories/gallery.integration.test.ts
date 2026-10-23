@@ -3,7 +3,8 @@ import { drizzle } from "drizzle-orm/d1";
 import { beforeEach, describe, expect, it } from "vitest";
 import * as schema from "@/db/schema";
 import type { Actor } from "@/server/auth/permissions";
-import { createGalleryRepository, purgeExpiredGallery, type CreateGalleryItemInput } from "./gallery";
+import { eq } from "drizzle-orm";
+import { createGalleryRepository, ensureEventAlbums, purgeExpiredGallery, type CreateGalleryItemInput } from "./gallery";
 
 const db = drizzle(env.DB, { schema });
 const gallery = createGalleryRepository(db);
@@ -166,7 +167,7 @@ describe("gallery soft delete and restore", () => {
 		await gallery.restore(ana, { itemIds: [photo.id], folderIds: [] });
 		expect((await gallery.folderView(ana, trip))?.items.map((row) => row.id)).toEqual([photo.id]);
 		const rows = await auditRows();
-		expect(rows.at(-1)?.detail).toContain('into "Trip" because its folder is gone');
+		expect(rows.at(-1)?.detail).toContain('into "Trip" because its album is gone');
 	});
 
 	it("audits delete and restore, naming the uploader as the target", async () => {
@@ -235,5 +236,187 @@ describe("gallery event pages", () => {
 		const tagged = await upload(ben, { eventId: "evt", takenAt: new Date(3000) });
 		await upload(ben);
 		expect((await gallery.eventItems(ana, "evt")).map((row) => row.id)).toEqual([tagged.id, inFolder.id]);
+	});
+});
+
+async function insertEvent(id: string, overrides: { title?: string; status?: string; startsAt?: number; endsAt?: number | null; type?: string; readOnly?: boolean } = {}) {
+	const startsAt = overrides.startsAt ?? Date.now() - 3 * DAY;
+	await env.DB.prepare(
+		"INSERT INTO crs_events (id, title, type, status, place, starts_at, ends_at, read_only, description, created_by, checkin_secret) VALUES (?, ?, ?, ?, 'Hall', ?, ?, ?, '', 'ana', 's')",
+	)
+		.bind(id, overrides.title ?? id, overrides.type ?? "official", overrides.status ?? "approved", startsAt, overrides.endsAt === undefined ? startsAt + 2 * 60 * 60 * 1000 : overrides.endsAt, overrides.readOnly ? 1 : 0)
+		.run();
+}
+
+async function eventAlbums() {
+	return db.select({ id: schema.galleryFolders.id, eventId: schema.galleryFolders.eventId, name: schema.galleryFolders.name }).from(schema.galleryFolders).where(eq(schema.galleryFolders.isEventAlbum, true));
+}
+
+describe("gallery hearts, views and tags", () => {
+	it("counts hearts per member and shows the viewer's own heart", async () => {
+		const item = await upload(ana);
+		expect(await gallery.setHeart(ben, item.id, true)).toEqual({ heartCount: 1 });
+		expect(await gallery.setHeart(ben, item.id, true)).toEqual({ heartCount: 1 });
+		expect(await gallery.setHeart(ana, item.id, true)).toEqual({ heartCount: 2 });
+		const [seenByBen] = (await gallery.folderView(ben, null))!.items;
+		expect([seenByBen.heartCount, seenByBen.hearted]).toEqual([2, true]);
+		await gallery.setHeart(ben, item.id, false);
+		const [seenByKeeper] = (await gallery.folderView(keeper, null))!.items;
+		expect([seenByKeeper.heartCount, seenByKeeper.hearted]).toEqual([1, false]);
+		await gallery.deleteItems(ana, [item.id]);
+		await expect(gallery.setHeart(ben, item.id, true)).rejects.toThrow("no longer exists");
+	});
+
+	it("counts views without touching the photo's edit time", async () => {
+		const item = await upload(ana);
+		await gallery.recordView(ben, item.id);
+		await gallery.recordView(keeper, item.id);
+		const [row] = await db.select().from(schema.galleryItems).where(eq(schema.galleryItems.id, item.id));
+		expect(row.viewCount).toBe(2);
+		expect(row.updatedAt.getTime()).toBe(item.updatedAt.getTime());
+	});
+
+	it("tags people by member and topics by text, once each, and audits both ways", async () => {
+		const item = await upload(ana);
+		await gallery.addTag(ben, item.id, { memberId: "keeper" });
+		await gallery.addTag(ben, item.id, { memberId: "keeper" });
+		await gallery.addTag(ben, item.id, { label: "  #Awarding  night " });
+		await gallery.addTag(keeper, item.id, { label: "awarding NIGHT" });
+		const [view] = (await gallery.folderView(ana, null))!.items;
+		expect(view.tags.map((tag) => [tag.kind, tag.label])).toEqual([
+			["person", "KEEPER"],
+			["topic", "Awarding night"],
+		]);
+		await env.DB.prepare("UPDATE members SET full_name = 'Kee Per' WHERE id = 'keeper'").run();
+		const [renamed] = (await gallery.folderView(ana, null))!.items;
+		expect(renamed.tags[0].label).toBe("Kee Per");
+		await gallery.removeTag(ana, view.tags[1].id);
+		const rows = (await auditRows()).filter((row) => row.action === "gallery:tag" || row.action === "gallery:untag");
+		expect(rows.map((row) => [row.action, row.actorMemberId, row.targetMemberId])).toEqual([
+			["gallery:tag", "ben", "keeper"],
+			["gallery:tag", "ben", "ana"],
+			["gallery:untag", "ana", "ana"],
+		]);
+		await env.DB.prepare("UPDATE members SET status = 'inactive' WHERE id = 'boss'").run();
+		await expect(gallery.addTag(ana, item.id, { memberId: "boss" })).rejects.toThrow("not in the portal");
+	});
+});
+
+describe("gallery browsing and search", () => {
+	it("sorts by hearts, views or tags, listing only photos that have some", async () => {
+		const [quiet, loved, viewed, tagged] = [await upload(ana), await upload(ana), await upload(ana), await upload(ana)];
+		await gallery.setHeart(ben, loved.id, true);
+		await gallery.setHeart(ana, loved.id, true);
+		await gallery.setHeart(ben, viewed.id, true);
+		await gallery.recordView(ben, viewed.id);
+		await gallery.addTag(ben, tagged.id, { label: "group photo" });
+		await gallery.addTag(ben, tagged.id, { memberId: "ana" });
+		const ids = async (sort: "loved" | "viewed" | "tagged" | "recent") => (await gallery.browse(ana, { sort })).items.map((item) => item.id);
+		expect(await ids("loved")).toEqual([loved.id, viewed.id]);
+		expect(await ids("viewed")).toEqual([viewed.id]);
+		expect(await ids("tagged")).toEqual([tagged.id]);
+		expect(await ids("recent")).toHaveLength(4);
+		expect((await ids("recent")).includes(quiet.id)).toBe(true);
+	});
+
+	it("finds photos by caption, topic, tagged person and event, and albums by name", async () => {
+		const album = await gallery.createFolder(ana, { name: "Summit Day 1", parentId: null });
+		const captioned = await upload(ana, { caption: "Sunset at the venue", folderId: album });
+		const topical = await upload(ana);
+		await gallery.addTag(ben, topical.id, { label: "Awarding" });
+		const person = await upload(ana);
+		await gallery.addTag(ben, person.id, { memberId: "keeper" });
+		const evented = await upload(ana, { eventId: "evt" });
+		const find = async (q: string) => (await gallery.browse(ana, { sort: "recent", q })).items.map((item) => item.id);
+		expect(await find("sunset")).toEqual([captioned.id]);
+		expect(await find("award")).toEqual([topical.id]);
+		expect(await find("keep")).toEqual([person.id]);
+		expect(await find("retreat")).toEqual([evented.id]);
+		expect((await gallery.browse(ana, { sort: "recent", q: "summit" })).albums.map((card) => card.name)).toEqual(["Summit Day 1"]);
+		expect((await gallery.browse(ana, { sort: "recent", personId: "keeper" })).items.map((item) => item.id)).toEqual([person.id]);
+	});
+
+	it("leaves out photos hidden by a deleted album", async () => {
+		const album = await gallery.createFolder(ana, { name: "Gone", parentId: null });
+		await upload(ana, { folderId: album, caption: "hidden one" });
+		await gallery.deleteFolder(ana, album);
+		expect((await gallery.browse(ana, { sort: "recent", q: "hidden" })).items).toEqual([]);
+	});
+});
+
+describe("gallery event albums", () => {
+	it("gives each ended, approved event one album, and skips the rest", async () => {
+		await insertEvent("past", { title: "General Assembly" });
+		await insertEvent("future", { startsAt: Date.now() + 5 * DAY });
+		await insertEvent("pending", { status: "pending" });
+		await insertEvent("bday", { type: "birthday" });
+		await insertEvent("notice", { readOnly: true });
+		expect(await ensureEventAlbums(db)).toBe(1);
+		expect(await ensureEventAlbums(db)).toBe(0);
+		expect((await eventAlbums()).map((album) => [album.eventId, album.name])).toEqual([["past", "General Assembly"]]);
+		expect(await gallery.eventAlbum(ana, "past")).toEqual({ id: (await eventAlbums())[0].id });
+		expect(await gallery.eventAlbum(ana, "future")).toBeNull();
+	});
+
+	it("does not remake an album that waits in Recently deleted", async () => {
+		await insertEvent("past");
+		await ensureEventAlbums(db);
+		const [album] = await eventAlbums();
+		await gallery.deleteFolder(ben, album.id);
+		expect(await ensureEventAlbums(db)).toBe(0);
+		expect(await gallery.eventAlbum(ana, "past")).toBeNull();
+	});
+});
+
+describe("gallery front page", () => {
+	const now = new Date("2026-10-23T00:00:00+08:00");
+	async function schoolYear() {
+		await env.DB.prepare("DELETE FROM terms").run();
+		await env.DB.prepare("INSERT INTO terms (id, name, retained_at, probation_below, starts_at, ends_at) VALUES ('sy25', 'SY 2025-2026', 10, 5, ?, ?)")
+			.bind(new Date("2025-08-01T00:00:00+08:00").getTime(), new Date("2026-05-31T00:00:00+08:00").getTime())
+			.run();
+	}
+
+	it("puts recent events first, hides old empty ones, and keeps member albums apart", async () => {
+		await schoolYear();
+		await insertEvent("fresh", { title: "Leadership Summit", startsAt: now.getTime() - 5 * DAY });
+		await insertEvent("old-full", { title: "Christmas Party", startsAt: new Date("2025-12-12T18:00:00+08:00").getTime() });
+		await insertEvent("old-empty", { title: "Org Fair", startsAt: new Date("2025-09-01T10:00:00+08:00").getTime() });
+		await insertEvent("ancient", { title: "Founding Day", startsAt: new Date("2024-03-01T10:00:00+08:00").getTime() });
+		await ensureEventAlbums(db, now);
+		const albumFor = async (eventId: string) => (await eventAlbums()).find((album) => album.eventId === eventId)!.id;
+		await upload(ana, { folderId: await albumFor("old-full") });
+		await upload(ana, { folderId: await albumFor("ancient") });
+		const mine = await gallery.createFolder(ana, { name: "Org shirts", parentId: null });
+		const tagged = await upload(ben, { folderId: mine });
+		await gallery.addTag(ben, tagged.id, { memberId: "ana" });
+		await gallery.setHeart(ben, tagged.id, true);
+		await upload(ana);
+
+		const home = await gallery.homeView(ana, now);
+		expect(home.recentEvents.map((card) => card.name)).toEqual(["Leadership Summit", "Christmas Party", "Founding Day"]);
+		expect(home.archive).toEqual([]);
+		expect(home.albums.map((card) => card.name)).toEqual(["Org shirts"]);
+		expect(home.highlights.sort).toBe("loved");
+		expect(home.highlights.items.map((item) => item.id)).toEqual([tagged.id]);
+		expect([home.looseCount, home.photosOfMe]).toEqual([1, 1]);
+		await env.DB.prepare("DELETE FROM terms").run();
+	});
+
+	it("moves event albums past the first six into their school year", async () => {
+		await schoolYear();
+		const dates = ["2025-07-15", "2025-08-15", "2025-09-15", "2025-10-15", "2025-11-15", "2025-12-15", "2026-01-15", "2026-02-15"];
+		for (const [index, date] of dates.entries()) {
+			await insertEvent(`e${index + 1}`, { title: `Event ${index + 1}`, startsAt: new Date(`${date}T10:00:00+08:00`).getTime() });
+		}
+		await ensureEventAlbums(db, now);
+		for (const album of await eventAlbums()) await upload(ana, { folderId: album.id });
+		const home = await gallery.homeView(ana, now);
+		expect(home.recentEvents.map((card) => card.name)).toEqual(["Event 8", "Event 7", "Event 6", "Event 5", "Event 4", "Event 3"]);
+		expect(home.archive.map((group) => [group.name, group.albums.map((card) => card.name)])).toEqual([
+			["SY 2025-2026", ["Event 2"]],
+			["Earlier", ["Event 1"]],
+		]);
+		await env.DB.prepare("DELETE FROM terms").run();
 	});
 });

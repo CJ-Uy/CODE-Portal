@@ -1,8 +1,8 @@
-import { and, desc, eq, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, lt, sql, type SQL } from "drizzle-orm";
 import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
-import { auditLogs, crsEvents, galleryFolders, galleryItems, members, type GalleryItemKind } from "@/db/schema";
+import { auditLogs, crsEvents, galleryFolders, galleryHearts, galleryItems, galleryTags, members, terms, type GalleryItemKind, type GalleryTagKind } from "@/db/schema";
 import { createId } from "@/lib/ids";
 import { createFolderTree, daysLeft, purgeCutoff, type FolderTree } from "@/lib/gallery/tree";
 import type { Actor } from "@/server/auth/permissions";
@@ -31,10 +31,26 @@ export type GalleryItemView = Pick<
 	| "eventId"
 	| "uploadedBy"
 	| "createdAt"
-> & { uploaderName: string; eventTitle: string | null };
+	| "viewCount"
+> & { uploaderName: string; eventTitle: string | null; heartCount: number; hearted: boolean; tags: GalleryTagView[] };
+
+/** A person tag's label is the member's current name; a topic tag's is what was typed. */
+export type GalleryTagView = { id: string; kind: GalleryTagKind; memberId: string | null; label: string };
 
 export type GalleryCover = Pick<GalleryItem, "fileKey" | "posterKey" | "kind">;
-export type GalleryFolderCard = { id: string; name: string; isPublic: boolean; itemCount: number; folderCount: number; cover: GalleryCover | null };
+export type GalleryFolderCard = {
+	id: string;
+	name: string;
+	isPublic: boolean;
+	isEventAlbum: boolean;
+	/** When the album's event started, for event albums and albums tagged with an event. */
+	eventDate: Date | null;
+	itemCount: number;
+	folderCount: number;
+	/** Newest upload directly inside, for sorting albums by activity. */
+	latestAt: Date | null;
+	cover: GalleryCover | null;
+};
 export type GalleryCrumb = { id: string; name: string };
 
 export type GalleryFolderView = {
@@ -83,6 +99,26 @@ export type CreateGalleryItemInput = {
 	eventId: string | null;
 };
 
+/** How a list of photos is ordered. Every mode except recent only lists photos that have some of what it counts. */
+export type GallerySort = "recent" | "loved" | "viewed" | "tagged";
+export type GalleryBrowseInput = { sort: GallerySort; q?: string; personId?: string };
+export type GalleryBrowseView = { items: GalleryItemView[]; albums: GalleryFolderCard[] };
+export type GalleryMemberOption = { id: string; name: string };
+
+/**
+ * The gallery's front page. Recent events lead (empty ones too, while the event is recent, so there is always
+ * somewhere to put new photos); older event albums with photos fold into school years; member albums sit apart.
+ */
+export type GalleryHomeView = {
+	recentEvents: GalleryFolderCard[];
+	albums: GalleryFolderCard[];
+	archive: { key: string; name: string; albums: GalleryFolderCard[] }[];
+	highlights: { sort: GallerySort; items: GalleryItemView[] };
+	/** Photos sitting at the top level, outside any album. */
+	looseCount: number;
+	photosOfMe: number;
+};
+
 export type GalleryItemPatch = { caption?: string | null; takenAt?: Date | null; eventId?: string | null };
 export type GalleryFolderPatch = { name?: string; eventId?: string | null; isPublic?: boolean };
 
@@ -102,6 +138,15 @@ export type GalleryRepository = {
 	deleteFolder(actor: Actor, folderId: string): Promise<void>;
 	listDeleted(actor: Actor, now?: Date): Promise<GalleryDeletedView>;
 	restore(actor: Actor, input: { itemIds: string[]; folderIds: string[] }): Promise<void>;
+	homeView(actor: Actor, now?: Date): Promise<GalleryHomeView>;
+	browse(actor: Actor, input: GalleryBrowseInput): Promise<GalleryBrowseView>;
+	/** The event's own album, made first if the event has ended. Null for an event that has not ended or does not get one. */
+	eventAlbum(actor: Actor, eventId: string, now?: Date): Promise<{ id: string } | null>;
+	recordView(actor: Actor, itemId: string): Promise<void>;
+	setHeart(actor: Actor, itemId: string, on: boolean): Promise<{ heartCount: number }>;
+	addTag(actor: Actor, itemId: string, input: { memberId: string } | { label: string }): Promise<void>;
+	removeTag(actor: Actor, tagId: string): Promise<void>;
+	memberOptions(actor: Actor): Promise<GalleryMemberOption[]>;
 	/** For the storage proxy. A null actor is a signed-out visitor, who may only read public items. */
 	canReadObject(actor: Actor | null, itemId: string): Promise<boolean>;
 };
@@ -110,6 +155,12 @@ export type GalleryRepository = {
 const ID_CHUNK = 90;
 const MAX_NAME = 120;
 const MAX_CAPTION = 2000;
+const MAX_TOPIC = 40;
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** An event album stays on the front page, even empty, for this long after its event. */
+export const RECENT_EVENT_DAYS = 60;
+const RECENT_EVENT_LIMIT = 6;
+const BROWSE_LIMIT = 120;
 
 const STALE = "Some of these were moved or deleted by someone else. Refresh and try again.";
 
@@ -147,17 +198,47 @@ async function eventTitles(db: Db, ids: (string | null)[]): Promise<Map<string, 
 	return new Map(rows.map((row) => [row.id, row.title]));
 }
 
-async function decorate(db: Db, items: GalleryItem[]): Promise<(GalleryItem & { uploaderName: string; eventTitle: string | null })[]> {
-	const [names, titles] = await Promise.all([namesFor(db, items.map((item) => item.uploadedBy)), eventTitles(db, items.map((item) => item.eventId))]);
+type Decorated = GalleryItem & { uploaderName: string; eventTitle: string | null; heartCount: number; hearted: boolean; tags: GalleryTagView[] };
+
+async function decorate(db: Db, items: GalleryItem[], viewerId: string | null): Promise<Decorated[]> {
+	const ids = items.map((item) => item.id);
+	const [names, titles, heartRows, mine, tagRows] = await Promise.all([
+		namesFor(db, items.map((item) => item.uploadedBy)),
+		eventTitles(db, items.map((item) => item.eventId)),
+		inChunks(ids, (chunk) =>
+			db.select({ itemId: galleryHearts.itemId, count: sql<number>`count(*)` }).from(galleryHearts).where(inArray(galleryHearts.itemId, chunk)).groupBy(galleryHearts.itemId),
+		),
+		viewerId
+			? inChunks(ids, (chunk) => db.select({ itemId: galleryHearts.itemId }).from(galleryHearts).where(and(inArray(galleryHearts.itemId, chunk), eq(galleryHearts.memberId, viewerId))))
+			: Promise.resolve([]),
+		inChunks(ids, (chunk) =>
+			db
+				.select({ id: galleryTags.id, itemId: galleryTags.itemId, kind: galleryTags.kind, memberId: galleryTags.memberId, label: galleryTags.label })
+				.from(galleryTags)
+				.where(inArray(galleryTags.itemId, chunk))
+				.orderBy(galleryTags.createdAt),
+		),
+	]);
+	const people = await namesFor(db, tagRows.map((tag) => tag.memberId));
+	const hearts = new Map(heartRows.map((row) => [row.itemId, Number(row.count)]));
+	const hearted = new Set(mine.map((row) => row.itemId));
+	const tags = new Map<string, GalleryTagView[]>();
+	for (const tag of tagRows) {
+		const label = (tag.memberId && people.get(tag.memberId)) || tag.label;
+		tags.set(tag.itemId, [...(tags.get(tag.itemId) ?? []), { id: tag.id, kind: tag.kind, memberId: tag.memberId, label }]);
+	}
 	return items.map((item) => ({
 		...item,
 		// The email snapshot keeps the uploader identifiable after their member row is gone.
 		uploaderName: (item.uploadedBy && names.get(item.uploadedBy)) || item.uploaderEmail,
 		eventTitle: item.eventId ? titles.get(item.eventId) ?? null : null,
+		heartCount: hearts.get(item.id) ?? 0,
+		hearted: hearted.has(item.id),
+		tags: tags.get(item.id) ?? [],
 	}));
 }
 
-function toView(item: GalleryItem & { uploaderName: string; eventTitle: string | null }): GalleryItemView {
+function toView(item: Decorated): GalleryItemView {
 	return {
 		id: item.id,
 		folderId: item.folderId,
@@ -173,13 +254,17 @@ function toView(item: GalleryItem & { uploaderName: string; eventTitle: string |
 		eventId: item.eventId,
 		uploadedBy: item.uploadedBy,
 		createdAt: item.createdAt,
+		viewCount: item.viewCount,
 		uploaderName: item.uploaderName,
 		eventTitle: item.eventTitle,
+		heartCount: item.heartCount,
+		hearted: item.hearted,
+		tags: item.tags,
 	};
 }
 
 /** Live item count and newest item of each folder, counting only items directly inside it. */
-async function folderStats(db: Db, folderIds: string[]): Promise<Map<string, { count: number; cover: GalleryCover }>> {
+async function folderStats(db: Db, folderIds: string[]): Promise<Map<string, { count: number; latestAt: Date; cover: GalleryCover }>> {
 	const rows = await inChunks(folderIds, async (chunk) => {
 		const ranked = db
 			.select({
@@ -188,6 +273,7 @@ async function folderStats(db: Db, folderIds: string[]): Promise<Map<string, { c
 				posterKey: galleryItems.posterKey,
 				kind: galleryItems.kind,
 				count: sql<number>`count(*) over (partition by ${galleryItems.folderId})`.as("count"),
+				latest: sql<number>`max(${galleryItems.createdAt}) over (partition by ${galleryItems.folderId})`.as("latest"),
 				rank: sql<number>`row_number() over (partition by ${galleryItems.folderId} order by coalesce(${galleryItems.takenAt}, ${galleryItems.createdAt}) desc)`.as("rank"),
 			})
 			.from(galleryItems)
@@ -195,18 +281,28 @@ async function folderStats(db: Db, folderIds: string[]): Promise<Map<string, { c
 			.as("ranked");
 		return db.select().from(ranked).where(eq(ranked.rank, 1));
 	});
-	return new Map(rows.map((row) => [row.folderId as string, { count: Number(row.count), cover: { fileKey: row.fileKey, posterKey: row.posterKey, kind: row.kind } }]));
+	return new Map(
+		rows.map((row) => [row.folderId as string, { count: Number(row.count), latestAt: new Date(Number(row.latest)), cover: { fileKey: row.fileKey, posterKey: row.posterKey, kind: row.kind } }]),
+	);
 }
 
 async function folderCards(db: Db, tree: Tree, folders: Folder[]): Promise<GalleryFolderCard[]> {
-	const stats = await folderStats(db, folders.map((folder) => folder.id));
+	const eventIds = [...new Set(folders.map((folder) => folder.eventId).filter((id): id is string => Boolean(id)))];
+	const [stats, events] = await Promise.all([
+		folderStats(db, folders.map((folder) => folder.id)),
+		inChunks(eventIds, (chunk) => db.select({ id: crsEvents.id, startsAt: crsEvents.startsAt }).from(crsEvents).where(inArray(crsEvents.id, chunk))),
+	]);
+	const eventDates = new Map(events.map((event) => [event.id, event.startsAt]));
 	return folders
 		.map((folder) => ({
 			id: folder.id,
 			name: folder.name,
 			isPublic: folder.isPublic,
+			isEventAlbum: folder.isEventAlbum,
+			eventDate: folder.eventId ? eventDates.get(folder.eventId) ?? null : null,
 			itemCount: stats.get(folder.id)?.count ?? 0,
 			folderCount: tree.children(folder.id).length,
+			latestAt: stats.get(folder.id)?.latestAt ?? null,
 			cover: stats.get(folder.id)?.cover ?? null,
 		}))
 		.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
@@ -217,7 +313,7 @@ const folderLabel = (tree: Tree, folderId: string | null) =>
 
 function cleanName(name: string): string {
 	const trimmed = name.replace(/\s+/g, " ").trim().slice(0, MAX_NAME);
-	if (!trimmed) throw new Error("Give the folder a name.");
+	if (!trimmed) throw new Error("Give the album a name.");
 	return trimmed;
 }
 
@@ -249,7 +345,7 @@ async function assertEvent(db: Db, eventId: string | null | undefined): Promise<
 }
 
 function assertLiveFolder(tree: Tree, folderId: string | null): void {
-	if (!tree.isLive(folderId)) throw new Error("That folder no longer exists.");
+	if (!tree.isLive(folderId)) throw new Error("That album no longer exists.");
 }
 
 /** Every requested item, visible (not deleted, folder chain live). Throws if any is missing so a stale screen never half-applies. */
@@ -264,13 +360,75 @@ async function liveItems(db: Db, tree: Tree, itemIds: string[]): Promise<Gallery
 
 function liveFolder(tree: Tree, folderId: string): Folder {
 	const folder = tree.get(folderId);
-	if (!folder || !tree.isLive(folderId)) throw new Error("That folder no longer exists.");
+	if (!folder || !tree.isLive(folderId)) throw new Error("That album no longer exists.");
 	return folder;
 }
 
 export function createGalleryRepository(db: Db): GalleryRepository {
+	const heartCount = sql<number>`(select count(*) from ${galleryHearts} where ${galleryHearts.itemId} = ${galleryItems.id})`;
+	const tagCount = sql<number>`(select count(*) from ${galleryTags} where ${galleryTags.itemId} = ${galleryItems.id})`;
+
+	/**
+	 * Photos across every album. Search matches captions, topics, tagged people (by their current name) and the
+	 * photo's own event; album names and event titles match albums, returned separately.
+	 * ponytail: LIKE scans; add an FTS table if the gallery reaches tens of thousands of photos.
+	 */
+	async function browseItems(actor: Actor, input: GalleryBrowseInput): Promise<GalleryBrowseView> {
+		const query = (input.q ?? "").replace(/[%_\\]/g, " ").trim().toLowerCase();
+		const pattern = `%${query}%`;
+		const conditions: (SQL | undefined)[] = [isNull(galleryItems.deletedAt)];
+		if (input.personId) {
+			conditions.push(
+				sql`exists (select 1 from ${galleryTags} where ${galleryTags.itemId} = ${galleryItems.id} and ${galleryTags.kind} = 'person' and ${galleryTags.memberId} = ${input.personId})`,
+			);
+		}
+		if (query) {
+			conditions.push(sql`(
+				lower(coalesce(${galleryItems.caption}, '')) like ${pattern}
+				or exists (select 1 from ${galleryTags} where ${galleryTags.itemId} = ${galleryItems.id} and lower(${galleryTags.label}) like ${pattern})
+				or exists (select 1 from ${galleryTags} join ${members} on ${members.id} = ${galleryTags.memberId}
+					where ${galleryTags.itemId} = ${galleryItems.id}
+					and (lower(coalesce(${members.fullName}, '')) like ${pattern} or lower(coalesce(${members.name}, '')) like ${pattern} or lower(coalesce(${members.nickname}, '')) like ${pattern}))
+				or exists (select 1 from ${crsEvents} where ${crsEvents.id} = ${galleryItems.eventId} and lower(${crsEvents.title}) like ${pattern})
+			)`);
+		}
+		const order =
+			input.sort === "loved"
+				? [desc(heartCount), desc(galleryItems.viewCount), desc(galleryItems.createdAt)]
+				: input.sort === "viewed"
+					? [desc(galleryItems.viewCount), desc(heartCount), desc(galleryItems.createdAt)]
+					: input.sort === "tagged"
+						? [desc(tagCount), desc(galleryItems.createdAt)]
+						: [desc(galleryItems.createdAt)];
+		if (input.sort === "loved") conditions.push(sql`${heartCount} > 0`);
+		if (input.sort === "viewed") conditions.push(sql`${galleryItems.viewCount} > 0`);
+		if (input.sort === "tagged") conditions.push(sql`${tagCount} > 0`);
+		const tree = await loadTree(db);
+		// Photos hidden by a deleted album are dropped after the query, so read a little extra.
+		const rows = (await db.select().from(galleryItems).where(and(...conditions)).orderBy(...order).limit(BROWSE_LIMIT + 80))
+			.filter((item) => tree.isLive(item.folderId))
+			.slice(0, BROWSE_LIMIT);
+		let albums: GalleryFolderCard[] = [];
+		if (query) {
+			const live = tree.all().filter((folder) => tree.isLive(folder.id));
+			const titles = await eventTitles(db, live.map((folder) => folder.eventId));
+			const matches = live.filter((folder) => folder.name.toLowerCase().includes(query) || (folder.eventId && titles.get(folder.eventId)?.toLowerCase().includes(query)));
+			albums = (await folderCards(db, tree, matches.slice(0, 24))).filter((card) => card.itemCount > 0 || card.folderCount > 0 || !card.isEventAlbum);
+		}
+		return { items: (await decorate(db, rows, actor.memberId)).map(toView), albums };
+	}
+
+	/** A few photos for the front page: the most loved, else the most viewed, else the newest. */
+	async function highlightsFor(actor: Actor): Promise<GalleryHomeView["highlights"]> {
+		for (const sort of ["loved", "viewed", "recent"] as const) {
+			const { items } = await browseItems(actor, { sort });
+			if (items.length) return { sort, items: items.slice(0, 7) };
+		}
+		return { sort: "recent", items: [] };
+	}
+
 	return {
-		async folderView(_actor, folderId) {
+		async folderView(actor, folderId) {
 			const tree = await loadTree(db);
 			if (!tree.isLive(folderId)) return null;
 			const folder = folderId ? tree.get(folderId)! : null;
@@ -298,12 +456,12 @@ export function createGalleryRepository(db: Db): GalleryRepository {
 					: null,
 				path: tree.path(folderId).map(({ id, name }) => ({ id, name })),
 				folders: cards,
-				items: (await decorate(db, rows)).map(toView),
+				items: (await decorate(db, rows, actor.memberId)).map(toView),
 				inheritedEvent: inheritedId && titles.has(inheritedId) ? { id: inheritedId, title: titles.get(inheritedId)! } : null,
 			};
 		},
 
-		async eventItems(_actor, eventId) {
+		async eventItems(actor, eventId) {
 			const tree = await loadTree(db);
 			// A photo's own event tag wins; an untagged photo takes the nearest tag of the folders above it.
 			const folderIds = tree
@@ -319,7 +477,7 @@ export function createGalleryRepository(db: Db): GalleryRepository {
 			const items = [...direct.filter((item) => tree.isLive(item.folderId)), ...inherited].sort(
 				(a, b) => (b.takenAt ?? b.createdAt).getTime() - (a.takenAt ?? a.createdAt).getTime() || b.createdAt.getTime() - a.createdAt.getTime(),
 			);
-			return (await decorate(db, items)).map(toView);
+			return (await decorate(db, items, actor.memberId)).map(toView);
 		},
 
 		async publicView(folderId) {
@@ -522,7 +680,7 @@ export function createGalleryRepository(db: Db): GalleryRepository {
 			const tree = await loadTree(db);
 			const folder = liveFolder(tree, folderId);
 			assertLiveFolder(tree, parentId);
-			if (tree.wouldCycle(folderId, parentId)) throw new Error("A folder cannot go inside itself.");
+			if (tree.wouldCycle(folderId, parentId)) throw new Error("An album cannot go inside itself.");
 			if (folder.parentId === parentId) return;
 			await commit(db, [
 				db.update(galleryFolders).set({ parentId, updatedAt: new Date() }).where(eq(galleryFolders.id, folderId)),
@@ -564,7 +722,7 @@ export function createGalleryRepository(db: Db): GalleryRepository {
 			const [stats, deleters, items] = await Promise.all([
 				folderStats(db, [...new Set([...subtrees.values()].flat())]),
 				namesFor(db, [...rows.map((row) => row.deletedBy), ...folders.map((folder) => folder.deletedBy)]),
-				decorate(db, rows),
+				decorate(db, rows, actor.memberId),
 			]);
 			const canRestore = (deletedBy: string | null) => seesEveryone || deletedBy === actor.memberId;
 			return {
@@ -614,7 +772,7 @@ export function createGalleryRepository(db: Db): GalleryRepository {
 			const now = new Date();
 			for (const folder of folders) {
 				const parentId = tree.nearestLive(folder.parentId);
-				const moved = parentId !== folder.parentId ? `, into ${folderLabel(tree, parentId)} because its folder is gone` : "";
+				const moved = parentId !== folder.parentId ? `, into ${folderLabel(tree, parentId)} because its album is gone` : "";
 				statements.push(
 					db.update(galleryFolders).set({ deletedAt: null, deletedBy: null, parentId, updatedAt: now }).where(eq(galleryFolders.id, folder.id)),
 					db.insert(auditLogs).values(audit(actor, { action: "gallery:folder_restore", targetType: "gallery_folder", targetId: folder.id, detail: `${folder.name}${moved}` })),
@@ -623,7 +781,7 @@ export function createGalleryRepository(db: Db): GalleryRepository {
 			}
 			for (const item of items) {
 				const folderId = tree.nearestLive(item.folderId);
-				const moved = folderId !== item.folderId ? `, into ${folderLabel(tree, folderId)} because its folder is gone` : "";
+				const moved = folderId !== item.folderId ? `, into ${folderLabel(tree, folderId)} because its album is gone` : "";
 				statements.push(
 					db.update(galleryItems).set({ deletedAt: null, deletedBy: null, folderId, updatedAt: now }).where(eq(galleryItems.id, item.id)),
 					db.insert(auditLogs).values(
@@ -632,6 +790,132 @@ export function createGalleryRepository(db: Db): GalleryRepository {
 				);
 			}
 			await commit(db, statements);
+		},
+
+		async homeView(actor, now = new Date()) {
+			// The cron makes event albums every minute; doing it here too covers environments without a cron.
+			await ensureEventAlbums(db, now);
+			const tree = await loadTree(db);
+			const [cards, termRows, [loose], [mine], highlights] = await Promise.all([
+				folderCards(db, tree, tree.children(null)),
+				db.select({ id: terms.id, name: terms.name, startsAt: terms.startsAt, endsAt: terms.endsAt }).from(terms).orderBy(desc(terms.startsAt)),
+				db.select({ count: sql<number>`count(*)` }).from(galleryItems).where(and(isNull(galleryItems.folderId), isNull(galleryItems.deletedAt))),
+				db
+					.select({ count: sql<number>`count(distinct ${galleryTags.itemId})` })
+					.from(galleryTags)
+					.innerJoin(galleryItems, eq(galleryItems.id, galleryTags.itemId))
+					.where(and(eq(galleryTags.kind, "person"), eq(galleryTags.memberId, actor.memberId), isNull(galleryItems.deletedAt))),
+				highlightsFor(actor),
+			]);
+			const hasPhotos = (card: GalleryFolderCard) => card.itemCount > 0 || card.folderCount > 0;
+			const recent = (card: GalleryFolderCard) => card.eventDate !== null && now.getTime() - card.eventDate.getTime() < RECENT_EVENT_DAYS * DAY_MS;
+			const byEventDate = (a: GalleryFolderCard, b: GalleryFolderCard) => (b.eventDate?.getTime() ?? 0) - (a.eventDate?.getTime() ?? 0);
+			const eventAlbums = cards.filter((card) => card.isEventAlbum).sort(byEventDate);
+			// An empty event album only shows while its event is recent; older empty ones wait, hidden, until someone fills them.
+			const recentEvents = eventAlbums.filter((card) => hasPhotos(card) || recent(card)).slice(0, RECENT_EVENT_LIMIT);
+			const shown = new Set(recentEvents.map((card) => card.id));
+			const archive: GalleryHomeView["archive"] = [];
+			for (const card of eventAlbums.filter((card) => !shown.has(card.id) && hasPhotos(card))) {
+				const term = termRows.find((row) => card.eventDate && card.eventDate >= row.startsAt && card.eventDate <= row.endsAt);
+				const key = term?.id ?? "earlier";
+				const group = archive.find((entry) => entry.key === key) ?? archive[archive.push({ key, name: term?.name ?? "Earlier", albums: [] }) - 1];
+				group.albums.push(card);
+			}
+			const albums = cards
+				.filter((card) => !card.isEventAlbum)
+				.sort((a, b) => (b.latestAt?.getTime() ?? 0) - (a.latestAt?.getTime() ?? 0) || a.name.localeCompare(b.name, undefined, { numeric: true }));
+			return { recentEvents, albums, archive, highlights, looseCount: Number(loose?.count ?? 0), photosOfMe: Number(mine?.count ?? 0) };
+		},
+
+		async browse(actor, input) {
+			return browseItems(actor, input);
+		},
+
+		async eventAlbum(_actor, eventId, now = new Date()) {
+			await ensureEventAlbums(db, now, eventId);
+			const [album] = await db
+				.select({ id: galleryFolders.id })
+				.from(galleryFolders)
+				.where(and(eq(galleryFolders.eventId, eventId), eq(galleryFolders.isEventAlbum, true), isNull(galleryFolders.deletedAt)))
+				.limit(1);
+			return album ?? null;
+		},
+
+		async recordView(_actor, itemId) {
+			// Popularity only, so it is not audited and does not touch updated_at.
+			await db
+				.update(galleryItems)
+				.set({ viewCount: sql`${galleryItems.viewCount} + 1` })
+				.where(and(eq(galleryItems.id, itemId), isNull(galleryItems.deletedAt)));
+		},
+
+		async setHeart(actor, itemId, on) {
+			const tree = await loadTree(db);
+			await liveItems(db, tree, [itemId]);
+			if (on) await db.insert(galleryHearts).values({ itemId, memberId: actor.memberId }).onConflictDoNothing();
+			else await db.delete(galleryHearts).where(and(eq(galleryHearts.itemId, itemId), eq(galleryHearts.memberId, actor.memberId)));
+			const [row] = await db.select({ count: sql<number>`count(*)` }).from(galleryHearts).where(eq(galleryHearts.itemId, itemId));
+			return { heartCount: Number(row?.count ?? 0) };
+		},
+
+		async addTag(actor, itemId, input) {
+			const tree = await loadTree(db);
+			const [item] = await liveItems(db, tree, [itemId]);
+			let tag: InferInsertModel<typeof galleryTags>;
+			if ("memberId" in input) {
+				const [person] = await db
+					.select({ id: members.id, fullName: members.fullName, name: members.name, email: members.email, status: members.status })
+					.from(members)
+					.where(eq(members.id, input.memberId))
+					.limit(1);
+				if (!person || person.status !== "active") throw new Error("That member is not in the portal.");
+				const label = person.fullName ?? person.name ?? person.email;
+				tag = { id: createId("gtag"), itemId, kind: "person", key: person.id, memberId: person.id, label, taggedBy: actor.memberId };
+			} else {
+				const label = input.label.trim().replace(/^#+/, "").replace(/\s+/g, " ").trim().slice(0, MAX_TOPIC);
+				if (!label) throw new Error("Type a person or a topic to tag.");
+				tag = { id: createId("gtag"), itemId, kind: "topic", key: label.toLowerCase(), memberId: null, label, taggedBy: actor.memberId };
+			}
+			const inserted = await db.insert(galleryTags).values(tag).onConflictDoNothing().returning({ id: galleryTags.id });
+			if (inserted.length === 0) return; // already tagged
+			await db.insert(auditLogs).values(
+				audit(actor, {
+					action: "gallery:tag",
+					targetType: "gallery_item",
+					targetId: itemId,
+					targetMemberId: tag.memberId ?? item.uploadedBy,
+					detail: `${item.originalName}: tagged ${tag.kind === "person" ? tag.label : `"${tag.label}"`}`,
+				}),
+			);
+		},
+
+		async removeTag(actor, tagId) {
+			const [tag] = await db.select().from(galleryTags).where(eq(galleryTags.id, tagId)).limit(1);
+			if (!tag) return;
+			const tree = await loadTree(db);
+			const [item] = await liveItems(db, tree, [tag.itemId]);
+			await commit(db, [
+				db.delete(galleryTags).where(eq(galleryTags.id, tagId)),
+				db.insert(auditLogs).values(
+					audit(actor, {
+						action: "gallery:untag",
+						targetType: "gallery_item",
+						targetId: tag.itemId,
+						targetMemberId: tag.memberId ?? item.uploadedBy,
+						detail: `${item.originalName}: removed ${tag.kind === "person" ? tag.label : `"${tag.label}"`}`,
+					}),
+				),
+			]);
+		},
+
+		async memberOptions() {
+			const rows = await db
+				.select({ id: members.id, fullName: members.fullName, name: members.name, email: members.email })
+				.from(members)
+				.where(eq(members.status, "active"));
+			return rows
+				.map((row) => ({ id: row.id, name: row.fullName ?? row.name ?? row.email }))
+				.sort((a, b) => a.name.localeCompare(b.name));
 		},
 
 		async canReadObject(actor, itemId) {
@@ -722,6 +1006,39 @@ export async function purgeExpiredGallery(
 	return { items: gone.length, folders };
 }
 
+/**
+ * Gives every event that has ended its own album, so members always have somewhere to put its photos. Runs from the
+ * cron and from the gallery's front page; idempotent (one album per event, enforced by a unique index). Birthdays and
+ * informational events get none. An album someone deleted is not remade while it waits in Recently deleted.
+ */
+export async function ensureEventAlbums(db: Db, now = new Date(), onlyEventId?: string): Promise<number> {
+	const due = await db
+		.select({ id: crsEvents.id, title: crsEvents.title })
+		.from(crsEvents)
+		.where(
+			and(
+				onlyEventId ? eq(crsEvents.id, onlyEventId) : undefined,
+				isNull(crsEvents.deletedAt),
+				eq(crsEvents.status, "approved"),
+				eq(crsEvents.readOnly, false),
+				sql`${crsEvents.type} <> 'birthday'`,
+				sql`coalesce(${crsEvents.endsAt}, ${crsEvents.startsAt}) < ${now.getTime()}`,
+				sql`not exists (select 1 from ${galleryFolders} where ${galleryFolders.eventId} = ${crsEvents.id} and ${galleryFolders.isEventAlbum} = 1)`,
+			),
+		)
+		.limit(80);
+	await commit(
+		db,
+		due.map((event) =>
+			db
+				.insert(galleryFolders)
+				.values({ id: createId("gfd"), name: event.title.replace(/\s+/g, " ").trim().slice(0, MAX_NAME) || "Event", eventId: event.id, isEventAlbum: true })
+				.onConflictDoNothing(),
+		),
+	);
+	return due.length;
+}
+
 export function createUnavailableGalleryRepository(): GalleryRepository {
 	const unavailable = () => {
 		throw new Error("The gallery is unavailable through this repository adapter.");
@@ -742,6 +1059,14 @@ export function createUnavailableGalleryRepository(): GalleryRepository {
 		deleteFolder: unavailable,
 		listDeleted: unavailable,
 		restore: unavailable,
+		homeView: unavailable,
+		browse: unavailable,
+		eventAlbum: unavailable,
+		recordView: unavailable,
+		setHeart: unavailable,
+		addTag: unavailable,
+		removeTag: unavailable,
+		memberOptions: unavailable,
 		canReadObject: unavailable,
 	};
 }

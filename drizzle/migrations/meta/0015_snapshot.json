@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "f1b6573d-4d67-4654-99f0-edd32bb1db4b",
+  "id": "6aa38682-a996-4930-aad5-28ba592eeb49",
   "prevId": "506a049a-820f-4398-a964-76ddac7b2bc5",
   "tables": {
     "accounts": {
@@ -2730,6 +2730,14 @@
           "autoincrement": false,
           "default": false
         },
+        "is_event_album": {
+          "name": "is_event_album",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
         "created_by": {
           "name": "created_by",
           "type": "text",
@@ -2782,6 +2790,14 @@
             "deleted_at"
           ],
           "isUnique": false
+        },
+        "gallery_folders_event_album_idx": {
+          "name": "gallery_folders_event_album_idx",
+          "columns": [
+            "event_id"
+          ],
+          "isUnique": true,
+          "where": "\"gallery_folders\".\"is_event_album\" = 1"
         }
       },
       "foreignKeys": {
@@ -2839,6 +2855,81 @@
         }
       },
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "gallery_hearts": {
+      "name": "gallery_hearts",
+      "columns": {
+        "item_id": {
+          "name": "item_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "member_id": {
+          "name": "member_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "gallery_hearts_member_idx": {
+          "name": "gallery_hearts_member_idx",
+          "columns": [
+            "member_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "gallery_hearts_item_id_gallery_items_id_fk": {
+          "name": "gallery_hearts_item_id_gallery_items_id_fk",
+          "tableFrom": "gallery_hearts",
+          "tableTo": "gallery_items",
+          "columnsFrom": [
+            "item_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "gallery_hearts_member_id_members_id_fk": {
+          "name": "gallery_hearts_member_id_members_id_fk",
+          "tableFrom": "gallery_hearts",
+          "tableTo": "members",
+          "columnsFrom": [
+            "member_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "gallery_hearts_item_id_member_id_pk": {
+          "columns": [
+            "item_id",
+            "member_id"
+          ],
+          "name": "gallery_hearts_item_id_member_id_pk"
+        }
+      },
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
@@ -2943,6 +3034,14 @@
           "notNull": true,
           "autoincrement": false
         },
+        "view_count": {
+          "name": "view_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -3003,6 +3102,13 @@
             "uploaded_by"
           ],
           "isUnique": false
+        },
+        "gallery_items_view_count_idx": {
+          "name": "gallery_items_view_count_idx",
+          "columns": [
+            "view_count"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -3051,6 +3157,138 @@
           "tableTo": "members",
           "columnsFrom": [
             "deleted_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "gallery_tags": {
+      "name": "gallery_tags",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "item_id": {
+          "name": "item_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "member_id": {
+          "name": "member_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tagged_by": {
+          "name": "tagged_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "gallery_tags_item_kind_key_idx": {
+          "name": "gallery_tags_item_kind_key_idx",
+          "columns": [
+            "item_id",
+            "kind",
+            "key"
+          ],
+          "isUnique": true
+        },
+        "gallery_tags_member_idx": {
+          "name": "gallery_tags_member_idx",
+          "columns": [
+            "member_id"
+          ],
+          "isUnique": false
+        },
+        "gallery_tags_kind_key_idx": {
+          "name": "gallery_tags_kind_key_idx",
+          "columns": [
+            "kind",
+            "key"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "gallery_tags_item_id_gallery_items_id_fk": {
+          "name": "gallery_tags_item_id_gallery_items_id_fk",
+          "tableFrom": "gallery_tags",
+          "tableTo": "gallery_items",
+          "columnsFrom": [
+            "item_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "gallery_tags_member_id_members_id_fk": {
+          "name": "gallery_tags_member_id_members_id_fk",
+          "tableFrom": "gallery_tags",
+          "tableTo": "members",
+          "columnsFrom": [
+            "member_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "gallery_tags_tagged_by_members_id_fk": {
+          "name": "gallery_tags_tagged_by_members_id_fk",
+          "tableFrom": "gallery_tags",
+          "tableTo": "members",
+          "columnsFrom": [
+            "tagged_by"
           ],
           "columnsTo": [
             "id"
