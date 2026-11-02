@@ -6,12 +6,20 @@ import { ENGAGEMENT_TYPES, FORMAT_DETAILS, LIBRARY_KINDS, LIBRARY_SOURCES, SUBTY
 /** Rows per load: the first load comes with the page, the rest as the member scrolls. */
 export const PAGE_SIZE = 24;
 
-export const SORTS = ["relevance", "title", "newest", "most_saved", "most_read"] as const;
+export const SORTS = ["relevance", "title", "title_desc", "type", "type_desc", "author", "author_desc", "year", "year_desc", "newest", "most_saved", "least_saved", "most_read"] as const;
 export const SORT_LABELS: Record<(typeof SORTS)[number], string> = {
 	relevance: "Relevance",
 	title: "A to Z",
+	title_desc: "Z to A",
+	type: "Type: A to Z",
+	type_desc: "Type: Z to A",
+	author: "By: A to Z",
+	author_desc: "By: Z to A",
+	year: "Year: oldest first",
+	year_desc: "Year: newest first",
 	newest: "Newest",
 	most_saved: "Most saved",
+	least_saved: "Least saved",
 	most_read: "Most read",
 };
 const SUBTYPE_VALUES: readonly string[] = [...SUBTYPES.code_document, ...SUBTYPES.reading];

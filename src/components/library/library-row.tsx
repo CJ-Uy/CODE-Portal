@@ -3,19 +3,20 @@ import { Lock } from "lucide-react";
 import { showSaveCount } from "@/lib/library/activity";
 import type { LibraryCardFields } from "@/lib/library/card-fields";
 import { KIND_LABELS } from "@/lib/library/taxonomy";
+import { SortHeading } from "./search-filters";
 
 /** The sheet's columns. The header row and every item row share it, so the columns line up at every width. */
 export const ROW_GRID = "md:grid-cols-[minmax(0,1fr)_8rem_3.5rem] lg:grid-cols-[minmax(0,1fr)_8rem_minmax(0,12rem)_3.5rem_4rem]";
 
-/** Column names over the rows, from the width where rows become columns. Screen readers get each row's facts in its own text. */
+/** Sort controls over the rows, from the width where rows become columns. */
 export function LibraryRowHeader() {
 	return (
-		<div aria-hidden className={`hidden gap-x-4 border-b border-border px-4 py-2.5 text-xs font-medium text-muted-foreground md:grid ${ROW_GRID}`}>
-			<span>Title</span>
-			<span>Type</span>
-			<span className="hidden lg:block">By</span>
-			<span>Year</span>
-			<span className="hidden text-right lg:block">Saves</span>
+		<div role="group" aria-label="Sort library items" className={`hidden gap-x-4 border-b border-border px-4 py-1 text-xs font-medium text-muted-foreground md:grid ${ROW_GRID}`}>
+			<SortHeading label="Title" ascending="title" descending="title_desc" />
+			<SortHeading label="Type" ascending="type" descending="type_desc" />
+			<SortHeading label="By" ascending="author" descending="author_desc" className="hidden lg:inline-flex" />
+			<SortHeading label="Year" ascending="year" descending="year_desc" />
+			<SortHeading label="Saves" ascending="least_saved" descending="most_saved" className="hidden justify-end lg:inline-flex" />
 		</div>
 	);
 }

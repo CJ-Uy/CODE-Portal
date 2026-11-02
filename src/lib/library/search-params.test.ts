@@ -45,8 +45,10 @@ describe("parseLibrarySearchParams", () => {
 		expect(parsed).toMatchObject({ subtype: "Module", formatDetail: "SLE", engagementType: "C-Team" });
 	});
 
-	it("reads the A to Z sort", () => {
-		expect(parseLibrarySearchParams({ sort: "title" }).sort).toBe("title");
+	it.each(["title", "title_desc", "type", "type_desc", "author", "author_desc", "year", "year_desc", "least_saved", "most_saved"])("keeps the %s column sort and filters in the URL", (sort) => {
+		const parsed = parseLibrarySearchParams({ sort, q: "burnout", type: "guide", smart: "0" });
+		expect(parsed.sort).toBe(sort);
+		expect(toLibrarySearchParams(parsed).toString()).toBe(`q=burnout&type=guide&sort=${sort}&smart=0`);
 	});
 
 	it("trims q, drops a blank one and caps it at 200 characters", () => {

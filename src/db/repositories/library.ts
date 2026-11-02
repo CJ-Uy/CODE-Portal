@@ -19,7 +19,7 @@ import { createId } from "@/lib/ids";
 import { blocksToPlainText, buildSearchText, readMinutes } from "@/lib/library/blocks";
 import type { LibraryBlock } from "@/lib/library/blocks";
 import { decodeCursor, encodeCursor } from "@/lib/library/cursor";
-import { allowedFormats, defaultFormat, defaultPublicReadiness, defaultSource, REPORT_REASONS } from "@/lib/library/taxonomy";
+import { allowedFormats, defaultFormat, defaultPublicReadiness, defaultSource, KIND_LABELS, REPORT_REASONS } from "@/lib/library/taxonomy";
 import type {
 	LibraryAuthor,
 	LibraryFormat,
@@ -87,8 +87,8 @@ export type LibrarySearchInput = {
 	subtype?: string;
 	formatDetail?: string;
 	engagementType?: string;
-	/** "title" is A to Z. */
-	sort?: "relevance" | "title" | "newest" | "most_saved" | "most_read";
+	/** Column sorts ascend unless suffixed with _desc; saves use least_saved / most_saved. */
+	sort?: "relevance" | "title" | "title_desc" | "type" | "type_desc" | "author" | "author_desc" | "year" | "year_desc" | "newest" | "most_saved" | "least_saved" | "most_read";
 	limit?: number;
 	offset?: number;
 	/** A `nextCursor` from the previous page of the same search: this page starts right after its last row. */
@@ -507,11 +507,19 @@ export function createLibraryRepository(db: Db, audit: AuditRepository, onModera
 			// `order` names the key list, so a cursor from one order is never read against another.
 			let order: string;
 			let keys: SortKey[];
-			if (sort === "most_saved") [order, keys] = ["most_saved", [{ expr: savesOf, desc: true }, ...newest]];
+			if (sort === "most_saved" || sort === "least_saved") [order, keys] = [sort, [{ expr: savesOf, desc: sort === "most_saved" }, ...newest]];
 			else if (sort === "most_read") [order, keys] = ["most_read", [{ expr: secondsReadOf, desc: true }, ...newest]];
 			// ponytail: SQLite's lower() folds ASCII only, so a title starting with "É" sorts after "Z"; a stored sort key fixes it if that matters.
-			else if (sort === "title") [order, keys] = ["title", [{ expr: sql`lower(${libraryItems.title})` }, id]];
-			else if (sort === "relevance" && input.onlyIds)
+			else if (sort === "title" || sort === "title_desc") [order, keys] = [sort, [{ expr: sql`lower(${libraryItems.title})`, desc: sort === "title_desc" }, id]];
+			else if (sort === "type" || sort === "type_desc") {
+				const label = sql`CASE ${libraryItems.kind} ${sql.join(Object.entries(KIND_LABELS).map(([kind, name]) => sql`WHEN ${kind} THEN ${name}`), sql` `)} END`;
+				[order, keys] = [sort, [{ expr: label, desc: sort === "type_desc" }, id]];
+			} else if (sort === "author" || sort === "author_desc") {
+				const authors = sql`lower(coalesce((SELECT group_concat(json_extract(value, '$.name'), ', ') FROM json_each(${libraryItems.authorsJson})), ''))`;
+				[order, keys] = [sort, [{ expr: sql`CASE WHEN ${authors} = '' THEN 1 ELSE 0 END` }, { expr: authors, desc: sort === "author_desc" }, id]];
+			} else if (sort === "year" || sort === "year_desc") {
+				[order, keys] = [sort, [{ expr: sql`CASE WHEN ${libraryItems.year} IS NULL THEN 1 ELSE 0 END` }, { expr: sql`coalesce(${libraryItems.year}, 0)`, desc: sort === "year_desc" }, id]];
+			} else if (sort === "relevance" && input.onlyIds)
 				[order, keys] = ["relevance_ids", [{ expr: sql`(SELECT CAST(key AS INTEGER) FROM json_each(${JSON.stringify(input.onlyIds)}) WHERE value = ${libraryItems.id})` }, ...newest]];
 			else if (sort === "relevance" && words.length)
 				[order, keys] = [

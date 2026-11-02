@@ -611,6 +611,27 @@ describe("library repository: cursor pages", () => {
 		expect(cards.map((card) => card.id)).toEqual(["lib_b", "lib_d", "lib_a", "lib_c", "lib_e", "lib_g", "lib_f"]);
 	});
 
+	it.each([
+		["title_desc", ["lib_f", "lib_g", "lib_e", "lib_c", "lib_a", "lib_b", "lib_d"]],
+		["type", ["lib_d", "lib_b", "lib_c", "lib_a", "lib_e", "lib_f", "lib_g"]],
+		["type_desc", ["lib_a", "lib_e", "lib_f", "lib_g", "lib_c", "lib_b", "lib_d"]],
+		["author", ["lib_c", "lib_b", "lib_a", "lib_d", "lib_e", "lib_f", "lib_g"]],
+		["author_desc", ["lib_a", "lib_b", "lib_c", "lib_d", "lib_e", "lib_f", "lib_g"]],
+		["year", ["lib_b", "lib_a", "lib_c", "lib_d", "lib_e", "lib_f", "lib_g"]],
+		["year_desc", ["lib_a", "lib_c", "lib_b", "lib_d", "lib_e", "lib_f", "lib_g"]],
+		["least_saved", ["lib_d", "lib_f", "lib_a", "lib_b", "lib_g", "lib_c", "lib_e"]],
+		["most_saved", ["lib_c", "lib_e", "lib_g", "lib_d", "lib_f", "lib_a", "lib_b"]],
+	] as const)("sorts by %s across pages, with ties and missing values", async (sort, expected) => {
+		await db.update(libraryItems).set({ kind: "code_document" });
+		await db.update(libraryItems).set({ kind: "code_document", authorsJson: [{ name: "Zoe" }], year: 2024 }).where(eq(libraryItems.id, "lib_a"));
+		await db.update(libraryItems).set({ kind: "reading", authorsJson: [{ name: "ana" }, { name: "Zoe" }], year: 2022 }).where(eq(libraryItems.id, "lib_b"));
+		await db.update(libraryItems).set({ kind: "guide", authorsJson: [{ name: "Ana" }, { name: "Ben" }], year: 2024 }).where(eq(libraryItems.id, "lib_c"));
+		await db.update(libraryItems).set({ kind: "article" }).where(eq(libraryItems.id, "lib_d"));
+		const { ids, totals } = await readAll({ sort }, 2);
+		expect(ids).toEqual(expected);
+		expect(totals).toEqual([7, 7, 7, 7]);
+	});
+
 	it("gives the last page no cursor, even when it is exactly full", async () => {
 		const first = await repo.search(actors.other, { sort: "newest", limit: 4 });
 		expect(first.cards).toHaveLength(4);
@@ -653,6 +674,7 @@ describe("library repository: cursor pages", () => {
 	it("refuses a cursor from another order, and one that is not a cursor", async () => {
 		const { nextCursor } = await repo.search(actors.other, { sort: "title", limit: 2 });
 		await expect(repo.search(actors.other, { sort: "newest", cursor: nextCursor! })).rejects.toThrow("changed");
+		await expect(repo.search(actors.other, { sort: "title_desc", cursor: nextCursor! })).rejects.toThrow("changed");
 		await expect(repo.search(actors.other, { sort: "title", cursor: "garbage" })).rejects.toThrow("changed");
 		await expect(repo.search(actors.other, { sort: "title", cursor: '["title","x"]' })).rejects.toThrow("changed");
 	});

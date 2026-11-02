@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useId, useOptimistic, useRef, useState, useTransition } from "react";
-import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
 import { setSmartSearchAction } from "@/app/portal/library/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -341,6 +341,28 @@ export function SearchBar() {
 				Search
 			</Button>
 		</form>
+	);
+}
+
+export function SortHeading({ label, ascending, descending, className }: { label: string; ascending: (typeof SORTS)[number]; descending: (typeof SORTS)[number]; className?: string }) {
+	const { query, change } = useSearch();
+	const sort = effectiveSort(query);
+	const active = sort === ascending || sort === descending;
+	const direction = sort === ascending ? "ascending" : "descending";
+	const Icon = active ? (sort === ascending ? ArrowUp : ArrowDown) : ArrowUpDown;
+	return (
+		<Button
+			type="button"
+			variant="ghost"
+			size="sm"
+			aria-label={`${label}${active ? `, sorted ${direction}` : ""}. Sort ${sort === ascending ? "descending" : "ascending"}`}
+			aria-pressed={active}
+			onClick={() => change((now) => ({ sort: effectiveSort(now) === ascending ? descending : ascending }), "replace")}
+			className={cn("h-10 min-w-0 justify-start gap-1 px-0 text-xs", active && "text-foreground", className)}
+		>
+			{label}
+			<Icon aria-hidden className={cn(!active && "opacity-50")} />
+		</Button>
 	);
 }
 
