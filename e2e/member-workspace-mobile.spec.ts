@@ -82,7 +82,7 @@ test("a full school-year term fits mobile in all retention views", async ({ page
 	await signInAs(page, "member");
 	await page.goto("/portal/retention");
 	await expect(page.getByRole("heading", { name: "Retention requirements" })).toBeVisible();
-	await expect(page.getByRole("progressbar", { name: "Retention requirements", exact: true })).toHaveAttribute("aria-valuemax", "12");
+	await expect(page.getByRole("progressbar", { name: /retention points$/ })).toHaveCount(3);
 	for (const width of [320, 390, 430, 844, 1440]) {
 		await page.setViewportSize({ width, height: 900 });
 		expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

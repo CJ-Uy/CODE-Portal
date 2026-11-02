@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Check, CircleCheck, X } from "lucide-react";
 import type { PendingShare } from "@/db/repositories/retention";
-import { formatPoints } from "@/lib/points";
+import { formatPoints, quantizePoints } from "@/lib/points";
 import type { RetentionPart, RetentionProgress, RetentionSlot, RetentionStatus } from "@/lib/retention-parts";
 import { cn } from "@/lib/utils";
 
@@ -25,11 +25,47 @@ function dateTime(date: Date): string {
 const pendingTotal = (progress: RetentionProgress) =>
 	progress.parts.reduce((sum, part) => sum + part.slots.reduce((inner, slot) => inner + (slot.state === "open" ? slot.pending : 0), 0), 0);
 
+function RequirementRing({ label, slots, compact, overall }: { label: string; slots: RetentionSlot[]; compact: boolean; overall: boolean }) {
+	const points = quantizePoints(slots.reduce((sum, slot) => sum + slot.counted, 0));
+	const upcoming = slots.every((slot) => slot.state === "upcoming");
+	return (
+		<div className="grid min-w-0 content-start justify-items-center gap-2 text-center">
+			<div
+				className={cn("relative aspect-square w-full", overall ? compact ? "max-w-20" : "max-w-28 sm:max-w-32" : compact ? "max-w-14" : "max-w-18 sm:max-w-20")}
+				role="progressbar"
+				aria-label={`${label} retention points`}
+				aria-valuemin={0}
+				aria-valuemax={slots.length}
+				aria-valuenow={points}
+				aria-valuetext={`${formatPoints(points)} of ${slots.length} retention points`}
+			>
+				<svg viewBox="0 0 100 100" className="size-full -rotate-90" fill="none" strokeWidth="8" aria-hidden focusable="false">
+					<circle cx="50" cy="50" r="43" className="stroke-secondary" />
+					{points > 0 ? <circle cx="50" cy="50" r="43" pathLength="100" strokeDasharray={`${(points / slots.length) * 100} 100`} strokeLinecap="round" className="stroke-accent" /> : null}
+				</svg>
+				<span className="absolute inset-0 flex flex-col items-center justify-center" aria-hidden>
+					<span className={cn("font-semibold tabular-nums", overall ? compact ? "text-lg" : "text-2xl sm:text-3xl" : compact ? "text-xs" : "text-base sm:text-lg")}>{formatPoints(points)}<span className="text-xs font-normal text-muted-foreground">/{slots.length}</span></span>
+					<span className={cn("text-xs text-muted-foreground", compact && !overall && "sr-only")}>points</span>
+				</span>
+			</div>
+			<div className="min-w-0">
+				<p className="text-sm font-semibold">{label}</p>
+				{upcoming ? <p className="mt-0.5 text-xs text-muted-foreground">Opens {shortDate(slots[0].startsAt)}</p> : null}
+			</div>
+		</div>
+	);
+}
+
 /** Completed requirements first, then the retention status and next deadline. */
 /** plain drops the lines spoken to the member ("Nice work"), for officers reading someone else's progress. */
 export function RetentionVerdict({ progress, termName, compact = false, plain = false }: { progress: RetentionProgress; termName?: string; compact?: boolean; plain?: boolean }) {
 	const deadline = progress.nextDeadline;
 	const waiting = pendingTotal(progress);
+	const semestral = progress.parts.filter((part) => part.period === "semester");
+	const groups = [
+		{ label: "Overall", slots: progress.parts.flatMap((part) => part.slots) },
+		...["1st semester", "2nd semester"].map((label, index) => ({ label, slots: semestral.flatMap((part) => part.slots.slice(index, index + 1)) })),
+	].filter((group) => group.slots.length > 0);
 	return (
 		<div className="grid min-w-0 gap-3">
 			<div className="grid min-w-0 gap-1">
@@ -38,17 +74,9 @@ export function RetentionVerdict({ progress, termName, compact = false, plain = 
 				</p>
 				{termName ? <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]">{termName}</p> : null}
 			</div>
-			{progress.required > 0 ? (
-				<div
-					className="h-2.5 overflow-hidden rounded-full bg-secondary"
-					role="progressbar"
-					aria-label="Retention requirements"
-					aria-valuemin={0}
-					aria-valuemax={progress.required}
-					aria-valuenow={progress.met}
-					aria-valuetext={`${progress.met} of ${progress.required} requirements met`}
-				>
-					<div className="h-full bg-accent" style={{ width: `${(progress.met / progress.required) * 100}%` }} />
+			{groups.length > 0 ? (
+				<div className="grid min-w-0 max-w-md grid-cols-[minmax(0,1.25fr)_repeat(2,minmax(0,1fr))] items-center gap-3 py-1">
+					{groups.map((group, index) => <RequirementRing key={group.label} {...group} compact={compact} overall={index === 0} />)}
 				</div>
 			) : null}
 			<p className="flex min-w-0 items-start gap-2 text-sm">

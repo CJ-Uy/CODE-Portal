@@ -11,13 +11,13 @@ Mode: Operate. A member opens this to answer one question: am I retained this sc
 
 ## Direction contract
 
-THESIS: The school year as a report card. Two semester columns; each part is a row; a yearly part's cell spans both columns, a semestral part gets one cell per semester. Refuses the uniform list of progress bars and the big ring.
+THESIS: A school-year status dashboard above a report card. A larger overall point ring includes yearly and semester requirements; two smaller rings show the semesters. The grid below keeps a row per part and two semester columns, with yearly cells spanning both.
 
 OWN-WORLD: CODE navy and blue tokens, Unna for the page and group headings only, Source Sans for every label and figure (tabular numerals). Met cells fill navy with a drawn check; pending shares are a hatched pale-blue segment; overflow is a dashed chip that reads "not counted"; missed cells go flat with an x. No red or green: state is carried by fill, icon and words.
 
 STORY: See the verdict and next deadline, unlock pending feedback shares, scan the grid for open cells, see what does not count, then check milestones and history.
 
-FIRST VIEWPORT: Title and school-year picker; a one-line verdict ("On track. 5 of 12 met.") with a 12-cell slot strip and the next deadline naming its parts; the pending-feedback panel when any; the grid's column heads with each semester's dates, then the first rows.
+FIRST VIEWPORT: Title and school-year picker; completed requirements above the overall and semester point rings; status and next deadline; pending feedback when any; then the grid. Rings include partial earned points, exclude unanswered feedback and overflow, and show points separately from requirements met. Unopened semesters show their opening date.
 
 FORM: Semester timeline grid, rank 3 of 7 on my list, dealt lead. Seed key dc53a3ee. Code-led (no image generation).
 

@@ -8,9 +8,11 @@ test("members see retention requirements and the records behind their points", a
 	await signInAs(page, "member");
 	await page.goto("/portal/retention");
 	await expect(page.getByRole("heading", { name: "Retention requirements" })).toBeVisible();
-	const progress = page.getByRole("progressbar", { name: "Retention requirements", exact: true });
-	await expect(progress).toHaveAttribute("aria-valuemax", "12");
-	await expect(progress).toHaveAttribute("aria-valuetext", /of 12 requirements met/);
+	for (const [label, maximum] of [["Overall", 12], ["1st semester", 4], ["2nd semester", 4]] as const) {
+		const ring = page.getByRole("progressbar", { name: `${label} retention points`, exact: true });
+		await expect(ring).toHaveAttribute("aria-valuemax", String(maximum));
+		await expect(ring).toHaveAttribute("aria-valuetext", new RegExp(`of ${maximum} retention points`));
+	}
 	const history = page.getByRole("region", { name: "Activity history" });
 	await expect(history).toContainText("Manual record");
 	await expect(history).toContainText("Event attendance");

@@ -16,14 +16,20 @@ const now = new Date("2026-11-02");
 const record = (pointTypeId: string, points: number) => ({ pointTypeId, points, countsOn: now });
 
 describe("RetentionVerdict", () => {
-	it("counts only met requirements in the completion bar, excluding partial and pending points", () => {
+	it("shows counted points overall and per semester while keeping completed requirements separate", () => {
 		const progress = buildRetentionProgress(types, year, [record("yearly", 1), record("semester", 0.75)], [record("semester", 0.25)], now);
 		const html = renderToStaticMarkup(<RetentionVerdict progress={progress} termName="School year 2026-2027" />);
 		expect(html).toContain("1 of 3 requirements met");
-		expect(html).toContain('role="progressbar"');
-		expect(html).toContain('aria-valuenow="1"');
-		expect(html).toContain('aria-valuemax="3"');
-		expect(html).toContain('aria-valuetext="1 of 3 requirements met"');
+		const rings = html.match(/role="progressbar"[^>]*/g);
+		expect(rings).toHaveLength(3);
+		expect(rings?.[0]).toContain('aria-label="Overall retention points"');
+		expect(rings?.[0]).toContain('aria-valuenow="1.75"');
+		expect(rings?.[0]).toContain('aria-valuemax="3"');
+		expect(rings?.[1]).toContain('aria-label="1st semester retention points"');
+		expect(rings?.[1]).toContain('aria-valuenow="0.75"');
+		expect(rings?.[2]).toContain('aria-label="2nd semester retention points"');
+		expect(rings?.[2]).toContain('aria-valuenow="0"');
+		expect(html).toContain("Opens Jan 1");
 		expect(html).toContain("School year 2026-2027");
 		expect(html).toContain("No requirements missed.");
 		expect(html).toContain("Next deadline");
@@ -32,7 +38,7 @@ describe("RetentionVerdict", () => {
 	it("keeps feedback points separate in the compact summary", () => {
 		const progress = buildRetentionProgress(types, year, [record("semester", 0.75)], [record("semester", 0.25)], now);
 		const html = renderToStaticMarkup(<RetentionVerdict progress={progress} compact />);
-		expect(html).toContain('aria-valuenow="0"');
+		expect(html).toContain('aria-valuenow="0.75"');
 		expect(html).toContain("+0.25");
 		expect(html).toContain("waiting on your feedback forms");
 	});
@@ -46,13 +52,24 @@ describe("RetentionVerdict", () => {
 		expect(html).not.toContain("No requirements missed.");
 	});
 
-	it("shows a full bar for a retained member in the officer view", () => {
-		const progress = buildRetentionProgress([types[0]], year, [record("yearly", 1)], [], now);
+	it("caps overall points at each requirement and shows one full ring without semester requirements", () => {
+		const progress = buildRetentionProgress([types[0]], year, [record("yearly", 2)], [], now);
 		const html = renderToStaticMarkup(<RetentionVerdict progress={progress} plain />);
 		expect(html).toContain("Retained");
 		expect(html).toContain('aria-valuenow="1"');
 		expect(html).toContain('aria-valuemax="1"');
+		expect(html.match(/role="progressbar"/g)).toHaveLength(1);
+		expect(html).toContain('stroke-dasharray="100 100"');
 		expect(html).not.toContain("Nice work");
+	});
+
+	it("keeps first- and second-semester completion in their own rings", () => {
+		const progress = buildRetentionProgress(types, year, [record("semester", 1), { ...record("semester", 0.75), countsOn: new Date("2027-02-01") }], [], new Date("2027-02-02"));
+		const html = renderToStaticMarkup(<RetentionVerdict progress={progress} />);
+		const rings = html.match(/role="progressbar"[^>]*/g);
+		expect(rings?.[0]).toContain('aria-valuenow="1.75"');
+		expect(rings?.[1]).toContain('aria-valuenow="1"');
+		expect(rings?.[2]).toContain('aria-valuenow="0.75"');
 	});
 
 	it("omits the bar when no requirements are configured", () => {
