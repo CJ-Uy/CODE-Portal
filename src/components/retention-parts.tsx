@@ -22,83 +22,43 @@ function dateTime(date: Date): string {
 	return date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" });
 }
 
-function slotWords(part: RetentionPart, slot: RetentionSlot): string {
-	const state = { met: "met", open: `${formatPoints(slot.counted)} of 1`, missed: "missed", upcoming: `opens ${shortDate(slot.startsAt)}` }[slot.state];
-	return `${part.label}, ${slot.label.toLowerCase()}: ${state}`;
-}
-
-/** A slot as a mini bar: earned in navy, a pending feedback share hatched, an unopened semester dashed. */
-function StripCell({ part, slot }: { part: RetentionPart; slot: RetentionSlot }) {
-	const pending = Math.min(slot.pending, Math.max(0, 1 - slot.counted));
-	return (
-		<li
-			title={slotWords(part, slot)}
-			className={cn(
-				"flex h-2.5 overflow-hidden rounded-sm",
-				slot.state === "upcoming" ? "border border-dashed border-border" : "bg-secondary",
-				slot.state === "missed" && "bg-foreground/20",
-			)}
-		>
-			{slot.state === "open" || slot.state === "met" ? <span className="h-full bg-accent" style={{ width: `${slot.counted * 100}%` }} /> : null}
-			{slot.state === "open" && pending > 0 ? <span className="h-full" style={{ ...PENDING_HATCH, width: `${pending * 100}%` }} /> : null}
-			<span className="sr-only">{slotWords(part, slot)}</span>
-		</li>
-	);
-}
-
-/** The whole year at a glance: the yearly slots, a gap, then the semester slots, with a key. Readable without color. */
-export function SlotStrip({ progress, showKey = true, className }: { progress: RetentionProgress; showKey?: boolean; className?: string }) {
-	const group = (period: RetentionPart["period"]) => progress.parts.filter((part) => part.period === period).flatMap((part) => part.slots.map((slot) => ({ part, slot })));
-	const groups = [group("year"), group("semester")].filter((cells) => cells.length > 0);
-	return (
-		<div className={cn("grid min-w-0 gap-2", className)}>
-			<div className="flex min-w-0 gap-3" role="list" aria-label={`${progress.met} of ${progress.required} requirements met`}>
-				{groups.map((cells, index) => (
-					<ol key={index} className="grid min-w-0 gap-1" style={{ flex: cells.length, gridTemplateColumns: `repeat(${cells.length}, minmax(0, 1fr))` }}>
-						{cells.map(({ part, slot }) => (
-							<StripCell key={slot.key} part={part} slot={slot} />
-						))}
-					</ol>
-				))}
-			</div>
-			{showKey ? <ul className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-hidden>
-				<li className="flex items-center gap-1.5"><span className="h-2 w-3.5 rounded-sm bg-accent" />Met</li>
-				<li className="flex items-center gap-1.5"><span className="flex h-2 w-3.5 overflow-hidden rounded-sm bg-secondary"><span className="w-1/2 bg-accent" /></span>Part done</li>
-				<li className="flex items-center gap-1.5"><span className="h-2 w-3.5 rounded-sm" style={PENDING_HATCH} />Waiting on a form</li>
-				<li className="flex items-center gap-1.5"><span className="h-2 w-3.5 rounded-sm border border-dashed border-border" />Not open yet</li>
-			</ul> : null}
-		</div>
-	);
-}
-
 const pendingTotal = (progress: RetentionProgress) =>
 	progress.parts.reduce((sum, part) => sum + part.slots.reduce((inner, slot) => inner + (slot.state === "open" ? slot.pending : 0), 0), 0);
 
-/** "On track. 5 of 12 requirements met in SY 2026-2027." plus the strip and one line on what to do next. */
+/** Completed requirements first, then the retention status and next deadline. */
 /** plain drops the lines spoken to the member ("Nice work"), for officers reading someone else's progress. */
 export function RetentionVerdict({ progress, termName, compact = false, plain = false }: { progress: RetentionProgress; termName?: string; compact?: boolean; plain?: boolean }) {
 	const deadline = progress.nextDeadline;
 	const waiting = pendingTotal(progress);
 	return (
 		<div className="grid min-w-0 gap-3">
-			<p className={cn("flex min-w-0 items-start gap-2 text-pretty", compact ? "text-base" : "text-lg sm:text-xl")}>
-				{progress.status === "retained" ? <CircleCheck className={cn("shrink-0 text-accent", compact ? "mt-0.5 size-5" : "mt-1 size-6")} aria-hidden /> : null}
-				<span className="min-w-0">
-					<span className="font-semibold">{STATUS_LABEL[progress.status]}.</span>{" "}
-					<span className="tabular-nums">
-						{progress.met} of {progress.required} requirements met
-						{termName ? (
-							<>
-								{" in "}
-								<span className="whitespace-nowrap">{termName}</span>
-							</>
-						) : null}
-					</span>
-					{progress.missed > 0 ? <span className="text-muted-foreground"> ({progress.missed} missed)</span> : null}
+			<div className="grid min-w-0 gap-1">
+				<p className={cn("font-semibold tabular-nums text-pretty", compact ? "text-lg" : "text-xl sm:text-2xl")}>
+					{progress.met} of {progress.required} requirements met
+				</p>
+				{termName ? <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]">{termName}</p> : null}
+			</div>
+			{progress.required > 0 ? (
+				<div
+					className="h-2.5 overflow-hidden rounded-full bg-secondary"
+					role="progressbar"
+					aria-label="Retention requirements"
+					aria-valuemin={0}
+					aria-valuemax={progress.required}
+					aria-valuenow={progress.met}
+					aria-valuetext={`${progress.met} of ${progress.required} requirements met`}
+				>
+					<div className="h-full bg-accent" style={{ width: `${(progress.met / progress.required) * 100}%` }} />
+				</div>
+			) : null}
+			<p className="flex min-w-0 items-start gap-2 text-sm">
+				{progress.status === "retained" ? <CircleCheck className="size-4 shrink-0 text-accent" aria-hidden /> : null}
+				<span>
+					<span className="font-semibold">{STATUS_LABEL[progress.status]}.</span>
+					{progress.status === "on_track" ? <span className="text-muted-foreground"> No requirements missed.</span> : null}
+					{progress.missed > 0 ? <span className="text-muted-foreground"> {progress.missed} missed.</span> : null}
 				</span>
 			</p>
-			{/* Once every box is full there is nothing left to decode, so the key goes. */}
-			<SlotStrip progress={progress} showKey={!compact && progress.status !== "retained"} />
 			{progress.status === "on_track" ? (
 				deadline ? (
 					<p className="min-w-0 text-sm text-muted-foreground [overflow-wrap:anywhere]">
