@@ -12,19 +12,34 @@ import { cn } from "@/lib/utils";
 
 function HowItWorks() {
 	return (
-		<details className="group min-w-0 rounded-lg border border-border bg-card">
-			<summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-4 py-3 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+		<details className="group min-w-0 rounded-xl border border-border bg-card">
+			<summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-5 py-4 text-sm font-semibold transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-6 [&::-webkit-details-marker]:hidden">
 				How retention works
-				<ChevronDown className="size-4 shrink-0 transition-transform duration-200 group-open:rotate-180" aria-hidden />
+				<ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none" aria-hidden />
 			</summary>
-			<ul className="grid max-w-prose gap-2 px-4 pb-4 text-sm text-muted-foreground">
-				<li>You are retained when all 12 boxes are met by the end of the school year.</li>
-				<li>4 parts need 1 point any time in the year. The other 4 need 1 point in each semester.</li>
-				<li>A 1st-semester box cannot be filled by a 2nd-semester event.</li>
-				<li>Points past 1 are extra. They count toward milestones, not retention.</li>
-				<li>If an event has a feedback form, check-in gives 75% of its points and answering gives the rest.</li>
-				<li>Other points, like Feedback, are kept but do not count toward retention.</li>
-			</ul>
+			<div className="border-t border-border/60 px-5 py-5 sm:px-6 sm:py-6">
+				<p className="max-w-prose text-base leading-relaxed">You are retained when <strong className="font-semibold">all 12 boxes are met</strong> by the end of the school year.</p>
+				<dl className="mt-6 grid gap-5 md:grid-cols-3 md:gap-6">
+					<div className="min-w-0">
+						<dt className="font-heading text-lg font-semibold">Across the school year</dt>
+						<dd className="mt-2 space-y-2 text-sm leading-relaxed text-muted-foreground">
+							<p>4 parts need 1 point any time in the year. The other 4 need 1 point in each semester.</p>
+							<p>A 1st-semester box cannot be filled by a 2nd-semester event.</p>
+						</dd>
+					</div>
+					<div className="min-w-0 border-t border-border/60 pt-5 md:border-l md:border-t-0 md:pl-6 md:pt-0">
+						<dt className="font-heading text-lg font-semibold">Check-in and feedback</dt>
+						<dd className="mt-2 text-sm leading-relaxed text-muted-foreground">If an event has a feedback form, check-in gives <strong className="font-semibold text-foreground">75% of its points</strong> and answering gives the rest.</dd>
+					</div>
+					<div className="min-w-0 border-t border-border/60 pt-5 md:border-l md:border-t-0 md:pl-6 md:pt-0">
+						<dt className="font-heading text-lg font-semibold">Extra and other points</dt>
+						<dd className="mt-2 space-y-2 text-sm leading-relaxed text-muted-foreground">
+							<p>Points past 1 are extra. They count toward milestones, not retention.</p>
+							<p>Other points, like Feedback, are kept but do not count toward retention.</p>
+						</dd>
+					</div>
+				</dl>
+			</div>
 		</details>
 	);
 }

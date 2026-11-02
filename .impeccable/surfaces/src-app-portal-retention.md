@@ -30,3 +30,5 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 - [Codecademy path curriculum](https://mobbin.com/screens/63e05256-8dd3-4758-9abd-bc84176be27d): grouped requirements with a small per-item progress mark.
 
 Mobile: the grid keeps two semester columns down to 320px; the part label moves above its cells. Yearly cells span both columns. Every cell states its value in words as well as fill.
+
+Every requirement cell has the same minimum height, including met and unopened slots: 6rem on desktop and 8rem on phones, where notes need more room to wrap. Cells stretch within their row and may grow for enlarged text. Keep pending feedback and extra-point details inside that space. The How retention works disclosure leads with the retention rule, then separates school-year requirements, check-in and feedback, and extra points into three divided columns on desktop and a stacked list on phones.

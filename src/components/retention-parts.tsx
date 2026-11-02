@@ -131,7 +131,7 @@ function SlotCell({ slot, spans, pendingHref }: { slot: RetentionSlot; spans: bo
 	const met = slot.state === "met";
 	if (slot.state === "upcoming") {
 		return (
-			<div className={cn("min-w-0 self-start rounded-md border border-dashed px-3 py-2.5 text-sm text-muted-foreground", spans ? "col-span-2" : "col-span-1")}>
+			<div className={cn("min-h-32 min-w-0 rounded-md border border-dashed p-3 text-sm text-muted-foreground md:min-h-24", spans ? "col-span-2" : "col-span-1")}>
 				Opens {shortDate(slot.startsAt)}
 			</div>
 		);
@@ -139,7 +139,7 @@ function SlotCell({ slot, spans, pendingHref }: { slot: RetentionSlot; spans: bo
 	return (
 		<div
 			className={cn(
-				"grid min-w-0 content-start gap-2 rounded-md border p-3",
+				"grid min-h-32 min-w-0 content-start gap-2 rounded-md border p-3 md:min-h-24",
 				spans ? "col-span-2" : "col-span-1",
 				met ? "border-accent bg-accent text-accent-foreground" : slot.state === "missed" ? "bg-secondary/40" : "bg-card",
 			)}

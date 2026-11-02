@@ -38,6 +38,10 @@ test("mobile tabs and grouped actions keep every released page reachable", async
 	await expect(menu.getByRole("link", { name: "Create event", exact: true })).toHaveAttribute("href", "/portal/calendar?create=1");
 	await expect(menu.getByRole("link", { name: "New short link", exact: true })).toHaveAttribute("href", "/portal/links?create=1");
 	const more = menu.getByRole("navigation", { name: "More modules" });
+	await expect(more.getByRole("group").getByRole("heading")).toHaveText(["Community", "Resources & tools", "Personal"]);
+	await expect(more.getByRole("group", { name: "Community", exact: true }).getByRole("link")).toHaveText(["Announcements", "Ments Tree", "Gallery"]);
+	await expect(more.getByRole("group", { name: "Resources & tools", exact: true }).getByRole("link")).toHaveText(["Library", "Important links", "Link shortener", "Guides"]);
+	await expect(more.getByRole("group", { name: "Personal", exact: true }).getByRole("link")).toHaveText(["Mail", "Notifications"]);
 	for (const name of ["Ments Tree", "Link shortener", "Mail"]) await expect(more.getByRole("link", { name, exact: true })).toBeVisible();
 	await expect(more.getByRole("link", { name: "Retention", exact: true })).toHaveCount(0);
 	await expectNoOverflow(page);
@@ -60,6 +64,10 @@ test("mobile tabs and grouped actions keep every released page reachable", async
 	await page.setViewportSize({ width: 1440, height: 900 });
 	await expect(tabs).toHaveCount(1);
 	await expect(page.getByRole("button", { name: "Check-in code and quick actions", exact: true })).toBeHidden();
+	await expect(tabs.locator(':scope > a[href^="/portal"]')).toHaveText(["Home", "Calendar", "Retention"]);
+	await expect(tabs.getByRole("group").getByRole("link")).toHaveText(["Announcements", "Ments Tree", "Gallery", "Library", "Important links", "Link shortener", "Guides", "Mail", "Notifications", "Profile"]);
+	await expect(tabs.getByRole("group", { name: "Community", exact: true }).getByRole("link")).toHaveText(["Announcements", "Ments Tree", "Gallery"]);
+	await expect(tabs.getByRole("link", { name: "Retention", exact: true })).toHaveAttribute("aria-current", "page");
 	await expectNoOverflow(page);
 	await page.screenshot({ path: testInfo.outputPath("desktop-portal.png") });
 	expect(errors).toEqual([]);

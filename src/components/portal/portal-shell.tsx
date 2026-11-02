@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { Breadcrumb } from "./breadcrumb";
 import { AdminNavigation } from "./admin-navigation";
 import { MemberAvatar } from "./member-avatar";
-import { adminNav, sectionFor, visiblePrimaryNav, visibleSecondaryNav, visibleMobileNav, type NavItem } from "./nav-items";
+import { adminNav, sectionFor, visiblePrimaryNav, visibleNavGroups, visibleMobileNav, type NavItem } from "./nav-items";
 import type { FeatureFlags } from "@/server/features";
 import { navPinIconFor } from "./nav-pin-icons";
 import { crumbFor } from "@/app/portal/admin/nav";
@@ -46,8 +46,8 @@ function RailItem({ item, pathname }: { item: NavItem; pathname: string }) {
 			href={item.href}
 			aria-current={on ? "page" : undefined}
 			className={cn(
-				"relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors",
-				on ? "bg-white/10 text-primary-foreground" : "text-primary-foreground/65 hover:text-primary-foreground",
+				"relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-secondary",
+				on ? "bg-white/10 text-primary-foreground" : "text-primary-foreground/65 hover:bg-white/5 hover:text-primary-foreground",
 			)}
 		>
 			{on ? (
@@ -104,10 +104,12 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 	// Flagged-off destinations must not render a link. The pages themselves already 404,
 	// but a visible link to a 404 reads as a broken portal rather than an unshipped one.
 	const primary = visiblePrimaryNav(flags);
-	const secondary = visibleSecondaryNav(flags);
+	const groups = visibleNavGroups(flags);
 	const mobile = visibleMobileNav(flags);
-	const sheetItems: NavItem[] = [...primary, ...secondary].filter((item) => !mobile.some((tab) => tab.id === item.id));
-	if (showAdmin) sheetItems.push(adminNav);
+	const sheetGroups = groups
+		.map((group) => ({ ...group, items: group.items.filter((item) => !mobile.some((tab) => tab.id === item.id)) }))
+		.filter((group) => group.items.length > 0);
+	if (showAdmin) sheetGroups.push({ label: "Administration", items: [adminNav] });
 	const leftTabs = mobile.slice(0, 2);
 	const rightTabs = mobile.slice(2, 4);
 
@@ -144,12 +146,11 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 							{primary.map((item) => (
 								<RailItem key={item.id} item={item} pathname={pathname} />
 							))}
-						</nav>
-						{secondary.length || navPins.length ? <Separator className="my-3 bg-white/10" /> : null}
-						<nav className="flex flex-col gap-1" aria-label="Resources and updates">
-							{secondary.length ? <p className="px-3 pb-1 text-xs font-semibold text-primary-foreground/70">Resources &amp; updates</p> : null}
-							{secondary.map((item) => (
-								<RailItem key={item.id} item={item} pathname={pathname} />
+							{groups.map((group) => (
+								<div key={group.label} role="group" aria-label={group.label} className="mt-4 flex flex-col gap-0.5">
+									<p className="px-3 pb-1 text-xs font-semibold text-primary-foreground/70">{group.label}</p>
+									{group.items.map((item) => <RailItem key={item.id} item={item} pathname={pathname} />)}
+								</div>
 							))}
 							{navPins.length > 0 ? (
 								<>
@@ -304,9 +305,6 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 					</> : null}
 
 					<nav className="flex flex-col border-t border-border px-2 pt-3" aria-label="More modules">
-						{!inAdmin ? <h3 className="px-3 pb-1 font-sans text-sm font-semibold text-muted-foreground">
-							Go to
-						</h3> : null}
 						{inAdmin ? (
 							<>
 								<SheetClose asChild>
@@ -321,23 +319,29 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 							</>
 						) : (
 							<>
-								{sheetItems.map((item) => {
-									const Icon = item.icon;
-									return (
-										<SheetClose asChild key={item.id}>
-											<Link
-												href={item.href}
-												className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold hover:bg-muted"
-											>
-												<span className="grid size-9 place-items-center rounded-lg bg-secondary text-accent">
-													<Icon className="size-5" />
-												</span>
-												<span className="flex-1">{item.label}</span>
-												<ChevronRight className="size-4 text-muted-foreground" />
-											</Link>
-										</SheetClose>
-									);
-								})}
+								{sheetGroups.map((group) => (
+									<div key={group.label} role="group" aria-label={group.label} className="pb-3">
+										<h3 className="px-3 pb-1 font-sans text-sm font-semibold text-muted-foreground">{group.label}</h3>
+										{group.items.map((item) => {
+											const Icon = item.icon;
+											return (
+												<SheetClose asChild key={item.id}>
+													<Link
+														href={item.href}
+														aria-current={isActive(pathname, item.href) ? "page" : undefined}
+														className={cn("flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring", isActive(pathname, item.href) && "bg-muted")}
+													>
+														<span className="grid size-9 place-items-center rounded-lg bg-secondary text-accent">
+															<Icon className="size-5" />
+														</span>
+														<span className="flex-1">{item.label}</span>
+														<ChevronRight className="size-4 text-muted-foreground" />
+													</Link>
+												</SheetClose>
+											);
+										})}
+									</div>
+								))}
 								{navPins.length > 0 ? (
 									<div className="mt-2 border-t border-border pt-2">
 										<h3 className="px-3 pb-1 font-sans text-sm font-semibold text-muted-foreground">Pinned links</h3>
