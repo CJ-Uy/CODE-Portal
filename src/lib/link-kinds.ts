@@ -14,7 +14,7 @@ export const LINK_KIND_LABELS: Record<LinkKind, string> = {
 	site: "Website",
 };
 
-// Names in src/components/portal/nav-pin-icons.ts, so the sidebar (a client component) can take them as plain strings.
+// Shared icon names, so client components can receive the selected icon as a plain string.
 export const LINK_KIND_ICONS = {
 	sheet: "FileSpreadsheet",
 	doc: "FileText",

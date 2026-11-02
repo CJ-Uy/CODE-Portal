@@ -1,5 +1,18 @@
 # Shared Dev Deploy Note
 
+## Independent pinned navigation links
+
+The sidebar and mobile menu now read optional shortcuts from the existing
+`nav_pins` table. Admins manage them under System > Pinned Nav Links. Important
+links remain a separate categorized directory; its old sidebar flag is ignored.
+Beta's pin table is empty, so the sample directory links no longer appear as pins.
+
+No schema migration, reset, seed, or binding change is needed. Schema changes in
+this release are comments only. Push to beta to trigger the existing Cloudflare
+build for `code-portal-beta` in account `83376df5e0bae067afa197b07430168d`.
+Shared-mode adapters continue to omit navigation editing, as they do for the
+Important links editor. Existing directory data stays intact.
+
 ## Retention category views and activity history
 
 Member history now returns the event title, category key, label, and colour from

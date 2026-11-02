@@ -138,10 +138,10 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 							Back to portal
 						</Link>
 						<Separator className="my-2 bg-white/10" />
-						<div className="min-h-0 flex-1 overflow-y-auto pr-1"><AdminNavigation groups={adminGroups} pathname={pathname} /></div>
+						<div className="portal-nav-scroll min-h-0 flex-1 overflow-y-auto pr-1"><AdminNavigation groups={adminGroups} pathname={pathname} /></div>
 					</>
 				) : (
-					<div className="min-h-0 flex-1 overflow-y-auto pr-1">
+					<div className="portal-nav-scroll min-h-0 flex-1 overflow-y-auto pr-1">
 						<nav className="flex flex-col gap-1" aria-label="Portal modules">
 							{primary.map((item) => (
 								<RailItem key={item.id} item={item} pathname={pathname} />

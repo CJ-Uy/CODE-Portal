@@ -7,8 +7,7 @@ import { requireActor } from "@/server/auth/actor";
 import type { Actor } from "@/server/auth/permissions";
 import { parseArchive, parseCategoryInput, parseId, parseLinkInput, parseMove } from "./input";
 
-// The repository checks nav:configure and writes the audit log; every change refreshes the editor,
-// the member directory and the sidebar pins that the portal layout renders.
+// The repository checks nav:configure and writes the audit log; refresh the editor and member directory.
 async function run(change: (repositories: Repositories, actor: Actor) => Promise<unknown>) {
 	const actor = await requireActor();
 	await change(await getRepositories(), actor);

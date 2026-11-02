@@ -62,7 +62,7 @@ export const adminGroups: AdminGroup[] = [
 		{
 			segment: "important-links",
 			label: "Important Links",
-			description: "Add, order and archive the links members see, and pin some to the sidebar.",
+			description: "Organize the member link directory into categories.",
 			permission: "nav:configure",
 		},
 	]),
@@ -135,6 +135,12 @@ export const adminGroups: AdminGroup[] = [
 		{ segment: "exports", label: "Data Exports", description: "XLSX exports of points data.", permission: "retention:record" },
 	]),
 	G("system", "System", [
+		{
+			segment: "nav-pins",
+			label: "Pinned Nav Links",
+			description: "Optional shortcuts in every member's sidebar and menu. Usually left empty.",
+			permission: "nav:configure",
+		},
 		{
 			segment: "quick-links",
 			label: "Dashboard Shortcuts",

@@ -16,7 +16,7 @@ function repository() {
 }
 
 function link(title: string, categoryId: string | null, extra: Partial<ImportantLinkInput> = {}): ImportantLinkInput {
-	return { title, url: `https://example.com/${title.toLowerCase()}`, description: null, kind: null, categoryId, showInSidebar: false, ...extra };
+	return { title, url: `https://example.com/${title.toLowerCase()}`, description: null, kind: null, categoryId, ...extra };
 }
 
 function titles(directory: LinkDirectory) {
@@ -71,14 +71,13 @@ describe("important links repository on D1", () => {
 		const { db, links } = repository();
 		const records = await links.createCategory(navAdmin, { name: "Records" });
 		const old = await links.createCategory(navAdmin, { name: "Old" });
-		const master = await links.createLink(navAdmin, link("Masterfile", records.id, { showInSidebar: true }));
+		const master = await links.createLink(navAdmin, link("Masterfile", records.id));
 		await links.createLink(navAdmin, link("Tracker", records.id));
-		await links.createLink(navAdmin, link("Legacy", old.id, { showInSidebar: true }));
+		await links.createLink(navAdmin, link("Legacy", old.id));
 
 		await links.setLinkArchived(navAdmin, master.id, true);
 		await links.setCategoryArchived(navAdmin, old.id, true);
 		expect(titles(await links.listDirectory(member))).toEqual({ categories: [["Records", ["Tracker"]]], uncategorized: [] });
-		expect(await links.listSidebar(member)).toEqual([]);
 		expect(titles(await links.listForEditing(navAdmin))).toEqual({
 			categories: [
 				["Records", ["Masterfile", "Tracker"]],
@@ -89,7 +88,7 @@ describe("important links repository on D1", () => {
 
 		await links.setLinkArchived(navAdmin, master.id, false);
 		await links.setCategoryArchived(navAdmin, old.id, false);
-		expect((await links.listSidebar(member)).map((item) => item.title)).toEqual(["Masterfile", "Legacy"]);
+		expect(titles(await links.listDirectory(member))).toEqual({ categories: [["Records", ["Masterfile", "Tracker"]], ["Old", ["Legacy"]]], uncategorized: [] });
 		const actions = (await db.select().from(auditLogs)).map((row) => row.action);
 		expect(actions).toEqual(
 			expect.arrayContaining(["important_link:archive", "important_link:restore", "link_category:archive", "link_category:restore"]),
@@ -134,15 +133,4 @@ describe("important links repository on D1", () => {
 		await expect(links.updateLink(navAdmin, "ilk_missing", link("x", null))).rejects.toThrow("not found");
 	});
 
-	it("orders sidebar links by category, then position, with uncategorized links last", async () => {
-		const { links } = repository();
-		const first = await links.createCategory(navAdmin, { name: "First" });
-		const second = await links.createCategory(navAdmin, { name: "Second" });
-		await links.createLink(navAdmin, link("Loose", null, { showInSidebar: true }));
-		await links.createLink(navAdmin, link("Second pin", second.id, { showInSidebar: true }));
-		await links.createLink(navAdmin, link("Hidden", first.id));
-		await links.createLink(navAdmin, link("First pin", first.id, { showInSidebar: true }));
-
-		expect((await links.listSidebar(member)).map((item) => item.title)).toEqual(["First pin", "Second pin", "Loose"]);
-	});
 });

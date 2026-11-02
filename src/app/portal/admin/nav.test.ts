@@ -21,6 +21,11 @@ const allFlags: FeatureFlags = {
 };
 
 describe("admin nav registry", () => {
+	it("keeps the link directory and optional nav pins in separate admin pages", () => {
+		expect(adminGroups.find((group) => group.segment === "content")?.pages.find((page) => page.segment === "important-links")?.href).toBe("/portal/admin/content/important-links");
+		expect(adminGroups.find((group) => group.segment === "system")?.pages.find((page) => page.segment === "nav-pins")).toMatchObject({ label: "Pinned Nav Links", permission: "nav:configure" });
+	});
+
 	it("has 5 groups with the spec's routes", () => {
 		expect(adminGroups.map((g) => g.segment)).toEqual(["members", "content", "email", "data", "system"]);
 		const members = adminGroups.find((g) => g.segment === "members")!;

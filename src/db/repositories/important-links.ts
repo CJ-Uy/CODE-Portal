@@ -21,7 +21,6 @@ export type ImportantLinkInput = {
 	description: string | null;
 	kind: LinkKind | null;
 	categoryId: string | null;
-	showInSidebar: boolean;
 };
 export type LinkCategoryInput = { name: string };
 export type MoveDirection = "up" | "down";
@@ -33,8 +32,6 @@ export type ImportantLinksRepository = {
 	listDirectory(actor: Actor): Promise<LinkDirectory>;
 	/** Everything, archived included, for the editor. */
 	listForEditing(actor: Actor): Promise<LinkDirectory>;
-	/** Visible links marked for the sidebar, in directory order. */
-	listSidebar(actor: Actor): Promise<ImportantLink[]>;
 	createLink(actor: Actor, input: ImportantLinkInput): Promise<ImportantLink>;
 	updateLink(actor: Actor, id: string, input: ImportantLinkInput): Promise<ImportantLink>;
 	setLinkArchived(actor: Actor, id: string, archived: boolean): Promise<void>;
@@ -115,20 +112,6 @@ export function createImportantLinksRepository(db: Db, audit: AuditRepository): 
 			const categories = await db.select().from(linkCategories).orderBy(asc(linkCategories.position), asc(linkCategories.createdAt));
 			const links = await db.select().from(importantLinks).orderBy(asc(importantLinks.position), asc(importantLinks.createdAt));
 			return groupDirectory(categories, links);
-		},
-		async listSidebar() {
-			const rows = await db
-				.select({ link: importantLinks })
-				.from(importantLinks)
-				.leftJoin(linkCategories, eq(importantLinks.categoryId, linkCategories.id))
-				.where(and(eq(importantLinks.showInSidebar, true), isNull(importantLinks.archivedAt), isNull(linkCategories.archivedAt)))
-				.orderBy(
-					sql`${linkCategories.id} is null`,
-					asc(linkCategories.position),
-					asc(importantLinks.position),
-					asc(importantLinks.createdAt),
-				);
-			return rows.map((row) => row.link);
 		},
 		async createLink(actor, input) {
 			assertConfigure(actor);
@@ -233,7 +216,6 @@ export function createUnavailableImportantLinksRepository(): ImportantLinksRepos
 	return {
 		listDirectory: unavailable,
 		listForEditing: unavailable,
-		listSidebar: unavailable,
 		createLink: unavailable,
 		updateLink: unavailable,
 		setLinkArchived: unavailable,

@@ -17,16 +17,15 @@ describe("important link form input", () => {
 			description: null,
 			kind: null,
 			categoryId: null,
-			showInSidebar: false,
 		});
 	});
 
-	it("keeps a chosen type, category and sidebar pin", () => {
+	it("keeps a chosen type and category but ignores the legacy sidebar flag", () => {
 		expect(
 			parseLinkInput(
 				form({ title: "Apply", url: "https://code.link/apply", description: "Open until Friday.", kind: "form", categoryId: "lcat_forms", showInSidebar: "on" }),
 			),
-		).toMatchObject({ description: "Open until Friday.", kind: "form", categoryId: "lcat_forms", showInSidebar: true });
+		).toEqual({ title: "Apply", url: "https://code.link/apply", description: "Open until Friday.", kind: "form", categoryId: "lcat_forms" });
 	});
 
 	it("rejects missing titles, non-web links, unknown types and long descriptions", () => {

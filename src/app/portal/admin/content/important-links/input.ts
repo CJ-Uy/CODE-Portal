@@ -21,7 +21,6 @@ const linkSchema = z.object({
 	description: z.string().trim().max(DESCRIPTION_MAX).transform(blankToNull),
 	kind: z.union([z.literal(""), z.enum(LINK_KINDS)]).transform((value) => value || null),
 	categoryId: optionalIdSchema,
-	showInSidebar: z.boolean(),
 });
 
 export function parseLinkInput(formData: FormData): ImportantLinkInput {
@@ -31,7 +30,6 @@ export function parseLinkInput(formData: FormData): ImportantLinkInput {
 		description: formData.get("description") ?? "",
 		kind: formData.get("kind") ?? "",
 		categoryId: formData.get("categoryId") ?? "",
-		showInSidebar: formData.get("showInSidebar") === "on",
 	});
 }
 

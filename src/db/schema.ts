@@ -686,8 +686,7 @@ export const auditLogs = sqliteTable(
 	],
 );
 
-// Legacy: migration 0015 copied every pin into important_links (show_in_sidebar on, same ids) and
-// nothing reads this table any more. Drop it in a later migration once production runs important links.
+// Optional navigation shortcuts, managed independently of the categorized Important links directory.
 export const navPins = sqliteTable(
 	"nav_pins",
 	{
@@ -747,6 +746,7 @@ export const importantLinks = sqliteTable(
 		description: text("description"),
 		// One of LINK_KINDS in src/lib/link-kinds.ts; null means detect it from the URL.
 		kind: text("kind"),
+		// Kept for older deployments; navigation now reads nav_pins independently.
 		showInSidebar: integer("show_in_sidebar", { mode: "boolean" }).notNull().default(false),
 		position: integer("position").notNull().default(0),
 		archivedAt: integer("archived_at", { mode: "timestamp_ms" }),

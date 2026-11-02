@@ -12,6 +12,7 @@ import {
 	libraryItems,
 	linkCategories,
 	members,
+	navPins,
 	pointTypes,
 	quickLinks,
 	shortLinks,
@@ -213,8 +214,11 @@ export function createAuditRepository(db: Db): AuditRepository {
 									.where(inArray(surveys.id, targetIds)),
 							);
 							break;
-						// Migration 0015 copied each nav pin into important_links under the same id.
 						case "nav_pin":
+							// Older pin audit entries may refer to the copy made by migration 0015.
+							rememberLabels(targetType, await db.select({ id: importantLinks.id, label: importantLinks.title }).from(importantLinks).where(inArray(importantLinks.id, targetIds)));
+							rememberLabels(targetType, await db.select({ id: navPins.id, label: navPins.label }).from(navPins).where(inArray(navPins.id, targetIds)));
+							break;
 						case "important_link":
 							rememberLabels(
 								targetType,

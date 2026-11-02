@@ -46,7 +46,6 @@ export default async function ImportantLinksAdminPage() {
 	const allLinks = [...directory.categories.flatMap((category) => category.links), ...directory.uncategorized];
 	const archivedLinks = allLinks.filter((link) => link.archivedAt);
 	const activeOther = directory.uncategorized.filter((link) => !link.archivedAt);
-	const pinnedCount = [...categories.flatMap((category) => category.links), ...activeOther].filter((link) => !link.archivedAt && link.showInSidebar).length;
 	const liveCount = categories.reduce((total, category) => total + category.links.filter((link) => !link.archivedAt).length, 0) + activeOther.length;
 
 	return (
@@ -85,7 +84,7 @@ export default async function ImportantLinksAdminPage() {
 					<div className="min-w-0">
 						<h2 id="directory" className="text-2xl font-semibold text-primary">What members see</h2>
 						<p className="mt-1 text-sm text-muted-foreground">
-							{liveCount} {liveCount === 1 ? "link" : "links"} in {categories.length} {categories.length === 1 ? "category" : "categories"}, {pinnedCount} in the sidebar
+							{liveCount} {liveCount === 1 ? "link" : "links"} in {categories.length} {categories.length === 1 ? "category" : "categories"}
 						</p>
 					</div>
 					<Button asChild variant="outline" className="min-h-10">
@@ -205,7 +204,6 @@ function LinkList({ links, options, empty }: { links: ImportantLink[]; options: 
 									<span className="min-w-0">
 										{LINK_KIND_LABELS[linkKindOf(link)]} <span aria-hidden>·</span> <span className="[overflow-wrap:anywhere]">{linkHost(link.url)}</span>
 									</span>
-									{link.showInSidebar ? <span className="rounded-md bg-secondary px-2 py-0.5 font-medium text-secondary-foreground">In sidebar</span> : null}
 								</span>
 							</span>
 							<EditCue />
@@ -218,7 +216,7 @@ function LinkList({ links, options, empty }: { links: ImportantLink[]; options: 
 									<SubmitButton icon={<Save aria-hidden />}>Save changes</SubmitButton>
 								</div>
 							</form>
-							<ArchiveForm action={archiveLinkAction} id={link.id} label="Archive link" note="Hides it from members and the sidebar. Restore it anytime." />
+							<ArchiveForm action={archiveLinkAction} id={link.id} label="Archive link" note="Hides it from the directory. Restore it anytime." />
 						</div>
 					</details>
 				</li>
@@ -274,13 +272,6 @@ function LinkFields({ categories, link }: { categories: CategoryOption[]; link?:
 					Description <span className="font-normal text-muted-foreground">(optional)</span>
 				</span>
 				<Input name="description" maxLength={DESCRIPTION_MAX} defaultValue={link?.description ?? ""} placeholder="What members use it for, in one line" />
-			</label>
-			<label className="flex min-w-0 items-start gap-3 text-sm sm:col-span-2">
-				<input type="checkbox" name="showInSidebar" defaultChecked={link?.showInSidebar} className="mt-0.5 size-4 shrink-0 accent-primary" />
-				<span className="min-w-0">
-					<span className="block font-medium">Show in sidebar</span>
-					<span className="text-muted-foreground">Also pin it in every member&apos;s sidebar and menu.</span>
-				</span>
 			</label>
 		</div>
 	);
