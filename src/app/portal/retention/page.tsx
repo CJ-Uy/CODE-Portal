@@ -1,21 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Filter } from "lucide-react";
 import { getRepositories } from "@/db";
-import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
 import { PointsLeaderboard } from "@/components/points-leaderboard";
 import { RetentionHistory } from "@/components/retention-history";
 import { requireActor } from "@/server/auth/actor";
 import { isFeatureEnabled } from "@/server/features";
-import { selectLeaderboardPointTypeId } from "./point-type-selection";
 
 export const dynamic = "force-dynamic";
 
 export default async function RetentionHistoryPage({
 	searchParams,
 }: {
-	searchParams: Promise<{ termId?: string; view?: string; pointTypeId?: string }>;
+	searchParams: Promise<{ termId?: string; view?: string }>;
 }) {
 	// The portal layout already redirects signed-out visitors to /signin, so this guard is
 	// what a signed-in member hits. Kept above the data loading so a disabled surface
@@ -43,14 +39,10 @@ export default async function RetentionHistoryPage({
 	]);
 	const selectedTermId = history.summary?.termId ?? params.termId ?? terms.find((term) => term.isCurrent)?.id ?? "";
 
-	const selectedPointTypeId = selectLeaderboardPointTypeId(params.pointTypeId, pointTypeLoad.rows);
 	const leaderboard =
-		view === "leaderboard" && pointTypeLoad.ok && selectedTermId && selectedPointTypeId
-			? await repositories.retention
-					.publicLeaderboard(actor, { termId: selectedTermId, pointTypeId: selectedPointTypeId, limit: 100 })
-					.catch(() => [])
+		view === "leaderboard" && selectedTermId
+			? await repositories.retention.publicLeaderboard(actor, { termId: selectedTermId, limit: 100 }).catch(() => [])
 			: [];
-	const selectedPointType = pointTypeLoad.rows.find((type) => type.id === selectedPointTypeId);
 
 	const tabs = [
 		{ id: "history", label: "My retention", href: "/portal/retention" },
@@ -96,30 +88,13 @@ export default async function RetentionHistoryPage({
 					pointTypes={pointTypeLoad.rows}
 					nextEvents={nextEvents}
 				/>
-			) : !pointTypeLoad.ok ? (
-				<p className="text-sm text-muted-foreground">Point types are unavailable right now.</p>
 			) : (
 				<>
-					<form method="get" className="flex flex-wrap items-end gap-3">
-						<input type="hidden" name="view" value={view} />
-						<input type="hidden" name="termId" value={selectedTermId} />
-						<label className="grid min-w-0 gap-1.5 text-sm">
-							<span className="font-medium">Point type</span>
-							<Select name="pointTypeId" defaultValue={selectedPointTypeId ?? ""} className="min-w-0">
-								{pointTypeLoad.rows.map((type) => (
-									<option key={type.id} value={type.id}>
-										{type.label}
-										{type.active ? "" : " (retired)"}
-									</option>
-								))}
-							</Select>
-						</label>
-						<Button type="submit" variant="secondary">
-							<Filter />
-							View
-						</Button>
-					</form>
-					<PointsLeaderboard rows={leaderboard} meId={actor.memberId} pointTypeLabel={selectedPointType?.label ?? "these"} />
+					<p className="max-w-2xl text-sm text-muted-foreground">
+						Just for fun: everyone&apos;s points this semester, every category added up, including points that don&apos;t count toward
+						retention. It shows who&apos;s been the most active, not who&apos;s on track to stay a member.
+					</p>
+					<PointsLeaderboard rows={leaderboard} meId={actor.memberId} />
 				</>
 			)}
 		</div>

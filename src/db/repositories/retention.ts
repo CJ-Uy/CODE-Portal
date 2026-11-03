@@ -18,7 +18,7 @@ import type { RetentionRecordSource } from "@/db/schema";
 import { fromLocalInput } from "@/lib/date-slots";
 import { quantizePoints } from "@/lib/points";
 import { RETENTION_POINT_TYPE_ID } from "@/lib/point-types";
-import { buildRetentionProgress, type PartRecord, type PartType, type RetentionProgress } from "@/lib/retention-parts";
+import { buildRetentionProgress, semesterBoundary, type PartRecord, type PartType, type RetentionProgress } from "@/lib/retention-parts";
 import type { Actor } from "@/server/auth/permissions";
 import { can } from "@/server/auth/permissions";
 import type { CreateManualRetentionRecordInput } from "../types";
@@ -64,7 +64,8 @@ export type EventRosterRow = {
 export type ListForMemberInput = { memberId: string; termId: string; limit?: number; offset?: number };
 export type MemberTermSummaryInput = { memberId: string; termId: string };
 export type LeaderboardInput = { termId: string; limit?: number; offset?: number };
-export type PublicLeaderboardInput = LeaderboardInput & { pointTypeId: string };
+// The member leaderboard is just for fun: everyone's points this semester, every category summed, retention or not.
+export type PublicLeaderboardInput = LeaderboardInput;
 export type LedgerListOptions = { q?: string; limit?: number; offset?: number };
 export type LeaderboardRow = { memberId: string; fullName: string | null; name: string | null; totalPoints: number };
 
@@ -127,7 +128,7 @@ export type RetentionRepository = {
 	eventFeedbackShare(actor: Actor, eventId: string, now?: Date): Promise<EventFeedbackShare>;
 	nextPartEvents(actor: Actor, now?: Date): Promise<Map<string, NextPartEvent>>;
 	leaderboard(actor: Actor, input: LeaderboardInput): Promise<LeaderboardRow[]>;
-	publicLeaderboard(actor: Actor, input: PublicLeaderboardInput): Promise<LeaderboardRow[]>;
+	publicLeaderboard(actor: Actor, input: PublicLeaderboardInput, now?: Date): Promise<LeaderboardRow[]>;
 	createManual(actor: Actor, input: CreateManualRetentionRecordInput): Promise<{ recordIds: string[] }>;
 	listForTerm(actor: Actor, termId: string, opts?: LedgerListOptions): Promise<TermMasterRow[]>;
 	listMemberTermHistory(actor: Actor, memberId: string, termId: string, opts?: LedgerListOptions): Promise<MemberHistoryRow[]>;
@@ -395,7 +396,17 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 			return rows.map((row) => ({ ...row, totalPoints: quantizePoints(Number(row.totalPoints)) }));
 		},
 
-		async publicLeaderboard(_actor, input) {
+		async publicLeaderboard(_actor, input, now = new Date()) {
+			const [term] = await db
+				.select({ startsAt: terms.startsAt, endsAt: terms.endsAt, secondSemesterStartsAt: terms.secondSemesterStartsAt })
+				.from(terms)
+				.where(eq(terms.id, input.termId))
+				.limit(1);
+			if (!term) return [];
+			// Same semester rule as the retention path: the event's date, else when the record was made.
+			const boundary = semesterBoundary(term);
+			const [from, until] = now < boundary ? [term.startsAt, boundary] : [boundary, new Date(term.endsAt.getTime() + 1)];
+			const countsOn = sql`coalesce(${crsEvents.startsAt}, ${retentionRecords.recordedAt})`;
 			const rows: LeaderboardRow[] = await db
 				.select({
 					memberId: retentionRecords.memberId,
@@ -405,7 +416,8 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 				})
 				.from(retentionRecords)
 				.innerJoin(members, eq(members.id, retentionRecords.memberId))
-				.where(and(eq(retentionRecords.termId, input.termId), eq(retentionRecords.pointTypeId, input.pointTypeId)))
+				.leftJoin(crsEvents, eq(crsEvents.id, retentionRecords.eventId))
+				.where(and(eq(retentionRecords.termId, input.termId), sql`${countsOn} >= ${from.getTime()}`, sql`${countsOn} < ${until.getTime()}`))
 				.groupBy(retentionRecords.memberId, members.fullName, members.name)
 				.orderBy(desc(sql`coalesce(sum(${retentionRecords.points}), 0)`))
 				.limit(Math.min(input.limit ?? 25, 100))
