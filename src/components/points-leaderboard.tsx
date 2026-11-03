@@ -6,6 +6,7 @@ import { MemberAvatar } from "@/components/portal/member-avatar";
 import type { LeaderboardRow } from "@/db/repositories/retention";
 import { formatPoints } from "@/lib/points";
 import { competitionRanks, shownThroughRank } from "@/lib/leaderboard";
+import { PointsDistribution } from "@/components/points-distribution";
 import { cn } from "@/lib/utils";
 
 function initialsFrom(name: string): string {
@@ -230,6 +231,8 @@ export function PointsLeaderboard({ rows, meId }: { rows: LeaderboardRow[]; meId
 					</CardContent>
 				</Card>
 			) : null}
+
+			<PointsDistribution values={rows.map((row) => row.totalPoints)} mine={myIndex === -1 ? null : rows[myIndex].totalPoints} />
 		</div>
 	);
 }

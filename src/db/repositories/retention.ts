@@ -420,7 +420,7 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 				.where(and(eq(retentionRecords.termId, input.termId), sql`${countsOn} >= ${from.getTime()}`, sql`${countsOn} < ${until.getTime()}`))
 				.groupBy(retentionRecords.memberId, members.fullName, members.name)
 				.orderBy(desc(sql`coalesce(sum(${retentionRecords.points}), 0)`))
-				.limit(Math.min(input.limit ?? 25, 100))
+				.limit(Math.min(input.limit ?? 25, 500))
 				.offset(input.offset ?? 0);
 			return rows.map((row) => ({ ...row, totalPoints: quantizePoints(Number(row.totalPoints)) }));
 		},
