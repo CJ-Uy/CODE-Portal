@@ -1,4 +1,3 @@
-import jsQR from "jsqr";
 import type { QrStyle } from "@/db/repositories/links";
 import { isSelfContainedQrSvg, qrCornerTypes, qrDotType } from "./qr-style";
 
@@ -58,8 +57,10 @@ export async function renderQrArtifacts(payload: string, style: QrStyle, size: n
 	]);
 	throwIfAborted(signal);
 
+	// The decoder only checks the export, so it loads here rather than with the links page.
+	const { default: jsQR } = await import("jsqr");
 	const verified = [fullSvgCanvas, smallSvgCanvas, fullPngCanvas, smallPngCanvas]
-		.every((canvas) => decodeQr(canvas) === payload);
+		.every((canvas) => decodeQr(jsQR, canvas) === payload);
 	return { svg, png, verified };
 }
 
@@ -123,7 +124,7 @@ function canvasBlob(canvas: HTMLCanvasElement): Promise<Blob> {
 	return new Promise((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("QR PNG generation failed.")), "image/png"));
 }
 
-function decodeQr(canvas: HTMLCanvasElement): string | null {
+function decodeQr(jsQR: typeof import("jsqr").default, canvas: HTMLCanvasElement): string | null {
 	const context = canvas.getContext("2d", { willReadFrequently: true });
 	if (!context) return null;
 	const pixels = context.getImageData(0, 0, canvas.width, canvas.height);

@@ -19,6 +19,8 @@ export type LibraryActivityRepository = {
 	totalActiveSeconds(): Promise<number>;
 	/** Items saved by at least 3 distinct members since `since`, most first; only items this actor can browse. */
 	mostSavedSince(actor: Actor, since: Date, limit: number): Promise<LibraryCard[]>;
+	/** Items this member opened, most recent day first, at most `limit`; only items they can still browse. */
+	recentlyOpened(actor: Actor, limit: number): Promise<LibraryCard[]>;
 	/** When the current term started (`startsAt <= now < endsAt`), or 120 days before `now` while no term covers it. */
 	termStart(now?: Date): Promise<Date>;
 	/** The item's owner or a moderator who can see it; anyone else gets "Library item not found.". Always the last 12 ISO weeks, oldest first, with zeros for quiet weeks. */
@@ -150,6 +152,24 @@ export function createLibraryActivityRepository(db: Db): LibraryActivityReposito
 			return order.flatMap((id) => cards.get(id) ?? []);
 		},
 
+		async recentlyOpened(actor, limit) {
+			if (limit < 1) return [];
+			// Days have no time of day, so items opened on the same day fall back to the most read, then the title.
+			// ponytail: the key leads with item_id, so this reads the member's rows by scan; add a (member_id, day) index if the table grows large.
+			const lastDay = sql<string>`MAX(${libraryItemMemberDays.day})`;
+			const ranked = await db
+				.select({ id: libraryItemMemberDays.itemId })
+				.from(libraryItemMemberDays)
+				.innerJoin(libraryItems, eq(libraryItems.id, libraryItemMemberDays.itemId))
+				.where(and(eq(libraryItemMemberDays.memberId, actor.memberId), gt(libraryItemMemberDays.opens, 0), publishedVisibleWhere(actor)))
+				.groupBy(libraryItemMemberDays.itemId)
+				.orderBy(desc(lastDay), desc(sql`SUM(${libraryItemMemberDays.activeSeconds})`), asc(libraryItems.title))
+				.limit(limit);
+			const order = ranked.map((row) => row.id);
+			const cards = new Map((await cardsByIds(db, order)).map((card) => [card.id, card]));
+			return order.flatMap((id) => cards.get(id) ?? []);
+		},
+
 		async termStart(now = new Date()) {
 			const [term] = await db
 				.select({ startsAt: terms.startsAt })
@@ -204,6 +224,7 @@ export function createUnavailableLibraryActivityRepository(): LibraryActivityRep
 		statsFor: unavailable,
 		totalActiveSeconds: unavailable,
 		mostSavedSince: unavailable,
+		recentlyOpened: unavailable,
 		termStart: unavailable,
 		weeklyForOwner: unavailable,
 	};

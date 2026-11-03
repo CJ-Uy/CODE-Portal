@@ -39,6 +39,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
 		...baseAdapter,
 		createUser: (data) => baseAdapter.createUser!({ ...data, email: data.email.toLowerCase() }),
 		getUserByEmail: (email) => baseAdapter.getUserByEmail!(email.toLowerCase()),
+		// Every authed request runs this. The role lookup keys off the session token rather than
+		// the member id, so it goes out beside the session read instead of after it, and the
+		// session callback below needs no query of its own.
+		getSessionAndUser: async (sessionToken) => {
+			const [found, roleRows] = await Promise.all([
+				baseAdapter.getSessionAndUser!(sessionToken),
+				db
+					.select()
+					.from(sessions)
+					.innerJoin(memberRoles, eq(memberRoles.memberId, sessions.userId))
+					.innerJoin(roles, eq(roles.id, memberRoles.roleId))
+					.where(eq(sessions.sessionToken, sessionToken)),
+			]);
+			return found && { ...found, user: { ...found.user, roleKeys: roleRows.map((row) => row.roles.key) } };
+		},
 	};
 
 	return {
@@ -68,21 +83,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
 				return rosterAllowed || getRosterDeniedRedirect(profile.email);
 			},
 			async session({ session, user }) {
-				const [member] = await db.select().from(members).where(eq(members.id, user.id)).limit(1);
-				if (!member) return session;
-
-				const elevated = await db
-					.select()
-					.from(memberRoles)
-					.innerJoin(roles, eq(roles.id, memberRoles.roleId))
-					.where(eq(memberRoles.memberId, user.id));
+				// `user` is the full members row plus its role keys, both read by getSessionAndUser above.
+				if (!user.status) return session;
 
 				session.user.id = user.id;
-				session.user.status = member.status;
-				session.user.roles = [
-					"member",
-					...normalizeRoleKeys(elevated.map((item) => item.roles.key)).filter((role) => role !== "member"),
-				];
+				session.user.status = user.status;
+				// Missing keys fail closed to a plain member.
+				session.user.roles = ["member", ...normalizeRoleKeys(user.roleKeys ?? []).filter((role) => role !== "member")];
 				return session;
 			},
 		},

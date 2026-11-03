@@ -1,7 +1,7 @@
 export type AuditPhraseInput = {
 	action: string;
 	actorName: string | null;
-	actorContext: "session" | "shared_dev_token";
+	actorContext: "session" | "shared_dev_token" | "system";
 	sharedTokenLabel: string | null;
 	targetLabel: string | null;
 	targetMemberName: string | null;
@@ -34,12 +34,35 @@ const PHRASES: Record<string, PhraseBuilder> = {
 	"event:transfer": ({ targetLabel }) => withTarget("transferred", targetLabel),
 	"event:undo_scan": (input) => memberAt("undid check-in for", input),
 	"event:update": ({ targetLabel }) => withTarget("updated event", targetLabel),
+	// The detail already names the photo or folder, which outlives a purge; a label would repeat it.
+	"gallery:delete": () => "deleted from the gallery",
+	"gallery:edit": () => "edited gallery details of",
+	"gallery:folder_create": () => "created gallery folder",
+	"gallery:folder_delete": () => "deleted gallery folder",
+	"gallery:folder_edit": () => "changed gallery folder",
+	"gallery:folder_move": () => "moved gallery folder",
+	"gallery:folder_purge": () => "permanently deleted gallery folder",
+	"gallery:folder_restore": () => "restored gallery folder",
+	"gallery:move": () => "moved in the gallery",
+	"gallery:purge": () => "permanently deleted from the gallery",
+	"gallery:restore": () => "restored to the gallery",
+	"gallery:upload": () => "uploaded to the gallery",
 	"forum:reveal_author": ({ targetLabel }) => withTarget("revealed forum author for", targetLabel),
 	"library:access_request": ({ targetLabel }) => withTarget("requested access to", targetLabel),
 	"library:create": ({ targetLabel }) => withTarget("created library item", targetLabel),
 	"library:delete": ({ targetLabel }) => withTarget("deleted library item", targetLabel),
 	"library:update": ({ targetLabel }) => withTarget("updated library item", targetLabel),
 	"link:create": ({ targetLabel }) => withTarget("created link", targetLabel),
+	"important_link:archive": ({ targetLabel }) => withTarget("archived important link", targetLabel),
+	"important_link:create": ({ targetLabel }) => withTarget("added important link", targetLabel),
+	"important_link:reorder": ({ targetLabel }) => withTarget("reordered important link", targetLabel),
+	"important_link:restore": ({ targetLabel }) => withTarget("restored important link", targetLabel),
+	"important_link:update": ({ targetLabel }) => withTarget("updated important link", targetLabel),
+	"link_category:archive": ({ targetLabel }) => withTarget("archived link category", targetLabel),
+	"link_category:create": ({ targetLabel }) => withTarget("added link category", targetLabel),
+	"link_category:reorder": ({ targetLabel }) => withTarget("reordered link category", targetLabel),
+	"link_category:restore": ({ targetLabel }) => withTarget("restored link category", targetLabel),
+	"link_category:update": ({ targetLabel }) => withTarget("renamed link category", targetLabel),
 	"member:create": ({ targetMemberName, targetLabel }) => withTarget("created member", targetMemberName ?? targetLabel),
 	"member:delete": ({ targetMemberName, targetLabel }) => withTarget("deleted member", targetMemberName ?? targetLabel),
 	"member:profile_update": ({ targetMemberName, targetLabel }) => withTarget("updated member profile", targetMemberName ?? targetLabel),
@@ -64,6 +87,7 @@ const PHRASES: Record<string, PhraseBuilder> = {
 };
 
 export function actorDisplay(input: AuditPhraseInput): string {
+	if (input.actorContext === "system") return "System";
 	if (input.actorContext === "shared_dev_token") {
 		return input.sharedTokenLabel ? `Shared token · ${input.sharedTokenLabel}` : "Shared token";
 	}

@@ -2,7 +2,7 @@ import { and, asc, count, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "@/db/schema";
 import { crsEvents, eventDebriefs, members, surveyAnswers, surveyAssignments, surveyQuestions, surveyResponses, surveys } from "@/db/schema";
-import type { EventFeedbackRow, MetricKey, ResultsQuestion, ResultsRespondents, Survey, SurveyResults } from "@/db/types";
+import type { EventFeedbackRow, MetricKey, ResultsQuestion, ResultsRespondents, Survey, SurveyResults, SurveySource } from "@/db/types";
 import { canFilterInvited } from "@/lib/feedback/results-view";
 import { COMPARE_MIN_EVENTS, COMPARE_MIN_RESPONSES, effectiveStatus, RESULTS_MIN_RESPONSES, scaleSummary } from "@/lib/feedback/stats";
 import { buildSummaryInput, type FeedbackSummary, parseSummary, SUMMARY_SYSTEM_PROMPT, type Summarizer } from "@/lib/feedback/summary";
@@ -27,8 +27,17 @@ export type OrganizerResults = {
 	results?: SurveyResults;
 };
 
+/** Every response as one row, for the spreadsheet download. Names and emails are null for responses stored before 0014. */
+export type SurveyExport = {
+	title: string;
+	eventTitle: string | null;
+	questions: Array<{ id: string; prompt: string }>;
+	rows: Array<{ name: string | null; email: string | null; source: SurveySource; submittedAt: Date; answers: Record<string, string> }>;
+};
+
 export type SurveyResultsRepository = {
 	getResults(actor: Actor, surveyId: string, opts: { filter: ResultsFilter }, now?: Date): Promise<SurveyResults & ResultsRespondents>;
+	exportResponses(actor: Actor, surveyId: string): Promise<SurveyExport>;
 	getOrganizerResults(actor: Actor, eventId: string, now?: Date): Promise<OrganizerResults | null>;
 	setAnswerHidden(actor: Actor, input: { answerId: string; hidden: boolean }): Promise<void>;
 	feedbackForEvents(actor: Actor, eventIds: string[]): Promise<Map<string, EventFeedbackRow>>;
@@ -133,7 +142,7 @@ async function buildResults(db: Db, survey: Survey, requested: ResultsFilter, no
 		belowThreshold,
 		shareWithOrganizers: survey.shareWithOrganizers,
 	};
-	// Below the threshold nothing but the counts goes out, to protect anonymity.
+	// Below the threshold nothing but the counts goes out, so no single answer stands out.
 	if (belowThreshold) return { ...header, questions: [], summary: null };
 
 	const [questions, answers] = await Promise.all([
@@ -245,6 +254,57 @@ export function createSurveyResultsRepository(db: Db, audit: AuditRepository): S
 			if (!survey) throw new Error("Survey not found.");
 			const [results, names] = await Promise.all([buildResults(db, survey, opts.filter, now, false), respondentNames(db, survey.id)]);
 			return { ...results, ...names };
+		},
+
+		async exportResponses(actor, surveyId) {
+			if (!can(actor, "survey:configure")) throw new Error("Not authorized to read survey results.");
+			const [survey] = await db
+				.select({ id: surveys.id, title: surveys.title, eventTitle: crsEvents.title })
+				.from(surveys)
+				.leftJoin(crsEvents, eq(crsEvents.id, surveys.eventId))
+				.where(eq(surveys.id, surveyId))
+				.limit(1);
+			if (!survey) throw new Error("Survey not found.");
+
+			const [questions, responses, answers] = await Promise.all([
+				db
+					.select({ id: surveyQuestions.id, prompt: surveyQuestions.prompt })
+					.from(surveyQuestions)
+					.where(eq(surveyQuestions.surveyId, surveyId))
+					.orderBy(asc(surveyQuestions.position)),
+				db
+					.select({
+						id: surveyResponses.id,
+						name: sql<string | null>`coalesce(${members.fullName}, ${members.name})`,
+						email: members.email,
+						source: surveyResponses.source,
+						submittedAt: surveyResponses.submittedAt,
+					})
+					.from(surveyResponses)
+					.leftJoin(members, eq(members.id, surveyResponses.memberId))
+					.where(eq(surveyResponses.surveyId, surveyId))
+					.orderBy(asc(surveyResponses.submittedAt), asc(surveyResponses.id)),
+				db
+					.select({ responseId: surveyAnswers.responseId, questionId: surveyAnswers.questionId, value: surveyAnswers.value })
+					.from(surveyAnswers)
+					.innerJoin(surveyResponses, eq(surveyResponses.id, surveyAnswers.responseId))
+					.where(eq(surveyResponses.surveyId, surveyId)),
+			]);
+
+			const byResponse = new Map<string, Record<string, string>>();
+			for (const answer of answers) {
+				const row = byResponse.get(answer.responseId) ?? {};
+				row[answer.questionId] = answer.value;
+				byResponse.set(answer.responseId, row);
+			}
+			// Downloading names with answers is worth a trail, like reading them is for the summary.
+			await audit.record(actor, { action: "survey:export", targetType: "survey", targetId: surveyId, category: "survey" });
+			return {
+				title: survey.title,
+				eventTitle: survey.eventTitle,
+				questions,
+				rows: responses.map(({ id, ...response }) => ({ ...response, answers: byResponse.get(id) ?? {} })),
+			};
 		},
 
 		async getOrganizerResults(actor, eventId, now = new Date()) {
@@ -379,6 +439,7 @@ export function createUnavailableSurveyResultsRepository(): SurveyResultsReposit
 	const unavailable = () => Promise.reject(new Error("Survey results are not available through this repository adapter."));
 	return {
 		getResults: unavailable,
+		exportResponses: unavailable,
 		getOrganizerResults: unavailable,
 		setAnswerHidden: unavailable,
 		feedbackForEvents: unavailable,

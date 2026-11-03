@@ -116,3 +116,36 @@ describe("escapeHtml", () => {
 		expect(escapeHtml(`<a href="x" title='y'>&</a>`)).toBe("&lt;a href=&quot;x&quot; title=&#39;y&#39;&gt;&amp;&lt;/a&gt;");
 	});
 });
+
+describe("renderEmail with an HTML body", () => {
+	const source = `<!doctype html><html><head><style>.card{background:#fff}@media (prefers-color-scheme: dark){.card{background:#111 !important}}</style><script>steal()</script></head>
+<body style="background:#F5F5F6"><table class="card"><tr><td>Hi {{first_name}}, {{message}}<a href="{{link}}" onclick="x()">Open</a></td></tr></table></body></html>`;
+	const sheetValues = { ...values, message: "Line 1\nLine 2", link: "javascript:alert(1)" };
+	const rendered = render({ blocks: [{ id: "h", type: "html", props: { html: source } }], values: sheetValues, resolve: valueResolver(sheetValues) });
+
+	it("is framed, merges escaped values, then sanitizes", () => {
+		expect(rendered.framed).toBe(true);
+		expect(rendered.html).toContain("Hi &lt;b&gt;Eve&lt;/b&gt;, Line 1<br>Line 2");
+		expect(rendered.html).not.toMatch(/<script|onclick|javascript:/);
+		expect(rendered.html).toContain('<a href="#">Open</a>');
+	});
+
+	it("keeps the author's <style> and body background, adds dark-mode metadata and the footer", () => {
+		expect(rendered.html).toContain(".card{background:#fff}");
+		expect(rendered.html).toContain('<meta name="color-scheme" content="light dark">');
+		expect(rendered.bodyHtml).toMatch(/^<div style="background:#F5F5F6">/);
+		expect(rendered.html).toContain("Unsubscribe from Newsletter");
+		expect(rendered.html.indexOf("Unsubscribe from")).toBeGreaterThan(rendered.html.indexOf("</table>"));
+		expect(rendered.html).not.toContain("code-logo-full-navy");
+	});
+
+	it("builds a plain-text alternative from the sanitized body", () => {
+		expect(rendered.text).toContain("Hi <b>Eve</b>, Line 1\nLine 2Open");
+		expect(rendered.text).toContain("Unsubscribe: https://beta.ateneocode.org/unsubscribe?t=abc");
+		expect(rendered.text).not.toContain("steal");
+	});
+
+	it("keeps block emails unframed", () => {
+		expect(render().framed).toBe(false);
+	});
+});

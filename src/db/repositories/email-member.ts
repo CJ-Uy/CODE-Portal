@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import { emailCampaigns, emailCategories, emailDeliveries, emailOptouts, emailSenders, members } from "@/db/schema";
-import { mergeValuesFor, replaceTags } from "@/lib/email/merge";
+import { mergeValuesFor, replaceTagsOneLine } from "@/lib/email/merge";
 import { renderEmail, valueResolver } from "@/lib/email/render";
 import type { Actor } from "@/server/auth/permissions";
 import type { EmailDb } from "./email-audience";
@@ -14,7 +14,7 @@ export type ArchiveItem = {
 	sentAt: Date | null;
 	readAt: Date | null;
 };
-export type ReaderView = { deliveryId: string; subject: string; bodyHtml: string; categoryName: string; senderName: string | null; sentAt: Date | null };
+export type ReaderView = { deliveryId: string; subject: string; bodyHtml: string; html: string; framed: boolean; categoryName: string; senderName: string | null; sentAt: Date | null };
 export type PreferenceRow = { id: string; name: string; description: string; required: boolean; optedOut: boolean };
 
 async function activeCategory(db: EmailDb, id: string) {
@@ -76,6 +76,7 @@ export function createEmailMemberRepository(db: EmailDb) {
 					subject: emailCampaigns.subject,
 					preheader: emailCampaigns.preheader,
 					mergeOverrides: emailCampaigns.mergeOverrides,
+					mergeSheet: emailCampaigns.mergeSheet,
 					email: emailDeliveries.email,
 					categoryName: emailCategories.name,
 					senderName: emailSenders.displayName,
@@ -90,9 +91,9 @@ export function createEmailMemberRepository(db: EmailDb) {
 				.orderBy(desc(emailDeliveries.sentAt))
 				.limit(200);
 			const [member] = await db.select().from(members).where(eq(members.id, actor.memberId)).limit(1);
-			return rows.map(({ mergeOverrides, email, ...r }) => {
-				const values = mergeValuesFor({ ...(member ?? { name: null, fullName: null, nickname: null, batch: null }), email }, mergeOverrides);
-				const merge = (text: string) => replaceTags(text, (tag) => values[tag]);
+			return rows.map(({ mergeOverrides, mergeSheet, email, ...r }) => {
+				const values = mergeValuesFor({ ...(member ?? { name: null, fullName: null, nickname: null, batch: null }), email }, mergeOverrides, mergeSheet);
+				const merge = (text: string) => replaceTagsOneLine(text, values);
 				return { ...r, subject: merge(r.subject), preheader: merge(r.preheader) };
 			});
 		},
@@ -117,7 +118,7 @@ export function createEmailMemberRepository(db: EmailDb) {
 			if (!row) return null;
 			if (!row.delivery.readAt) await db.update(emailDeliveries).set({ readAt: new Date() }).where(eq(emailDeliveries.id, deliveryId));
 			const [member] = await db.select().from(members).where(eq(members.id, actor.memberId)).limit(1);
-			const values = mergeValuesFor({ ...(member ?? { name: null, fullName: null, nickname: null, batch: null }), email: row.delivery.email }, row.campaign.mergeOverrides);
+			const values = mergeValuesFor({ ...(member ?? { name: null, fullName: null, nickname: null, batch: null }), email: row.delivery.email }, row.campaign.mergeOverrides, row.campaign.mergeSheet);
 			const categoryName = row.category?.name ?? "CODE";
 			const rendered = renderEmail({
 				subject: row.campaign.subject,
@@ -128,7 +129,7 @@ export function createEmailMemberRepository(db: EmailDb) {
 				baseUrl,
 				footer: { categoryName, required: true, archiveUrl: null, preferencesUrl: `${baseUrl}/portal/mail/preferences`, unsubscribeUrl: null },
 			});
-			return { deliveryId, subject: rendered.subject, bodyHtml: rendered.bodyHtml, categoryName, senderName: row.senderName, sentAt: row.delivery.sentAt };
+			return { deliveryId, subject: rendered.subject, bodyHtml: rendered.bodyHtml, html: rendered.html, framed: rendered.framed, categoryName, senderName: row.senderName, sentAt: row.delivery.sentAt };
 		},
 
 		async listPreferences(actor: Actor): Promise<PreferenceRow[]> {

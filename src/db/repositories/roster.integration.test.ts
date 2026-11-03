@@ -21,9 +21,9 @@ describe("roster repository on D1", () => {
 			.bind(rosterAdmin.memberId, "admin@example.com", "Roster Admin")
 			.run();
 		await env.DB.prepare(
-			"INSERT INTO terms (id, name, retained_at, probation_below, starts_at, ends_at) VALUES (?, ?, ?, ?, ?, ?)",
+			"INSERT INTO terms (id, name, starts_at, ends_at) VALUES (?, ?, ?, ?)",
 		)
-			.bind(TERM, "Term X", 20, 10, 0, 9999999999999)
+			.bind(TERM, "Term X", 0, 9999999999999)
 			.run();
 	});
 

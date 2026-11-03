@@ -12,7 +12,7 @@ export function ShareToggle({ surveyId, shared }: { surveyId: string; shared: bo
 	const [result, formAction, pending] = useActionState<RunningResult, FormData>(updateRunningAction, null);
 
 	return (
-		<form action={formAction} className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-border/60 bg-card p-4">
+		<form action={formAction} className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 border-t border-border/60 pt-4">
 			<input type="hidden" name="surveyId" value={surveyId} />
 			<input type="hidden" name="intent" value="share" />
 			<input type="hidden" name="shareWithOrganizers" value={shared ? "0" : "1"} />

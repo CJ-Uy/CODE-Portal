@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import QRCode from "qrcode";
 import { cn } from "@/lib/utils";
 
 /**
@@ -33,7 +32,9 @@ export function QrCanvas({
 		// QR + center logo stay crisp on hi-DPI screens instead of being upscaled.
 		const dpr = Math.min(window.devicePixelRatio || 1, 3); // ponytail: cap at 3x, extra pixels are wasted
 		// errorCorrectionLevel H (30% recovery) so the center logo badge stays scannable.
-		QRCode.toCanvas(canvas, payload, { width: size * dpr, margin: 1, errorCorrectionLevel: "H" })
+		// Loaded on first draw: the portal shell carries this card on every page, behind a sheet.
+		import("qrcode")
+			.then(({ default: QRCode }) => QRCode.toCanvas(canvas, payload, { width: size * dpr, margin: 1, errorCorrectionLevel: "H" }))
 			.then(() => {
 				canvas.style.width = `${size}px`;
 				canvas.style.height = `${size}px`;

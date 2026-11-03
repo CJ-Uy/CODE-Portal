@@ -13,5 +13,7 @@ declare module "next-auth" {
 
 	interface User {
 		status?: MemberStatus;
+		/** Set by the adapter's getSessionAndUser in src/auth.ts, read by the session callback. */
+		roleKeys?: string[];
 	}
 }

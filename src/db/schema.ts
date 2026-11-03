@@ -3,7 +3,7 @@ import { check, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex
 import type { EventSignupAnswers, EventSignupField } from "@/lib/event-signup-form";
 import type { PointMilestone } from "@/lib/point-milestones";
 import type { Audience, EmailBlock, EmailCampaignStatus, EmailDeliveryStatus } from "@/lib/email/types";
-import type { MergeOverrides } from "@/lib/email/merge";
+import type { MergeOverrides, MergeSheet } from "@/lib/email/merge";
 import type { LibraryBlock } from "@/lib/library/blocks";
 import type {
 	LibraryAuthor,
@@ -28,7 +28,8 @@ export type SurveyQuestionType = "scale" | "text" | "choice";
 export type SurveySource = "invited" | "walk_in";
 /** Stable keys that let a rating question be compared across events. Values live in METRIC_KEYS (types.ts). */
 export type MetricKey = "overall" | "flow" | "content" | "venue" | "return_intent" | "learning";
-export type AuditActorContext = "session" | "shared_dev_token";
+/** "system" is the cron, which acts for nobody (the gallery purge). */
+export type AuditActorContext = "session" | "shared_dev_token" | "system";
 export type AuditCategory =
 	| "role"
 	| "event"
@@ -38,8 +39,12 @@ export type AuditCategory =
 	| "member"
 	| "announcement"
 	| "library"
-	| "email";
-export type RetentionRecordSource = "event_attendance" | "manual" | "survey_response";
+	| "email"
+	| "gallery";
+/** feedback_share is the rest of an event's points, earned by answering its feedback form; survey_response is points for answering a form with no event. */
+export type RetentionRecordSource = "event_attendance" | "manual" | "survey_response" | "feedback_share";
+/** How often a retention part needs its point: once a school year, or once each semester. */
+export type RetentionPeriod = "year" | "semester";
 
 const nowMs = sql`(unixepoch() * 1000)`;
 
@@ -86,6 +91,8 @@ export const mentsPeople = sqliteTable(
 	],
 );
 
+// Retired 2026-10-23: CJ removed Pments from the Ments Tree. Nothing reads or writes this table any more; it stays so
+// no member's saved rows are lost, and a later cleanup migration can drop it.
 export const mentsPments = sqliteTable(
 	"ments_pments",
 	{
@@ -422,10 +429,10 @@ export const terms = sqliteTable(
 	{
 		id: text("id").primaryKey(),
 		name: text("name").notNull(),
-		retainedAt: integer("retained_at").notNull(),
-		probationBelow: integer("probation_below").notNull(),
 		startsAt: integer("starts_at", { mode: "timestamp_ms" }).notNull(),
 		endsAt: integer("ends_at", { mode: "timestamp_ms" }).notNull(),
+		// Nullable so a row written by an older Worker mid-deploy still reads; readers fall back to the midpoint.
+		secondSemesterStartsAt: integer("second_semester_starts_at", { mode: "timestamp_ms" }),
 	},
 	(table) => [index("terms_starts_ends_idx").on(table.startsAt, table.endsAt)],
 );
@@ -457,6 +464,8 @@ export const pointTypes = sqliteTable(
 		key: text("key").notNull().unique(),
 		label: text("label").notNull(),
 		milestonesJson: text("milestones_json", { mode: "json" }).$type<PointMilestone[]>().notNull().default([]),
+		// Set only on the 8 retention parts, by migration 0016. NULL: the type never counts toward retention.
+		retentionPeriod: text("retention_period").$type<RetentionPeriod>(),
 		active: integer("active", { mode: "boolean" }).notNull().default(true),
 		position: integer("position").notNull().default(0),
 		updatedBy: text("updated_by").references(() => members.id, { onDelete: "set null" }),
@@ -506,6 +515,10 @@ export const retentionRecords = sqliteTable(
 		uniqueIndex("retention_records_survey_event_member_type_idx")
 			.on(table.eventId, table.memberId, table.pointTypeId)
 			.where(sql`source = 'survey_response'`),
+		// One feedback share per member per point type per event; re-upserted when the event's awards change.
+		uniqueIndex("retention_records_share_event_member_type_idx")
+			.on(table.eventId, table.memberId, table.pointTypeId)
+			.where(sql`source = 'feedback_share'`),
 	],
 );
 
@@ -673,6 +686,7 @@ export const auditLogs = sqliteTable(
 	],
 );
 
+// Optional navigation shortcuts, managed independently of the categorized Important links directory.
 export const navPins = sqliteTable(
 	"nav_pins",
 	{
@@ -704,6 +718,43 @@ export const quickLinks = sqliteTable(
 		updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
 	},
 	(table) => [index("quick_links_position_idx").on(table.position)],
+);
+
+// Member-facing link directory at /portal/important-links. Archiving a category hides it and its links.
+export const linkCategories = sqliteTable(
+	"link_categories",
+	{
+		id: text("id").primaryKey(),
+		name: text("name").notNull(),
+		position: integer("position").notNull().default(0),
+		archivedAt: integer("archived_at", { mode: "timestamp_ms" }),
+		createdBy: text("created_by").references(() => members.id, { onDelete: "set null" }),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+		updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	},
+	(table) => [index("link_categories_position_idx").on(table.position)],
+);
+
+export const importantLinks = sqliteTable(
+	"important_links",
+	{
+		id: text("id").primaryKey(),
+		// Null files the link under "Other links" at the end of the directory.
+		categoryId: text("category_id").references(() => linkCategories.id, { onDelete: "set null" }),
+		title: text("title").notNull(),
+		url: text("url").notNull(),
+		description: text("description"),
+		// One of LINK_KINDS in src/lib/link-kinds.ts; null means detect it from the URL.
+		kind: text("kind"),
+		// Kept for older deployments; navigation now reads nav_pins independently.
+		showInSidebar: integer("show_in_sidebar", { mode: "boolean" }).notNull().default(false),
+		position: integer("position").notNull().default(0),
+		archivedAt: integer("archived_at", { mode: "timestamp_ms" }),
+		createdBy: text("created_by").references(() => members.id, { onDelete: "set null" }),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+		updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	},
+	(table) => [index("important_links_category_position_idx").on(table.categoryId, table.position)],
 );
 
 export const rateLimitCounters = sqliteTable(
@@ -1066,6 +1117,8 @@ export const emailCampaigns = sqliteTable(
 		blocks: text("blocks", { mode: "json" }).$type<EmailBlock[]>().notNull().default([]),
 		audience: text("audience", { mode: "json" }).$type<Audience>().notNull(),
 		mergeOverrides: text("merge_overrides", { mode: "json" }).$type<MergeOverrides>().notNull().default({}),
+		/** Spreadsheet rows imported for this email; null when none. */
+		mergeSheet: text("merge_sheet", { mode: "json" }).$type<MergeSheet | null>(),
 		status: text("status").$type<EmailCampaignStatus>().notNull().default("draft"),
 		scheduledAt: integer("scheduled_at", { mode: "timestamp_ms" }),
 		startedAt: integer("started_at", { mode: "timestamp_ms" }),
@@ -1167,5 +1220,148 @@ export const emailMessages = sqliteTable(
 	(table) => [
 		index("email_messages_message_id_idx").on(table.messageId),
 		index("email_messages_thread_created_idx").on(table.threadId, table.createdAt),
+	],
+);
+
+export type GalleryItemKind = "photo" | "video";
+
+/**
+ * The shared photo gallery. Folders nest through parent_id. A delete is soft: deleted_at hides the row
+ * (and, for a folder, everything under it) and the cron purges it, files included, 30 days later.
+ * Folder references have no ON DELETE action on purpose, so a folder row cannot be removed while
+ * anything still points at it; the purge deletes items, and their R2 files, first.
+ */
+export const galleryFolders = sqliteTable(
+	"gallery_folders",
+	{
+		id: text("id").primaryKey(),
+		parentId: text("parent_id").references((): AnySQLiteColumn => galleryFolders.id),
+		name: text("name").notNull(),
+		eventId: text("event_id").references(() => crsEvents.id, { onDelete: "set null" }),
+		/** Shows this folder and everything under it on the public site. Only gallery admins set it. */
+		isPublic: integer("is_public", { mode: "boolean" }).notNull().default(false),
+		/** Made by the gallery for an event that has ended, so there is always somewhere to put its photos. */
+		isEventAlbum: integer("is_event_album", { mode: "boolean" }).notNull().default(false),
+		createdBy: text("created_by").references(() => members.id, { onDelete: "set null" }),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+		updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+		deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
+		deletedBy: text("deleted_by").references(() => members.id, { onDelete: "set null" }),
+	},
+	(table) => [
+		index("gallery_folders_parent_idx").on(table.parentId),
+		index("gallery_folders_deleted_idx").on(table.deletedAt),
+		// One automatic album per event, even when two cron ticks race. Member-made albums may share an event.
+		uniqueIndex("gallery_folders_event_album_idx").on(table.eventId).where(sql`${table.isEventAlbum} = 1`),
+	],
+);
+
+export const galleryItems = sqliteTable(
+	"gallery_items",
+	{
+		id: text("id").primaryKey(),
+		/** Null is the gallery's top level. */
+		folderId: text("folder_id").references(() => galleryFolders.id),
+		kind: text("kind").$type<GalleryItemKind>().notNull(),
+		fileKey: text("file_key").notNull(),
+		/** A frame the uploader's browser grabbed from a video. Photos are resized on request instead. */
+		posterKey: text("poster_key"),
+		contentType: text("content_type").notNull(),
+		sizeBytes: integer("size_bytes").notNull(),
+		durationSeconds: real("duration_seconds"),
+		originalName: text("original_name").notNull(),
+		caption: text("caption"),
+		takenAt: integer("taken_at", { mode: "timestamp_ms" }),
+		eventId: text("event_id").references(() => crsEvents.id, { onDelete: "set null" }),
+		/** Who uploaded it. Never changes after upload; edits and moves only touch updated_at. */
+		uploadedBy: text("uploaded_by").references(() => members.id, { onDelete: "set null" }),
+		/** The uploader's email at upload time, so the record survives the member row being deleted. */
+		uploaderEmail: text("uploader_email").notNull(),
+		/** Lightbox opens, counted once per photo per page visit. A popularity signal, not an audit record. */
+		viewCount: integer("view_count").notNull().default(0),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+		updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+		deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
+		deletedBy: text("deleted_by").references(() => members.id, { onDelete: "set null" }),
+	},
+	(table) => [
+		index("gallery_items_folder_idx").on(table.folderId, table.deletedAt),
+		index("gallery_items_event_idx").on(table.eventId),
+		index("gallery_items_deleted_idx").on(table.deletedAt),
+		index("gallery_items_uploaded_by_idx").on(table.uploadedBy),
+		index("gallery_items_view_count_idx").on(table.viewCount),
+	],
+);
+
+/** A member's heart on a photo. "Best" sorts by how many hearts a photo has. */
+export const galleryHearts = sqliteTable(
+	"gallery_hearts",
+	{
+		itemId: text("item_id")
+			.notNull()
+			.references(() => galleryItems.id, { onDelete: "cascade" }),
+		memberId: text("member_id")
+			.notNull()
+			.references(() => members.id, { onDelete: "cascade" }),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	},
+	(table) => [primaryKey({ columns: [table.itemId, table.memberId] }), index("gallery_hearts_member_idx").on(table.memberId)],
+);
+
+export const gallerySaves = sqliteTable(
+	"gallery_saves",
+	{
+		itemId: text("item_id").notNull().references(() => galleryItems.id, { onDelete: "cascade" }),
+		memberId: text("member_id").notNull().references(() => members.id, { onDelete: "cascade" }),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	},
+	(table) => [primaryKey({ columns: [table.itemId, table.memberId] }), index("gallery_saves_member_idx").on(table.memberId)],
+);
+
+export const galleryLists = sqliteTable(
+	"gallery_lists",
+	{
+		id: text("id").primaryKey(),
+		memberId: text("member_id").notNull().references(() => members.id, { onDelete: "cascade" }),
+		name: text("name").notNull(),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	},
+	(table) => [index("gallery_lists_member_idx").on(table.memberId)],
+);
+
+export const galleryListItems = sqliteTable(
+	"gallery_list_items",
+	{
+		listId: text("list_id").notNull().references(() => galleryLists.id, { onDelete: "cascade" }),
+		itemId: text("item_id").notNull().references(() => galleryItems.id, { onDelete: "cascade" }),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	},
+	(table) => [primaryKey({ columns: [table.listId, table.itemId] }), index("gallery_list_items_item_idx").on(table.itemId)],
+);
+
+export type GalleryTagKind = "person" | "topic";
+
+/**
+ * Who is in a photo (a member) or what it shows (a short topic like "awarding"). `key` is the member id or the
+ * lowercased topic, so the same person or topic cannot be tagged twice on one photo.
+ */
+export const galleryTags = sqliteTable(
+	"gallery_tags",
+	{
+		id: text("id").primaryKey(),
+		itemId: text("item_id")
+			.notNull()
+			.references(() => galleryItems.id, { onDelete: "cascade" }),
+		kind: text("kind").$type<GalleryTagKind>().notNull(),
+		key: text("key").notNull(),
+		memberId: text("member_id").references(() => members.id, { onDelete: "cascade" }),
+		label: text("label").notNull(),
+		taggedBy: text("tagged_by").references(() => members.id, { onDelete: "set null" }),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	},
+	(table) => [
+		uniqueIndex("gallery_tags_item_kind_key_idx").on(table.itemId, table.kind, table.key),
+		index("gallery_tags_member_idx").on(table.memberId),
+		index("gallery_tags_kind_key_idx").on(table.kind, table.key),
 	],
 );

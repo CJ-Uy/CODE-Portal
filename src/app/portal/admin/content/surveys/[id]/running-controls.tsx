@@ -37,11 +37,7 @@ export function RunningControls({ surveyId, closesAt, timeClosed, reminder }: Ru
 	);
 
 	return (
-		<section aria-labelledby="manage-heading" className="grid min-w-0 gap-5 rounded-xl border border-border/60 bg-card p-5">
-			<h2 id="manage-heading" className="text-xl font-semibold text-primary">
-				Manage this form
-			</h2>
-
+		<div className="grid min-w-0 gap-4">
 			{timeClosed ? (
 				<p className="min-w-0 rounded-lg border border-border bg-secondary p-3 text-sm text-secondary-foreground">
 					The closing time has passed, so no one can answer. Pick a later time to open it again.
@@ -50,16 +46,16 @@ export function RunningControls({ surveyId, closesAt, timeClosed, reminder }: Ru
 
 			<form action={formAction} className="flex min-w-0 flex-wrap items-end gap-3">
 				{hidden("closesAt")}
-				<label className="grid min-w-0 gap-2 text-sm font-medium sm:max-w-xs">
+				<label className="grid min-w-0 flex-1 basis-48 gap-2 text-sm font-medium">
 					Closes at
 					<Input key={closesAt} name="closesAt" type="datetime-local" defaultValue={closesAt} required />
 				</label>
 				<Button type="submit" variant="outline" disabled={pending}>
-					Update closing time
+					Update
 				</Button>
 			</form>
 
-			<div className="flex min-w-0 flex-wrap items-center gap-3">
+			<div className="flex min-w-0 flex-wrap items-center gap-3 border-t border-border/60 pt-4">
 				{reminder === "ready" ? (
 					<Button type="button" variant="outline" disabled={pending} onClick={() => ask("remind")}>
 						Send reminder now
@@ -109,6 +105,6 @@ export function RunningControls({ surveyId, closesAt, timeClosed, reminder }: Ru
 					{result.ok}
 				</p>
 			) : null}
-		</section>
+		</div>
 	);
 }

@@ -28,6 +28,7 @@ const creatorPermissionValues: Record<PermissionAction, (typeof creatorPermissio
 	"library:moderate": "announcement:manage",
 	"email:send": "system:super_only",
 	"email:configure": "system:super_only",
+	"gallery:manage": "system:super_only",
 	"system:super_only": "system:super_only",
 };
 

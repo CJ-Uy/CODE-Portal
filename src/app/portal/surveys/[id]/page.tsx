@@ -1,19 +1,24 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { signInPath } from "@/server/auth/sign-in";
-import { CheckCircle2, Send } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Eye } from "lucide-react";
 import { getRepositories } from "@/db";
 import { RESPONDENT_STATE_MESSAGES, type RespondentView } from "@/db/repositories/surveys";
 import type { SurveyQuestion } from "@/db/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { formatUtc8DateTime } from "@/lib/date-slots";
+import { formatEstimate } from "@/lib/feedback/editor-input";
 import { parseOptions, safeFeedbackError, scaleLabels } from "@/lib/feedback/form";
+import { estimateSeconds } from "@/lib/feedback/stats";
 import { pointsPhrase } from "@/lib/points";
+import { FeedbackShareNote } from "@/components/feedback-share-note";
 import { getActor } from "@/server/auth/actor";
 import { can, type Actor } from "@/server/auth/permissions";
 import { isFeatureEnabled } from "@/server/features";
 import { submitResponseAction } from "./actions";
+import { SubmitButton } from "./submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -43,30 +48,55 @@ export default async function MemberSurveyPage({
 	const { survey, questions, eventTitle, state } = detail;
 	const backHref = isPreview ? `/portal/admin/content/surveys/${survey.id}` : survey.eventId ? `/portal/calendar/${survey.eventId}` : "/portal";
 	// Points are only promised while their point type is active, which is also when answering awards them.
+	// An event's form pays the rest of the event's points instead of points for answering.
 	const pointType =
-		survey.pointsAward > 0
+		survey.pointsAward > 0 && !survey.eventId
 			? (await repositories.pointTypes.list().catch(() => [])).find((type) => type.id === survey.pointTypeId && type.active)
 			: undefined;
 	const points = pointType ? pointsPhrase(survey.pointsAward, pointType.label) : null;
+	const share = survey.eventId && !isPreview ? await repositories.retention.eventFeedbackShare(actor, survey.eventId).catch(() => null) : null;
 
 	return (
 		<div className="mx-auto grid w-full min-w-0 max-w-2xl gap-6">
-			<header className="grid min-w-0 gap-1">
-				<p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Feedback</p>
-				<h1 className="min-w-0 font-heading text-3xl leading-tight [overflow-wrap:anywhere]">{eventTitle ?? survey.title}</h1>
-				<p className="text-sm text-muted-foreground">
-					CRS can see your name with your answers so they can follow up. Organizers see the answers without names. Used only to
-					evaluate this project (RA 10173).
-				</p>
-				{points && state === "open" ? <p className="min-w-0 text-sm font-medium [overflow-wrap:anywhere]">You&apos;ll get {points} for answering.</p> : null}
+			<Link href={backHref} className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+				<ArrowLeft className="size-4" />
+				{isPreview ? "Back to the form" : backHref === "/portal" ? "Back to portal" : "Back to event"}
+			</Link>
+			<header className="grid min-w-0 gap-2">
+				<h1 className="min-w-0 font-heading text-3xl leading-tight [overflow-wrap:anywhere]">
+					{eventTitle ? `How was ${eventTitle}?` : survey.title}
+				</h1>
+				{state === "open" ? (
+					<>
+						<p className="flex min-w-0 flex-wrap gap-x-2 gap-y-1 text-sm text-muted-foreground">
+							<span>
+								{questions.length} {questions.length === 1 ? "question" : "questions"}
+							</span>
+							<span aria-hidden="true">&middot;</span>
+							<span>{formatEstimate(estimateSeconds(questions))}</span>
+							{survey.closesAt ? (
+								<>
+									<span aria-hidden="true">&middot;</span>
+									<span>Closes {formatUtc8DateTime(survey.closesAt)}</span>
+								</>
+							) : null}
+						</p>
+						{points ? <p className="min-w-0 text-sm font-medium [overflow-wrap:anywhere]">You&apos;ll get {points} for answering.</p> : null}
+						<FeedbackShareNote share={share} on="form" />
+						<p className="flex min-w-0 items-start gap-2 rounded-lg bg-secondary/60 p-3 text-sm text-secondary-foreground">
+							<Eye className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+							<span className="grid min-w-0 gap-0.5">
+								<span>CRS sees your name with your answers. Organizers see them without names.</span>
+								<span className="text-xs text-muted-foreground">Used only for evaluation (RA 10173).</span>
+							</span>
+						</p>
+					</>
+				) : null}
 			</header>
 
 			{isPreview ? (
-				<p role="status" className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border bg-secondary p-3 text-sm text-secondary-foreground">
-					<span className="min-w-0 font-medium">Preview. This is how members see the form. Nothing here is saved or sent.</span>
-					<Link href={backHref} className="font-medium text-accent underline-offset-4 hover:underline">
-						Back to the form
-					</Link>
+				<p role="status" className="min-w-0 rounded-lg border border-border bg-secondary p-3 text-sm font-medium text-secondary-foreground">
+					Preview. This is how members see the form. Nothing here is saved or sent.
 				</p>
 			) : null}
 
@@ -83,18 +113,17 @@ export default async function MemberSurveyPage({
 						</p>
 					) : null}
 					<QuestionCards questions={questions} />
-					<Button type="submit" className="h-12 w-full sm:ml-auto sm:w-auto">
-						<Send />
-						Send feedback
-					</Button>
+					<SubmitButton />
 				</form>
 			) : (
 				<StateCard
 					message={
-						done && state === "answered" ? `Thanks, feedback sent.${points ? ` You got ${points}.` : ""}` : RESPONDENT_STATE_MESSAGES[state]
+						done && state === "answered" ? `Thanks, feedback sent.${points ? ` You got ${points}.` : survey.eventId ? " Any points this event still owed you are on your retention page." : ""}` : RESPONDENT_STATE_MESSAGES[state]
 					}
+					hint={done && state === "answered" ? null : stateHint(state, survey.closesAt)}
 					thanked={state === "answered"}
 					backHref={backHref}
+					previewHref={can(actor, "survey:configure") && state !== "answered" ? `/portal/surveys/${encodeURIComponent(survey.id)}?preview=1` : null}
 				/>
 			)}
 		</div>
@@ -136,17 +165,55 @@ function QuestionCards({ questions }: { questions: SurveyQuestion[] }) {
 	);
 }
 
-function StateCard({ message, thanked, backHref }: { message: string; thanked: boolean; backHref: string }) {
+// Why the form isn't there, so nobody is left guessing whether something broke.
+function stateHint(state: Exclude<RespondentView["state"], "open">, closesAt: Date | null): string {
+	switch (state) {
+		case "closed":
+			return closesAt && closesAt <= new Date()
+				? `It closed ${formatUtc8DateTime(closesAt)}.`
+				: "CRS closed it early.";
+		case "staff":
+			return "You're on this event's team. Add your notes to its debrief instead.";
+		case "answered":
+			return "Each person answers once.";
+		case "ineligible":
+			return "It's for invited members and checked-in attendees. Ask CRS if that's you.";
+	}
+}
+
+function StateCard({
+	message,
+	hint,
+	thanked,
+	backHref,
+	previewHref,
+}: {
+	message: string;
+	hint: string | null;
+	thanked: boolean;
+	backHref: string;
+	previewHref: string | null;
+}) {
 	return (
 		<Card>
 			<CardContent className="grid justify-items-start gap-4 p-5">
-				<p className="flex min-w-0 items-center gap-2 text-base font-medium">
-					{thanked ? <CheckCircle2 className="size-5 shrink-0 text-accent" /> : null}
-					<span className="min-w-0 [overflow-wrap:anywhere]">{message}</span>
-				</p>
-				<Button asChild variant="outline">
-					<Link href={backHref}>{backHref === "/portal" ? "Back to portal" : "Back to event"}</Link>
-				</Button>
+				<div className="grid min-w-0 gap-1">
+					<p className="flex min-w-0 items-center gap-2 text-base font-medium">
+						{thanked ? <CheckCircle2 className="size-5 shrink-0 text-accent" /> : null}
+						<span className="min-w-0 [overflow-wrap:anywhere]">{message}</span>
+					</p>
+					{hint ? <p className="min-w-0 text-sm text-muted-foreground">{hint}</p> : null}
+				</div>
+				<div className="flex flex-wrap gap-3">
+					<Button asChild variant="outline">
+						<Link href={backHref}>{backHref === "/portal" ? "Back to portal" : "Back to event"}</Link>
+					</Button>
+					{previewHref ? (
+						<Button asChild variant="ghost">
+							<Link href={previewHref}>See the questions</Link>
+						</Button>
+					) : null}
+				</div>
 			</CardContent>
 		</Card>
 	);

@@ -1,12 +1,12 @@
 import { asc, eq } from "drizzle-orm";
-import { pointTypes } from "@/db/schema";
+import { pointTypes, type RetentionPeriod } from "@/db/schema";
 import { pointMilestonesSchema, type PointMilestone } from "@/lib/point-milestones";
-import { RETENTION_POINT_TYPE_ID } from "@/lib/point-types";
 import type { Actor } from "@/server/auth/permissions";
 import { can } from "@/server/auth/permissions";
 import type { AuditRepository } from "./audit";
 
-const RETENTION_RETIRE_ERROR = "The Retention point type cannot be retired.";
+// Retiring a part would make retention impossible: its events could no longer award it.
+const PART_RETIRE_ERROR = "Retention parts cannot be retired.";
 const POINT_TYPE_KEY_PATTERN = /^[a-z0-9_]{1,40}$/;
 
 // Match the existing eventTypeRules repository until the repository Db union is centralized.
@@ -18,6 +18,8 @@ export type PointTypeRow = {
 	key: string;
 	label: string;
 	milestones?: PointMilestone[];
+	/** Set on the 8 retention parts by migration 0015; NULL means the type never counts toward retention. */
+	retentionPeriod?: RetentionPeriod | null;
 	active: boolean;
 	position: number;
 };
@@ -45,6 +47,7 @@ export function createPointTypesRepository(db: Db, audit: AuditRepository): Poin
 					key: pointTypes.key,
 					label: pointTypes.label,
 					milestones: pointTypes.milestonesJson,
+					retentionPeriod: pointTypes.retentionPeriod,
 					active: pointTypes.active,
 					position: pointTypes.position,
 				})
@@ -92,8 +95,8 @@ export function createPointTypesRepository(db: Db, audit: AuditRepository): Poin
 			if (!existing) throw new Error("Point type not found.");
 			if (existing.key !== input.key) throw new Error("Point type keys cannot be changed.");
 
-			if (input.id === RETENTION_POINT_TYPE_ID && !input.active) {
-				throw new Error(RETENTION_RETIRE_ERROR);
+			if (existing.retentionPeriod && !input.active) {
+				throw new Error(PART_RETIRE_ERROR);
 			}
 			const updated = await db.update(pointTypes).set({
 				label,

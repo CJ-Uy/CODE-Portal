@@ -28,11 +28,11 @@ export default async function EventRosterPage({ params }: { params: Promise<{ id
 	if (!can(actor, "retention:record")) notFound();
 	const { id } = paramsSchema.parse(await params);
 	const db = getDb() as unknown as DrizzleD1Database<typeof schema>;
-	const [event] = await db.select().from(crsEvents).where(eq(crsEvents.id, id)).limit(1);
-	if (!event) notFound();
 	// The roster stays on retention:record; the feedback and debrief sections need survey:configure as well.
 	const showFeedback = isFeatureEnabled("surveys") && can(actor, "survey:configure");
-	const [roster, scannerRows, pointRows, feedbackLoad] = await Promise.all([
+	// Every read needs only the id, so the event row goes out with them rather than ahead of them.
+	const [[event], roster, scannerRows, pointRows, feedbackLoad] = await Promise.all([
+		db.select().from(crsEvents).where(eq(crsEvents.id, id)).limit(1),
 		createAttendanceReports(db).eventRoster(actor, id),
 		db.select({ count: sql<number>`count(*)` }).from(eventStaff).where(eq(eventStaff.eventId, id)),
 		db
@@ -42,6 +42,7 @@ export default async function EventRosterPage({ params }: { params: Promise<{ id
 			.groupBy(retentionRecords.memberId),
 		showFeedback ? getRepositories().then((repositories) => loadEventFeedback(repositories, actor, id)) : Promise.resolve(null),
 	]);
+	if (!event) notFound();
 	const pointsByMember = new Map(pointRows.map((row) => [row.memberId, quantizePoints(Number(row.points))]));
 	const attendees = roster.filter((row) => row.scannedAt);
 	const absents = roster.filter((row) => !row.scannedAt);

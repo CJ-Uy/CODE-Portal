@@ -3,6 +3,7 @@ import {
 	buildMonthGrid,
 	deriveEnd,
 	endOfUtc8Day,
+	formatUtc8Day,
 	formatEventRange,
 	fromLocalInput,
 	startOfUtc8Day,
@@ -122,5 +123,19 @@ describe("toLocalInput", () => {
 	it("round-trips a browser datetime-local value without changing the instant", () => {
 		const value = "2026-07-25T13:05";
 		expect(toLocalInput(fromLocalInput(value))).toBe(value);
+	});
+});
+
+describe("formatUtc8Day", () => {
+	// 23 Oct 2026, 11 PM in Manila: still "today" there although it is already the 23rd 3 PM UTC.
+	const now = new Date("2026-10-23T15:00:00Z");
+	it("says Today, Tomorrow and Yesterday by the Manila calendar day", () => {
+		expect(formatUtc8Day(new Date("2026-10-23T10:00:00Z"), now)).toBe("Today");
+		expect(formatUtc8Day(new Date("2026-10-23T16:30:00Z"), now)).toBe("Tomorrow");
+		expect(formatUtc8Day(new Date("2026-10-22T03:00:00Z"), now)).toBe("Yesterday");
+	});
+	it("falls back to a short date, adding the year only outside this year", () => {
+		expect(formatUtc8Day(new Date("2026-10-26T08:00:00Z"), now)).toBe("Mon, Oct 26");
+		expect(formatUtc8Day(new Date("2027-01-05T08:00:00Z"), now)).toBe("Tue, Jan 5, 2027");
 	});
 });

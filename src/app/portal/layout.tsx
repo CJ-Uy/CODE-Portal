@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 import { signInPath } from "@/server/auth/sign-in";
 import { getRepositories } from "@/db";
+import { NavigationProgress } from "@/components/portal/navigation-progress";
 import { NotificationBell } from "@/components/portal/notification-bell";
+import { OfflineNotice } from "@/components/portal/offline-notice";
 import { PortalShell } from "@/components/portal/portal-shell";
 import { getActor } from "@/server/auth/actor";
 import { hasAnyAdminScope } from "@/server/auth/admin";
@@ -30,7 +32,7 @@ export default async function PortalLayout({ children }: { children: React.React
 		repositories.members.getById(actor, actor.memberId),
 		flags.notifications ? repositories.notifications.listFeed(actor, { limit: 10 }).catch(() => []) : Promise.resolve([]),
 		flags.notifications ? repositories.notifications.unreadCount(actor).catch(() => 0) : Promise.resolve(0),
-		repositories.navPins.listVisible(actor).catch(() => []),
+		repositories.navPins.list(actor).catch(() => []),
 	]);
 	if (!member) redirect(await signInPath());
 
@@ -47,6 +49,8 @@ export default async function PortalLayout({ children }: { children: React.React
 
 	return (
 		<>
+			<NavigationProgress />
+			<OfflineNotice />
 			<PortalShell
 				member={{ displayName, initials: initialsFrom(displayName), subtitle: member.email }}
 				memberId={actor.memberId}

@@ -28,6 +28,7 @@ export default async function NewEmailPage({ searchParams }: { searchParams: Pro
 				blocks: content?.blocks ?? [],
 				audience: EMPTY_AUDIENCE,
 				mergeOverrides: {},
+				mergeSheet: null,
 				status: "draft",
 					scheduledAt: null,
 			}}

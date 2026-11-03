@@ -1,9 +1,11 @@
+import { baseHtmlTemplate } from "./base-html";
 import type { EmailBlock } from "./types";
 
 const heading = (text: string, level: 1 | 2 = 1): EmailBlock => ({ id: "h", type: "heading", props: { text, level } });
 const text = (text: string): EmailBlock => ({ id: "t", type: "text", props: { text } });
 const button = (label: string, href: string): EmailBlock => ({ id: "b", type: "button", props: { label, href } });
 const divider: EmailBlock = { id: "d", type: "divider", props: {} };
+const htmlBody = (html: string): EmailBlock => ({ id: "html", type: "html", props: { html } });
 
 /** Built-in starters work immediately, without seeding or modifying saved templates. */
 export function emailStarters(baseUrl: string) {
@@ -37,7 +39,7 @@ export function emailStarters(baseUrl: string) {
 		{
 			id: "newsletter", name: "The CODE roundup", description: "Three focused sections for resources, events and the community.",
 			subject: "Your CODE roundup, {{first_name}}", preheader: "Something to read, something to join, someone to connect with.",
-			blocks: [heading("A little more CODE."), text("Hi {{first_name}},\n\nHere are three places to start when you drop into the workspace."), heading("Something to read", 2), text("Find a useful resource in the library. Save it for later or share a thought in the comments."), button("Visit the library", `${portal}/library`), divider, heading("Something to join", 2), text("Check the calendar and find your next chance to learn with others."), button("See the calendar", `${portal}/calendar`), divider, heading("Someone to connect with", 2), text("Explore the Ments Tree to see how CODE’s generations are connected. Add your informal Pments to recognize the people who’ve helped you along the way."), button("Explore the Ments Tree", `${portal}/ments`), text("Until next time,\nCODE")],
+			blocks: [heading("A little more CODE."), text("Hi {{first_name}},\n\nHere are three places to start when you drop into the workspace."), heading("Something to read", 2), text("Find a useful resource in the library. Save it for later or share a thought in the comments."), button("Visit the library", `${portal}/library`), divider, heading("Something to join", 2), text("Check the calendar and find your next chance to learn with others."), button("See the calendar", `${portal}/calendar`), divider, heading("Someone to connect with", 2), text("Explore the Ments Tree to see how CODE’s generations are connected, and find your own place in it."), button("Explore the Ments Tree", `${portal}/ments`), text("Until next time,\nCODE")],
 		},
 		{
 			id: "feedback", name: "Ask for feedback", description: "Invite a reply with specific, easy-to-answer questions.",
@@ -50,9 +52,14 @@ export function emailStarters(baseUrl: string) {
 			blocks: [heading("A resource for your next idea."), text("Hi {{firstname}},\n\nLooking for a place to start? The CODE library brings our resources together so you can browse, save favorites and return when you need them."), button("Find your next read", `${portal}/library`), divider, heading("Make it yours", 2), text("Filter for what interests you, save something to revisit, and leave a comment when a resource sparks a thought."), text("Happy reading,\nCODE")],
 		},
 		{
-			id: "ments", name: "Meet your Ments Tree", description: "Help members discover their connections and report Pments.",
+			id: "ments", name: "Meet your Ments Tree", description: "Help members discover their connections in the tree.",
 			subject: "Where do you fit in the Ments Tree, {{first_name}}?", preheader: "Explore CODE’s connections, one generation at a time.",
-			blocks: [heading("Every connection has a story."), text("Hi {{first_name}},\n\nExplore the Ments Tree to see the people and generations that connect CODE. Follow a branch, find a familiar name, or zoom out to see the whole picture."), button("Find your connections", `${portal}/ments`), divider, heading("Recognize your Pments", 2), text("Some people guide us informally. Add your Pments on the tree page to recognize those connections alongside official Ments."), text("See you in the tree,\nCODE")],
+			blocks: [heading("Every connection has a story."), text("Hi {{first_name}},\n\nExplore the Ments Tree to see the people and generations that connect CODE. Follow a branch, find a familiar name, or zoom out to see the whole picture."), button("Find your connections", `${portal}/ments`), text("See you in the tree,\nCODE")],
+		},
+		{
+			id: "html", name: "Your own HTML design", description: "A table-based layout with dark mode. Swap in what your AI tool or designer writes.",
+			subject: "An update from CODE, {{first_name}}", preheader: "",
+			blocks: [htmlBody(baseHtmlTemplate(baseUrl))],
 		},
 	].map((starter) => ({ ...starter, blocks: starter.blocks.map((block, i) => ({ ...block, id: `${starter.id}_${i}` })) }));
 }

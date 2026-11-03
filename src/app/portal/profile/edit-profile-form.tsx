@@ -5,8 +5,9 @@ import { Check, Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
 import { updateProfileAction, type UpdateProfileResult } from "./actions";
+
+const BIRTHDAY = new Intl.DateTimeFormat("en", { timeZone: "UTC", month: "long", day: "numeric" });
 
 export type ProfileFormValues = {
 	fullName: string;
@@ -36,35 +37,41 @@ export function EditProfileForm({ values }: { values: ProfileFormValues }) {
 
 	return (
 		<form ref={formRef} action={formAction} className="grid gap-5">
-			<div className="flex items-start justify-between gap-3">
-				<p className="text-sm text-muted-foreground">
-					{editing ? "Update your details, then save." : "These details are used across the portal."}
-				</p>
-				{editing ? null : (
-					<Button type="button" variant="outline" size="sm" onClick={() => setEditing(true)}>
-						<Pencil />
-						Edit
-					</Button>
-				)}
-			</div>
-
-			{/* ponytail: one disabled fieldset instead of a disabled prop per field. */}
-			<fieldset disabled={!editing || pending} className="grid gap-5 sm:grid-cols-2">
-				<Field label="Full name" name="fullName" defaultValue={values.fullName} editing={editing} />
-				<Field label="Nickname" name="nickname" defaultValue={values.nickname} editing={editing} />
-				<Field label="Pronouns" name="pronouns" defaultValue={values.pronouns} editing={editing} />
-				<Field label="Batch" name="batch" defaultValue={values.batch} editing={editing} />
-				<Field label="Birthday" name="birthday" type="date" defaultValue={values.birthday} editing={editing} />
-				<label className="flex gap-3 self-end pb-2 text-sm font-medium">
-					<Checkbox defaultChecked={values.birthdayPublic} name="birthdayPublic" className="mt-0.5" />
-					<span className="grid gap-1">
-						Show my birthday
-						<span className="text-xs font-normal text-muted-foreground">
-							Adds a Birthday event to the org calendar each year. Uncheck to keep it hidden.
+			{editing ? (
+				<fieldset disabled={pending} className="grid gap-5 sm:grid-cols-2">
+					<Field label="Full name" name="fullName" defaultValue={values.fullName} />
+					<Field label="Nickname" name="nickname" defaultValue={values.nickname} />
+					<Field label="Pronouns" name="pronouns" defaultValue={values.pronouns} />
+					<Field label="Batch" name="batch" defaultValue={values.batch} />
+					<Field label="Birthday" name="birthday" type="date" defaultValue={values.birthday} />
+					<label className="flex gap-3 self-end pb-2 text-sm font-medium">
+						<Checkbox defaultChecked={values.birthdayPublic} name="birthdayPublic" className="mt-0.5" />
+						<span className="grid gap-1">
+							Show my birthday
+							<span className="text-xs font-normal text-muted-foreground">
+								Adds a Birthday event to the org calendar each year. Uncheck to keep it hidden.
+							</span>
 						</span>
-					</span>
-				</label>
-			</fieldset>
+					</label>
+				</fieldset>
+			) : (
+				<div className="grid gap-4">
+					<dl className="grid grid-cols-2 gap-x-6 gap-y-4">
+						<Detail label="Full name" value={values.fullName} />
+						<Detail label="Nickname" value={values.nickname} />
+						<Detail label="Pronouns" value={values.pronouns} />
+						<Detail label="Batch" value={values.batch} />
+						<Detail
+							label="Birthday"
+							value={values.birthday ? `${BIRTHDAY.format(new Date(`${values.birthday}T00:00:00Z`))}${values.birthdayPublic ? ", on the calendar" : ", hidden"}` : ""}
+						/>
+					</dl>
+					<Button type="button" variant="outline" size="sm" className="min-h-11 w-fit sm:min-h-9" onClick={() => setEditing(true)}>
+						<Pencil />
+						Edit details
+					</Button>
+				</div>
+			)}
 
 			{state && !state.ok ? (
 				<p role="alert" className="text-sm text-destructive">
@@ -93,32 +100,20 @@ export function EditProfileForm({ values }: { values: ProfileFormValues }) {
 	);
 }
 
-function Field({
-	label,
-	name,
-	defaultValue,
-	editing,
-	type = "text",
-}: {
-	label: string;
-	name: string;
-	defaultValue: string;
-	editing: boolean;
-	type?: string;
-}) {
+function Field({ label, name, defaultValue, type = "text" }: { label: string; name: string; defaultValue: string; type?: string }) {
 	return (
 		<label className="grid gap-2 text-sm font-medium">
 			<span className="text-muted-foreground">{label}</span>
-			<Input
-				defaultValue={defaultValue}
-				name={name}
-				type={type}
-				placeholder={editing ? undefined : "—"}
-				className={cn(
-					!editing &&
-						"disabled:cursor-default disabled:border-transparent disabled:bg-muted/50 disabled:text-foreground disabled:opacity-100",
-				)}
-			/>
+			<Input defaultValue={defaultValue} name={name} type={type} />
 		</label>
+	);
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+	return (
+		<div className="min-w-0">
+			<dt className="text-sm text-muted-foreground">{label}</dt>
+			<dd className={value ? "mt-0.5 [overflow-wrap:anywhere]" : "mt-0.5 text-muted-foreground"}>{value || "Not set"}</dd>
+		</div>
 	);
 }

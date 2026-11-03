@@ -6,7 +6,11 @@ import {
 	auditLogs,
 	crsEvents,
 	eventTypeRules,
+	galleryFolders,
+	galleryItems,
+	importantLinks,
 	libraryItems,
+	linkCategories,
 	members,
 	navPins,
 	pointTypes,
@@ -28,7 +32,8 @@ export type AuditCategory =
 	| "member"
 	| "announcement"
 	| "library"
-	| "email";
+	| "email"
+	| "gallery";
 
 export type AuditRecordInput = {
 	action: string;
@@ -164,6 +169,24 @@ export function createAuditRepository(db: Db): AuditRepository {
 									.where(inArray(announcements.id, targetIds)),
 							);
 							break;
+						case "gallery_item":
+							rememberLabels(
+								targetType,
+								await db
+									.select({ id: galleryItems.id, label: galleryItems.originalName })
+									.from(galleryItems)
+									.where(inArray(galleryItems.id, targetIds)),
+							);
+							break;
+						case "gallery_folder":
+							rememberLabels(
+								targetType,
+								await db
+									.select({ id: galleryFolders.id, label: galleryFolders.name })
+									.from(galleryFolders)
+									.where(inArray(galleryFolders.id, targetIds)),
+							);
+							break;
 						case "library_item":
 							rememberLabels(
 								targetType,
@@ -192,12 +215,26 @@ export function createAuditRepository(db: Db): AuditRepository {
 							);
 							break;
 						case "nav_pin":
+							// Older pin audit entries may refer to the copy made by migration 0015.
+							rememberLabels(targetType, await db.select({ id: importantLinks.id, label: importantLinks.title }).from(importantLinks).where(inArray(importantLinks.id, targetIds)));
+							rememberLabels(targetType, await db.select({ id: navPins.id, label: navPins.label }).from(navPins).where(inArray(navPins.id, targetIds)));
+							break;
+						case "important_link":
 							rememberLabels(
 								targetType,
 								await db
-									.select({ id: navPins.id, label: navPins.label })
-									.from(navPins)
-									.where(inArray(navPins.id, targetIds)),
+									.select({ id: importantLinks.id, label: importantLinks.title })
+									.from(importantLinks)
+									.where(inArray(importantLinks.id, targetIds)),
+							);
+							break;
+						case "link_category":
+							rememberLabels(
+								targetType,
+								await db
+									.select({ id: linkCategories.id, label: linkCategories.name })
+									.from(linkCategories)
+									.where(inArray(linkCategories.id, targetIds)),
 							);
 							break;
 						case "quick_link":

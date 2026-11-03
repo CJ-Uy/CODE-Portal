@@ -56,7 +56,7 @@ export function DraftForm({ surveyId, title, questions, onDirtyChange }: DraftFo
 			onSubmit={onSubmit}
 			onInput={markEdited}
 			onClick={(event) => {
-				if ((event.target as HTMLElement).closest("button")) markEdited();
+				if ((event.target as HTMLElement).closest("button:not([data-view-only])")) markEdited();
 			}}
 			className="grid min-w-0 gap-6"
 		>
@@ -69,9 +69,12 @@ export function DraftForm({ surveyId, title, questions, onDirtyChange }: DraftFo
 			</section>
 
 			<section aria-labelledby="draft-questions" className="grid min-w-0 gap-3">
-				<h2 id="draft-questions" className="text-xl font-semibold text-primary">
-					Questions
-				</h2>
+				<div className="grid min-w-0 gap-1">
+					<h2 id="draft-questions" className="text-xl font-semibold text-primary">
+						1. Check the questions
+					</h2>
+					<p className="min-w-0 text-sm text-muted-foreground">Open a question to edit it. Save before you send.</p>
+				</div>
 				<QuestionEditor name="questions" initial={questions} />
 			</section>
 

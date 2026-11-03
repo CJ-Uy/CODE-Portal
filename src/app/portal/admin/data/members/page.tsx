@@ -1,3 +1,4 @@
+import Form from "next/form";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { notFound } from "next/navigation";
@@ -52,7 +53,7 @@ export default async function MembersAdminPage({ searchParams }: { searchParams:
 
 			<div className="flex flex-wrap items-end gap-3">
 				{selectedTerm ? <TermSelector terms={pickers.terms} selectedTermId={selectedTerm.id} hidden={{ q: params.q }} /> : null}
-				<form className="flex flex-wrap items-end gap-2" method="get">
+				<Form action="" className="flex flex-wrap items-end gap-2">
 					<input type="hidden" name="termId" value={selectedTerm?.id ?? ""} />
 					<label className="grid min-w-56 gap-1 text-sm font-medium">
 						Search
@@ -63,7 +64,7 @@ export default async function MembersAdminPage({ searchParams }: { searchParams:
 						Find
 					</Button>
 					{params.q ? <Button asChild variant="ghost"><Link href={`/portal/admin/data/members?termId=${selectedTerm?.id ?? ""}`}>Clear</Link></Button> : null}
-				</form>
+				</Form>
 			</div>
 
 			<section className="grid gap-3">

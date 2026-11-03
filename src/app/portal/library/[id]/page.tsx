@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { signInPath } from "@/server/auth/sign-in";
-import { ArrowLeft, ExternalLink, FileText, Lock, Pencil } from "lucide-react";
+import { ExternalLink, FileText, Lock, Pencil } from "lucide-react";
 import { getRepositories } from "@/db";
 import { LINK_URL, type LibraryCard, type LibraryCommentView, type LibraryItemView } from "@/db/repositories/library";
 import { DownloadLink } from "@/components/library/download-link";
 import { LibraryItemCard } from "@/components/library/library-card";
 import { LibraryBlocks } from "@/components/library/library-blocks";
+import { BackToLibrary } from "@/components/library/back-to-library";
+import { CopyLinkButton } from "@/components/library/copy-link-button";
+import { LibraryCrumbs } from "@/components/library/library-header";
 import { ReadingTracker } from "@/components/library/reading-tracker";
 import { ReportButton } from "@/components/library/report-button";
 import { SavePicker } from "@/components/library/save-picker";
@@ -63,6 +66,15 @@ export default async function LibraryItemPage({ params }: { params: Promise<{ id
 	const { id } = await params;
 
 	const repositories = await getRepositories();
+	// The extras may fail without taking the item down with them. Those that need only the id start
+	// with the item read; on a hidden or missing item they are simply thrown away.
+	const extras = Promise.all([
+		repositories.library.listComments(actor, id).catch((): LibraryCommentView[] => []),
+		repositories.libraryActivity.statsFor([id]).then((all) => all.get(id) ?? null).catch(() => null),
+		repositories.libraryLists.myLists(actor).catch(() => ({ owned: [], editable: [] })),
+		repositories.libraryLists.savedIn(actor, id).catch((): string[] => []),
+		loadRelated(actor, repositories, id).catch((): LibraryCard[] => []),
+	]);
 	// A hidden item and a missing one look the same: nothing here says which it was.
 	const item = await repositories.library.getItem(actor, id).catch(() => null);
 	if (!item) notFound();
@@ -72,17 +84,11 @@ export default async function LibraryItemPage({ params }: { params: Promise<{ id
 	const isOwner = item.createdBy === actor.memberId;
 	const live = item.status === "published";
 
-	// The extras may fail without taking the item down with them.
-	const [comments, stats, lists, savedIn, related, embeds] = await Promise.all([
-		repositories.library.listComments(actor, id).catch((): LibraryCommentView[] => []),
-		live ? repositories.libraryActivity.statsFor([id]).then((all) => all.get(id) ?? null).catch(() => null) : Promise.resolve(null),
-		repositories.libraryLists.myLists(actor).catch(() => ({ owned: [], editable: [] })),
-		repositories.libraryLists.savedIn(actor, id).catch((): string[] => []),
-		loadRelated(actor, repositories, id),
-		loadEmbeds(actor, repositories, item),
-	]);
+	const [[comments, liveStats, lists, savedIn, related], embeds] = await Promise.all([extras, loadEmbeds(actor, repositories, item)]);
+	const stats = live ? liveStats : null;
 
 	const topLevel = comments.filter((comment) => !comment.parentId);
+	const visibleComments = comments.filter((comment) => !comment.hidden).length;
 	const repliesByParent = new Map<string, LibraryCommentView[]>();
 	for (const comment of comments) {
 		if (comment.parentId) repliesByParent.set(comment.parentId, [...(repliesByParent.get(comment.parentId) ?? []), comment]);
@@ -90,36 +96,55 @@ export default async function LibraryItemPage({ params }: { params: Promise<{ id
 
 	const file = item.format === "file" && item.fileKey ? { key: item.fileKey, name: item.fileName } : null;
 	const preview = file ? filePreview(file) : null;
-	const facts = [item.year ? String(item.year) : null, item.subtype, item.formatDetail, item.engagementType].filter(Boolean) as string[];
+	// Labelled where a bare value would not say what it is ("SLE", "C-Team", or a kind of document called "Other").
+	const facts = [
+		item.year ? String(item.year) : null,
+		item.subtype ? `Kind: ${item.subtype}` : null,
+		item.formatDetail ? `Format: ${item.formatDetail}` : null,
+		item.engagementType ? `Engagement: ${item.engagementType}` : null,
+	].filter((fact): fact is string => fact !== null);
 
 	return (
 		<div className="mx-auto grid min-w-0 max-w-4xl gap-6">
 			{live ? <ReadingTracker key={item.id} itemId={item.id} /> : null}
 
-			<Link href="/portal/library" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-				<ArrowLeft className="size-4" aria-hidden />
-				Back to library
-			</Link>
+			<LibraryCrumbs trail={[{ label: item.title }]} />
 
 			<StatusNote item={item} />
 
 			<header className="grid min-w-0 gap-3">
-				<div className="flex flex-wrap items-center gap-2">
-					<Badge variant="secondary">{KIND_LABELS[item.kind]}</Badge>
-					<Badge variant="outline">{SOURCE_LABELS[item.source]}</Badge>
-					{item.publicReadiness ? <Badge variant="info">{READINESS_LABELS[item.publicReadiness]}</Badge> : null}
-					{item.confidentiality === "confidential" ? (
-						<Badge variant="warn" className="gap-1">
-							<Lock className="size-3" aria-hidden />
-							Confidential
-						</Badge>
-					) : null}
-					{item.format === "page" ? <span className="text-xs text-muted-foreground">{item.readMinutes} min read</span> : null}
-				</div>
-
 				<h1 className="min-w-0 font-heading text-3xl leading-tight [overflow-wrap:anywhere]">{item.title}</h1>
+				{/* What it is, in one quiet line. The type is a way to more of the same kind. */}
+				<p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+					<Link href={`/portal/library?type=${item.kind}`} className="font-medium text-foreground underline-offset-4 hover:underline">
+						{KIND_LABELS[item.kind]}
+					</Link>
+					<span aria-hidden>·</span>
+					<span>{SOURCE_LABELS[item.source]}</span>
+					{item.format === "page" ? (
+						<>
+							<span aria-hidden>·</span>
+							<span>{item.readMinutes} min read</span>
+						</>
+					) : null}
+					{item.confidentiality === "confidential" ? (
+						<>
+							<span aria-hidden>·</span>
+							<span className="inline-flex items-center gap-1 font-medium text-foreground">
+								<Lock className="size-3.5" aria-hidden />
+								Confidential
+							</span>
+						</>
+					) : null}
+					{item.publicReadiness ? (
+						<>
+							<span aria-hidden>·</span>
+							<span>{READINESS_LABELS[item.publicReadiness]}</span>
+						</>
+					) : null}
+				</p>
 				{item.dek.trim() ? (
-					<div className="grid min-w-0 gap-2 text-lg text-muted-foreground">
+					<div className="grid min-w-0 max-w-[65ch] gap-2 text-lg text-muted-foreground">
 						{paragraphs(item.dek).map((part, index) => (
 							<p key={index} className="min-w-0 whitespace-pre-line [overflow-wrap:anywhere]">
 								{part}
@@ -140,12 +165,16 @@ export default async function LibraryItemPage({ params }: { params: Promise<{ id
 				) : null}
 				{facts.length > 0 ? <p className="min-w-0 [overflow-wrap:anywhere] text-sm text-muted-foreground">{facts.join(" · ")}</p> : null}
 				{item.tags.length > 0 ? (
-					<ul className="flex flex-wrap gap-2" aria-label="Tags">
+					// Each tag opens the library filtered to it, so a topic is one tap from everything else on it.
+					<ul className="flex flex-wrap gap-1.5" aria-label="Tags: each opens everything with that tag">
 						{item.tags.map((tag) => (
 							<li key={tag.id} className="min-w-0">
-								<Badge variant="outline" className="max-w-full [overflow-wrap:anywhere]">
+								<Link
+									href={`/portal/library?tag=${encodeURIComponent(tag.id)}`}
+									className="inline-flex min-h-8 max-w-full items-center rounded-full bg-secondary px-3 text-xs font-medium text-secondary-foreground [overflow-wrap:anywhere] transition-colors hover:bg-secondary/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+								>
 									{tag.name}
-								</Badge>
+								</Link>
 							</li>
 						))}
 					</ul>
@@ -156,7 +185,8 @@ export default async function LibraryItemPage({ params }: { params: Promise<{ id
 					</p>
 				) : null}
 
-				<div className="flex flex-wrap items-center gap-2 pt-1">
+				{/* The things a reader does here. Reporting and flagging are rare, so they wait at the foot of the page. */}
+				<div className="flex flex-wrap items-start gap-2 pt-1">
 					<SavePicker itemId={item.id} lists={[...lists.owned, ...lists.editable]} savedIn={savedIn} />
 					{file && preview === "pdf" ? <DownloadLink itemId={item.id} href={libraryFileHref(file, { download: true })} /> : null}
 					{item.format === "link" && item.url && LINK_URL.test(item.url) ? (
@@ -167,7 +197,7 @@ export default async function LibraryItemPage({ params }: { params: Promise<{ id
 							</a>
 						</Button>
 					) : null}
-					{isOwner ? null : <ReportButton itemId={item.id} />}
+					{live ? <CopyLinkButton path={`/portal/library/${item.id}`} /> : null}
 					{item.canEdit ? (
 						<Button asChild variant="ghost">
 							<Link href={`/portal/library/${item.id}/edit`}>
@@ -176,7 +206,6 @@ export default async function LibraryItemPage({ params }: { params: Promise<{ id
 							</Link>
 						</Button>
 					) : null}
-					{item.canEdit && live ? <FlagClientDataButton itemId={item.id} /> : null}
 				</div>
 
 				{stats ? <p className="min-w-0 text-sm text-muted-foreground">{statsLine(stats).join(" · ")}</p> : null}
@@ -200,35 +229,7 @@ export default async function LibraryItemPage({ params }: { params: Promise<{ id
 				/>
 			) : null}
 
-			<section aria-labelledby="discussion-title" className="grid min-w-0 gap-4">
-				<h2 id="discussion-title" className="font-heading text-xl">
-					Discussion ({comments.filter((comment) => !comment.hidden).length})
-				</h2>
-				<div className="rounded-xl border border-border p-4">
-					<CommentForm itemId={item.id} label="Comment" placeholder="Add a comment" />
-				</div>
-				<div className="grid gap-3">
-					{topLevel.map((comment) => (
-						<div key={comment.id} className="grid gap-2">
-							<CommentRow comment={comment} itemId={item.id} canModerate={canModerate} />
-							{(repliesByParent.get(comment.id) ?? []).map((reply) => (
-								<div key={reply.id} className="ml-4 min-w-0 sm:ml-6">
-									<CommentRow comment={reply} itemId={item.id} canModerate={canModerate} />
-								</div>
-							))}
-							<details className="ml-4 min-w-0 text-sm sm:ml-6">
-								<summary className="w-fit cursor-pointer rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-									Reply
-								</summary>
-								<div className="mt-2">
-									<CommentForm itemId={item.id} parentId={comment.id} label="Reply" placeholder="Write a reply" />
-								</div>
-							</details>
-						</div>
-					))}
-				</div>
-			</section>
-
+			{/* What to read next comes before the discussion: most readers finish here and look for the next thing. */}
 			{related.length > 0 ? (
 				<section aria-labelledby="related-title" className="grid min-w-0 gap-3">
 					<h2 id="related-title" className="font-heading text-xl">
@@ -243,6 +244,47 @@ export default async function LibraryItemPage({ params }: { params: Promise<{ id
 					</ul>
 				</section>
 			) : null}
+
+			<section aria-labelledby="discussion-title" className="grid min-w-0 gap-4">
+				<div className="grid gap-1">
+					<h2 id="discussion-title" className="font-heading text-xl">
+						Discussion{visibleComments > 0 ? ` (${visibleComments})` : ""}
+					</h2>
+					{visibleComments === 0 ? <p className="text-sm text-muted-foreground">No comments yet. Ask a question, or say how you used it.</p> : null}
+				</div>
+				<div className="grid gap-3">
+					{topLevel.map((comment) => (
+						<div key={comment.id} className="grid gap-2">
+							<CommentRow comment={comment} itemId={item.id} canModerate={canModerate} />
+							{(repliesByParent.get(comment.id) ?? []).map((reply) => (
+								<div key={reply.id} className="ml-4 min-w-0 sm:ml-6">
+									<CommentRow comment={reply} itemId={item.id} canModerate={canModerate} />
+								</div>
+							))}
+							<details className="ml-4 min-w-0 text-sm sm:ml-6">
+								<summary className="flex min-h-11 w-fit cursor-pointer items-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+									Reply
+								</summary>
+								<div className="mt-2">
+									<CommentForm itemId={item.id} parentId={comment.id} label="Reply" placeholder="Write a reply" />
+								</div>
+							</details>
+						</div>
+					))}
+				</div>
+				<div className="rounded-xl border border-border bg-card p-4">
+					<CommentForm itemId={item.id} label="Comment" placeholder="Add a comment" />
+				</div>
+			</section>
+
+			{/* The foot of a long page: the way back without scrolling up, and the rare actions. */}
+			<footer className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border pt-4 text-sm">
+				<BackToLibrary className="inline-flex min-h-11 items-center gap-1.5 rounded-md font-medium text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" label="Back to the library" />
+				<div className="flex flex-wrap items-center gap-1 text-muted-foreground">
+					{item.canEdit && live ? <FlagClientDataButton itemId={item.id} /> : null}
+					{isOwner ? null : <ReportButton itemId={item.id} />}
+				</div>
+			</footer>
 		</div>
 	);
 }

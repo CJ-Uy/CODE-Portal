@@ -88,16 +88,14 @@ describe("point types repository", () => {
 		})).rejects.toThrow();
 	});
 
-	it("refuses to retire the retention point type", async () => {
+	it("refuses to retire a retention part but lets the old Retention type retire", async () => {
+		await env.DB.prepare("INSERT INTO point_types (id, key, label, retention_period, active, position) VALUES ('pt_gma', 'gma', 'GMA', 'semester', 1, 5)").run();
 		await expect(
-			repo.upsertType(retentionAdmin, {
-				id: RETENTION_POINT_TYPE_ID,
-				key: "retention",
-				label: "Retention",
-				active: false,
-				position: 0,
-			}),
-		).rejects.toThrow("The Retention point type cannot be retired.");
+			repo.upsertType(retentionAdmin, { id: "pt_gma", key: "gma", label: "GMA", active: false, position: 5 }),
+		).rejects.toThrow("Retention parts cannot be retired.");
+		await expect(
+			repo.upsertType(retentionAdmin, { id: RETENTION_POINT_TYPE_ID, key: "retention", label: "Retention", active: false, position: 0 }),
+		).resolves.toMatchObject({ active: false });
 	});
 
 	it("allows relabelling and reordering the retention point type", async () => {

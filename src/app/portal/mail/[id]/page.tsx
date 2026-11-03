@@ -27,7 +27,7 @@ export default async function MailReaderPage({ params }: { params: Promise<{ id:
 					{view.senderName ?? "CODE"} · {view.sentAt ? DATE.format(view.sentAt) : ""}
 				</p>
 			</header>
-			<EmailPreview bodyHtml={view.bodyHtml} />
+			<EmailPreview email={view} />
 			<p className="text-sm text-muted-foreground">
 				Sent to you because: {view.categoryName}.{" "}
 				<Link href="/portal/mail/preferences" className="text-accent underline-offset-2 hover:underline">

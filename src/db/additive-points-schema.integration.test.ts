@@ -17,8 +17,8 @@ describe("additive points schema on D1", () => {
 		await env.DB.prepare("INSERT INTO members (id, email, name) VALUES (?, ?, ?)")
 			.bind("mem_points", "points@example.com", "Points")
 			.run();
-		await env.DB.prepare("INSERT INTO terms (id, name, retained_at, probation_below, starts_at, ends_at) VALUES (?, ?, ?, ?, ?, ?)")
-			.bind("term_points", "Points term", 20, 10, 0, 1)
+		await env.DB.prepare("INSERT INTO terms (id, name, starts_at, ends_at) VALUES (?, ?, ?, ?)")
+			.bind("term_points", "Points term", 0, 1)
 			.run();
 		await env.DB.prepare("INSERT INTO crs_events (id, title, type, status, place, starts_at, description, created_by, checkin_secret) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
 			.bind("evt_points", "Points event", "official", "approved", "Room", 0, "Schema test", "mem_points", "secret")

@@ -22,7 +22,9 @@ import { canViewFeedbackArchive } from "@/server/feedback/archive-access";
 import { buildAwardEditorRows } from "./award-editor-input";
 import { EventManagePanel, type SignupResponseRow } from "./event-manage-panel";
 import { EventSignupPanel } from "./event-signup-panel";
+import { FeedbackShareNote } from "@/components/feedback-share-note";
 import { FeedbackCard } from "./feedback-card";
+import { EventPhotos } from "@/components/gallery/event-photos";
 import { OrganizerFeedback } from "./organizer-feedback";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +41,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 		loadEventTypes(() => repositories.eventTypeRules.list()),
 	]);
 	if (!event) notFound();
+	const feedbackShare = await repositories.retention.eventFeedbackShare(actor, eventId).catch(() => null);
 	const isPast = inclusiveEndDate(event.startsAt, event.endsAt) < toIsoDate(new Date());
 
 	// Management view keys off the viewer-scoped capability flags on the event record.
@@ -48,6 +51,10 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 		: false;
 	const canViewSignupResponses = event.rsvpResponsesPublic || canManageSignupResponses;
 	const surveysOn = isFeatureEnabled("surveys");
+	// Started now, awaited below, so the photo row adds no round trip to the page.
+	const photosLoad = isFeatureEnabled("gallery") ? repositories.gallery.eventItems(actor, eventId).catch(() => []) : Promise.resolve([]);
+	// An event that has started always has an album to add photos to; the gallery makes it on first ask.
+	const albumLoad = isFeatureEnabled("gallery") && new Date(event.startsAt).getTime() <= new Date().getTime() ? repositories.gallery.eventAlbum(actor, eventId).catch(() => null) : Promise.resolve(null);
 	// The event's owner and staff admins; the repository checks this again for every read below.
 	const isOrganizer = managed ? managed.myRole === "owner" || managed.myRole === "admin" : false;
 	const [pointTypeLoad, staff, attendance, invites, signups, terms, feedback, organizerFeedback, debrief] = await Promise.all([
@@ -98,7 +105,13 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 			: [...allowedTypesForActor, ...rows.filter((row) => row.type === managed.type)]
 		: [];
 	// Points attach to a term; resolve the active one server-side, same as markPresentAction.
+	const [photos, album] = await Promise.all([photosLoad, albumLoad]);
 	const currentTerm = terms.find((t) => t.isCurrent);
+	// A debrief reviews what happened, so before the event it only shows once CRS has made a form for it.
+	const organizerPanel =
+		isOrganizer && surveysOn && (isPast || (organizerFeedback !== null && organizerFeedback.state !== "none")) ? (
+			<OrganizerFeedback eventId={event.id} feedback={organizerFeedback} debrief={debrief?.ok ? debrief.view : null} />
+		) : null;
 
 	// Share + calendar handoff. Built server-side so the Google URL and .ics agree on the same
 	// inclusive end date; a null public_code (row written by an older Worker) just hides the bar.
@@ -145,7 +158,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 							<Badge variant="secondary">Informational</Badge>
 						) : (
 							<Badge variant={event.iAttended ? "default" : "secondary"}>
-								{event.iAttended ? "Attended" : event.myRsvp === "going" ? "Going" : "Not going"}
+								{event.iAttended ? "Attended" : isPast ? "Didn't attend" : event.myRsvp === "going" ? "Going" : "Not going"}
 							</Badge>
 						)}
 					</div>
@@ -178,15 +191,22 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 					</div>
 					{awardLoad.ok ? <AwardChips awards={awardLoad.rows} /> : <p className="text-sm text-muted-foreground">Points unavailable</p>}
 				</div>
+				{awardLoad.ok && awardLoad.rows.some((award) => award.pointTypeActive) ? <FeedbackShareNote share={feedbackShare} on="event" /> : null}
 			</header>
 
 			{feedback && (feedback.state === "open" || feedback.state === "answered") ? (
-				<FeedbackCard surveyId={feedback.surveyId} state={feedback.state} />
+				<FeedbackCard surveyId={feedback.surveyId} state={feedback.state} closesAt={feedback.closesAt} />
 			) : null}
 
+			<EventPhotos eventId={event.id} items={photos} albumId={album?.id ?? null} />
+			{/* After the event, how it went is what organizers come back for, so it leads; before, it waits at the end. */}
+			{isPast ? organizerPanel : null}
+
 			{/* An informational event has no signup and no check-in, so the whole interaction column
-			    goes away rather than rendering controls that the repository would reject. */}
-			{event.readOnly ? null : (
+			    goes away rather than rendering controls that the repository would reject. An ended event
+			    drops it too: signing up means nothing then, the header badge already says whether you
+			    attended, and the check-in code stays one tap away in the plus menu. */}
+			{event.readOnly || isPast ? null : (
 			<div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
 				<EventSignupPanel
 					eventId={event.id}
@@ -220,7 +240,8 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 
 			{/* Rows collected before the event was made informational stay visible to organizers —
 			    flipping the flag hides the affordances, it does not delete history. */}
-			{event.readOnly && !canViewSignupResponses ? null : (
+			{/* An ended event nobody signed up for has nothing to show here. */}
+			{(event.readOnly && !canViewSignupResponses) || (isPast && event.attendingCount === 0) ? null : (
 				<SignupResponses
 					count={event.attendingCount}
 					form={event.rsvpForm}
@@ -265,9 +286,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
 				/>
 			) : null}
 
-			{isOrganizer && surveysOn ? (
-				<OrganizerFeedback eventId={event.id} feedback={organizerFeedback} debrief={debrief?.ok ? debrief.view : null} />
-			) : null}
+			{isPast ? null : organizerPanel}
 		</div>
 	);
 }

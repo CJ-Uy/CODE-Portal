@@ -1,5 +1,42 @@
 # Shared Dev Deploy Note
 
+## Gallery Saved library and private photo lists
+
+`0019_gallery_library.sql` adds `gallery_saves`, `gallery_lists`, and
+`gallery_list_items`. The tables are additive. Existing photos, albums and
+hearts stay intact. Apply the migration before deploying the gallery code,
+which reads bookmark state on member gallery pages. No reset or seed is needed.
+
+Members can share an album link, browse their own liked and saved photos, and
+organize saved photos into private lists. Lists are restricted to their owner,
+including for admins. Removing a bookmark removes that member's list entries;
+deleting a list keeps its photos in Saved. Album links retain member access.
+
+After approval, migrate and redeploy the beta Worker from the current
+`wrangler.beta.jsonc`: `code-portal-beta`, account
+`83376df5e0bae067afa197b07430168d`, D1 `code-nest-beta-db`
+(`ffe974a7-4b89-4ac7-b07e-ad62f4530ca2`). Check the bindings again before running.
+The shared repository adapter continues to report the gallery as unavailable.
+
+```powershell
+pnpm exec wrangler d1 migrations apply DB --config wrangler.beta.jsonc --remote
+pnpm build
+pnpm exec wrangler deploy --no-x-autoconfig --config wrangler.beta.jsonc
+```
+
+## Independent pinned navigation links
+
+The sidebar and mobile menu now read optional shortcuts from the existing
+`nav_pins` table. Admins manage them under System > Pinned Nav Links. Important
+links remain a separate categorized directory; its old sidebar flag is ignored.
+Beta's pin table is empty, so the sample directory links no longer appear as pins.
+
+No schema migration, reset, seed, or binding change is needed. Schema changes in
+this release are comments only. Push to beta to trigger the existing Cloudflare
+build for `code-portal-beta` in account `83376df5e0bae067afa197b07430168d`.
+Shared-mode adapters continue to omit navigation editing, as they do for the
+Important links editor. Existing directory data stays intact.
+
 ## Retention category views and activity history
 
 Member history now returns the event title, category key, label, and colour from

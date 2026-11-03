@@ -5,6 +5,8 @@ export type EmailBlock =
 	| { id: string; type: "image"; props: { src: string; alt: string; href?: string } }
 	| { id: string; type: "divider"; props: Record<string, never> }
 	| { id: string; type: "spacer"; props: { size: "sm" | "md" | "lg" } }
+	/** Author HTML and CSS. Only ever the sole block: the email's whole body. Sanitized on every render. */
+	| { id: string; type: "html"; props: { html: string } }
 	| {
 			id: string;
 			type: "event";

@@ -18,7 +18,7 @@ describe("feedbackEmailContent", () => {
 		expect(c.subject).toBe("How was Hackfest?");
 		expect(c.preheader).toBe("Your feedback helps the next one go better.");
 		expect(c.blocks.some((b) => b.type === "button" && b.props.href === "https://x/portal/surveys/s1")).toBe(true);
-		expect(c.blocks.find((b) => b.type === "button")).toMatchObject({ props: { label: "Share feedback" } });
+		expect(c.blocks.find((b) => b.type === "button")).toMatchObject({ props: { label: "Give feedback" } });
 		expect(texts(c.blocks)).toEqual([
 			"Hi {{first_name}},",
 			"Thanks for coming to Hackfest. We'd like your feedback. It takes about 6 min.",
@@ -41,7 +41,7 @@ describe("feedbackEmailContent", () => {
 		expect(JSON.stringify(c)).not.toMatch(/last day/i);
 		expect(JSON.stringify(c.blocks)).toContain("If you've already answered, thank you");
 		expect(texts(c.blocks)[1]).toBe(`If you've already answered, thank you, and you can ignore this. If not, it takes about 6 min, and the form closes ${WHEN}.`);
-		expect(c.blocks.some((b) => b.type === "button" && b.props.label === "Share feedback")).toBe(true);
+		expect(c.blocks.some((b) => b.type === "button" && b.props.label === "Give feedback")).toBe(true);
 	});
 
 	it("produces content the email schema accepts", () => {

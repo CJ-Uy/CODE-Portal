@@ -175,8 +175,9 @@ test("an admin shares a list with a member editor, who adds a note and a comment
 		await member.waitForURL(/\/portal\/library\/lists\/[^/]+$/);
 		await expect(member.getByRole("link", { name: title })).toBeVisible();
 
+		await member.getByRole("button", { name: "Add a note" }).click();
 		await member.getByLabel("Note", { exact: true }).fill(note);
-		await member.getByRole("button", { name: "Save note" }).click();
+		await member.getByLabel("Note", { exact: true }).blur();
 		await expect(member.getByText("Saved", { exact: true })).toBeVisible();
 
 		await member.getByLabel("Add a comment").fill(comment);
@@ -210,11 +211,11 @@ test("a 120-character title with no spaces never scrolls the page sideways at 37
 
 	// The card that carries the title: on the home shelf, in search results, and in the member's own library.
 	await page.goto("/portal/library");
-	await expect(page.getByRole("link", { name: title })).toBeVisible();
+	await expect(page.getByLabel("Library items").getByRole("link", { name: title, exact: true })).toBeVisible();
 	expect(await scrollWidth()).toBeLessThanOrEqual(375);
 
 	await searchFor(page, title);
-	await expect(page.getByRole("link", { name: title })).toBeVisible();
+	await expect(page.getByLabel("Library items").getByRole("link", { name: title, exact: true })).toBeVisible();
 	expect(await scrollWidth()).toBeLessThanOrEqual(375);
 
 	await page.goto("/portal/library/mine");

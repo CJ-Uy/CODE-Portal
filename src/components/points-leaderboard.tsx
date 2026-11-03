@@ -5,7 +5,7 @@ import { EmptyState } from "@/components/portal/empty-state";
 import { MemberAvatar } from "@/components/portal/member-avatar";
 import type { LeaderboardRow } from "@/db/repositories/retention";
 import { formatPoints } from "@/lib/points";
-import { competitionRanks } from "@/lib/retention-stats";
+import { competitionRanks } from "@/lib/leaderboard";
 import { cn } from "@/lib/utils";
 
 function initialsFrom(name: string): string {
@@ -51,13 +51,11 @@ function PodiumSpot({
 	rank,
 	place,
 	isMe,
-	retained,
 }: {
 	row: LeaderboardRow;
 	rank: number;
 	place: 1 | 2 | 3;
 	isMe: boolean;
-	retained: boolean;
 }) {
 	const name = displayName(row);
 	return (
@@ -79,7 +77,6 @@ function PodiumSpot({
 				{isMe ? <span className="ml-1 text-xs text-accent">You</span> : null}
 			</p>
 			<p className="font-heading text-lg tabular-nums leading-none">{formatPoints(row.totalPoints)}</p>
-			{retained ? <p className="text-[11px] font-semibold text-accent">✓ Retained</p> : null}
 			<div
 				className={cn(
 					"grid w-full place-items-start justify-center rounded-t-lg pt-2 font-heading text-xl",
@@ -105,13 +102,10 @@ export function PointsLeaderboard({
 	rows,
 	meId,
 	pointTypeLabel,
-	retainedAt,
 }: {
 	rows: LeaderboardRow[];
 	meId: string;
 	pointTypeLabel: string;
-	/** Set only for the retention point type, where a cut-off line means something. */
-	retainedAt: number | null;
 }) {
 	if (rows.length === 0) {
 		return (
@@ -129,7 +123,6 @@ export function PointsLeaderboard({
 	const middle = Math.floor(sortedPoints.length / 2);
 	const median = sortedPoints.length % 2 ? sortedPoints[middle] : (sortedPoints[middle - 1] + sortedPoints[middle]) / 2;
 	const average = sortedPoints.reduce((sum, value) => sum + value, 0) / sortedPoints.length;
-	const retainedCount = retainedAt === null ? 0 : rows.filter((row) => row.totalPoints >= retainedAt).length;
 
 	let position: ReactNode;
 	if (myIndex === -1) {
@@ -169,11 +162,6 @@ export function PointsLeaderboard({
 							You&apos;re leading{behind ? ` by ${formatPoints(me.totalPoints - behind.totalPoints)}` : ""}. Keep it up.
 						</p>
 					)}
-					{retainedAt !== null && me.totalPoints < retainedAt ? (
-						<p className="text-muted-foreground">
-							{formatPoints(retainedAt - me.totalPoints)} more to join the retained zone.
-						</p>
-					) : null}
 				</div>
 			</div>
 		);
@@ -193,11 +181,7 @@ export function PointsLeaderboard({
 						<Stat label="Members ranked" value={String(rows.length)} />
 						<Stat label="Top score" value={formatPoints(rows[0].totalPoints)} />
 						<Stat label="Median" value={formatPoints(median)} />
-						{retainedAt !== null ? (
-							<Stat label={`Retained (≥${formatPoints(retainedAt)})`} value={String(retainedCount)} />
-						) : (
-							<Stat label="Average" value={formatPoints(average)} />
-						)}
+						<Stat label="Average" value={formatPoints(average)} />
 					</div>
 				</CardContent>
 			</Card>
@@ -211,7 +195,6 @@ export function PointsLeaderboard({
 							rank={ranks[index]}
 							place={(index + 1) as 1 | 2 | 3}
 							isMe={row.memberId === meId}
-							retained={retainedAt !== null && row.totalPoints >= retainedAt}
 						/>
 					))}
 				</CardContent>
@@ -225,17 +208,8 @@ export function PointsLeaderboard({
 								const index = offset + 3;
 								const name = displayName(row);
 								const isMe = row.memberId === meId;
-								const crossesCutoff =
-									retainedAt !== null && row.totalPoints < retainedAt && rows[index - 1].totalPoints >= retainedAt;
 								return (
 									<li key={row.memberId}>
-										{crossesCutoff ? (
-											<p className="flex items-center justify-center gap-2 bg-secondary/40 py-1.5 text-xs font-semibold text-accent">
-												<ArrowUp className="size-3.5" aria-hidden />
-												Retained zone · {formatPoints(retainedAt)}+ points
-												<ArrowUp className="size-3.5" aria-hidden />
-											</p>
-										) : null}
 										<div className={cn("flex min-w-0 items-center gap-3 px-4 py-3", isMe && "bg-secondary/50")}>
 											<span className="w-7 shrink-0 text-center font-heading text-lg tabular-nums text-muted-foreground">
 												{ranks[index]}

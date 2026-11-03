@@ -44,7 +44,7 @@ test("Home leads with approved upcoming events and retention after a long archiv
 	const retention = page.getByRole("heading", { name: "Retention path", exact: true });
 	await expect(retention).toBeVisible();
 	expect((await upcoming.boundingBox())!.y).toBeLessThan((await retention.boundingBox())!.y);
-	expect((await retention.boundingBox())!.y).toBeLessThan((await page.locator("main").getByText("Retention", { exact: true }).boundingBox())!.y);
+	await expect(page.locator("main")).toContainText(/of 12 requirements met/);
 	await expect(page.locator("main")).not.toContainText("Pending workspace event");
 	for (const width of [320, 390, 430, 1440]) {
 		await page.setViewportSize({ width, height: 900 });
@@ -60,7 +60,7 @@ test("Profile reveals the check-in QR by touch and keyboard at its high-DPI disp
 		await page.goto("/portal/profile");
 		const code = page.locator("main canvas[aria-label='Member attendance QR code']");
 		await expect(code).toBeHidden();
-		await page.getByText("Show check-in code", { exact: true }).tap();
+		await page.getByText("Show my check-in code", { exact: true }).tap();
 		await expect(code).toBeVisible();
 		await expect(code).toHaveAttribute("width", "660");
 		expect((await code.boundingBox())!.width).toBe(220);
@@ -81,14 +81,11 @@ test("Profile reveals the check-in QR by touch and keyboard at its high-DPI disp
 test("a full school-year term fits mobile in all retention views", async ({ page }) => {
 	await signInAs(page, "member");
 	await page.goto("/portal/retention");
-	await expect(page.getByRole("heading", { name: "Points by week" })).toBeVisible();
-	await expect(page.getByText("W46", { exact: true })).toBeAttached();
+	await expect(page.getByRole("heading", { name: "Retention requirements" })).toBeVisible();
+	await expect(page.getByRole("progressbar", { name: /retention points$/ })).toHaveCount(3);
 	for (const width of [320, 390, 430, 844, 1440]) {
 		await page.setViewportSize({ width, height: 900 });
-		for (const name of ["Progress", "Pie", "Bar race"]) {
-			await page.getByRole("button", { name, exact: true }).click();
-			expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-		}
+		expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 	}
 });
 

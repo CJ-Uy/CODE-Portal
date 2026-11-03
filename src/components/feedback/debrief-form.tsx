@@ -13,6 +13,14 @@ const MAX_LENGTH = 2000;
 
 const fold = (text: string) => text.replace(/\r\n?/g, "\n").trim();
 
+// One short example each, so an empty box shows the kind of answer that helps the next organizers.
+const EXAMPLES: Record<DebriefView["fields"][number]["name"], string> = {
+	intended: "e.g. Get first-years to practise one full case",
+	happened: "e.g. The talk ran long, so only one case fit",
+	why: "e.g. We started late waiting on the mic",
+	change: "e.g. Test the audio the day before",
+};
+
 /**
  * Drops each field that still holds the text it loaded with, so a save from a stale tab leaves other organizers' edits
  * alone. A field emptied on purpose differs from what it loaded, so it is still posted, as "", and clears.
@@ -56,7 +64,7 @@ export function DebriefForm({ eventId, fields, lastEdited }: { eventId: string }
 			{fields.map((field) => (
 				<label key={field.name} className="grid min-w-0 gap-2 text-sm font-medium">
 					<span className="min-w-0 [overflow-wrap:anywhere]">{field.label}</span>
-					<Textarea name={field.name} defaultValue={field.value} maxLength={MAX_LENGTH} rows={3} />
+					<Textarea name={field.name} defaultValue={field.value} maxLength={MAX_LENGTH} rows={3} placeholder={EXAMPLES[field.name]} />
 				</label>
 			))}
 			<div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">

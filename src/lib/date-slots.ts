@@ -106,3 +106,17 @@ export function utc8Parts(date: Date): { year: number; month: number } {
 	const shifted = new Date(date.getTime() + UTC8_OFFSET_MS);
 	return { year: shifted.getUTCFullYear(), month: shifted.getUTCMonth() + 1 };
 }
+
+/**
+ * A Manila calendar day said the way a member reads it: "Today", "Tomorrow" or "Yesterday" when close,
+ * otherwise a short weekday and date, with the year only when it is not this year.
+ */
+export function formatUtc8Day(date: Date, now = new Date()): string {
+	const day = toLocalDate(date);
+	const offset = Math.round((Date.parse(day) - Date.parse(toLocalDate(now))) / 86_400_000);
+	if (offset === 0) return "Today";
+	if (offset === 1) return "Tomorrow";
+	if (offset === -1) return "Yesterday";
+	const sameYear = day.slice(0, 4) === toLocalDate(now).slice(0, 4);
+	return new Intl.DateTimeFormat("en", { timeZone: "Asia/Manila", weekday: "short", month: "short", day: "numeric", year: sameYear ? undefined : "numeric" }).format(date);
+}

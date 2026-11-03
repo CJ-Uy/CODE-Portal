@@ -14,3 +14,7 @@ v1 posture, per master plan section 13:
 R2 incremental cache stays disabled in v1. There is no ISR or on-demand
 revalidation surface, so the default in-Worker cache is sufficient. Revisit if a
 later phase adds ISR.
+
+## Data caching
+
+No KV or Durable Object cache sits in front of D1. Read-mostly config (nav pins, quick links, point and event types, terms) always loads in parallel with per-member reads, so caching it would not remove a round trip. See `performance.md` for the measurements behind this.

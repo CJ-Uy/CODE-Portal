@@ -156,6 +156,28 @@ describe("survey results on D1", () => {
 		}
 	});
 
+	it("exports one row per response with names, in question order, and audits it", async () => {
+		await db.insert(schema.members).values({ id: "mem_named", email: "named@example.com", fullName: "Named Person", status: "active" });
+		await seedSurvey({ id: "srv_1", eventId: "evt_1", questions: [{ id: "q2", type: "scale" }, { id: "q1", type: "text" }] });
+		await respond("srv_1", "invited", { q1: "Loved it", q2: "5" }, "mem_named");
+		await respond("srv_1", "walk_in", { q2: "3" });
+
+		const sheet = await results.exportResponses(crs, "srv_1");
+
+		expect(sheet).toMatchObject({ title: "Survey srv_1", eventTitle: "Event evt_1", questions: [{ id: "q2" }, { id: "q1" }] });
+		expect(sheet.rows).toHaveLength(2);
+		expect(sheet.rows).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ name: "Named Person", email: "named@example.com", source: "invited", answers: { q1: "Loved it", q2: "5" } }),
+				expect.objectContaining({ name: null, email: null, source: "walk_in", answers: { q2: "3" } }),
+			]),
+		);
+		const [entry] = await db.select().from(schema.auditLogs).where(eq(schema.auditLogs.action, "survey:export"));
+		expect(entry).toMatchObject({ actorMemberId: "mem_crs", targetId: "srv_1" });
+		// Organizers never get names, so they never get the download either.
+		await expect(results.exportResponses(owner, "srv_1")).rejects.toThrow("Not authorized");
+	});
+
 	it("rejects a member without survey:configure", async () => {
 		await seedSurvey({ id: "srv_1", questions: [{ id: "q1", type: "text" }] });
 		await expect(results.getResults(owner, "srv_1", { filter: "all" }, NOW)).rejects.toThrow("Not authorized");

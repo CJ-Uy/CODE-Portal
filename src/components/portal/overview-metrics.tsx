@@ -1,4 +1,7 @@
-import type { LucideIcon } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, type LucideIcon } from "lucide-react";
+import { RetentionVerdict } from "@/components/retention-parts";
+import type { OverviewSummary } from "@/db/repositories/overview";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 
 export function MetricCard({
@@ -26,17 +29,17 @@ export function MetricCard({
 	);
 }
 
-export function RetentionProgress({ points, retainedAt }: { points: number; retainedAt: number | null }) {
-	const target = retainedAt ?? 0;
-	const pct = target > 0 ? Math.min(100, Math.round((points / target) * 100)) : 0;
+export function RetentionProgress({ retention }: { retention: OverviewSummary["retention"] }) {
+	if (!retention || retention.progress.required === 0) {
+		return <p className="text-xs text-muted-foreground">No school year is running, so there is nothing to track yet.</p>;
+	}
 	return (
-		<div className="space-y-2">
-			<div className="h-2 rounded-full bg-muted">
-				<div className="h-2 rounded-full bg-primary" style={{ width: `${pct}%` }} />
-			</div>
-			<p className="text-xs text-muted-foreground">
-				{target > 0 ? `${points} of ${target} points toward retained status.` : "No active term target set."}
-			</p>
+		<div className="grid gap-3">
+			<RetentionVerdict progress={retention.progress} compact />
+			<Link href="/portal/retention" className="inline-flex w-fit items-center gap-1 text-sm font-medium text-accent underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+				See what you still need
+				<ArrowRight className="size-4" aria-hidden />
+			</Link>
 		</div>
 	);
 }

@@ -1,3 +1,4 @@
+import Form from "next/form";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
@@ -46,7 +47,7 @@ export function TermSelector({
 	hidden?: Record<string, string | undefined>;
 }) {
 	return (
-		<form className="flex flex-wrap items-end gap-2" method="get">
+		<Form action="" className="flex flex-wrap items-end gap-2">
 			{Object.entries(hidden ?? {}).map(([key, value]) =>
 				value ? <input key={key} type="hidden" name={key} value={value} /> : null,
 			)}
@@ -63,7 +64,7 @@ export function TermSelector({
 			<Button type="submit" variant="secondary">
 				View
 			</Button>
-		</form>
+		</Form>
 	);
 }
 

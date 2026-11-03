@@ -168,7 +168,7 @@ describe("smartSearch", () => {
 });
 
 describe("searchLibrary: when smart search runs", () => {
-	const search = { q: "burnout", limit: 24, offset: 0 };
+	const search = { q: "burnout", limit: 24 };
 
 	it("smart search off by flag: no AI call, even with both bindings in the Worker env", async () => {
 		const run: string[] = [];
@@ -206,13 +206,15 @@ describe("searchLibrary: when smart search runs", () => {
 		expect(ai.calls.sort()).toEqual(["embed", "keywords"]);
 	});
 
-	it("pages over the smart ids, and falls back to plain search when smart search fails", async () => {
+	it("returns every smart result in one load, and falls back to plain search when smart search fails", async () => {
 		const ids = [];
 		for (let i = 0; i < 3; i++) ids.push(await insertItem({ title: `Note ${i}` }));
 		const vectorize = fakeVectorize(ids.map((id) => `${id}:0`));
-		const page2 = await searchLibrary(actors.other, { q: "unrelated words", limit: 2, offset: 2, smart: true }, { smart: { ai: fakeAi(), vectorize }, preference: true, repos });
-		expect(page2.total).toBe(3);
-		expect(page2.cards.map((card) => card.id)).toEqual([ids[2]]);
+		// The member's page size does not cut a smart list short, and there is never a next page to ask for.
+		const all = await searchLibrary(actors.other, { q: "unrelated words", limit: 2, smart: true }, { smart: { ai: fakeAi(), vectorize }, preference: true, repos });
+		expect(all.total).toBe(3);
+		expect(all.cards.map((card) => card.id)).toEqual(ids);
+		expect(all.nextCursor).toBeNull();
 
 		await insertItem({ title: "Burnout" });
 		const broken = fakeAi({ embed: async () => Promise.reject(new Error("down")) });

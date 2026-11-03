@@ -9,13 +9,15 @@ export type SurveyEventRole = "owner" | "admin" | "scanner";
 
 /** The owner is crs_events.created_by; everyone else is an event_staff row. */
 export async function eventRole(db: Db, eventId: string, memberId: string): Promise<SurveyEventRole | null> {
-	const [event] = await db.select({ createdBy: crsEvents.createdBy }).from(crsEvents).where(eq(crsEvents.id, eventId)).limit(1);
+	const [[event], [staff]] = await Promise.all([
+		db.select({ createdBy: crsEvents.createdBy }).from(crsEvents).where(eq(crsEvents.id, eventId)).limit(1),
+		db
+			.select({ role: eventStaff.role })
+			.from(eventStaff)
+			.where(and(eq(eventStaff.eventId, eventId), eq(eventStaff.memberId, memberId)))
+			.limit(1),
+	]);
 	if (event?.createdBy === memberId) return "owner";
-	const [staff] = await db
-		.select({ role: eventStaff.role })
-		.from(eventStaff)
-		.where(and(eq(eventStaff.eventId, eventId), eq(eventStaff.memberId, memberId)))
-		.limit(1);
 	return staff?.role ?? null;
 }
 
@@ -25,8 +27,10 @@ export function isOrganizerRole(role: SurveyEventRole | null): boolean {
 }
 
 export async function staffIds(db: Db, eventId: string): Promise<Set<string>> {
-	const [event] = await db.select({ createdBy: crsEvents.createdBy }).from(crsEvents).where(eq(crsEvents.id, eventId)).limit(1);
-	const staff = await db.select({ memberId: eventStaff.memberId }).from(eventStaff).where(eq(eventStaff.eventId, eventId));
+	const [[event], staff] = await Promise.all([
+		db.select({ createdBy: crsEvents.createdBy }).from(crsEvents).where(eq(crsEvents.id, eventId)).limit(1),
+		db.select({ memberId: eventStaff.memberId }).from(eventStaff).where(eq(eventStaff.eventId, eventId)),
+	]);
 	return new Set([...(event ? [event.createdBy] : []), ...staff.map((row) => row.memberId)]);
 }
 

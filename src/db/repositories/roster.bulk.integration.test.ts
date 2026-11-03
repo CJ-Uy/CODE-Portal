@@ -23,9 +23,9 @@ describe("roster.bulkAdd on D1", () => {
 		await env.DB.prepare("INSERT INTO members (id, email, name) VALUES (?,?,?)").bind("mem_admin", "admin@example.com", "Admin").run();
 		await env.DB.prepare("INSERT INTO members (id, email, name) VALUES (?,?,?)").bind("mem_a", "a@x.com", "A").run();
 		await env.DB.prepare(
-			"INSERT INTO terms (id, name, retained_at, probation_below, starts_at, ends_at) VALUES (?,?,?,?,?,?)",
+			"INSERT INTO terms (id, name, starts_at, ends_at) VALUES (?,?,?,?)",
 		)
-			.bind(TERM, "Bulk", 20, 10, 0, 9999999999999)
+			.bind(TERM, "Bulk", 0, 9999999999999)
 			.run();
 	});
 

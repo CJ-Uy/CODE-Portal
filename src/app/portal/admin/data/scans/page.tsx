@@ -1,3 +1,4 @@
+import Form from "next/form";
 import Link from "next/link";
 import { Filter } from "lucide-react";
 import { notFound } from "next/navigation";
@@ -76,7 +77,7 @@ export default async function ScansAdminPage({ searchParams }: { searchParams: P
 
 			{selectedTerm ? <TermSelector terms={pickers.terms} selectedTermId={selectedTerm.id} hidden={{ eventId: params.eventId, scannerId: params.scannerId, memberId: params.memberId, from: dateValue(params.from), to: dateValue(params.to) }} /> : null}
 
-			<form className="grid gap-3 rounded-lg border border-border p-3 sm:grid-cols-2 lg:grid-cols-6" method="get">
+			<Form action="" className="grid gap-3 rounded-lg border border-border p-3 sm:grid-cols-2 lg:grid-cols-6">
 				<input type="hidden" name="termId" value={selectedTerm?.id ?? ""} />
 				<label className="grid gap-1 text-sm font-medium">
 					Event
@@ -111,7 +112,7 @@ export default async function ScansAdminPage({ searchParams }: { searchParams: P
 					<Button type="submit" variant="secondary"><Filter className="size-4" />Filter</Button>
 					{hasFilters ? <Button asChild variant="ghost"><Link href={`/portal/admin/data/scans?termId=${selectedTerm?.id ?? ""}`}>Clear</Link></Button> : null}
 				</div>
-			</form>
+			</Form>
 			{invalidRange ? <p role="alert" className="text-sm text-destructive">End date must be on or after the start date. Change the dates and filter again.</p> : null}
 
 			<section className="grid gap-3">

@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { signInPath } from "@/server/auth/sign-in";
-import { ArrowLeft } from "lucide-react";
+import { getRepositories } from "@/db";
+import { LibraryHeader } from "@/components/library/library-header";
 import { Button } from "@/components/ui/button";
+import { formatHours } from "@/lib/library/activity";
 import { READINESS_LABELS } from "@/lib/library/taxonomy";
 import type { LibraryPublicReadiness } from "@/lib/library/taxonomy";
 import { getActor } from "@/server/auth/actor";
@@ -34,90 +36,117 @@ const WHY_NOT_BUSINESS: { title: string; body: string }[] = [
 	{ title: "Budgets are small.", body: "\"Hire a consultant\" or \"buy a tool\" isn't an answer when the budget is whatever the org raised this term." },
 ];
 
+// The library's four places in plain words, for anyone who opens it and wonders where things are.
+const WAYS_IN: { title: string; href: string; body: string }[] = [
+	{ title: "Browse", href: "/portal/library", body: "Search, or tap a type. The newest items sit at the top, and everything else follows from A to Z as you scroll. More filters has source, tags and smart search." },
+	{ title: "Lists", href: "/portal/library/lists", body: "Save anything to your Saved list, make your own lists, share a reading pack, and open the collections moderators put together." },
+	{ title: "My items", href: "/portal/library/mine", body: "Your drafts and everything you have published, with how each one is doing." },
+	{ title: "Add to the library", href: "/portal/library/new", body: "Upload a file, write a page or share a link. It stays a draft, seen only by you, until you publish it." },
+];
+
 export default async function LibraryAboutPage() {
 	if (!isFeatureEnabled("library")) notFound();
 	const actor = await getActor();
 	if (!actor) redirect(await signInPath());
+	// Moved here from the library home, where it competed with the list. Unavailable means the line is left out.
+	const seconds = await getRepositories()
+		.then((repositories) => repositories.libraryActivity.totalActiveSeconds())
+		.catch(() => null);
 
 	return (
-		<article className="mx-auto grid min-w-0 max-w-2xl gap-8">
-			<div className="grid gap-3">
-				<Link href="/portal/library" className="inline-flex min-h-10 w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-					<ArrowLeft className="size-4" aria-hidden />
-					Library
-				</Link>
-				<div>
-					<p className="text-xs font-semibold uppercase text-primary">About the library</p>
-					<h1 className="font-heading text-3xl">Toward a public library</h1>
+		<div className="mx-auto grid min-w-0 max-w-6xl gap-8">
+			<LibraryHeader current="about" />
+			<article className="grid min-w-0 max-w-2xl gap-8">
+				<section aria-labelledby="ways-title" className="grid gap-3">
+					<h2 id="ways-title" className="font-heading text-2xl">
+						How the library works
+					</h2>
+					<dl className="grid gap-4">
+						{WAYS_IN.map((way) => (
+							<div key={way.title} className="min-w-0">
+								<dt>
+									<Link href={way.href} className="font-medium text-accent underline-offset-4 hover:underline">
+										{way.title}
+									</Link>
+								</dt>
+								<dd className="leading-7 text-muted-foreground">{way.body}</dd>
+							</div>
+						))}
+					</dl>
+				</section>
+
+				<div className="grid gap-3">
+					<h2 className="font-heading text-2xl">Toward a public library</h2>
+					<p className="leading-7 text-muted-foreground">
+						CODE has spent years doing organization-development work with student organizations: working out what is stuck, then designing the modules and sessions that help. Most of what we learned sits in Intervention Design Forms (IDFs) and modules that one batch of CODErs wrote for one engagement. This library keeps that work where the next batch can find it.
+					</p>
 				</div>
-				<p className="leading-7 text-muted-foreground">
-					CODE has spent years doing organization-development work with student organizations: working out what is stuck, then designing the modules and sessions that help. Most of what we learned sits in Intervention Design Forms (IDFs) and modules that one batch of CODErs wrote for one engagement. This library keeps that work where the next batch can find it.
-				</p>
-			</div>
 
-			<section aria-labelledby="why-title" className="grid gap-3">
-				<h2 id="why-title" className="font-heading text-xl">
-					Why advice written for businesses often misses
-				</h2>
-				<p className="leading-7 text-muted-foreground">
-					Search for help running an organization and you will mostly find advice for companies. A lot of it is good, and a lot of it doesn&apos;t fit a youth org, because:
-				</p>
-				<ul className="grid gap-3">
-					{WHY_NOT_BUSINESS.map((point) => (
-						<li key={point.title} className="min-w-0 leading-7">
-							<span className="font-medium">{point.title}</span> <span className="text-muted-foreground">{point.body}</span>
-						</li>
-					))}
-				</ul>
-			</section>
+				<section aria-labelledby="why-title" className="grid gap-3">
+					<h3 id="why-title" className="font-heading text-xl">
+						Why advice written for businesses often misses
+					</h3>
+					<p className="leading-7 text-muted-foreground">
+						Search for help running an organization and you will mostly find advice for companies. A lot of it is good, and a lot of it doesn&apos;t fit a youth org, because:
+					</p>
+					<ul className="grid gap-3">
+						{WHY_NOT_BUSINESS.map((point) => (
+							<li key={point.title} className="min-w-0 leading-7">
+								<span className="font-medium">{point.title}</span> <span className="text-muted-foreground">{point.body}</span>
+							</li>
+						))}
+					</ul>
+				</section>
 
-			<section aria-labelledby="hope-title" className="grid gap-3">
-				<h2 id="hope-title" className="font-heading text-xl">
-					What we hope it becomes
-				</h2>
-				<p className="leading-7 text-muted-foreground">
-					We would like this to grow into a reliable resource that any student organization can use: practical, written by people who have done the work, and honest about what fits a volunteer team. We are not there yet. For now it is a place for us to collect what we have, check it, and make it better.
-				</p>
-			</section>
+				<section aria-labelledby="hope-title" className="grid gap-3">
+					<h3 id="hope-title" className="font-heading text-xl">
+						What we hope it becomes
+					</h3>
+					<p className="leading-7 text-muted-foreground">
+						We would like this to grow into a reliable resource that any student organization can use: practical, written by people who have done the work, and honest about what fits a volunteer team. We are not there yet. For now it is a place for us to collect what we have, check it, and make it better.
+					</p>
+					{seconds ? <p className="leading-7 text-muted-foreground">So far, members have spent {formatHours(seconds)} reading it.</p> : null}
+				</section>
 
-			<section aria-labelledby="labels-title" className="grid gap-3">
-				<h2 id="labels-title" className="font-heading text-xl">
-					What the public-readiness labels mean
-				</h2>
-				<p className="leading-7 text-muted-foreground">
-					Moderators can mark an item to say whether it could one day be shared outside CODE. The label shows on its card. It is a note for later, and it changes nothing about who can see the item today.
-				</p>
-				<dl className="grid gap-3">
-					{LABEL_MEANINGS.map(({ value, meaning }) => (
-						<div key={value} className="min-w-0 rounded-xl border border-border p-4">
-							<dt className="font-medium">{READINESS_LABELS[value]}</dt>
-							<dd className="mt-1 text-sm leading-6 text-muted-foreground">{meaning}</dd>
+				<section aria-labelledby="labels-title" className="grid gap-3">
+					<h3 id="labels-title" className="font-heading text-xl">
+						What the public-readiness labels mean
+					</h3>
+					<p className="leading-7 text-muted-foreground">
+						Moderators can mark an item to say whether it could one day be shared outside CODE. The label shows on its card. It is a note for later, and it changes nothing about who can see the item today.
+					</p>
+					<dl className="grid gap-3">
+						{LABEL_MEANINGS.map(({ value, meaning }) => (
+							<div key={value} className="min-w-0 rounded-xl border border-border p-4">
+								<dt className="font-medium">{READINESS_LABELS[value]}</dt>
+								<dd className="mt-1 text-sm leading-6 text-muted-foreground">{meaning}</dd>
+							</div>
+						))}
+						<div className="min-w-0 rounded-xl border border-dashed border-border p-4">
+							<dt className="font-medium">No label</dt>
+							<dd className="mt-1 text-sm leading-6 text-muted-foreground">Nobody has reviewed it yet. Most items start here.</dd>
 						</div>
-					))}
-					<div className="min-w-0 rounded-xl border border-dashed border-border p-4">
-						<dt className="font-medium">No label</dt>
-						<dd className="mt-1 text-sm leading-6 text-muted-foreground">Nobody has reviewed it yet. Most items start here.</dd>
-					</div>
-				</dl>
-			</section>
+					</dl>
+				</section>
 
-			<section aria-labelledby="members-title" className="grid gap-3">
-				<h2 id="members-title" className="font-heading text-xl">
-					Members only, for now
-				</h2>
-				<p className="leading-7 text-muted-foreground">
-					Published items are visible to every signed-in CODE member and no one else. Drafts and items waiting for approval stay with their owners and the library moderators, and confidential items are limited further.
-				</p>
-				<p className="leading-7 text-muted-foreground">If you wrote something that helped a team, adding it is the best way to move this forward.</p>
-				<div className="flex flex-wrap gap-2">
-					<Button asChild className="min-h-10">
-						<Link href="/portal/library/new">Add to the library</Link>
-					</Button>
-					<Button asChild variant="outline" className="min-h-10">
-						<Link href="/portal/library">Back to the library</Link>
-					</Button>
-				</div>
-			</section>
-		</article>
+				<section aria-labelledby="members-title" className="grid gap-3">
+					<h3 id="members-title" className="font-heading text-xl">
+						Members only, for now
+					</h3>
+					<p className="leading-7 text-muted-foreground">
+						Published items are visible to every signed-in CODE member and no one else. Drafts and items waiting for approval stay with their owners and the library moderators, and confidential items are limited further.
+					</p>
+					<p className="leading-7 text-muted-foreground">If you wrote something that helped a team, adding it is the best way to move this forward.</p>
+					<div className="flex flex-wrap gap-2">
+						<Button asChild className="min-h-10">
+							<Link href="/portal/library/new">Add to the library</Link>
+						</Button>
+						<Button asChild variant="outline" className="min-h-10">
+							<Link href="/portal/library">Browse the library</Link>
+						</Button>
+					</div>
+				</section>
+			</article>
+		</div>
 	);
 }

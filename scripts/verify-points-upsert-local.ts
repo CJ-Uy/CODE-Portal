@@ -21,8 +21,8 @@ try {
 		INSERT INTO point_types
 			(id, key, label, active, position, updated_by)
 		VALUES ('pt_retention', 'retention', 'Retention', 1, 0, 'mem_local');
-		INSERT INTO terms (id, name, retained_at, probation_below, starts_at, ends_at)
-		VALUES ('term_local', 'Local Term', 20, 10, 0, 2000);
+		INSERT INTO terms (id, name, starts_at, ends_at)
+		VALUES ('term_local', 'Local Term', 0, 2000);
 		INSERT INTO crs_events
 			(id, title, type, status, place, starts_at, ends_at, description, created_by, checkin_secret)
 		VALUES ('evt_local', 'Local Event', 'official', 'approved', 'Room', 500, 1500, 'Local check', 'mem_local', 'secret');

@@ -1,14 +1,15 @@
 import { redirect } from "next/navigation";
 import { signInPath } from "@/server/auth/sign-in";
 import Link from "next/link";
-import { ArrowRight, BookOpen, CalendarDays, ClipboardCheck, Link2, Megaphone, MessageSquare } from "lucide-react";
+import { ArrowRight, BookOpen, MessageSquare, QrCode } from "lucide-react";
 import { getRepositories } from "@/db";
 import { EventScanPanel } from "@/components/event-scan-panel";
-import { LibraryItemCard } from "@/components/library/library-card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { MetricCard, RetentionProgress } from "@/components/portal/overview-metrics";
+import { RetentionProgress } from "@/components/portal/overview-metrics";
+import { DateTile } from "@/components/portal/date-tile";
+import { PageHeader } from "@/components/portal/page-header";
+import { formatUtc8Day, formatUtc8Time, toLocalDate } from "@/lib/date-slots";
+import { KIND_LABELS } from "@/lib/library/taxonomy";
 import { getActor } from "@/server/auth/actor";
 import { getAppConfig } from "@/server/env";
 import { getFeatureFlags } from "@/server/features";
@@ -18,7 +19,7 @@ import type { OverviewSummary } from "@/db/repositories/overview";
 export const dynamic = "force-dynamic";
 
 const EMPTY_SUMMARY: OverviewSummary = {
-	retention: { points: 0, retainedAt: null, termName: null },
+	retention: null,
 	pendingSurveys: 0,
 	oldestPendingSurveyId: null,
 	upcomingEvents: 0,
@@ -66,43 +67,89 @@ export default async function PortalOverviewPage() {
 		}
 	}
 	const today = new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric", timeZone: "Asia/Manila" }).format(now);
-	const eventDate = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" });
+	const todayIso = toLocalDate(now);
+	const happeningToday = upcomingEvents.some((event) => toLocalDate(event.startsAt) <= todayIso);
+	const pendingForms = flags.surveys && summary.oldestPendingSurveyId ? summary.pendingSurveys : 0;
 
 	return (
 		<div className="grid min-w-0 grid-cols-1 gap-6">
-			<div>
-				<h1 className="font-heading text-3xl">Home</h1>
-				<p className="mt-1 text-sm text-muted-foreground">{today}</p>
-			</div>
+			<PageHeader title="Home" description={today} />
 
-			<div className={flags.retention ? "grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]" : "grid min-w-0 grid-cols-1 gap-6"}>
-				<Card>
-					<CardHeader className="flex-row flex-wrap items-center justify-between gap-3">
-						<CardTitle>Upcoming events</CardTitle>
-						<Button asChild variant="outline" size="sm"><Link href="/portal/calendar"><CalendarDays />Calendar</Link></Button>
-					</CardHeader>
-					<CardContent>
-						{upcomingEvents.length ? <ul className="divide-y divide-border">
-							{upcomingEvents.map((event) => <li key={event.id}>
-								<Link href={`/portal/calendar/${event.id}`} className="group flex min-w-0 items-center gap-4 rounded-md py-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-									<div className="min-w-0 flex-1">
-										<p className="break-words font-medium group-hover:underline">{event.title}</p>
-										<p className="mt-1 text-sm text-muted-foreground">{eventDate.format(event.startsAt)}{event.place ? ` · ${event.place}` : ""}</p>
-									</div>
-									<ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-								</Link>
-							</li>)}
-						</ul> : <p className="text-sm text-muted-foreground">No upcoming events scheduled. Check Calendar for updates.</p>}
-					</CardContent>
-				</Card>
+			{/* A member who signed in from a feedback email lands here, so the waiting form is the first thing they see. */}
+			{pendingForms > 0 ? (
+				<Link
+					href={`/portal/surveys/${encodeURIComponent(summary.oldestPendingSurveyId!)}`}
+					className="group flex min-w-0 items-center gap-3 rounded-xl bg-secondary px-4 py-3 text-secondary-foreground transition-colors hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+				>
+					<span className="grid size-10 shrink-0 place-items-center rounded-full bg-card text-accent">
+						<MessageSquare className="size-5" aria-hidden />
+					</span>
+					<span className="min-w-0 flex-1">
+						<span className="block font-semibold">
+							{pendingForms === 1 ? "A feedback form is waiting for you" : `${pendingForms} feedback forms are waiting for you`}
+						</span>
+						<span className="block text-sm text-secondary-foreground/80">Answer while the event is fresh.</span>
+					</span>
+					<span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold">
+						Answer
+						<ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
+					</span>
+				</Link>
+			) : null}
+
+			<div className={flags.retention ? "grid min-w-0 grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]" : "grid min-w-0 grid-cols-1 gap-6"}>
+				<section aria-labelledby="home-events" className="min-w-0 rounded-lg border bg-card shadow-sm">
+					<div className="flex items-center justify-between gap-3 p-5 pb-2">
+						<h2 id="home-events" className="text-base font-semibold">Upcoming events</h2>
+						<SeeAll href="/portal/calendar">Calendar</SeeAll>
+					</div>
+					{upcomingEvents.length ? (
+						<ul className="divide-y divide-border px-2 pb-2">
+							{upcomingEvents.map((event) => {
+								const isToday = toLocalDate(event.startsAt) <= todayIso;
+								return (
+									<li key={event.id}>
+										<Link
+											href={`/portal/calendar/${event.id}`}
+											className="group flex min-w-0 items-center gap-3 rounded-md px-3 py-3 transition-colors hover:bg-secondary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+										>
+											<DateTile date={event.startsAt} today={isToday} />
+											<span className="min-w-0 flex-1">
+												<span className="block font-medium [overflow-wrap:anywhere] group-hover:underline">{event.title}</span>
+												<span className="mt-0.5 block text-sm text-muted-foreground [overflow-wrap:anywhere]">
+													{isToday ? "Today" : formatUtc8Day(event.startsAt, now)} · {formatUtc8Time(event.startsAt)}
+													{event.place ? ` · ${event.place}` : ""}
+												</span>
+											</span>
+											<ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+										</Link>
+									</li>
+								);
+							})}
+						</ul>
+					) : (
+						<p className="px-5 pb-5 pt-1 text-sm text-muted-foreground">Nothing coming up yet. Approved events show here and on Calendar.</p>
+					)}
+					{happeningToday ? (
+						<div className="border-t border-border px-5 py-3">
+							<Link
+								href="/portal/profile?code=1#check-in"
+								className="inline-flex min-h-11 items-center gap-2 rounded-md text-sm font-semibold text-accent underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+							>
+								<QrCode className="size-4" aria-hidden />
+								Show my check-in code
+							</Link>
+						</div>
+					) : null}
+				</section>
 				{flags.retention ? (
 					<Card>
 						<CardHeader>
 							<CardTitle>Retention path</CardTitle>
-							<CardDescription>{summary.retention.termName ?? "Current term"}</CardDescription>
+							<CardDescription>{summary.retention?.termName ?? "No school year running"}</CardDescription>
 						</CardHeader>
 						<CardContent>
-							<RetentionProgress points={summary.retention.points} retainedAt={summary.retention.retainedAt} />
+							<RetentionProgress retention={summary.retention} />
 						</CardContent>
 					</Card>
 				) : null}
@@ -122,87 +169,81 @@ export default async function PortalOverviewPage() {
 				))
 				: null}
 
-			{/* Metrics for flagged-off surfaces drop out rather than showing a zero the member
-			    cannot act on. The grid reflows on its own at two or three cards. */}
-			<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-				{flags.retention ? (
-					<MetricCard
-						label="Retention"
-						value={summary.retention.termName ? String(summary.retention.points) : "0"}
-						description={summary.retention.termName ?? "No active term"}
-						icon={ClipboardCheck}
-					/>
-				) : null}
-				{/* A member who signed in from a feedback email lands here, so a pending form is one tap away. */}
-				{flags.surveys && summary.oldestPendingSurveyId ? (
-					<Link
-						href={`/portal/surveys/${encodeURIComponent(summary.oldestPendingSurveyId)}`}
-						className="block min-w-0 rounded-lg transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-					>
-						<MetricCard label="Surveys" value={String(summary.pendingSurveys)} description="Pending responses. Open the next one." icon={MessageSquare} />
-					</Link>
-				) : flags.surveys ? (
-					<MetricCard label="Surveys" value={String(summary.pendingSurveys)} description="Pending responses" icon={MessageSquare} />
-				) : null}
-				<MetricCard label="Events" value={String(summary.upcomingEvents)} description="Upcoming approved events" icon={CalendarDays} />
-				<MetricCard label="Links" value={String(summary.linkClicks)} description="Clicks on your short links" icon={Link2} />
-			</div>
-
-			<div className={flags.library && flags.announcements ? "grid gap-6 lg:grid-cols-[1.4fr_1fr]" : "grid gap-6"}>
+			{flags.announcements || flags.library ? (
+				<div className={flags.library && flags.announcements ? "grid min-w-0 grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]" : "grid min-w-0 grid-cols-1 gap-6"}>
 					{flags.announcements ? (
-					<Card>
-						<CardHeader className="flex-row items-center justify-between space-y-0">
-							<div className="flex items-center gap-2">
-								<Megaphone className="size-4 text-accent" />
-								<CardTitle className="text-lg">Announcements</CardTitle>
+						<section aria-labelledby="home-announcements" className="min-w-0 rounded-lg border bg-card shadow-sm">
+							<div className="flex items-center justify-between gap-3 p-5 pb-2">
+								<h2 id="home-announcements" className="text-base font-semibold">Announcements</h2>
+								<SeeAll href="/portal/announcements">See all</SeeAll>
 							</div>
-							<Link href="/portal/announcements" className="inline-flex items-center gap-1 text-sm text-accent hover:underline">
-								See all
-								<ArrowRight className="size-3.5" />
-							</Link>
-						</CardHeader>
-						<CardContent className="grid gap-3">
 							{announcements.length === 0 ? (
-								<p className="text-sm text-muted-foreground">No announcements right now.</p>
+								<p className="px-5 pb-5 pt-1 text-sm text-muted-foreground">No announcements right now.</p>
 							) : (
-								announcements.map((item) => (
-									<div key={item.id} className="flex items-start gap-3">
-										<Badge variant="info" className="mt-0.5 shrink-0">
-											{item.tag}
-										</Badge>
-										<div className="min-w-0">
-											<p className="truncate text-sm font-medium">{item.title}</p>
-											<p className="line-clamp-1 text-xs text-muted-foreground">{item.body}</p>
-										</div>
-										{item.unread ? <span className="ml-auto mt-1.5 size-2 shrink-0 rounded-full bg-accent" /> : null}
-									</div>
-								))
+								<ul className="divide-y divide-border px-2 pb-2">
+									{announcements.map((item) => (
+										<li key={item.id}>
+											<Link
+												href={`/portal/announcements#${item.id}`}
+												className="flex min-w-0 items-start gap-3 rounded-md px-3 py-3 transition-colors hover:bg-secondary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+											>
+												<span className={item.unread ? "mt-2 size-2 shrink-0 rounded-full bg-[#4986AC]" : "mt-2 size-2 shrink-0"} aria-hidden />
+												<span className="min-w-0 flex-1">
+													<span className="flex min-w-0 items-baseline justify-between gap-3">
+														<span className={`min-w-0 text-sm [overflow-wrap:anywhere] ${item.unread ? "font-semibold" : "font-medium"}`}>{item.title}</span>
+														<span className="shrink-0 text-xs text-muted-foreground">{formatUtc8Day(item.createdAt, now)}</span>
+													</span>
+													<span className="mt-0.5 line-clamp-1 text-sm text-muted-foreground [overflow-wrap:anywhere]">{item.body}</span>
+													{item.unread ? <span className="sr-only">Unread.</span> : null}
+												</span>
+											</Link>
+										</li>
+									))}
+								</ul>
 							)}
-						</CardContent>
-					</Card>
+						</section>
 					) : null}
-				{flags.library ? (
-				<Card>
-					<CardHeader className="flex-row items-center justify-between space-y-0">
-						<div className="flex items-center gap-2">
-							<BookOpen className="size-4 text-accent" />
-							<CardTitle className="text-lg">From the library</CardTitle>
-						</div>
-						<Link href="/portal/library" className="inline-flex items-center gap-1 text-sm text-accent hover:underline">
-							Browse
-							<ArrowRight className="size-3.5" />
-						</Link>
-					</CardHeader>
-					<CardContent className="grid gap-3">
-						{libraryItems.length === 0 ? (
-							<p className="text-sm text-muted-foreground">No library items yet.</p>
-						) : (
-							libraryItems.map((item) => <LibraryItemCard key={item.id} card={item} compact />)
-						)}
-					</CardContent>
-				</Card>
-				) : null}
-			</div>
+					{flags.library ? (
+						<section aria-labelledby="home-library" className="min-w-0 rounded-lg border bg-card shadow-sm">
+							<div className="flex items-center justify-between gap-3 p-5 pb-2">
+								<h2 id="home-library" className="text-base font-semibold">New in the library</h2>
+								<SeeAll href="/portal/library">Browse</SeeAll>
+							</div>
+							{libraryItems.length === 0 ? (
+								<p className="px-5 pb-5 pt-1 text-sm text-muted-foreground">No library items yet.</p>
+							) : (
+								<ul className="divide-y divide-border px-2 pb-2">
+									{libraryItems.map((item) => (
+										<li key={item.id}>
+											<Link
+												href={`/portal/library/${item.id}`}
+												className="flex min-w-0 items-start gap-3 rounded-md px-3 py-3 transition-colors hover:bg-secondary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+											>
+												<BookOpen className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden />
+												<span className="min-w-0 flex-1">
+													<span className="block text-sm font-medium [overflow-wrap:anywhere]">{item.title}</span>
+													<span className="mt-0.5 block text-xs text-muted-foreground [overflow-wrap:anywhere]">
+														{[KIND_LABELS[item.kind], item.authorsJson.map((author) => author.name).join(", ")].filter(Boolean).join(" · ")}
+													</span>
+												</span>
+											</Link>
+										</li>
+									))}
+								</ul>
+							)}
+						</section>
+					) : null}
+				</div>
+			) : null}
 		</div>
+	);
+}
+
+function SeeAll({ href, children }: { href: string; children: React.ReactNode }) {
+	return (
+		<Link href={href} className="inline-flex min-h-11 items-center gap-1 rounded-md text-sm font-medium text-accent underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+			{children}
+			<ArrowRight className="size-3.5" aria-hidden />
+		</Link>
 	);
 }

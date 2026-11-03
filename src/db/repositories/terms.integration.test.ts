@@ -20,10 +20,9 @@ function repo() {
 const sy2026 = {
 	id: null,
 	name: "SY 2026-2027",
-	retainedAt: 20,
-	probationBelow: 10,
 	startsAt: day("2026-08-01"),
 	endsAt: day("2027-07-31"),
+	secondSemesterStartsAt: day("2027-01-11"),
 };
 
 describe("school year management", () => {
@@ -42,7 +41,7 @@ describe("school year management", () => {
 
 		const rows = await repo().listTermsAdmin(admin, NOW);
 		expect(rows).toHaveLength(1);
-		expect(rows[0]).toMatchObject({ id: created.id, name: "SY 2026-2027", retainedAt: 20, isCurrent: true });
+		expect(rows[0]).toMatchObject({ id: created.id, name: "SY 2026-2027", secondSemesterStartsAt: day("2027-01-11"), isCurrent: true });
 	});
 
 	it("marks a school year that does not cover today as not current", async () => {
@@ -56,7 +55,7 @@ describe("school year management", () => {
 		await expect(
 			repo().upsertTerm(
 				admin,
-				{ ...sy2026, name: "SY 2027-2028", startsAt: day("2027-07-31"), endsAt: day("2028-07-31") },
+				{ ...sy2026, name: "SY 2027-2028", startsAt: day("2027-07-31"), endsAt: day("2028-07-31"), secondSemesterStartsAt: day("2028-01-10") },
 				NOW,
 			),
 		).rejects.toThrow(/overlap/i);
@@ -66,7 +65,7 @@ describe("school year management", () => {
 		await repo().upsertTerm(admin, sy2026, NOW);
 		const next = await repo().upsertTerm(
 			admin,
-			{ ...sy2026, name: "SY 2027-2028", startsAt: day("2027-08-01"), endsAt: day("2028-07-31") },
+			{ ...sy2026, name: "SY 2027-2028", startsAt: day("2027-08-01"), endsAt: day("2028-07-31"), secondSemesterStartsAt: day("2028-01-10") },
 			NOW,
 		);
 		expect(next.isCurrent).toBe(false);
@@ -81,14 +80,14 @@ describe("school year management", () => {
 
 	it("edits a seed-era school year whose id predates createId", async () => {
 		await env.DB.prepare(
-			"INSERT INTO terms (id, name, retained_at, probation_below, starts_at, ends_at) VALUES (?, ?, ?, ?, ?, ?)",
+			"INSERT INTO terms (id, name, starts_at, ends_at) VALUES (?, ?, ?, ?)",
 		)
-			.bind("term_2026_1", "Term 1 2026", 20, 10, day("2026-06-18").getTime(), day("2026-10-31").getTime())
+			.bind("term_2026_1", "Term 1 2026", day("2026-06-18").getTime(), day("2026-10-31").getTime())
 			.run();
 
 		const edited = await repo().upsertTerm(
 			admin,
-			{ ...sy2026, id: "term_2026_1", name: "SY 2026-2027", startsAt: day("2026-06-18"), endsAt: day("2026-10-31") },
+			{ ...sy2026, id: "term_2026_1", name: "SY 2026-2027", startsAt: day("2026-06-18"), endsAt: day("2026-10-31"), secondSemesterStartsAt: day("2026-09-01") },
 			NOW,
 		);
 
@@ -103,10 +102,9 @@ describe("school year management", () => {
 		).rejects.toThrow(/end date/i);
 	});
 
-	it("rejects a probation threshold above the retained threshold", async () => {
-		await expect(
-			repo().upsertTerm(admin, { ...sy2026, retainedAt: 10, probationBelow: 20 }, NOW),
-		).rejects.toThrow(/probation/i);
+	it("rejects a 2nd semester that starts outside the school year", async () => {
+		await expect(repo().upsertTerm(admin, { ...sy2026, secondSemesterStartsAt: day("2026-08-01") }, NOW)).rejects.toThrow(/2nd semester/);
+		await expect(repo().upsertTerm(admin, { ...sy2026, secondSemesterStartsAt: day("2027-08-01") }, NOW)).rejects.toThrow(/2nd semester/);
 	});
 
 	it("refuses reads and writes without retention:configure", async () => {

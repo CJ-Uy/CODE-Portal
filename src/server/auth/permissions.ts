@@ -1,4 +1,4 @@
-export const roleKeys = ["super", "member", "events", "link", "retention", "member_admin", "publishing", "email"] as const;
+export const roleKeys = ["super", "member", "events", "link", "retention", "member_admin", "publishing", "email", "gallery"] as const;
 
 export type RoleKey = (typeof roleKeys)[number];
 
@@ -40,6 +40,7 @@ export const permissionActions = [
 	"library:moderate",
 	"email:send",
 	"email:configure",
+	"gallery:manage",
 	// Never granted to any role; marks gates only super admins pass (super passes every can() check).
 	"system:super_only",
 ] as const;
@@ -61,6 +62,7 @@ const rolePermissions: Record<Exclude<RoleKey, "super" | "member">, PermissionAc
 	member_admin: ["member:manage", "role:assign", "roster:manage", "nav:configure"],
 	publishing: ["announcement:manage", "library:manage", "library:moderate"],
 	email: ["email:send", "email:configure"],
+	gallery: ["gallery:manage"],
 };
 
 export function can(actor: Actor | null, action: PermissionAction): boolean {

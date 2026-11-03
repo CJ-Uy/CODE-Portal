@@ -3,17 +3,21 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Check, CircleAlert, FlaskConical, Send } from "lucide-react";
+import { Check, CircleAlert, Code2, FlaskConical, LayoutList, Send } from "lucide-react";
 import { AdminIntro } from "@/components/portal/admin-intro";
 import { AudiencePicker, ruleLabel } from "@/components/email/audience-picker";
-import { BlockEditor, type EventOption, type PreviewPerson } from "@/components/email/block-editor";
+import { BlockEditor, Segmented, type EventOption, type PreviewPerson } from "@/components/email/block-editor";
+import { HtmlEditor } from "@/components/email/html-editor";
 import { TaggedField } from "@/components/email/tagged-field";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import type { AudienceOptions, AudiencePreview, PersonalizationPreview } from "@/db/repositories/email-campaigns";
 import { toLocalInput } from "@/lib/date-slots";
 import type { Audience, EmailBlock, EmailCampaignStatus } from "@/lib/email/types";
-import { usedMergeTags, type MergeOverrides } from "@/lib/email/merge";
+import { newHtmlBlock } from "@/lib/email/blocks";
+import { htmlBodyOf } from "@/lib/email/html";
+import { knownVariables, usedMergeTags, type MergeOverrides, type MergeSheet } from "@/lib/email/merge";
+import { blocksToHtml } from "@/lib/email/render";
 import { cn } from "@/lib/utils";
 import { saveCampaignAction, scheduleCampaignAction, testSendAction } from "./actions";
 import { useAutosave } from "./use-autosave";
@@ -30,6 +34,7 @@ export type ComposerProps = {
 		blocks: EmailBlock[];
 		audience: Audience;
 		mergeOverrides: MergeOverrides;
+		mergeSheet: MergeSheet | null;
 		status: EmailCampaignStatus;
 		scheduledAt: Date | null;
 	};
@@ -95,10 +100,19 @@ export function Composer(props: ComposerProps) {
 	const [blocks, setBlocks] = useState(initial.blocks);
 	const [audience, setAudience] = useState(initial.audience);
 	const [mergeOverrides, setMergeOverrides] = useState(initial.mergeOverrides);
+	const [mergeSheet, setMergeSheet] = useState(initial.mergeSheet);
 	const tags = useMemo(() => usedMergeTags(`${subject} ${preheader} ${JSON.stringify(blocks)}`), [subject, preheader, blocks]);
+	const unfilled = useMemo(() => {
+		const known = knownVariables(mergeSheet, mergeOverrides);
+		return tags.filter((tag) => !known.has(tag));
+	}, [tags, mergeSheet, mergeOverrides]);
+	const htmlSource = htmlBodyOf(blocks);
+	// The body you switched away from, so switching back within this visit restores it.
+	const stash = useRef<{ blocks: EmailBlock[]; html: EmailBlock[] }>({ blocks: [], html: [] });
+	const fields = mergeSheet?.columns ?? [];
 	const [preview, setPreview] = useState<AudiencePreview | null>(null);
 	const [personalization, setPersonalization] = useState<{ key: string; preview: PersonalizationPreview } | null>(null);
-	const personalizationKey = JSON.stringify([audience, categoryId, tags, mergeOverrides]);
+	const personalizationKey = JSON.stringify([audience, categoryId, tags, mergeOverrides, mergeSheet?.importedAt ?? null]);
 	const personalizationPreview = personalization?.key === personalizationKey ? personalization.preview : null;
 	const onPersonalization = useCallback((preview: PersonalizationPreview) => setPersonalization({ key: personalizationKey, preview }), [personalizationKey]);
 	const [labels, setLabels] = useState(memberLabels);
@@ -111,8 +125,8 @@ export function Composer(props: ComposerProps) {
 	const sender = senders.find((s) => s.id === senderId) ?? null;
 
 	const value = useMemo(
-		() => ({ templateId, categoryId, senderId, subject, preheader, blocks, audience, mergeOverrides }),
-		[templateId, categoryId, senderId, subject, preheader, blocks, audience, mergeOverrides],
+		() => ({ templateId, categoryId, senderId, subject, preheader, blocks, audience, mergeOverrides, mergeSheet }),
+		[templateId, categoryId, senderId, subject, preheader, blocks, audience, mergeOverrides, mergeSheet],
 	);
 	const save = async (v: typeof value) => {
 		if (lockedRef.current) return true;
@@ -145,11 +159,11 @@ export function Composer(props: ComposerProps) {
 		sender: Boolean(sender && category),
 		audience: audience.include.length > 0 && (preview?.willReceive ?? 0) > 0,
 		subject: subject.trim().length > 0,
-		content: blocks.length > 0,
+		content: blocks.length > 0 && htmlSource?.trim() !== "",
 	};
 	const when = parseAt(at);
 	const whenOk = timing === "now" || (when.date !== null && at > toLocalInput(new Date()));
-	const ready = checks.sender && checks.audience && checks.subject && checks.content && whenOk;
+	const ready = checks.sender && checks.audience && checks.subject && checks.content && whenOk && unfilled.length === 0;
 	const labelOf = (r: Audience["include"][number]) => ruleLabel(r, options, labels);
 	const audienceSummary = audience.include.length ? audience.include.map(labelOf).join(", ") : "No one yet";
 	const everyGroup = audience.match === "all" && audience.include.filter((r) => r.kind !== "member" && r.kind !== "emails").length > 1;
@@ -171,6 +185,27 @@ export function Composer(props: ComposerProps) {
 
 	const onLabel = (memberId: string, name: string) => setLabels((l) => ({ ...l, [memberId]: name }));
 
+	const setMode = (mode: "blocks" | "html") => {
+		if ((mode === "html") === (htmlSource !== null)) return;
+		if (mode === "html") {
+			stash.current.blocks = blocks;
+			setBlocks(stash.current.html.length ? stash.current.html : [newHtmlBlock(blocks.length ? blocksToHtml(blocks, baseUrl) : "")]);
+		} else {
+			stash.current.html = blocks;
+			setBlocks(stash.current.blocks);
+		}
+	};
+	// Sample people show sheet columns too: their own row when the sheet has one, else the first row.
+	const previewPeople = useMemo<PreviewPerson[]>(() => {
+		const first = mergeSheet ? Object.values(mergeSheet.rows)[0] : undefined;
+		return people.map((p) => {
+			const row = mergeSheet?.rows[p.values.email.toLowerCase()] ?? first ?? {};
+			const values = { ...p.values };
+			for (const [name, value] of Object.entries(row)) if (value.trim() || !(name in values)) values[name] = value;
+			return { label: p.label, values };
+		});
+	}, [people, mergeSheet]);
+
 	const applyTemplate = (t: ComposerProps["templates"][number]) => {
 		setTemplateId(t.id.startsWith("starter:") ? null : t.id);
 		setSubject(t.subject);
@@ -182,7 +217,7 @@ export function Composer(props: ComposerProps) {
 
 	const testSend = () =>
 		startTransition(async () => {
-			const result = await testSendAction({ subject, preheader, blocks, categoryId, senderId, mergeOverrides });
+			const result = await testSendAction({ subject, preheader, blocks, categoryId, senderId, mergeOverrides, mergeSheet });
 			toast({ message: result.ok ? `Test sent to ${result.data.to}.` : result.error });
 		});
 
@@ -288,12 +323,47 @@ export function Composer(props: ComposerProps) {
 						</div>
 					</Step>
 
-					<Step n={4} title="Content" done={checks.content} open={open === 4} onToggle={() => toggle(4)} summary={blocks.length ? `${blocks.length} blocks` : "Empty"}>
-						<BlockEditor blocks={blocks} onChange={setBlocks} baseUrl={baseUrl} footer={footer} people={people} events={events} layout="compact" />
+					<Step n={4} title="Content" done={checks.content} open={open === 4} onToggle={() => toggle(4)} summary={htmlSource !== null ? `HTML · ${(new TextEncoder().encode(htmlSource).length / 1000).toFixed(1)} KB` : blocks.length ? `${blocks.length} blocks` : "Empty"}>
+						<div className="grid gap-4">
+							<div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+								<Segmented
+									label="Email body"
+									value={htmlSource !== null ? "html" : "blocks"}
+									onChange={setMode}
+									options={[
+										{ value: "blocks", label: <><LayoutList className="size-3.5" aria-hidden /> Blocks</> },
+										{ value: "html", label: <><Code2 className="size-3.5" aria-hidden /> HTML</> },
+									]}
+								/>
+								<span className="text-xs text-muted-foreground">{htmlSource !== null ? "Your own HTML and CSS, checked and cleaned for inboxes." : "CODE's layout. Switch to HTML to paste your own design."}</span>
+							</div>
+							{unfilled.length ? (
+								<p role="alert" className="flex items-start gap-2 rounded-lg border border-[#90B4CC] bg-secondary/50 p-3 text-sm">
+									<CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+									<span className="min-w-0 [overflow-wrap:anywhere]">Nothing fills {unfilled.map((t) => `{{${t}}}`).join(", ")} yet. Import a sheet with {unfilled.length === 1 ? "that column" : "those columns"} in Personalization, or fix the name.</span>
+								</p>
+							) : null}
+							{htmlSource !== null ? (
+								<HtmlEditor
+									html={htmlSource}
+									onChange={(html) => setBlocks((current) => [{ ...current[0], type: "html", props: { html } } as EmailBlock])}
+									subject={subject}
+									preheader={preheader}
+									baseUrl={baseUrl}
+									footer={footer}
+									people={previewPeople}
+									fields={fields}
+									sheetNote={fields.length ? `Columns from ${mergeSheet?.name ?? "your sheet"} are listed last.` : "Import a sheet in Personalization to add its columns as fields."}
+									layout="compact"
+								/>
+							) : (
+								<BlockEditor blocks={blocks} onChange={setBlocks} baseUrl={baseUrl} footer={footer} people={previewPeople} events={events} layout="compact" fields={fields} />
+							)}
+						</div>
 					</Step>
 
-					<Step n={5} title="Personalization" done={!tags.length || personalizationPreview?.missingCount === 0} open={open === 5} onToggle={() => toggle(5)} summary={tags.length ? `${tags.length} merge fields${personalizationPreview ? ` · ${personalizationPreview.missingCount} recipients with missing fields` : " · check recipients"}` : "No merge fields used"}>
-						<Personalization key={JSON.stringify([audience, categoryId])} audience={audience} categoryId={categoryId} tags={tags} overrides={mergeOverrides} onChange={setMergeOverrides} onPreview={onPersonalization} subject={subject} preheader={preheader} blocks={blocks} baseUrl={baseUrl} footer={footer} />
+					<Step n={5} title="Personalization" done={!unfilled.length && (!tags.length || personalizationPreview?.missingCount === 0)} open={open === 5} onToggle={() => toggle(5)} summary={[mergeSheet ? `Sheet: ${Object.keys(mergeSheet.rows).length} rows` : null, tags.length ? `${tags.length} merge fields${personalizationPreview ? ` · ${personalizationPreview.missingCount} recipients with missing fields` : " · check recipients"}` : "No merge fields used"].filter(Boolean).join(" · ")}>
+						<Personalization key={JSON.stringify([audience, categoryId])} audience={audience} categoryId={categoryId} tags={tags} overrides={mergeOverrides} onChange={setMergeOverrides} sheet={mergeSheet} onSheetChange={setMergeSheet} onPreview={onPersonalization} subject={subject} preheader={preheader} blocks={blocks} baseUrl={baseUrl} footer={footer} />
 					</Step>
 
 					<Step n={6} title="When" done open={open === 6} onToggle={() => toggle(6)} summary={whenLabel}>
@@ -347,7 +417,7 @@ export function Composer(props: ComposerProps) {
 							<Send />
 							Review and send
 						</Button>
-						{!ready ? <p className="text-xs text-muted-foreground">Choose a sender and audience, then add a subject and content to send.</p> : null}
+						{!ready ? <p className="text-xs text-muted-foreground">{unfilled.length ? `Fill or remove ${unfilled.map((t) => `{{${t}}}`).join(", ")} to send.` : "Choose a sender and audience, then add a subject and content to send."}</p> : null}
 					</div>
 				</aside>
 			</div>
@@ -385,7 +455,7 @@ export function Composer(props: ComposerProps) {
 							</div>
 						))}
 					</dl>
-					{tags.length ? <div className="grid gap-2 border-y border-border py-3 text-sm"><p>{personalizationPreview ? `${personalizationPreview.total} recipients checked. ${personalizationPreview.missingCount} have missing merge fields and will use the values shown in their preview.` : "Recipient merge fields have not been checked yet."}</p><Button variant="outline" size="sm" className="w-fit" onClick={() => { dialogRef.current?.close(); setOpen(5); }}>Review personalization</Button></div> : null}
+					{tags.length ? <div className="grid gap-2 border-y border-border py-3 text-sm"><p>{personalizationPreview ? `${personalizationPreview.total} recipients checked. ${personalizationPreview.missingCount} have missing merge fields and will use the values shown in their preview.` : "Recipient merge fields have not been checked yet."}</p>{personalizationPreview?.sheet ? <p>{`Sheet: ${personalizationPreview.sheet.matched} of ${personalizationPreview.sheet.rows} rows match a recipient. ${personalizationPreview.sheet.withoutRow} recipients have no row.`}</p> : null}<Button variant="outline" size="sm" className="w-fit" onClick={() => { dialogRef.current?.close(); setOpen(5); }}>Review personalization</Button></div> : null}
 					<div className="flex flex-wrap justify-end gap-2">
 						<Button variant="ghost" onClick={() => dialogRef.current?.close()} disabled={pending || sent}>
 							Keep editing

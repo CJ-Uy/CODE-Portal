@@ -126,7 +126,7 @@ export default async function SendReportPage({
 			</nav>
 
 			{tab === "content" && preview ? (
-				<EmailPreview bodyHtml={preview.bodyHtml} />
+				<EmailPreview email={preview} />
 			) : (
 				<section className="grid gap-3">
 					<form className="relative w-full sm:w-72">

@@ -44,6 +44,8 @@ async function createHandlers() {
 			return links.canEditLink(actor, linkId);
 		},
 		...createLibraryObjectAccess(getDb() as unknown as Db),
+		// Reads only; this handler never serves files.
+		canReadGalleryObject: async () => false,
 	});
 }
 

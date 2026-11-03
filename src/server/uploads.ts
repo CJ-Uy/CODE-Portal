@@ -1,6 +1,6 @@
 import { createId } from "@/lib/ids";
 import { can, type Actor } from "@/server/auth/permissions";
-import type { StorageAdapter } from "@/storage/types";
+import type { StorageAdapter, StorageRange } from "@/storage/types";
 
 const MB = 1024 * 1024;
 export const MAX_UPLOAD_BYTES = 5 * MB;
@@ -24,7 +24,7 @@ const libraryFileTypes = new Map([
 
 // A declared type is only a claim. Library uploads must also start with the bytes of their format.
 // The other image purposes are served with their stored type and are not sniffed.
-type Magic = { at: number; bytes: number[] }[];
+export type Magic = { at: number; bytes: number[] }[];
 const ascii = (text: string) => [...text].map((char) => char.charCodeAt(0));
 const ZIP_MAGIC: Magic = [{ at: 0, bytes: [0x50, 0x4b, 0x03, 0x04] }];
 
@@ -35,7 +35,7 @@ const documentMagic = new Map<string, Magic>([
 	["xlsx", ZIP_MAGIC],
 ]);
 
-const imageMagic = new Map<string, Magic>([
+export const imageMagic = new Map<string, Magic>([
 	["gif", [{ at: 0, bytes: ascii("GIF8") }]],
 	["jpg", [{ at: 0, bytes: [0xff, 0xd8, 0xff] }]],
 	["png", [{ at: 0, bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] }]],
@@ -66,7 +66,17 @@ type UploadHandlerDependencies = {
 	canEditLink(actor: Actor, linkId: string): Promise<boolean>;
 	canEditLibraryItem(actor: Actor, itemId: string): Promise<boolean>;
 	canReadLibraryObject(actor: Actor, itemId: string): Promise<boolean>;
+	/** Gallery files: a null actor is a signed-out visitor, who may only read items in public folders. */
+	canReadGalleryObject(actor: Actor | null, itemId: string): Promise<boolean>;
+	/** A webp `width` pixels wide, or null when the Images binding is missing or cannot read the file. */
+	transformImage?(body: ReadableStream, width: number): Promise<ArrayBuffer | null>;
 };
+
+// Grid tiles and the lightbox. Each width of each photo is transformed once, then kept beside the original.
+export const GALLERY_PREVIEW_WIDTHS = new Set([480, 1600]);
+// The Images binding reads at most 20 MB; anything larger is served as the original.
+const MAX_TRANSFORM_BYTES = 20 * MB;
+const galleryPhotoExtensions = new Set(["jpg", "png", "webp", "gif", "heic", "heif"]);
 
 export function createUploadHandlers(dependencies: UploadHandlerDependencies) {
 	return {
@@ -163,6 +173,15 @@ export function createUploadHandlers(dependencies: UploadHandlerDependencies) {
 			const namespace = parseNamespace(key);
 			if (!namespace) return Response.json({ error: "Object not found." }, { status: 404 });
 
+			if (request.method === "GET" && namespace.galleryItemId) {
+				const actor = await dependencies.getActor(request);
+				// 404 for everyone it hides from, signed in or not: a hidden file's existence is not confirmed.
+				if (!(await dependencies.canReadGalleryObject(actor, namespace.galleryItemId))) {
+					return Response.json({ error: "Object not found." }, { status: 404 });
+				}
+				return serveGalleryObject(request, key, dependencies);
+			}
+
 			if (request.method === "GET") {
 				if (!namespace.public) {
 					const actor = await dependencies.getActor(request);
@@ -191,7 +210,10 @@ export function createUploadHandlers(dependencies: UploadHandlerDependencies) {
 
 			if (request.method === "DELETE") {
 				let authorized: boolean;
-				if (namespace.libraryItemId) {
+				if (namespace.galleryItemId) {
+					// Gallery files only go through a soft delete and the 30-day purge, never straight out of R2.
+					authorized = false;
+				} else if (namespace.libraryItemId) {
 					authorized = can(actor, "library:manage");
 				} else if (namespace.linkId) {
 					authorized = can(actor, "link:moderate") || await dependencies.canEditLink(actor, namespace.linkId);
@@ -208,6 +230,69 @@ export function createUploadHandlers(dependencies: UploadHandlerDependencies) {
 			return new Response("Method not allowed", { status: 405 });
 		},
 	};
+}
+
+/**
+ * A gallery file, already access-checked. `?w=480|1600` on a photo serves a webp preview, made by the Images
+ * binding on first request and stored next to the original. Videos honour Range so they can seek and play on iOS.
+ * Keys never change content, so the browser may keep what it fetched.
+ */
+async function serveGalleryObject(request: Request, key: string, dependencies: UploadHandlerDependencies): Promise<Response> {
+	const params = new URL(request.url).searchParams;
+	const width = Number(params.get("w"));
+	const extension = key.slice(key.lastIndexOf(".") + 1);
+	const headers = new Headers({ "X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=86400", "Accept-Ranges": "bytes" });
+
+	if (GALLERY_PREVIEW_WIDTHS.has(width) && galleryPhotoExtensions.has(extension)) {
+		const previewKey = key.replace(/[^/]+$/, `w${width}.webp`);
+		const cached = await dependencies.storage.getObject(previewKey);
+		if (cached.body) {
+			headers.set("Content-Type", "image/webp");
+			return new Response(cached.body, { headers });
+		}
+		const original = await dependencies.storage.getObject(key);
+		if (original.body && dependencies.transformImage && (original.contentLength ?? Infinity) <= MAX_TRANSFORM_BYTES) {
+			const preview = await dependencies.transformImage(original.body, width).catch(() => null);
+			if (preview) {
+				await dependencies.storage.putObject({ key: previewKey, body: preview.slice(0), contentType: "image/webp" });
+				headers.set("Content-Type", "image/webp");
+				return new Response(preview, { headers });
+			}
+		} else {
+			await original.body?.cancel();
+		}
+		// No binding (local dev), too large, or a format the binding cannot read: the original still works.
+	}
+
+	const range = parseRangeHeader(request.headers.get("range"));
+	let object: Awaited<ReturnType<StorageAdapter["getObject"]>>;
+	try {
+		object = await dependencies.storage.getObject(key, range ? { range } : undefined);
+	} catch {
+		// R2 and the local adapter both throw for a range past the end of the file.
+		return new Response(null, { status: 416 });
+	}
+	if (!object.body) return Response.json({ error: "Object not found." }, { status: 404 });
+	headers.set("Content-Type", object.contentType ?? "application/octet-stream");
+	if (object.contentLength !== undefined) headers.set("Content-Length", String(object.contentLength));
+	if (params.get("download") === "1") headers.set("Content-Disposition", libraryDisposition(params, key));
+	if (object.range) {
+		const { offset, length, size } = object.range;
+		headers.set("Content-Range", `bytes ${offset}-${offset + length - 1}/${size}`);
+		return new Response(object.body, { status: 206, headers });
+	}
+	return new Response(object.body, { headers });
+}
+
+/** One `bytes=` range from a Range header. Anything else (several ranges, other units, garbage) reads the whole file. */
+export function parseRangeHeader(header: string | null): StorageRange | null {
+	const match = header?.trim().match(/^bytes=(\d*)-(\d*)$/);
+	if (!match || (!match[1] && !match[2])) return null;
+	if (!match[1]) return { suffix: Number(match[2]) };
+	const offset = Number(match[1]);
+	if (!match[2]) return { offset };
+	const end = Number(match[2]);
+	return end < offset ? null : { offset, length: end - offset + 1 };
 }
 
 async function matchesMagic(file: File, magic: Magic | undefined): Promise<boolean> {
@@ -236,7 +321,9 @@ function libraryDisposition(params: URLSearchParams, key: string): string {
 	return `${inline ? "inline" : "attachment"}; filename="${stem ? stem + extension : basename}"`;
 }
 
-function parseNamespace(key: string): { ownerMemberId: string; public: boolean; linkId?: string; libraryItemId?: string } | null {
+function parseNamespace(
+	key: string,
+): { ownerMemberId: string; public: boolean; linkId?: string; libraryItemId?: string; galleryItemId?: string } | null {
 	if (key.includes("..") || key.startsWith("/")) return null;
 	const parts = key.split("/");
 	if (parts[0] === "avatars" && parts.length === 3 && parts.every(isSafeSegment)) {
@@ -253,6 +340,9 @@ function parseNamespace(key: string): { ownerMemberId: string; public: boolean; 
 	}
 	if (parts[0] === "library" && parts.length === 4 && parts.every(isSafeSegment)) {
 		return { ownerMemberId: parts[2], public: false, libraryItemId: parts[1] };
+	}
+	if (parts[0] === "gallery" && parts.length === 4 && parts.every(isSafeSegment)) {
+		return { ownerMemberId: parts[2], public: false, galleryItemId: parts[1] };
 	}
 	return null;
 }

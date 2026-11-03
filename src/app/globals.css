@@ -87,34 +87,60 @@
 	--font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
-* {
-	border-color: var(--border);
-	letter-spacing: 0;
+/* Defaults only. Inside @layer base so any Tailwind utility (border-primary, font-sans on a heading) still wins:
+   unlayered rules here used to beat every utility and silently grey out intended navy borders. */
+@layer base {
+	* {
+		border-color: var(--border);
+		letter-spacing: 0;
+	}
+
+	html {
+		scroll-behavior: smooth;
+	}
+
+	body {
+		background: var(--background);
+		color: var(--foreground);
+		font-family: var(--font-source-sans), ui-sans-serif, system-ui, sans-serif;
+	}
+
+	h1,
+	h2,
+	h3,
+	h4,
+	.font-heading {
+		font-family: var(--font-unna), Georgia, serif;
+	}
+
+	button,
+	input,
+	select,
+	textarea {
+		letter-spacing: 0;
+	}
 }
 
-html {
-	scroll-behavior: smooth;
+.portal-nav-scroll {
+	scrollbar-width: thin;
+	scrollbar-color: color-mix(in srgb, var(--primary-foreground) 35%, transparent) transparent;
 }
 
-body {
-	background: var(--background);
-	color: var(--foreground);
-	font-family: var(--font-source-sans), ui-sans-serif, system-ui, sans-serif;
+.portal-nav-scroll::-webkit-scrollbar {
+	width: 6px;
 }
 
-h1,
-h2,
-h3,
-h4,
-.font-heading {
-	font-family: var(--font-unna), Georgia, serif;
+.portal-nav-scroll::-webkit-scrollbar-track {
+	background: transparent;
 }
 
-button,
-input,
-select,
-textarea {
-	letter-spacing: 0;
+.portal-nav-scroll::-webkit-scrollbar-thumb {
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--primary-foreground) 35%, transparent);
+}
+
+.portal-nav-scroll::-webkit-scrollbar-thumb:hover {
+	background: color-mix(in srgb, var(--primary-foreground) 55%, transparent);
 }
 
 .sheet-motion[data-side="right"] {
@@ -199,6 +225,8 @@ textarea {
 	60% { transform: scale(1.12); opacity: 1; }
 	100% { transform: scale(1); }
 }
+/* Gallery lightbox: opens from a near-full frame; motion-safe only (see lightbox.tsx). */
+@keyframes gallery-open { from { opacity: 0; transform: scale(0.98); } }
 .toast-enter { animation: toast-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1); }
 .row-enter { animation: row-in 200ms ease-out both; }
 .check-pop { animation: check-pop 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
@@ -209,4 +237,33 @@ dialog.email-dialog::backdrop { background: rgb(6 25 47 / 0.45); }
 @media (prefers-reduced-motion: reduce) {
 	.toast-enter, .row-enter, .check-pop, dialog.email-dialog[open] { animation: none; }
 	.row-leave { transition: none; }
+}
+
+/* Navigation progress (src/components/portal/navigation-progress.tsx). It fades in only after a
+   beat, so a navigation that lands quickly never flashes it. On "done" the bar snaps full and
+   fades out. Reduced motion keeps the fade and drops the growth. */
+.nav-progress {
+	opacity: 0;
+	transition: opacity 200ms ease-out;
+}
+.nav-progress[data-state="loading"] {
+	opacity: 1;
+	transition-delay: 150ms;
+	animation: nav-progress-grow 10s cubic-bezier(0.1, 0.7, 0.2, 1) 150ms both;
+}
+@keyframes nav-progress-grow {
+	from { transform: scaleX(0.05); }
+	to { transform: scaleX(0.9); }
+}
+
+/* Loading skeletons ease in instead of popping, and a page that arrives within the delay never shows one. */
+.loading-enter {
+	animation: loading-in 200ms ease-out 80ms both;
+}
+@keyframes loading-in {
+	from { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.nav-progress[data-state="loading"] { animation: none; }
 }

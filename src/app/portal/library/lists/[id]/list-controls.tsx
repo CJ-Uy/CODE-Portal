@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
-import { Check, Copy, LogOut, Trash2 } from "lucide-react";
+import { LogOut, Trash2 } from "lucide-react";
+import { CopyLinkButton } from "@/components/library/copy-link-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/components/ui/toast";
 import { actionErrorMessage } from "../../editor-input";
 import { deleteListAction, removeEditorAction, setSharedAction, updateListAction } from "../../list-actions";
 import { LIST_DESCRIPTION_MAX, LIST_NAME_MAX } from "../../list-input";
@@ -27,36 +27,6 @@ function useReturnFocus(confirming: boolean) {
 			back.current = true;
 		},
 	};
-}
-
-/** Copies the list's address. If the browser will not let the page use the clipboard, the address is shown to copy by hand. */
-export function CopyLinkButton({ listId }: { listId: string }) {
-	const toast = useToast();
-	const [copied, setCopied] = useState(false);
-	const [manual, setManual] = useState("");
-
-	const copy = async () => {
-		const link = `${window.location.origin}/portal/library/lists/${listId}`;
-		try {
-			await navigator.clipboard.writeText(link);
-			setManual("");
-			setCopied(true);
-			toast({ message: "Link copied." });
-			window.setTimeout(() => setCopied(false), 2000);
-		} catch {
-			setManual(link);
-		}
-	};
-
-	return (
-		<div className="grid min-w-0 gap-2">
-			<Button type="button" variant="outline" onClick={copy}>
-				{copied ? <Check aria-hidden /> : <Copy aria-hidden />}
-				{copied ? "Copied" : "Copy link"}
-			</Button>
-			{manual ? <Input readOnly value={manual} aria-label="List link" onFocus={(event) => event.currentTarget.select()} className="min-w-0 text-xs" /> : null}
-		</div>
-	);
 }
 
 /** The owner's "Share with members" switch. It cannot be turned on while a moderator has the list taken down. */
@@ -81,7 +51,8 @@ export function ShareControl({ listId, shared, takenDown }: { listId: string; sh
 		<div className="grid min-w-0 gap-2 rounded-xl border border-border bg-card p-4">
 			<div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3">
 				<Switch checked={optimistic} disabled={takenDown || pending} onChange={change} labelledBy={`share-${listId}`} describedBy={`share-note-${listId}`} />
-				<div className="grid min-w-0 flex-1 gap-0.5">
+				{/* At least 14rem for the words, so on a phone the copy button drops below them instead of squeezing them. */}
+				<div className="grid min-w-0 flex-1 basis-56 gap-0.5">
 					<p id={`share-${listId}`} className="font-medium">
 						Share with members
 					</p>
@@ -93,7 +64,7 @@ export function ShareControl({ listId, shared, takenDown }: { listId: string; sh
 								: "Only you and your editors can open this list."}
 					</p>
 				</div>
-				{optimistic && !takenDown ? <CopyLinkButton listId={listId} /> : null}
+				{optimistic && !takenDown ? <CopyLinkButton path={`/portal/library/lists/${listId}`} /> : null}
 			</div>
 			{error ? (
 				<p role="alert" className="min-w-0 text-sm text-destructive [overflow-wrap:anywhere]">

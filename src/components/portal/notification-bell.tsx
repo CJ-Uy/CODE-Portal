@@ -29,12 +29,12 @@ export function NotificationBell({ items, unreadCount, onMarkRead, onMarkAllRead
 	return (
 		<DropdownMenu open={open} onOpenChange={setOpen}>
 			<DropdownMenuTrigger asChild>
-				<Button variant="ghost" size="icon" aria-label="Notifications" className="relative">
+				<Button variant="ghost" size="icon" aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"} className="relative">
 					<Bell />
 					{unreadCount > 0 ? (
 						<Badge
-							variant="success"
-							className="absolute -right-1 -top-1 h-5 min-w-5 justify-center px-1 text-[10px]"
+							aria-hidden
+							className="absolute -right-1 -top-1 h-5 min-w-5 justify-center border-0 bg-[#90B4CC] px-1 text-[11px] text-primary"
 						>
 							{unreadCount > 9 ? "9+" : unreadCount}
 						</Badge>
@@ -72,7 +72,7 @@ export function NotificationBell({ items, unreadCount, onMarkRead, onMarkAllRead
 							<Link href={item.href ?? "/portal/notifications"}>
 								<span className="flex w-full items-center justify-between gap-2">
 									<span className="text-sm font-medium">{item.title}</span>
-									{item.readAt === null ? <span className="h-2 w-2 rounded-full bg-primary" /> : null}
+									{item.readAt === null ? <span className="size-2 shrink-0 rounded-full bg-[#4986AC]" aria-hidden /> : null}
 								</span>
 								<span className="text-xs text-muted-foreground">{item.body}</span>
 							</Link>

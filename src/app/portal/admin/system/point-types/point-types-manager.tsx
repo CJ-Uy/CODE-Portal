@@ -8,7 +8,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import type { PointTypeRow } from "@/db/repositories/pointTypes";
 import type { PointMilestone } from "@/lib/point-milestones";
-import { RETENTION_POINT_TYPE_ID } from "@/lib/point-types";
 import { cn } from "@/lib/utils";
 import { savePointTypesAction, upsertPointTypeAction } from "./actions";
 
@@ -243,6 +242,10 @@ function PointTypeEditor({
 							{row.key}
 						</Badge>
 						<Badge variant={row.active ? "success" : "outline"}>{row.active ? "Available" : "Inactive"}</Badge>
+						{/* Set by migration, not here: which types are retention parts is OSG's rule, not an officer's setting. */}
+						<Badge variant={row.retentionPeriod ? "info" : "outline"}>
+							{row.retentionPeriod === "year" ? "Retention: each year" : row.retentionPeriod === "semester" ? "Retention: each semester" : "Not counted for retention"}
+						</Badge>
 					</div>
 				</div>
 				<div className="flex shrink-0">
@@ -279,12 +282,12 @@ function PointTypeEditor({
 			<MilestoneEditor milestones={milestones} onChange={setMilestones} formId={formId} />
 
 			<label className="flex items-start gap-3 rounded-lg border border-border p-3 text-sm">
-				{row.id === RETENTION_POINT_TYPE_ID ? (
+				{row.retentionPeriod ? (
 					<>
 						<input type="hidden" name="activeIds" value={row.id} form={formId} />
 						<span
 							className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
-							title="Retention always exists and cannot be retired."
+							title="Retention parts cannot be retired: their events could no longer award them."
 						>
 							<Lock className="size-3.5" aria-hidden />
 							Always active

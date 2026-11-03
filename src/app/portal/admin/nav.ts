@@ -41,6 +41,15 @@ export const adminGroups: AdminGroup[] = [
 	G("content", "Content", [
 		{ segment: "announcements", label: "Announcements", description: "Publish updates for the member feed.", permission: "announcement:manage", feature: "announcements" },
 		{ segment: "library", label: "Library moderation", description: "Approve submissions, handle reports and manage tags.", permission: "library:moderate", feature: "library" },
+		{
+			segment: "gallery",
+			label: "Gallery",
+			description: "Restore anyone's deleted photos and folders.",
+			permission: "gallery:manage",
+			feature: "gallery",
+			// The gallery's own Recently deleted view; admins see everyone's deletions there.
+			href: "/portal/gallery/deleted",
+		},
 		{ segment: "surveys", label: "Surveys", description: "Create questions and select survey participants.", permission: "survey:configure", feature: "surveys" },
 		{
 			segment: "submissions",
@@ -50,6 +59,12 @@ export const adminGroups: AdminGroup[] = [
 			feature: "publicSite",
 		},
 		{ segment: "links", label: "Short Links", description: "Moderate member short links.", permission: "link:moderate" },
+		{
+			segment: "important-links",
+			label: "Important Links",
+			description: "Organize the member link directory into categories.",
+			permission: "nav:configure",
+		},
 	]),
 	G("email", "Email", [
 		{
@@ -120,7 +135,12 @@ export const adminGroups: AdminGroup[] = [
 		{ segment: "exports", label: "Data Exports", description: "XLSX exports of points data.", permission: "retention:record" },
 	]),
 	G("system", "System", [
-		{ segment: "nav-pins", label: "Pinned Nav Links", description: "Links shown in every member's top nav.", permission: "nav:configure" },
+		{
+			segment: "nav-pins",
+			label: "Pinned Nav Links",
+			description: "Optional shortcuts in every member's sidebar and menu. Usually left empty.",
+			permission: "nav:configure",
+		},
 		{
 			segment: "quick-links",
 			label: "Dashboard Shortcuts",

@@ -24,6 +24,7 @@ const CATEGORIES: AuditCategory[] = [
 	"announcement",
 	"library",
 	"email",
+	"gallery",
 ];
 
 function formatWhen(value: Date): string {

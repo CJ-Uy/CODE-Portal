@@ -52,31 +52,46 @@ export function createCalendarRepository(db: Db): CalendarRepository {
 			const { start, end } = monthRange(input.year, input.month);
 			const items: CalendarItem[] = [];
 
-			// Select by OVERLAP, not by start, so an event running in from the previous month is
-			// visible. monthRange is half-open [start, end), so a span ending exactly at `start` has
-			// zero overlap and must be excluded — hence the strict `>` for a real end, while a
-			// point-in-time event (null endsAt) starting exactly at `start` is inside the month.
-			const events = await db
-				.select({
-					id: crsEvents.id,
-					title: crsEvents.title,
-					startsAt: crsEvents.startsAt,
-					endsAt: crsEvents.endsAt,
-					readOnly: crsEvents.readOnly,
-					colour: eventTypeRules.colour,
-				})
-				.from(crsEvents)
-				.leftJoin(eventTypeRules, eq(eventTypeRules.type, crsEvents.type))
-				.where(
-					and(
-						isNull(crsEvents.deletedAt),
-						lt(crsEvents.startsAt, end),
-						or(
-							and(isNull(crsEvents.endsAt), gte(crsEvents.startsAt, start)),
-							and(isNotNull(crsEvents.endsAt), gt(crsEvents.endsAt, start)),
+			const canSeePrivate = can(actor, "member:manage");
+			// The four reads are independent, so they share one D1 round trip instead of four.
+			const [events, [birthdayType], memberRows, termRows] = await Promise.all([
+				// Select by OVERLAP, not by start, so an event running in from the previous month is
+				// visible. monthRange is half-open [start, end), so a span ending exactly at `start` has
+				// zero overlap and must be excluded — hence the strict `>` for a real end, while a
+				// point-in-time event (null endsAt) starting exactly at `start` is inside the month.
+				db
+					.select({
+						id: crsEvents.id,
+						title: crsEvents.title,
+						startsAt: crsEvents.startsAt,
+						endsAt: crsEvents.endsAt,
+						readOnly: crsEvents.readOnly,
+						colour: eventTypeRules.colour,
+					})
+					.from(crsEvents)
+					.leftJoin(eventTypeRules, eq(eventTypeRules.type, crsEvents.type))
+					.where(
+						and(
+							isNull(crsEvents.deletedAt),
+							lt(crsEvents.startsAt, end),
+							or(
+								and(isNull(crsEvents.endsAt), gte(crsEvents.startsAt, start)),
+								and(isNotNull(crsEvents.endsAt), gt(crsEvents.endsAt, start)),
+							),
 						),
 					),
-				);
+				// Birthdays are synthesized rather than stored as events, but they still answer to the
+				// admin-managed `birthday` type row for colour. A missing row degrades to accent.
+				db.select({ colour: eventTypeRules.colour }).from(eventTypeRules).where(eq(eventTypeRules.type, BIRTHDAY_EVENT_TYPE)),
+				db
+					.select({ id: members.id, name: members.name, birthday: members.birthday, birthdayPrivate: members.birthdayPrivate })
+					.from(members),
+				db
+					.select({ id: terms.id, name: terms.name, endsAt: terms.endsAt })
+					.from(terms)
+					.where(and(gte(terms.endsAt, start), lt(terms.endsAt, end))),
+			]);
+
 			for (const event of events) {
 				items.push({
 					id: `event:${event.id}`,
@@ -94,17 +109,7 @@ export function createCalendarRepository(db: Db): CalendarRepository {
 				});
 			}
 
-			const canSeePrivate = can(actor, "member:manage");
-			// Birthdays are synthesized rather than stored as events, but they still answer to the
-			// admin-managed `birthday` type row for colour. A missing row degrades to accent.
-			const [birthdayType] = await db
-				.select({ colour: eventTypeRules.colour })
-				.from(eventTypeRules)
-				.where(eq(eventTypeRules.type, BIRTHDAY_EVENT_TYPE));
 			const birthdayColour = birthdayType?.colour || "accent";
-			const memberRows = await db
-				.select({ id: members.id, name: members.name, birthday: members.birthday, birthdayPrivate: members.birthdayPrivate })
-				.from(members);
 			for (const member of memberRows) {
 				if (member.birthdayPrivate && !canSeePrivate) continue;
 				const date = birthdayInMonth(member.birthday, input.year, input.month);
@@ -124,10 +129,6 @@ export function createCalendarRepository(db: Db): CalendarRepository {
 				});
 			}
 
-			const termRows = await db
-				.select({ id: terms.id, name: terms.name, endsAt: terms.endsAt })
-				.from(terms)
-				.where(and(gte(terms.endsAt, start), lt(terms.endsAt, end)));
 			for (const term of termRows) {
 				items.push({
 					id: `term_deadline:${term.id}`,
@@ -149,30 +150,30 @@ export function createCalendarRepository(db: Db): CalendarRepository {
 		},
 
 		async getEvent(actor, eventId) {
-			const [event] = await db.select().from(crsEvents).where(eq(crsEvents.id, eventId)).limit(1);
+			// The side reads only need the id, so they go out with the event read rather than after it.
+			// A missing event wastes four empty reads, which is cheaper than four extra round trips.
+			const [[event], [myRsvp], [attending], [mine], media] = await Promise.all([
+				db.select().from(crsEvents).where(eq(crsEvents.id, eventId)).limit(1),
+				db
+					.select({ state: eventRsvps.state, answers: eventRsvps.answersJson })
+					.from(eventRsvps)
+					.where(and(eq(eventRsvps.eventId, eventId), eq(eventRsvps.memberId, actor.memberId)))
+					.limit(1),
+				db
+					.select({ value: count() })
+					.from(eventRsvps)
+					.where(and(eq(eventRsvps.eventId, eventId), eq(eventRsvps.state, "going"))),
+				db
+					.select({ memberId: crsAttendance.memberId })
+					.from(crsAttendance)
+					.where(and(eq(crsAttendance.eventId, eventId), eq(crsAttendance.memberId, actor.memberId)))
+					.limit(1),
+				db
+					.select({ id: eventMedia.id, r2Key: eventMedia.r2Key, caption: eventMedia.caption })
+					.from(eventMedia)
+					.where(eq(eventMedia.eventId, eventId)),
+			]);
 			if (!event || event.deletedAt) return null;
-
-			const [myRsvp] = await db
-				.select({ state: eventRsvps.state, answers: eventRsvps.answersJson })
-				.from(eventRsvps)
-				.where(and(eq(eventRsvps.eventId, eventId), eq(eventRsvps.memberId, actor.memberId)))
-				.limit(1);
-
-			const [attending] = await db
-				.select({ value: count() })
-				.from(eventRsvps)
-				.where(and(eq(eventRsvps.eventId, eventId), eq(eventRsvps.state, "going")));
-
-			const [mine] = await db
-				.select({ memberId: crsAttendance.memberId })
-				.from(crsAttendance)
-				.where(and(eq(crsAttendance.eventId, eventId), eq(crsAttendance.memberId, actor.memberId)))
-				.limit(1);
-
-			const media = await db
-				.select({ id: eventMedia.id, r2Key: eventMedia.r2Key, caption: eventMedia.caption })
-				.from(eventMedia)
-				.where(eq(eventMedia.eventId, eventId));
 
 			return {
 				id: event.id,

@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { signInPath } from "@/server/auth/sign-in";
-import { ArrowLeft, ListPlus, Plus } from "lucide-react";
+import { ListPlus, Plus } from "lucide-react";
 import { getRepositories } from "@/db";
 import type { LibraryCommentView } from "@/db/repositories/library";
 import type { LibraryListView } from "@/db/repositories/library-lists";
+import { CopyLinkButton } from "@/components/library/copy-link-button";
+import { LibraryCrumbs } from "@/components/library/library-header";
 import { ReportButton } from "@/components/library/report-button";
 import { EmptyState } from "@/components/portal/empty-state";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +16,7 @@ import { fullStopFor, relativeAge } from "@/lib/library/list-view";
 import { getActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
 import { isFeatureEnabled } from "@/server/features";
-import { CopyLinkButton, DeleteListButton, DetailsForm, LeaveListButton, ShareControl } from "./list-controls";
+import { DeleteListButton, DetailsForm, LeaveListButton, ShareControl } from "./list-controls";
 import { ListComments } from "./list-comments";
 import { ListEditor, type ListRow } from "./list-editor";
 import { ListEditors } from "./list-editors";
@@ -59,10 +61,7 @@ export default async function LibraryListPage({ params }: { params: Promise<{ id
 
 	return (
 		<div className="mx-auto grid min-w-0 max-w-4xl gap-6">
-			<Link href="/portal/library/lists" className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-				<ArrowLeft className="size-4" aria-hidden />
-				Lists
-			</Link>
+			<LibraryCrumbs trail={[{ label: "Lists", href: "/portal/library/lists" }, { label: list.name }]} />
 
 			{takenDown ? (
 				<p role="status" className="min-w-0 rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm [overflow-wrap:anywhere]">
@@ -125,10 +124,11 @@ export default async function LibraryListPage({ params }: { params: Promise<{ id
 							</Link>
 						</Button>
 					) : null}
-					{!isOwner && list.shared && !takenDown ? <CopyLinkButton listId={list.id} /> : null}
+					{!isOwner && list.shared && !takenDown ? <CopyLinkButton path={`/portal/library/lists/${list.id}`} /> : null}
 					{!isOwner && list.shared && !takenDown ? <ReportButton listId={list.id} /> : null}
 					{list.role === "editor" ? <LeaveListButton listId={list.id} memberId={actor.memberId} /> : null}
 				</div>
+				{canEdit && !takenDown ? <p className="min-w-0 text-sm text-muted-foreground">Already in the library? Open it and use Save to add it to this list.</p> : null}
 			</header>
 
 			{isOwner ? (

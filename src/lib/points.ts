@@ -32,3 +32,9 @@ export function pointsPhrase(value: number, label: string): string {
 export function isValidPoints(value: number): boolean {
 	return Number.isFinite(value);
 }
+
+/**
+ * Share of an event's points paid at check-in when the event has a feedback form. Answering the form pays the rest.
+ * Fixed by OSG (2026-10-23), not configurable.
+ */
+export const ATTENDANCE_SHARE = 0.75;

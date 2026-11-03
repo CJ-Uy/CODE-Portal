@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { findUnknownTags } from "./merge";
+import { HTML_MAX } from "./html";
+import { findUnknownTags, VARIABLE_PATTERN } from "./merge";
+import { SHEET_LIMITS } from "./sheet";
 import type { EmailBlock, EmailBlockType } from "./types";
 
 const httpsUrl = z
@@ -19,7 +21,7 @@ const tagged = (max: number) =>
 		.max(max)
 		.superRefine((value, ctx) => {
 			const unknown = findUnknownTags(value);
-			if (unknown.length > 0) ctx.addIssue({ code: "custom", message: `Unknown field: ${unknown.join(", ")}` });
+			if (unknown.length > 0) ctx.addIssue({ code: "custom", message: `Field names use lowercase letters, numbers and underscores. Fix: ${unknown.join(", ")}` });
 		});
 
 const id = z.string().min(1).max(40);
@@ -34,6 +36,7 @@ export const blockSchema = z.discriminatedUnion("type", [
 		props: z.object({ src: httpsUrl, alt: z.string().max(200), href: linkUrl.optional() }),
 	}),
 	z.object({ id, type: z.literal("divider"), props: z.object({}).strict() }),
+	z.object({ id, type: z.literal("html"), props: z.object({ html: tagged(HTML_MAX) }) }),
 	z.object({ id, type: z.literal("spacer"), props: z.object({ size: z.enum(["sm", "md", "lg"]) }) }),
 	z.object({
 		id,
@@ -48,7 +51,10 @@ export const blockSchema = z.discriminatedUnion("type", [
 	}),
 ]);
 
-export const blocksSchema = z.array(blockSchema).max(60);
+export const blocksSchema = z
+	.array(blockSchema)
+	.max(60)
+	.refine((blocks) => blocks.length <= 1 || blocks.every((b) => b.type !== "html"), "An HTML email has a single HTML body. Remove the other blocks.");
 
 export const emailContentSchema = z.object({
 	subject: tagged(200),
@@ -73,20 +79,30 @@ export const audienceSchema = z.object({
 	exclude: z.array(ruleSchema).max(100),
 });
 
+const variable = z.string().regex(VARIABLE_PATTERN);
+
 export const mergeOverridesSchema = z.record(
 	z.string().trim().toLowerCase().email(),
-	z.object({
-		first_name: z.string().trim().max(200).optional(),
-		full_name: z.string().trim().max(200).optional(),
-		nickname: z.string().trim().max(200).optional(),
-		batch: z.string().trim().max(200).optional(),
-	}).strict(),
+	z.record(variable, z.string().trim().max(SHEET_LIMITS.cell)).refine((value) => !Object.hasOwn(value, "email") && Object.keys(value).length <= SHEET_LIMITS.columns + 5, "Corrections cannot change the email address."),
 ).refine((value) => Object.keys(value).length <= 5000, "Use at most 5,000 recipient corrections per email.");
+
+export const mergeSheetSchema = z
+	.object({
+		name: z.string().max(200),
+		importedAt: z.string().max(40),
+		keyColumn: z.string().max(200),
+		columns: z.array(z.object({ header: z.string().max(200), variable: variable.refine((v) => v !== "email") })).min(1).max(SHEET_LIMITS.columns),
+		rows: z.record(z.string().trim().toLowerCase().email(), z.record(variable, z.string().max(SHEET_LIMITS.cell))).refine((rows) => Object.keys(rows).length <= SHEET_LIMITS.rows, `Use at most ${SHEET_LIMITS.rows.toLocaleString()} rows.`),
+	})
+	.refine((sheet) => JSON.stringify(sheet).length <= SHEET_LIMITS.bytes, "This sheet is too large to save with the email. Remove unused columns or rows.")
+	.nullable();
 
 const blockId = () => `blk_${crypto.randomUUID().replaceAll("-", "").slice(0, 10)}`;
 
+export const newHtmlBlock = (html: string): EmailBlock => ({ id: blockId(), type: "html", props: { html } });
+
 /** Default content for a block added from the palette. */
-export function newBlock(type: Exclude<EmailBlockType, "event">): EmailBlock {
+export function newBlock(type: Exclude<EmailBlockType, "event" | "html">): EmailBlock {
 	switch (type) {
 		case "heading":
 			return { id: blockId(), type, props: { text: "Heading", level: 1 } };

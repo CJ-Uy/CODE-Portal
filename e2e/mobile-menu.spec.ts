@@ -4,7 +4,7 @@ import { signInAs } from "./fixtures/auth";
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
 
 async function openMenu(page: Page) {
-	await page.getByRole("button", { name: "Open menu", exact: true }).click();
+	await page.getByRole("button", { name: "Check-in code and quick actions", exact: true }).click();
 	const menu = page.getByRole("dialog", { name: "Quick actions" });
 	await expect(menu).toBeVisible();
 	await expect(menu).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, 0)");
@@ -38,6 +38,10 @@ test("mobile tabs and grouped actions keep every released page reachable", async
 	await expect(menu.getByRole("link", { name: "Create event", exact: true })).toHaveAttribute("href", "/portal/calendar?create=1");
 	await expect(menu.getByRole("link", { name: "New short link", exact: true })).toHaveAttribute("href", "/portal/links?create=1");
 	const more = menu.getByRole("navigation", { name: "More modules" });
+	await expect(more.getByRole("group").getByRole("heading")).toHaveText(["Community", "Resources & tools", "Personal"]);
+	await expect(more.getByRole("group", { name: "Community", exact: true }).getByRole("link")).toHaveText(["Announcements", "Ments Tree", "Gallery"]);
+	await expect(more.getByRole("group", { name: "Resources & tools", exact: true }).getByRole("link")).toHaveText(["Library", "Important links", "Link shortener", "Guides"]);
+	await expect(more.getByRole("group", { name: "Personal", exact: true }).getByRole("link")).toHaveText(["Mail", "Notifications"]);
 	for (const name of ["Ments Tree", "Link shortener", "Mail"]) await expect(more.getByRole("link", { name, exact: true })).toBeVisible();
 	await expect(more.getByRole("link", { name: "Retention", exact: true })).toHaveCount(0);
 	await expectNoOverflow(page);
@@ -47,7 +51,7 @@ test("mobile tabs and grouped actions keep every released page reachable", async
 	expect(await menu.getByRole("button", { name: "Close menu or drag down" }).evaluate((element) => element.getBoundingClientRect().top)).toBe(handleTop);
 	await page.keyboard.press("Escape");
 	await expect(menu).toHaveCount(0);
-	await expect(page.getByRole("button", { name: "Open menu", exact: true })).toBeFocused();
+	await expect(page.getByRole("button", { name: "Check-in code and quick actions", exact: true })).toBeFocused();
 	await page.setViewportSize({ width: 320, height: 568 });
 	await openMenu(page);
 	await expectNoOverflow(page);
@@ -59,7 +63,11 @@ test("mobile tabs and grouped actions keep every released page reachable", async
 	await page.keyboard.press("Escape");
 	await page.setViewportSize({ width: 1440, height: 900 });
 	await expect(tabs).toHaveCount(1);
-	await expect(page.getByRole("button", { name: "Open menu", exact: true })).toBeHidden();
+	await expect(page.getByRole("button", { name: "Check-in code and quick actions", exact: true })).toBeHidden();
+	await expect(tabs.locator(':scope > a[href^="/portal"]')).toHaveText(["Home", "Calendar", "Retention"]);
+	await expect(tabs.getByRole("group").getByRole("link")).toHaveText(["Announcements", "Ments Tree", "Gallery", "Library", "Important links", "Link shortener", "Guides", "Mail", "Notifications", "Profile"]);
+	await expect(tabs.getByRole("group", { name: "Community", exact: true }).getByRole("link")).toHaveText(["Announcements", "Ments Tree", "Gallery"]);
+	await expect(tabs.getByRole("link", { name: "Retention", exact: true })).toHaveAttribute("aria-current", "page");
 	await expectNoOverflow(page);
 	await page.screenshot({ path: testInfo.outputPath("desktop-portal.png") });
 	expect(errors).toEqual([]);

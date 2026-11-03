@@ -7,12 +7,13 @@ import type { CampaignInput, PersonalizationInput } from "@/db/repositories/emai
 import type { TemplateInput } from "@/db/repositories/email-templates";
 import { fromLocalInput } from "@/lib/date-slots";
 import { runAction } from "@/lib/email/action-result";
-import { audienceSchema, emailContentSchema, mergeOverridesSchema } from "@/lib/email/blocks";
-import { MERGE_TAGS, mergeValuesFor, type MergeOverrides } from "@/lib/email/merge";
+import { audienceSchema, emailContentSchema, mergeOverridesSchema, mergeSheetSchema } from "@/lib/email/blocks";
+import { mergeValuesFor, VARIABLE_PATTERN, type MergeOverrides, type MergeSheet } from "@/lib/email/merge";
 import { renderEmail, valueResolver } from "@/lib/email/render";
 import type { Audience, EmailBlock } from "@/lib/email/types";
 import { requireActor } from "@/server/auth/actor";
 import { emailQueueFromEnv, sendingDepsFromEnv } from "@/server/email/db";
+import { blocksForSending } from "@/server/email/inline-css";
 import { queueEmailCampaign } from "@/server/email/jobs";
 import { assertFeatureEnabled } from "@/server/features";
 
@@ -85,8 +86,9 @@ export async function moveCategoryAction(id: string, direction: "up" | "down") {
 export async function saveTemplateAction(input: TemplateInput) {
 	return runAction(async () => {
 		const { actor, email } = await context();
+		// No revalidatePath: it refreshes the current route, which after the editor's /new to /[id] URL swap remounts the
+		// editor mid-typing. Every email page is force-dynamic, so the next visit to a list fetches fresh rows anyway.
 		const row = await email.templates.save(actor, input);
-		revalidatePath(`${BASE}/templates`);
 		return row.id;
 	});
 }
@@ -115,8 +117,8 @@ export async function saveCampaignAction(input: CampaignInput) {
 		const refs = z
 			.object({ id: idSchema.optional(), templateId: idSchema.nullable(), categoryId: idSchema.nullable(), senderId: idSchema.nullable() })
 			.parse(input);
+		// Autosave: no revalidatePath, for the same reason as saveTemplateAction.
 		const row = await email.campaigns.saveDraft(actor, { ...input, ...refs });
-		revalidatePath(BASE);
 		return { id: row.id, status: row.status };
 	});
 }
@@ -139,14 +141,21 @@ export async function previewPersonalizationAction(input: PersonalizationInput) 
 	return runAction(async () => {
 		const { actor, email } = await context();
 		const parsed = z.object({
-			audience: audienceSchema, categoryId: idSchema.nullable(), tags: z.array(z.enum(MERGE_TAGS)).max(5),
-			overrides: mergeOverridesSchema, q: z.string().max(80).optional(), missingOnly: z.boolean().optional(), page: z.number().int().min(0).max(10000).optional(),
+			audience: audienceSchema, categoryId: idSchema.nullable(), tags: z.array(z.string().regex(VARIABLE_PATTERN)).max(60),
+			overrides: mergeOverridesSchema, sheet: mergeSheetSchema.optional(), q: z.string().max(80).optional(), missingOnly: z.boolean().optional(), page: z.number().int().min(0).max(10000).optional(),
 		}).parse(input);
 		return email.campaigns.previewPersonalization(actor, parsed);
 	});
 }
 
-export async function testSendAction(input: { subject: string; preheader: string; blocks: EmailBlock[]; categoryId: string | null; senderId: string | null; mergeOverrides?: MergeOverrides }) {
+export async function sheetRecipientsAction(audience: Audience, categoryId: string | null) {
+	return runAction(async () => {
+		const { actor, email } = await context();
+		return email.campaigns.sheetRecipients(actor, audienceSchema.parse(audience), categoryId ? idSchema.parse(categoryId) : null);
+	});
+}
+
+export async function testSendAction(input: { subject: string; preheader: string; blocks: EmailBlock[]; categoryId: string | null; senderId: string | null; mergeOverrides?: MergeOverrides; mergeSheet?: MergeSheet | null }) {
 	return runAction(async () => {
 		const { actor, repos, email } = await context();
 		const content = emailContentSchema.parse({ subject: input.subject, preheader: input.preheader, blocks: input.blocks });
@@ -160,9 +169,10 @@ export async function testSendAction(input: { subject: string; preheader: string
 		if (!me) throw new Error("Your member profile was not found.");
 		const category = categories.find((c) => c.id === input.categoryId);
 		const { sender, config } = sendingDepsFromEnv();
-		const values = mergeValuesFor(me, mergeOverridesSchema.parse(input.mergeOverrides ?? {}));
+		const values = mergeValuesFor(me, mergeOverridesSchema.parse(input.mergeOverrides ?? {}), mergeSheetSchema.parse(input.mergeSheet ?? null));
 		const rendered = renderEmail({
 			...content,
+			blocks: await blocksForSending(content.blocks),
 			resolve: valueResolver(values),
 			values,
 			baseUrl: config.publicBaseUrl,

@@ -1,4 +1,5 @@
-import { replaceTags, type MergeTag, type MergeValues } from "./merge";
+import { htmlBodyOf, htmlToText, sanitizeEmailHtml } from "./html";
+import { replaceTags, replaceTagsOneLine, type MergeValues } from "./merge";
 import type { EmailBlock } from "./types";
 
 export const EMAIL_COLORS = {
@@ -15,7 +16,7 @@ export const EMAIL_COLORS = {
 const HEADING_FONT = "Georgia, 'Times New Roman', serif";
 const BODY_FONT = "Helvetica, Arial, sans-serif";
 
-export type TagResolver = (tag: MergeTag) => string;
+export type TagResolver = (tag: string) => string;
 
 export function escapeHtml(value: string): string {
 	return value
@@ -26,13 +27,14 @@ export function escapeHtml(value: string): string {
 		.replaceAll("'", "&#39;");
 }
 
+/** Escaped value; a line break in a sheet cell becomes <br>. */
 export const valueResolver =
 	(values: MergeValues): TagResolver =>
 	(tag) =>
-		escapeHtml(values[tag]);
+		escapeHtml(values[tag] ?? "").replaceAll("\n", "<br>");
 
 export const pillResolver: TagResolver = (tag) =>
-	`<span data-merge-tag="${tag}" style="display:inline-block;padding:0 6px;border-radius:999px;background:${EMAIL_COLORS.light};color:${EMAIL_COLORS.blue};font-size:0.85em;font-family:${BODY_FONT};">${tag.replace("_", " ")}</span>`;
+	`<span data-merge-tag="${tag}" style="display:inline-block;padding:0 6px;border-radius:999px;background:${EMAIL_COLORS.light};color:${EMAIL_COLORS.blue};font-size:0.85em;font-family:${BODY_FONT};">${tag.replaceAll("_", " ")}</span>`;
 
 /** Only https and mailto links survive; anything else becomes an inert "#". */
 function safeUrl(url: string): string {
@@ -88,6 +90,8 @@ export function renderBlockHtml(block: EmailBlock, resolve: TagResolver, baseUrl
 			return row(`<div style="height:1px;background:${EMAIL_COLORS.light};margin:8px 0 24px;line-height:1px;font-size:1px;">&nbsp;</div>`);
 		case "spacer":
 			return row(`<div style="height:${SPACER[block.props.size]}px;line-height:1px;font-size:1px;">&nbsp;</div>`, "0");
+		case "html":
+			return row(sanitizeEmailHtml(replaceTags(block.props.html, resolve)).body);
 		case "event": {
 			const href = safeAttr(`${baseUrl}${block.props.path}`);
 			return row(
@@ -137,10 +141,11 @@ export type RenderInput = {
 	footer: FooterInput;
 };
 
-export type RenderedEmail = { subject: string; preheader: string; html: string; bodyHtml: string; text: string };
+/** `framed` emails carry author HTML and CSS: show `html` in a sandboxed frame, never `bodyHtml` inline. */
+export type RenderedEmail = { subject: string; preheader: string; html: string; bodyHtml: string; text: string; framed: boolean };
 
 function blockText(block: EmailBlock, values: MergeValues, baseUrl: string): string {
-	const merge = (text: string) => replaceTags(text, (tag) => values[tag]);
+	const merge = (text: string) => replaceTags(text, (tag) => values[tag] ?? "");
 	const plain = (text: string) =>
 		merge(text)
 			.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, "$1 ($2)")
@@ -159,29 +164,74 @@ function blockText(block: EmailBlock, values: MergeValues, baseUrl: string): str
 			return "---";
 		case "spacer":
 			return "";
+		case "html":
+			return htmlToText(sanitizeEmailHtml(merge(block.props.html)).body);
 		case "event":
 			return `${block.props.title}\n${block.props.when} - ${block.props.place}\n${baseUrl}${block.props.path}`;
 	}
 }
 
+// The footer sits on the author's background, so it brings its own dark-mode colors (Apple Mail, then Outlook.com).
+const FRAMED_FOOTER_CSS =
+	"@media (prefers-color-scheme: dark){.code-footer td{color:#AAAFB5 !important;border-color:#3D5266 !important}.code-footer a{color:#D7DFE9 !important}}[data-ogsc] .code-footer td{color:#AAAFB5 !important}[data-ogsc] .code-footer a{color:#D7DFE9 !important}";
+const preheaderSpan = (preheader: string) => `<span style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(preheader)}</span>`;
+
+/** Author HTML: merged (values escaped), then sanitized, with the required footer appended outside the author's markup. */
+function renderFramed(input: RenderInput, source: string, subject: string, preheader: string) {
+	const doc = sanitizeEmailHtml(replaceTags(source, input.resolve));
+	const footer = `<table role="presentation" class="code-footer" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;">${renderFooterHtml(input.footer)}</table>`;
+	const bodyHtml = `<div${doc.bodyStyle ? ` style="${escapeHtml(doc.bodyStyle)}"` : ""}>${doc.body}${footer}</div>`;
+	const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><title>${escapeHtml(subject)}</title><style>${doc.styles}\n${FRAMED_FOOTER_CSS}</style></head><body style="margin:0;padding:0;">${preheaderSpan(preheader)}${bodyHtml}</body></html>`;
+	return { html, bodyHtml, content: doc.body };
+}
+
 export function renderEmail(input: RenderInput): RenderedEmail {
-	const subject = replaceTags(input.subject, (tag) => input.values[tag]);
-	const preheader = replaceTags(input.preheader, (tag) => input.values[tag]);
+	const subject = replaceTagsOneLine(input.subject, input.values);
+	const preheader = replaceTagsOneLine(input.preheader, input.values);
+	const source = htmlBodyOf(input.blocks);
+	if (source !== null) {
+		const { html, bodyHtml, content } = renderFramed(input, source, subject, preheader);
+		return { subject, preheader, html, bodyHtml, text: [htmlToText(content), "--", footerTextOf(input.footer)].join("\n\n"), framed: true };
+	}
 	const logoUrl = `${input.baseUrl}/code-logo-full-navy.png`;
 	const bodyHtml = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#FFFFFF;border-radius:12px;">${renderHeaderHtml(logoUrl)}${input.blocks
 		.map((block) => renderBlockHtml(block, input.resolve, input.baseUrl))
 		.join("")}${renderFooterHtml(input.footer)}</table>`;
-	const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(subject)}</title></head><body style="margin:0;padding:0;background:${EMAIL_COLORS.page};"><span style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(preheader)}</span><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${EMAIL_COLORS.page};"><tr><td style="padding:24px 12px;">${bodyHtml}</td></tr></table></body></html>`;
-	const footerText = input.footer.guest
+	const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(subject)}</title></head><body style="margin:0;padding:0;background:${EMAIL_COLORS.page};">${preheaderSpan(preheader)}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${EMAIL_COLORS.page};"><tr><td style="padding:24px 12px;">${bodyHtml}</td></tr></table></body></html>`;
+	const text = [...input.blocks.map((block) => blockText(block, input.values, input.baseUrl)).filter(Boolean), "--", footerTextOf(input.footer)].join("\n\n");
+	return { subject, preheader, html, bodyHtml, text, framed: false };
+}
+
+function footerTextOf(footer: FooterInput): string {
+	return footer.guest
 		? GUEST_FOOTER
 		: [
-				`Category: ${input.footer.categoryName}`,
-				input.footer.archiveUrl ? `Read in the portal: ${input.footer.archiveUrl}` : null,
-				`Email preferences: ${input.footer.preferencesUrl}`,
-				!input.footer.required && input.footer.unsubscribeUrl ? `Unsubscribe: ${input.footer.unsubscribeUrl}` : null,
+				`Category: ${footer.categoryName}`,
+				footer.archiveUrl ? `Read in the portal: ${footer.archiveUrl}` : null,
+				`Email preferences: ${footer.preferencesUrl}`,
+				!footer.required && footer.unsubscribeUrl ? `Unsubscribe: ${footer.unsubscribeUrl}` : null,
 			]
 				.filter(Boolean)
 				.join("\n");
-	const text = [...input.blocks.map((block) => blockText(block, input.values, input.baseUrl)).filter(Boolean), "--", footerText].join("\n\n");
-	return { subject, preheader, html, bodyHtml, text };
+}
+
+/** Block content as an editable HTML document, fields kept as {{tags}}, for switching an email to the HTML body. */
+export function blocksToHtml(blocks: EmailBlock[], baseUrl: string): string {
+	const keep: TagResolver = (tag) => `{{${tag}}}`;
+	const rows = [renderHeaderHtml(`${baseUrl}/code-logo-full-navy.png`), ...blocks.map((block) => renderBlockHtml(block, keep, baseUrl))].join("\n");
+	return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="margin:0;padding:0;background-color:${EMAIL_COLORS.page};">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${EMAIL_COLORS.page};"><tr><td style="padding:24px 12px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background-color:#FFFFFF;border-radius:12px;">
+${rows}
+</table>
+</td></tr></table>
+</body>
+</html>
+`;
 }

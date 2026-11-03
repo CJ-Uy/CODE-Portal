@@ -39,6 +39,7 @@ import { runAtomic } from "./atomic";
 import type { AuditRepository } from "./audit";
 import { chunk } from "./email-audience";
 import { notify } from "./notifications";
+import { buildFeedbackShareUpsert } from "./event-awards";
 import { getCurrentTermId } from "./retention";
 import { eligibleMemberIds, eventRole } from "./survey-access";
 import { pageLimit } from "./types";
@@ -95,36 +96,35 @@ async function respondentState(
 	survey: Survey,
 	now: Date,
 ): Promise<{ state: RespondentState; eventTitle: string | null; invited: boolean }> {
-	let event: { title: string; deletedAt: Date | null } | undefined;
-	if (survey.eventId) {
-		[event] = await db
-			.select({ title: crsEvents.title, deletedAt: crsEvents.deletedAt })
-			.from(crsEvents)
-			.where(eq(crsEvents.id, survey.eventId))
-			.limit(1);
-	}
+	// Every read needs only the survey row, so they share one round trip. The decisions below keep
+	// their order; a read that an earlier answer makes moot is simply unused.
+	const [[event], role, [assignment], [attended]] = await Promise.all([
+		survey.eventId
+			? db.select({ title: crsEvents.title, deletedAt: crsEvents.deletedAt }).from(crsEvents).where(eq(crsEvents.id, survey.eventId)).limit(1)
+			: Promise.resolve([]),
+		survey.eventId ? eventRole(db, survey.eventId, actor.memberId) : Promise.resolve(null),
+		db
+			.select({ completedAt: surveyAssignments.completedAt })
+			.from(surveyAssignments)
+			.where(and(eq(surveyAssignments.surveyId, survey.id), eq(surveyAssignments.memberId, actor.memberId)))
+			.limit(1),
+		survey.eventId
+			? db
+					.select({ memberId: crsAttendance.memberId })
+					.from(crsAttendance)
+					.where(and(eq(crsAttendance.eventId, survey.eventId), eq(crsAttendance.memberId, actor.memberId)))
+					.limit(1)
+			: Promise.resolve([]),
+	]);
 	const eventTitle = event?.title ?? null;
 	const result = (state: RespondentState, invited = false) => ({ state, eventTitle, invited });
 
 	if (survey.status === "draft") return result("ineligible");
 	if (effectiveStatus(survey, now) === "closed" || event?.deletedAt) return result("closed");
-	if (survey.eventId && (await eventRole(db, survey.eventId, actor.memberId))) return result("staff");
-
-	const [assignment] = await db
-		.select({ completedAt: surveyAssignments.completedAt })
-		.from(surveyAssignments)
-		.where(and(eq(surveyAssignments.surveyId, survey.id), eq(surveyAssignments.memberId, actor.memberId)))
-		.limit(1);
+	if (role) return result("staff");
 	if (assignment) return assignment.completedAt ? result("answered") : result("open", true);
-
-	if (event && survey.allowWalkIn) {
-		const [attended] = await db
-			.select({ memberId: crsAttendance.memberId })
-			.from(crsAttendance)
-			.where(and(eq(crsAttendance.eventId, survey.eventId!), eq(crsAttendance.memberId, actor.memberId)))
-			.limit(1);
-		if (attended) return result("open");
-	}
+	// Every attendee can answer an event's form, sampled or not: answering pays the rest of their points.
+	if (event && attended) return result("open");
 	return result("ineligible");
 }
 
@@ -146,8 +146,10 @@ function validateAnswers(questions: SurveyQuestion[], answers: SubmitSurveyRespo
 	}
 }
 
-// New drafts award 1 Feedback point for answering, while that point type is there to award.
-async function draftPointDefaults(db: SurveyDb): Promise<{ pointsAward: number; pointTypeId: string | null }> {
+// New drafts award 1 Feedback point for answering, while that point type is there to award. An event's form pays the
+// rest of the event's points instead (buildFeedbackShareUpsert), so it starts at 0.
+async function draftPointDefaults(db: SurveyDb, eventId?: string | null): Promise<{ pointsAward: number; pointTypeId: string | null }> {
+	if (eventId) return { pointsAward: 0, pointTypeId: null };
 	const [feedback] = await db
 		.select({ id: pointTypes.id })
 		.from(pointTypes)
@@ -163,6 +165,8 @@ async function draftPointDefaults(db: SurveyDb): Promise<{ pointsAward: number; 
  * the time they answered. With no such term, or a point type retired since sending, there is nothing to award.
  */
 async function answerAward(db: SurveyDb, survey: Survey, memberId: string, eventTitle: string | null, now: Date) {
+	// An event's form pays the rest of the event's points, in place of points for answering.
+	if (survey.eventId) return [buildFeedbackShareUpsert(db, survey.eventId, memberId)];
 	if (survey.pointsAward <= 0 || !survey.pointTypeId) return [];
 	const [type] = await db
 		.select({ id: pointTypes.id })
@@ -248,7 +252,7 @@ export type SurveysRepository = {
 	getById(actor: Actor, id: string): Promise<{ survey: Survey; questions: SurveyQuestion[] } | null>;
 	getForRespondent(actor: Actor, surveyId: string, now?: Date): Promise<RespondentView | null>;
 	submitResponse(actor: Actor, input: SubmitSurveyResponseInput, now?: Date): Promise<{ ok: true }>;
-	openFeedbackForEvent(actor: Actor, eventId: string, now?: Date): Promise<{ surveyId: string; state: RespondentState } | null>;
+	openFeedbackForEvent(actor: Actor, eventId: string, now?: Date): Promise<{ surveyId: string; state: RespondentState; closesAt: Date | null } | null>;
 };
 
 export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): SurveysRepository {
@@ -265,7 +269,7 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 					eventId: input.eventId ?? null,
 					status: "draft",
 					createdBy: actor.memberId,
-					...(await draftPointDefaults(db)),
+					...(await draftPointDefaults(db, input.eventId)),
 				})
 				.returning();
 
@@ -376,7 +380,7 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 			}
 
 			const surveyId = createId("srv");
-			const points = await draftPointDefaults(db);
+			const points = await draftPointDefaults(db, input.eventId);
 			// One atomic write, so a failed question insert cannot leave an empty draft behind.
 			await runAtomic(db, [
 				db.insert(surveys).values({
@@ -438,7 +442,7 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 			if (survey.status !== "draft") throw new Error("This form has already been sent.");
 			if (input.closesAt <= now) throw new Error("Pick a closing time in the future.");
 			let pointType: { label: string } | undefined;
-			if (input.pointsAward > 0) {
+			if (input.pointsAward > 0 && !survey.eventId) {
 				[pointType] = await db
 					.select({ label: pointTypes.label })
 					.from(pointTypes)
@@ -446,7 +450,11 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 					.limit(1);
 				if (!pointType) throw new Error("Pick an active point type for answering.");
 			}
-			const pointsLine = pointType ? `You'll get ${pointsPhrase(input.pointsAward, pointType.label)} for answering.` : null;
+			const pointsLine = survey.eventId
+				? "Answer to get the other 25% of this event's points."
+				: pointType
+					? `You'll get ${pointsPhrase(input.pointsAward, pointType.label)} for answering.`
+					: null;
 
 			const eligibleIds = await eligibleMemberIds(db, survey);
 			if (eligibleIds.length === 0) throw new Error("No one is eligible for this form yet.");
@@ -477,7 +485,7 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 						closesAt: input.closesAt,
 						reminderAt: input.remind ? reminderAtFor(input.closesAt, now) : null,
 						// Only an event has a door to walk in through.
-						allowWalkIn: survey.eventId ? input.allowWalkIn : false,
+						allowWalkIn: Boolean(survey.eventId),
 						shareWithOrganizers: input.shareWithOrganizers,
 						emailInvitees: input.emailInvitees,
 						sampleSize: drawn.length,
@@ -584,23 +592,20 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 
 		async getById(actor, id) {
 			if (!can(actor, "survey:configure")) throw new Error("Not authorized to read this survey.");
-			const [survey] = await db.select().from(surveys).where(eq(surveys.id, id)).limit(1);
+			const [[survey], questions] = await Promise.all([
+				db.select().from(surveys).where(eq(surveys.id, id)).limit(1),
+				db.select().from(surveyQuestions).where(eq(surveyQuestions.surveyId, id)).orderBy(asc(surveyQuestions.position)),
+			]);
 			if (!survey) return null;
-			const questions = await db
-				.select()
-				.from(surveyQuestions)
-				.where(eq(surveyQuestions.surveyId, id))
-				.orderBy(asc(surveyQuestions.position));
 			return { survey, questions };
 		},
 
 		async getForRespondent(actor, surveyId, now = new Date()) {
 			const [survey] = await db.select().from(surveys).where(eq(surveys.id, surveyId)).limit(1);
 			if (!survey || survey.status === "draft") return null;
-			const { state, eventTitle } = await respondentState(db, actor, survey, now);
-			// Only someone who can answer gets the questions.
-			const questions = state === "open" ? await orderedQuestions(db, surveyId) : [];
-			return { survey, questions, eventTitle, state };
+			// The questions load alongside the eligibility checks, but only someone who can answer gets them.
+			const [{ state, eventTitle }, allQuestions] = await Promise.all([respondentState(db, actor, survey, now), orderedQuestions(db, surveyId)]);
+			return { survey, questions: state === "open" ? allQuestions : [], eventTitle, state };
 		},
 
 		async submitResponse(actor, input, now = new Date()) {
@@ -665,7 +670,7 @@ export function createSurveysRepository(db: SurveyDb, audit: AuditRepository): S
 			if (!survey || effectiveStatus(survey, now) !== "running") return null;
 			const { state } = await respondentState(db, actor, survey, now);
 			// Only a member who can answer, or already did, is shown the card.
-			return state === "open" || state === "answered" ? { surveyId: survey.id, state } : null;
+			return state === "open" || state === "answered" ? { surveyId: survey.id, state, closesAt: survey.closesAt } : null;
 		},
 	};
 }

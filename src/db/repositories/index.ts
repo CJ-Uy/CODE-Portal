@@ -7,6 +7,7 @@ import { createEventForumRepository } from "./event-forum";
 import { createEventMediaRepository } from "./event-media";
 import { createEventsRepository } from "./events";
 import { createEventTypeRulesRepository } from "./eventTypeRules";
+import { createGalleryRepository, createUnavailableGalleryRepository } from "./gallery";
 import { createLibraryRepository, createUnavailableLibraryRepository } from "./library";
 import { createLibraryActivityRepository, createUnavailableLibraryActivityRepository } from "./library-activity";
 import { createLibraryListsRepository, createUnavailableLibraryListsRepository } from "./library-lists";
@@ -15,11 +16,12 @@ import { createLinksRepository, createUnavailableLinksRepository, type LinkDb } 
 import { createMembersRepository } from "./members";
 import { createMentsRepository } from "./ments";
 import { createSharedMentsRepository } from "./ments-shared";
-import { createNavPinsRepository } from "./navPins";
+import { createImportantLinksRepository, createUnavailableImportantLinksRepository } from "./important-links";
 import { createNotificationsRepository, type NotificationsRepository } from "./notifications";
 import { createOverviewRepository, type OverviewRepository } from "./overview";
 import { createPointTypesRepository } from "./pointTypes";
 import { createQuickLinksRepository } from "./quickLinks";
+import { createNavPinsRepository } from "./navPins";
 import { createRetentionRepository } from "./retention";
 import { createUnavailableRetentionRepository } from "./retention-unavailable";
 import { createRolesRepository } from "./roles";
@@ -74,7 +76,8 @@ export function createDrizzleRepositories(db: DrizzleDb) {
 		eventTypeRules: createEventTypeRulesRepository(db, audit),
 		pointTypes: createPointTypesRepository(db, audit),
 		retention,
-		navPins: createNavPinsRepository(db, audit),
+		importantLinks: createImportantLinksRepository(d1, audit),
+		navPins: createNavPinsRepository(d1, audit),
 		quickLinks: createQuickLinksRepository(db, audit),
 		roster: createRosterRepository(db, audit),
 		roles: createRolesRepository(d1),
@@ -86,6 +89,7 @@ export function createDrizzleRepositories(db: DrizzleDb) {
 		calendar: createCalendarRepository(d1),
 		announcements: createAnnouncementsRepository(d1, audit),
 		library: createLibraryRepository(libraryDb, audit),
+		gallery: createGalleryRepository(libraryDb),
 		libraryTags: createLibraryTagsRepository(libraryDb, audit),
 		libraryLists: createLibraryListsRepository(libraryDb, audit),
 		libraryActivity: createLibraryActivityRepository(libraryDb),
@@ -157,6 +161,7 @@ export function createSharedRepositories(adapter: DatabaseAdapter): Repositories
 		eventTypeRules: new Proxy({}, { get: () => unavailable }) as ReturnType<typeof createEventTypeRulesRepository>,
 		pointTypes: new Proxy({}, { get: () => unavailable }) as ReturnType<typeof createPointTypesRepository>,
 		retention: createUnavailableRetentionRepository(),
+		importantLinks: createUnavailableImportantLinksRepository(),
 		navPins: new Proxy({}, { get: () => unavailable }) as ReturnType<typeof createNavPinsRepository>,
 		quickLinks: new Proxy({}, { get: () => unavailable }) as ReturnType<typeof createQuickLinksRepository>,
 		roster: new Proxy({}, { get: () => unavailable }) as ReturnType<typeof createRosterRepository>,
@@ -169,6 +174,7 @@ export function createSharedRepositories(adapter: DatabaseAdapter): Repositories
 		calendar: createUnavailableCalendarRepository(),
 		announcements: createUnavailableAnnouncementsRepository(),
 		library: createUnavailableLibraryRepository(),
+		gallery: createUnavailableGalleryRepository(),
 		libraryTags: createUnavailableLibraryTagsRepository(),
 		libraryLists: createUnavailableLibraryListsRepository(),
 		libraryActivity: createUnavailableLibraryActivityRepository(),

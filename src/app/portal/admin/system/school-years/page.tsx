@@ -12,5 +12,5 @@ export default async function SchoolYearsAdminPage() {
 	if (!can(actor, "retention:configure")) redirect("/portal/admin");
 	const repositories = await getRepositories();
 	const rows = await repositories.retention.listTermsAdmin(actor);
-	return <div className="grid gap-6"><AdminIntro title="School years" whoFor="Set the dates and retention targets for each school year" /><SchoolYearsManager key={JSON.stringify(rows)} rows={rows} /></div>;
+	return <div className="grid gap-6"><AdminIntro title="School years" whoFor="Set each school year's dates and when its 2nd semester starts" /><SchoolYearsManager key={JSON.stringify(rows)} rows={rows} /></div>;
 }

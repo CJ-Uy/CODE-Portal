@@ -6,7 +6,10 @@ export function createUnavailableRetentionRepository(): RetentionRepository {
 	};
 	return {
 		listForMember: unavailable,
-		getMemberTermSummary: unavailable,
+		memberProgress: unavailable,
+		termProgress: unavailable,
+		eventFeedbackShare: unavailable,
+		nextPartEvents: unavailable,
 		leaderboard: unavailable,
 		publicLeaderboard: unavailable,
 		listForTerm: unavailable,

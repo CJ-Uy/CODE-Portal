@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { signInPath } from "@/server/auth/sign-in";
-import { ArrowLeft } from "lucide-react";
 import { getRepositories } from "@/db";
+import { LibraryCrumbs } from "@/components/library/library-header";
 import type { LibraryFormat, LibraryKind } from "@/lib/library/taxonomy";
 import { getActor } from "@/server/auth/actor";
 import { isFeatureEnabled } from "@/server/features";
@@ -39,12 +38,13 @@ export default async function NewLibraryItemPage({ searchParams }: { searchParam
 
 	return (
 		<div className="mx-auto grid max-w-6xl gap-6">
-			<Link href="/portal/library" className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-				<ArrowLeft className="size-4" aria-hidden />
-				Back to library
-			</Link>
+			<LibraryCrumbs
+				trail={[
+					...(target ? [{ label: "Lists", href: "/portal/library/lists" }, { label: target.name, href: `/portal/library/lists/${target.id}` }] : []),
+					{ label: "Add to the library" },
+				]}
+			/>
 			<div>
-				<p className="text-xs font-semibold uppercase text-primary">Member workspace</p>
 				<h1 className="font-heading text-3xl">Add to the library</h1>
 				<p className="mt-1 max-w-2xl text-sm text-muted-foreground">
 					Start a draft first. Nothing is shared until you publish it, and you can keep working on it as long as you like.

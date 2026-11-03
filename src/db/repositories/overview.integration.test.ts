@@ -38,19 +38,22 @@ describe("overview repository on D1", () => {
 				('pt_frontliner', 'frontliner', 'Frontliner', 1, 1, 'mem_admin')
 		`).run();
 		await env.DB.prepare(
-			"INSERT INTO terms (id, name, retained_at, probation_below, starts_at, ends_at) VALUES (?, ?, ?, ?, ?, ?)",
+			"INSERT INTO point_types (id, key, label, retention_period, active, position) VALUES ('pt_ts', 'ts', 'Training Seminar', 'year', 1, 2), ('pt_gma', 'gma', 'General Membership Activity', 'semester', 1, 3)",
+		).run();
+		await env.DB.prepare(
+			"INSERT INTO terms (id, name, starts_at, ends_at) VALUES (?, ?, ?, ?)",
 		)
-			.bind("term_now", "Term 1", 20, 10, NOW.getTime() - 1000, NOW.getTime() + 1000 * 60 * 60 * 24 * 60)
+			.bind("term_now", "Term 1", NOW.getTime() - 1000, NOW.getTime() + 1000 * 60 * 60 * 24 * 60)
 			.run();
 	});
 
-	it("sums this term's retention points, counts pending surveys, upcoming events, and owned-link clicks", async () => {
+	it("reports retention parts met this school year, counts pending surveys, upcoming events, and owned-link clicks", async () => {
 		await env.DB.prepare(`
 			INSERT INTO retention_records
 				(id, member_id, term_id, point_type_id, points, reason, source, recorded_by, recorded_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`)
-			.bind("ret_keep", "mem_ov", "term_now", "pt_retention", 8, "Retention", "manual", "mem_admin", NOW.getTime())
+			.bind("ret_keep", "mem_ov", "term_now", "pt_ts", 1, "Training", "manual", "mem_admin", NOW.getTime())
 			.run();
 		await env.DB.prepare(`
 			INSERT INTO retention_records
@@ -90,7 +93,8 @@ describe("overview repository on D1", () => {
 		const repository = createOverviewRepository(db);
 		const summary = await repository.getSummary(memberActor, NOW);
 
-		expect(summary.retention).toMatchObject({ points: 8, retainedAt: 20, termName: "Term 1" });
+		// Training Seminar is met; Frontliner points never count toward retention.
+		expect(summary.retention).toMatchObject({ termName: "Term 1", progress: { met: 1, required: 3, status: "on_track" } });
 		expect(summary.pendingSurveys).toBe(1);
 		expect(summary.oldestPendingSurveyId).toBe("srv_1");
 		expect(summary.upcomingEvents).toBe(1);
@@ -147,7 +151,7 @@ describe("overview repository on D1", () => {
 		const summary = await repository.getSummary(memberActor, NOW);
 
 		expect(summary).toEqual({
-			retention: { points: 0, retainedAt: null, termName: null },
+			retention: null,
 			pendingSurveys: 0,
 			oldestPendingSurveyId: null,
 			upcomingEvents: 0,
@@ -155,20 +159,20 @@ describe("overview repository on D1", () => {
 		});
 	});
 
-	it("quantizes fractional retention totals", async () => {
-		for (const [id, points] of [["ret_fraction_a", 0.1], ["ret_fraction_b", 0.2]] as const) {
+	it("meets a part from fractional points", async () => {
+		for (const [id, points] of [["ret_fraction_a", 0.3], ["ret_fraction_b", 0.7]] as const) {
 			await env.DB.prepare(`
 				INSERT INTO retention_records
 					(id, member_id, term_id, point_type_id, points, reason, source, recorded_by, recorded_at)
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 			`)
-				.bind(id, "mem_ov", "term_now", "pt_retention", points, id, "manual", "mem_admin", NOW.getTime())
+				.bind(id, "mem_ov", "term_now", "pt_ts", points, id, "manual", "mem_admin", NOW.getTime())
 				.run();
 		}
 
 		const repository = createOverviewRepository(drizzle(env.DB, { schema }));
 		const summary = await repository.getSummary(memberActor, NOW);
 
-		expect(summary.retention.points).toBe(0.3);
+		expect(summary.retention?.progress.parts[0].slots[0]).toMatchObject({ earned: 1, state: "met" });
 	});
 });
