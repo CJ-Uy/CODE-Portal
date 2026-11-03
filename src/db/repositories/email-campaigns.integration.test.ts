@@ -94,7 +94,7 @@ describe("email campaigns", () => {
 	it("previews the audience with opted-out members split out", async () => {
 		const ids = await setup();
 		await env.DB.prepare("INSERT INTO email_optouts (member_id, category_id, created_at) VALUES ('mem_b', ?, ?)").bind(ids.news.id, Date.now()).run();
-		const preview = await repos.campaigns.previewAudience(admin, draftInput(ids).audience, ids.news.id, NOW);
+		const preview = await repos.campaigns.previewAudience(admin, draftInput(ids).audience, ids.news.id);
 		expect(preview.matched).toBe(2);
 		expect(preview.willReceive).toBe(1);
 		expect(preview.optedOut.map((m) => m.memberId)).toEqual(["mem_b"]);
@@ -103,7 +103,7 @@ describe("email campaigns", () => {
 	it("counts outside recipients in the preview and flags them in the report", async () => {
 		const ids = await setup();
 		const audience = { match: "any" as const, include: [{ kind: "emails" as const, emails: ["mem_a@example.com", "guest@outside.org"] }], exclude: [] };
-		const preview = await repos.campaigns.previewAudience(admin, audience, ids.news.id, NOW);
+		const preview = await repos.campaigns.previewAudience(admin, audience, ids.news.id);
 		expect(preview).toMatchObject({ matched: 2, willReceive: 2, outside: ["guest@outside.org"], outsideCount: 1 });
 		expect(preview.recipients.map((r) => r.email)).toEqual(["mem_a@example.com"]);
 		const draft = await repos.campaigns.saveDraft(admin, { ...draftInput(ids), audience });

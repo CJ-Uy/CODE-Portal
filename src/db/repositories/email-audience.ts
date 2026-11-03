@@ -1,6 +1,6 @@
-import { and, desc, eq, gte, inArray, isNotNull, lte, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
-import { crsAttendance, eventRsvps, memberRoles, members, roles, surveyAssignments, termMemberRoster, terms } from "@/db/schema";
+import { crsAttendance, eventRsvps, memberRoles, members, roles, surveyAssignments, termMemberRoster } from "@/db/schema";
 import type { Audience, AudienceRule } from "@/lib/email/types";
 import type * as schema from "../schema";
 
@@ -30,15 +30,8 @@ export function memberDisplayName(member: { email: string; name: string | null; 
 
 const toSet = (rows: { id: string | null }[]) => new Set(rows.map((row) => row.id).filter((id): id is string => id !== null));
 
-async function currentTermId(db: EmailDb, now: Date): Promise<string | null> {
-	const [term] = await db
-		.select({ id: terms.id })
-		.from(terms)
-		.where(and(lte(terms.startsAt, now), gte(terms.endsAt, now)))
-		.orderBy(desc(terms.startsAt))
-		.limit(1);
-	return term?.id ?? null;
-}
+/** "Current member list" is everyone on the member list page, signed in or not; removing someone deletes them there. */
+const isCurrentMemberList = (rule: AudienceRule) => rule.kind === "roster" && rule.termId === "current";
 
 const typedEmails = (rules: AudienceRule[]) =>
 	new Set(rules.flatMap((rule) => (rule.kind === "emails" ? rule.emails.map((email) => email.trim().toLowerCase()) : [])));
@@ -54,7 +47,7 @@ async function membersByEmail(db: EmailDb, emails: Set<string>): Promise<Map<str
 	return byEmail;
 }
 
-async function idsForRule(db: EmailDb, rule: AudienceRule, now: Date): Promise<Set<string>> {
+async function idsForRule(db: EmailDb, rule: AudienceRule): Promise<Set<string>> {
 	switch (rule.kind) {
 		case "member":
 			return new Set([rule.memberId]);
@@ -73,13 +66,13 @@ async function idsForRule(db: EmailDb, rule: AudienceRule, now: Date): Promise<S
 					.where(eq(roles.key, rule.roleKey)),
 			);
 		case "roster": {
-			const termId = rule.termId === "current" ? await currentTermId(db, now) : rule.termId;
-			if (!termId) return new Set();
+			if (isCurrentMemberList(rule)) return toSet(await db.select({ id: members.id }).from(members));
+			// A named school year still reads the (shelved) term roster, for audiences saved before this change.
 			return toSet(
 				await db
 					.select({ id: termMemberRoster.memberId })
 					.from(termMemberRoster)
-					.where(and(eq(termMemberRoster.termId, termId), isNotNull(termMemberRoster.memberId))),
+					.where(and(eq(termMemberRoster.termId, rule.termId), isNotNull(termMemberRoster.memberId))),
 			);
 		}
 		case "survey_invitees":
@@ -109,21 +102,22 @@ function intersect(sets: Set<string>[]): Set<string> {
 	return new Set([...(first ?? [])].filter((id) => rest.every((set) => set.has(id))));
 }
 
-export async function resolveAudience(db: EmailDb, audience: Audience, now: Date): Promise<ResolvedRecipient[]> {
+export async function resolveAudience(db: EmailDb, audience: Audience): Promise<ResolvedRecipient[]> {
 	// Typed addresses behave like hand-picked members: always unioned in, never intersected.
 	const typed = typedEmails(audience.include);
 	const typedMembers = await membersByEmail(db, typed);
 	const picked = new Set([...audience.include.flatMap((rule) => (rule.kind === "member" ? [rule.memberId] : [])), ...typedMembers.values()]);
 	const groupRules = audience.include.filter((rule) => rule.kind !== "member" && rule.kind !== "emails");
-	const groupSets = await Promise.all(groupRules.map((rule) => idsForRule(db, rule, now)));
+	const groupSets = await Promise.all(groupRules.map((rule) => idsForRule(db, rule)));
 	const matched =
 		groupSets.length === 0 ? new Set<string>() : audience.match === "all" ? intersect(groupSets) : new Set(groupSets.flatMap((set) => [...set]));
 	for (const id of picked) matched.add(id);
-	for (const set of await Promise.all(audience.exclude.map((rule) => idsForRule(db, rule, now)))) {
+	for (const set of await Promise.all(audience.exclude.map((rule) => idsForRule(db, rule)))) {
 		for (const id of set) matched.delete(id);
 	}
 
-	const allowInactive = audience.include.some((rule) => rule.kind === "status" && rule.status === "inactive");
+	// Members who have not signed in yet are "inactive"; the member list includes them, other group rules do not.
+	const allowInactive = audience.include.some((rule) => (rule.kind === "status" && rule.status === "inactive") || isCurrentMemberList(rule));
 	const rows = [];
 	for (const part of chunk([...matched], ID_CHUNK)) {
 		rows.push(
