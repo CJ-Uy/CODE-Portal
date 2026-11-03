@@ -174,6 +174,9 @@ function blockText(block: EmailBlock, values: MergeValues, baseUrl: string): str
 // The footer sits on the author's background, so it brings its own dark-mode colors (Apple Mail, then Outlook.com).
 const FRAMED_FOOTER_CSS =
 	"@media (prefers-color-scheme: dark){.code-footer td{color:#AAAFB5 !important;border-color:#3D5266 !important}.code-footer a{color:#D7DFE9 !important}}[data-ogsc] .code-footer td{color:#AAAFB5 !important}[data-ogsc] .code-footer a{color:#D7DFE9 !important}";
+// Block emails have one light design, so ask Apple Mail (and clients that follow it) not to darken them.
+const LIGHT_ONLY_HEAD =
+	'<meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light only"><style>:root{color-scheme:light only;supported-color-schemes:light only}</style>';
 const preheaderSpan = (preheader: string) => `<span style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(preheader)}</span>`;
 
 /** Author HTML: merged (values escaped), then sanitized, with the required footer appended outside the author's markup. */
@@ -197,7 +200,7 @@ export function renderEmail(input: RenderInput): RenderedEmail {
 	const bodyHtml = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#FFFFFF;border-radius:12px;">${renderHeaderHtml(logoUrl)}${input.blocks
 		.map((block) => renderBlockHtml(block, input.resolve, input.baseUrl))
 		.join("")}${renderFooterHtml(input.footer)}</table>`;
-	const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(subject)}</title></head><body style="margin:0;padding:0;background:${EMAIL_COLORS.page};">${preheaderSpan(preheader)}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${EMAIL_COLORS.page};"><tr><td style="padding:24px 12px;">${bodyHtml}</td></tr></table></body></html>`;
+	const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${LIGHT_ONLY_HEAD}<title>${escapeHtml(subject)}</title></head><body style="margin:0;padding:0;background:${EMAIL_COLORS.page};">${preheaderSpan(preheader)}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${EMAIL_COLORS.page};"><tr><td style="padding:24px 12px;">${bodyHtml}</td></tr></table></body></html>`;
 	const text = [...input.blocks.map((block) => blockText(block, input.values, input.baseUrl)).filter(Boolean), "--", footerTextOf(input.footer)].join("\n\n");
 	return { subject, preheader, html, bodyHtml, text, framed: false };
 }

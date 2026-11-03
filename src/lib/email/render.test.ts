@@ -52,6 +52,13 @@ describe("renderEmail", () => {
 		expect(render().html).toMatch(/display:none[^>]*>Quick update/);
 	});
 
+	it("locks block emails to light mode so Apple Mail does not darken them", () => {
+		const { html } = render();
+		expect(html).toContain('<meta name="color-scheme" content="light only">');
+		expect(html).toContain('<meta name="supported-color-schemes" content="light only">');
+		expect(html).toContain(":root{color-scheme:light only;supported-color-schemes:light only}");
+	});
+
 	it("links the event block to the absolute portal URL", () => {
 		expect(render().html).toContain('href="https://beta.ateneocode.org/portal/calendar/evt_1"');
 	});

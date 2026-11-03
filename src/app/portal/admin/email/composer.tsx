@@ -244,7 +244,13 @@ export function Composer(props: ComposerProps) {
 
 	return (
 		<div className="grid gap-5 pb-24 lg:pb-0">
-			<AdminIntro title={initial.id ? "Edit email" : "New email"} whoFor="Choose a sender, recipients and content, then review before sending" effect="Changes save automatically as a draft" />
+			<AdminIntro title={initial.id ? "Edit email" : "New email"} whoFor="Choose a sender, recipients and content, send yourself a test, then review before sending" effect="Changes save automatically as a draft" />
+			<p className="flex items-start gap-2 rounded-lg border border-[#90B4CC] bg-secondary/50 p-3 text-sm">
+				<CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+				<span className="min-w-0">
+					Send yourself a test before sending. Ateneo&rsquo;s mail filter can quietly hold emails that read like a sign-in or inbox prompt, even when they show as sent. If your test does not arrive, change the wording and test again.
+				</span>
+			</p>
 			<div className="flex justify-end">
 				<span aria-live="polite" className="text-sm text-muted-foreground">
 					{saveLabel}
