@@ -36,6 +36,8 @@
 		"enabled": true
 	},
 	"upload_source_maps": true,
+	// Run next to the D1 primary in Tokyo: every query is a round trip, the visitor crosses only once.
+	"placement": { "mode": "targeted", "region": "aws:ap-northeast-1" },
 	"vars": {
 		"APP_ENV": "production",
 		"DEPLOY_ENV": "prod",
