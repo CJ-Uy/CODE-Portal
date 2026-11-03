@@ -4,8 +4,8 @@ import { formatPoints } from "@/lib/points";
 import { cn } from "@/lib/utils";
 
 const W = 320;
-const H = 132;
-const PLOT = 104; // bar area height; the rest holds the axis labels
+
+const PLOT = 100; // bar area in viewBox units; stretched to the box height
 const GAP = 2;
 
 /** A bar with 4px rounded top corners, square at the baseline. */
@@ -59,38 +59,45 @@ export function PointsDistribution({ values, mine }: { values: number[]; mine: n
 				</div>
 
 				<figure className="grid gap-2">
-					<svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full overflow-visible" role="img" aria-label={`Histogram of points: ${peaks.toLowerCase()} ${tail}.`}>
-						<line x1={0} y1={PLOT} x2={W} y2={PLOT} className="stroke-border" strokeWidth={1} />
-						{stats.bins.map((bin, i) => {
-							const height = bin.count === 0 ? 0 : Math.max(3, (bin.count / tallest) * (PLOT - 14));
-							const x = i * slot + GAP / 2;
-							const isMine = i === myBin;
-							return (
-								<g key={bin.from}>
-									<title>{`${formatPoints(bin.from)} to ${formatPoints(bin.to)} points: ${bin.count} ${bin.count === 1 ? "member" : "members"}${isMine ? " (you)" : ""}`}</title>
-									{/* Full-height hit area so thin or empty bins still show their tooltip. */}
-									<rect x={i * slot} y={0} width={slot} height={PLOT} className="fill-transparent" />
-									{height > 0 ? (
-										<path d={barPath(x, PLOT - height, slot - GAP, height)} className={cn("transition-colors", isMine ? "fill-accent" : "fill-accent/45 hover:fill-accent/70")} />
-									) : null}
-									{isMine ? (
-										<text x={x + (slot - GAP) / 2} y={PLOT - height - 4} textAnchor="middle" className="fill-foreground text-[9px] font-semibold">
-											You
-										</text>
-									) : null}
-								</g>
-							);
-						})}
-						<line x1={xOf(stats.median)} y1={4} x2={xOf(stats.median)} y2={PLOT} className="stroke-muted-foreground" strokeWidth={1} strokeDasharray="3 3" />
-						<text x={xOf(stats.median) + 3} y={10} className="fill-muted-foreground text-[9px]">
+					{/* Fixed height at any width: the SVG stretches the bars only; every label is HTML so text never scales. */}
+					<div className="relative h-36 pt-5" role="img" aria-label={`Histogram of points: ${peaks.toLowerCase()} ${tail}.`}>
+						<svg viewBox={`0 0 ${W} ${PLOT}`} preserveAspectRatio="none" className="h-full w-full overflow-visible">
+							<line x1={0} y1={PLOT} x2={W} y2={PLOT} className="stroke-border" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+							{stats.bins.map((bin, i) => {
+								const height = bin.count === 0 ? 0 : Math.max(2, (bin.count / tallest) * PLOT);
+								const isMine = i === myBin;
+								return (
+									<g key={bin.from}>
+										<title>{`${formatPoints(bin.from)} to ${formatPoints(bin.to)} points: ${bin.count} ${bin.count === 1 ? "member" : "members"}${isMine ? " (you)" : ""}`}</title>
+										{/* Full-height hit area so thin or empty bins still show their tooltip. */}
+										<rect x={i * slot} y={0} width={slot} height={PLOT} className="fill-transparent" />
+										{height > 0 ? (
+											<path d={barPath(i * slot + GAP / 2, PLOT - height, slot - GAP, height)} className={cn("transition-colors", isMine ? "fill-accent" : "fill-accent/45 hover:fill-accent/70")} />
+										) : null}
+									</g>
+								);
+							})}
+							<line x1={xOf(stats.median)} y1={0} x2={xOf(stats.median)} y2={PLOT} className="stroke-muted-foreground" strokeWidth={1} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+						</svg>
+						<span className="absolute top-0 -translate-x-1/2 text-[11px] whitespace-nowrap text-muted-foreground" style={{ left: `${(xOf(stats.median) / W) * 100}%` }}>
 							median {formatPoints(stats.median)}
-						</text>
+						</span>
+						{myBin >= 0 ? (
+							<span
+								className="absolute -translate-x-1/2 text-[11px] font-semibold text-foreground"
+								style={{ left: `${((myBin + 0.5) / stats.bins.length) * 100}%`, bottom: `calc(${(stats.bins[myBin].count / tallest) * 100}% * 0.86 + 0.25rem)` }}
+							>
+								You
+							</span>
+						) : null}
+					</div>
+					<div className="relative h-4 text-[11px] tabular-nums text-muted-foreground" aria-hidden>
 						{ticks.map((tick) => (
-							<text key={tick} x={xOf(tick)} y={PLOT + 14} textAnchor={tick === 0 ? "start" : tick === top ? "end" : "middle"} className="fill-muted-foreground text-[9px] tabular-nums">
+							<span key={tick} className={cn("absolute", tick === 0 ? "" : tick === top ? "-translate-x-full" : "-translate-x-1/2")} style={{ left: `${(xOf(tick) / W) * 100}%` }}>
 								{formatPoints(tick)}
-							</text>
+							</span>
 						))}
-					</svg>
+					</div>
 					<figcaption className="text-sm">
 						<span className="font-semibold">{peaks}</span> {tail}. {withinOneSd} of {stats.n} members ({Math.round((withinOneSd / stats.n) * 100)}%) are within one standard
 						deviation of the average of {formatPoints(stats.mean)}.

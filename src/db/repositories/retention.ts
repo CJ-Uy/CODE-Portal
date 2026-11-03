@@ -568,9 +568,8 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 		},
 
 		async myHistory(actor, input, now = new Date()) {
-			const termId = input.termId ?? (await getCurrentTermId(db, now));
-			if (!termId) return { summary: null, records: [], pendingShares: [], progress: null };
-
+			// Two D1 round trips: the school year (named, else the current one, in the same query), then everything that
+			// only needs its id, together. Each awaited query is a full round trip from the Worker to D1.
 			const [term] = await db
 				.select({
 					id: terms.id,
@@ -580,25 +579,31 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 					secondSemesterStartsAt: terms.secondSemesterStartsAt,
 				})
 				.from(terms)
-				.where(eq(terms.id, termId))
+				.where(input.termId ? eq(terms.id, input.termId) : and(lte(terms.startsAt, now), gte(terms.endsAt, now)))
+				.orderBy(desc(terms.startsAt))
 				.limit(1);
 			if (!term) return { summary: null, records: [], pendingShares: [], progress: null };
+			const termId = term.id;
 
-			const rows: MyHistoryRecord[] = await db
-				.select({
-					...typedRecordColumns,
-					eventTitle: crsEvents.title,
-					eventStartsAt: crsEvents.startsAt,
-					eventType: crsEvents.type,
-					eventTypeLabel: eventTypeRules.label,
-					eventColour: eventTypeRules.colour,
-				})
-				.from(retentionRecords)
-				.innerJoin(pointTypes, eq(pointTypes.id, retentionRecords.pointTypeId))
-				.leftJoin(crsEvents, eq(crsEvents.id, retentionRecords.eventId))
-				.leftJoin(eventTypeRules, eq(eventTypeRules.type, crsEvents.type))
-				.where(and(eq(retentionRecords.memberId, actor.memberId), eq(retentionRecords.termId, termId)))
-				.orderBy(desc(retentionRecords.recordedAt));
+			const [rows, pending, types]: [MyHistoryRecord[], Awaited<ReturnType<typeof pendingShares>>, PartType[]] = await Promise.all([
+				db
+					.select({
+						...typedRecordColumns,
+						eventTitle: crsEvents.title,
+						eventStartsAt: crsEvents.startsAt,
+						eventType: crsEvents.type,
+						eventTypeLabel: eventTypeRules.label,
+						eventColour: eventTypeRules.colour,
+					})
+					.from(retentionRecords)
+					.innerJoin(pointTypes, eq(pointTypes.id, retentionRecords.pointTypeId))
+					.leftJoin(crsEvents, eq(crsEvents.id, retentionRecords.eventId))
+					.leftJoin(eventTypeRules, eq(eventTypeRules.type, crsEvents.type))
+					.where(and(eq(retentionRecords.memberId, actor.memberId), eq(retentionRecords.termId, termId)))
+					.orderBy(desc(retentionRecords.recordedAt)),
+				pendingShares(db, { memberIds: [actor.memberId], termId }, now),
+				partTypes(db),
+			]);
 
 			const summary: MyHistorySummary = {
 				termId: term.id,
@@ -626,8 +631,7 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 				recordedBy: row.recordedBy,
 				recordedAt: row.recordedAt,
 			}));
-			const pending = (await pendingShares(db, { memberIds: [actor.memberId], termId }, now));
-			const progress = buildRetentionProgress(await partTypes(db), term, rows.map(toPartRecord), pending.map(pendingToPartRecord), now);
+			const progress = buildRetentionProgress(types, term, rows.map(toPartRecord), pending.map(pendingToPartRecord), now);
 			return { summary, records, pendingShares: pending, progress };
 		},
 
