@@ -87,7 +87,7 @@ function PasteList({ onAdd, onClose }: { onAdd: (emails: string[]) => void; onCl
 
 function baseSuggestions(options: AudienceOptions): Suggestion[] {
 	return [
-		{ rule: { kind: "roster", termId: "current" }, label: "Current member list", hint: options.currentTermName ?? "No active school year" },
+		{ rule: { kind: "roster", termId: "current" }, label: "Current member list", hint: "Everyone on the member list" },
 		...options.roles.map((r) => ({ rule: { kind: "role", roleKey: r.key } as AudienceRule, label: `Role: ${r.label}`, hint: "Admin role" })),
 		...options.batches.map((b) => ({ rule: { kind: "batch", batch: b } as AudienceRule, label: `Batch ${b}`, hint: "Batch" })),
 		...(["active", "pending", "inactive"] as const).map((s) => ({ rule: { kind: "status", status: s } as AudienceRule, label: `Status: ${s}`, hint: "Member status" })),

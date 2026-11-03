@@ -6,7 +6,6 @@ import type { Audience } from "@/lib/email/types";
 import { resolveAudience } from "./email-audience";
 
 const db = drizzle(env.DB, { schema });
-const NOW = new Date("2026-10-02T04:00:00Z");
 
 async function member(id: string, batch: string, status = "active") {
 	await env.DB.prepare("INSERT INTO members (id, email, name, batch, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
@@ -14,7 +13,7 @@ async function member(id: string, batch: string, status = "active") {
 		.run();
 }
 
-const ids = async (audience: Audience) => (await resolveAudience(db, audience, NOW)).map((r) => r.memberId);
+const ids = async (audience: Audience) => (await resolveAudience(db, audience)).map((r) => r.memberId);
 
 describe("resolveAudience", () => {
 	beforeEach(async () => {
@@ -48,8 +47,9 @@ describe("resolveAudience", () => {
 		await env.DB.prepare("INSERT INTO crs_attendance (event_id, member_id, scanned_at, scanned_by) VALUES ('evt_1', 'mem_b', ?, 'mem_a')").bind(Date.now()).run();
 	});
 
-	it("resolves the current roster without inactive members", async () => {
-		expect(await ids({ match: "any", include: [{ kind: "roster", termId: "current" }], exclude: [] })).toEqual(["mem_a", "mem_b"]);
+	it("resolves the current member list to everyone on the member list, including members who have not signed in", async () => {
+		// mem_c is not on the shelved term roster; the member list alone decides.
+		expect(await ids({ match: "any", include: [{ kind: "roster", termId: "current" }], exclude: [] })).toEqual(["mem_a", "mem_b", "mem_c", "mem_off"]);
 	});
 
 	it("unions with any and intersects with all", async () => {
@@ -58,7 +58,7 @@ describe("resolveAudience", () => {
 			{ kind: "role", roleKey: "email" },
 		] as const;
 		expect(await ids({ match: "any", include: [...rules], exclude: [] })).toEqual(["mem_a", "mem_b", "mem_c"]);
-		expect(await ids({ match: "all", include: [{ kind: "batch", batch: "2027" }, { kind: "roster", termId: "current" }], exclude: [] })).toEqual(["mem_b"]);
+		expect(await ids({ match: "all", include: [{ kind: "batch", batch: "2027" }, { kind: "roster", termId: "current" }], exclude: [] })).toEqual(["mem_b", "mem_c", "mem_off"]);
 	});
 
 	it("resolves survey_invitees to invited members only", async () => {
@@ -99,7 +99,7 @@ describe("resolveAudience", () => {
 
 	describe("typed addresses", () => {
 		const resolve = async (audience: Audience) =>
-			(await resolveAudience(db, audience, NOW)).map((r) => ({ memberId: r.memberId, email: r.email, external: r.external }));
+			(await resolveAudience(db, audience)).map((r) => ({ memberId: r.memberId, email: r.email, external: r.external }));
 
 		it("maps a member address to that member, even an inactive one", async () => {
 			expect(await resolve({ match: "any", include: [{ kind: "emails", emails: ["mem_off@example.com"] }], exclude: [] })).toEqual([
@@ -113,7 +113,7 @@ describe("resolveAudience", () => {
 		});
 
 		it("resolves an unknown address to an outside recipient", async () => {
-			const [guest] = await resolveAudience(db, { match: "any", include: [{ kind: "emails", emails: ["guest@outside.org"] }], exclude: [] }, NOW);
+			const [guest] = await resolveAudience(db, { match: "any", include: [{ kind: "emails", emails: ["guest@outside.org"] }], exclude: [] });
 			expect(guest).toEqual({ memberId: null, email: "guest@outside.org", name: null, fullName: null, nickname: null, batch: null, external: true });
 		});
 
@@ -152,7 +152,7 @@ describe("resolveAudience", () => {
 				],
 				exclude: [],
 			};
-			expect((await resolve(audience)).map((r) => r.email)).toEqual(["guest@outside.org", "mem_a@example.com", "mem_b@example.com"]);
+			expect((await resolve(audience)).map((r) => r.email)).toEqual(["guest@outside.org", "mem_a@example.com", "mem_b@example.com", "mem_c@example.com", "mem_off@example.com"]);
 		});
 	});
 });

@@ -153,7 +153,7 @@ export function createEmailCampaignsRepository(db: EmailDb, audit: AuditReposito
 
 	/** The resolved audience minus members who turned this category off. */
 	async function receiving(audience: Audience, categoryId: string | null) {
-		const [recipients, optedOut] = await Promise.all([resolveAudience(db, audienceSchema.parse(audience), new Date()), optedOutIds(categoryId)]);
+		const [recipients, optedOut] = await Promise.all([resolveAudience(db, audienceSchema.parse(audience)), optedOutIds(categoryId)]);
 		return recipients.filter((r) => !r.memberId || !optedOut.has(r.memberId));
 	}
 
@@ -327,9 +327,9 @@ export function createEmailCampaignsRepository(db: EmailDb, audit: AuditReposito
 			return row;
 		},
 
-		async previewAudience(actor: Actor, audience: Audience, categoryId: string | null, now = new Date()): Promise<AudiencePreview> {
+		async previewAudience(actor: Actor, audience: Audience, categoryId: string | null): Promise<AudiencePreview> {
 			assertEmail(actor, "email:send");
-			const recipients = await resolveAudience(db, audienceSchema.parse(audience), now);
+			const recipients = await resolveAudience(db, audienceSchema.parse(audience));
 			const optedOut = await optedOutIds(categoryId);
 			const memberRows = recipients.flatMap((r) => (r.memberId === null ? [] : [{ ...r, memberId: r.memberId }]));
 			const outside = recipients.filter((r) => r.external).map((r) => r.email);

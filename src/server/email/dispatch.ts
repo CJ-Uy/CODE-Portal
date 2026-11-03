@@ -31,8 +31,8 @@ export async function unsubscribeLinks(config: EmailConfig, memberId: string, ca
 	};
 }
 
-async function enqueue(db: EmailDb, campaign: { id: string; audience: Audience; categoryId: string | null }, now: Date) {
-	const recipients = await resolveAudience(db, campaign.audience, now);
+async function enqueue(db: EmailDb, campaign: { id: string; audience: Audience; categoryId: string | null }) {
+	const recipients = await resolveAudience(db, campaign.audience);
 	const [category] = campaign.categoryId
 		? await db.select({ required: emailCategories.required }).from(emailCategories).where(eq(emailCategories.id, campaign.categoryId)).limit(1)
 		: [];
@@ -78,7 +78,7 @@ async function claimDueCampaigns(db: EmailDb, now: Date): Promise<number> {
 		if (flipped.length === 0) continue;
 		if (campaign.status === "scheduled") claimed++;
 		try {
-			await enqueue(db, campaign, now);
+			await enqueue(db, campaign);
 			// startedAt marks the audience as fully enqueued. finish() leaves the campaign alone until it is set.
 			await db
 				.update(emailCampaigns)
