@@ -98,15 +98,18 @@ describe("point types repository", () => {
 		).resolves.toMatchObject({ active: false });
 	});
 
-	it("allows relabelling and reordering the retention point type", async () => {
+	it("keeps the Retention type retired: retention is the computed path, never points an admin gives", async () => {
 		const row = await repo.upsertType(retentionAdmin, {
 			id: RETENTION_POINT_TYPE_ID,
 			key: "retention",
 			label: "CRS Retention",
-			active: true,
+			active: false,
 			position: 3,
 		});
 		expect(row.label).toBe("CRS Retention");
 		expect(row.position).toBe(3);
+		await expect(
+			repo.upsertType(retentionAdmin, { id: RETENTION_POINT_TYPE_ID, key: "retention", label: "Retention", active: true, position: 0 }),
+		).rejects.toThrow("Retention can't be given as points");
 	});
 });

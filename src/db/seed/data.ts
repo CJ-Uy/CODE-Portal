@@ -47,7 +47,7 @@ export const seedRoles: InferInsertModel<typeof roles>[] = [
 ];
 
 export const seedPointTypes: InferInsertModel<typeof pointTypes>[] = [
-	{ id: "pt_retention", key: "retention", label: "Retention", active: true, position: 0 },
+	{ id: "pt_retention", key: "retention", label: "Retention", active: false, position: 0 },
 	{ id: "pt_frontliner", key: "frontliner", label: "Frontliner", active: true, position: 1 },
 	{ id: "pt_project_lead", key: "project_lead", label: "Project Lead", active: true, position: 2 },
 ];

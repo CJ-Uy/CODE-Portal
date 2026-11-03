@@ -54,7 +54,8 @@ describe("link seed data", () => {
 describe("point-type seeds", () => {
 	it("provides the three baseline point types", () => {
 		expect(seedPointTypes).toEqual([
-			expect.objectContaining({ id: "pt_retention", key: "retention", label: "Retention", active: true, position: 0 }),
+			// Retention is the computed path total, so its row stays retired and never appears in award pickers.
+			expect.objectContaining({ id: "pt_retention", key: "retention", label: "Retention", active: false, position: 0 }),
 			expect.objectContaining({ id: "pt_frontliner", key: "frontliner", label: "Frontliner", active: true, position: 1 }),
 			expect.objectContaining({ id: "pt_project_lead", key: "project_lead", label: "Project Lead", active: true, position: 2 }),
 		]);

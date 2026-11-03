@@ -3,6 +3,7 @@ import { pointTypes, type RetentionPeriod } from "@/db/schema";
 import { pointMilestonesSchema, type PointMilestone } from "@/lib/point-milestones";
 import type { Actor } from "@/server/auth/permissions";
 import { can } from "@/server/auth/permissions";
+import { RETENTION_POINT_TYPE_ID } from "@/lib/point-types";
 import type { AuditRepository } from "./audit";
 
 // Retiring a part would make retention impossible: its events could no longer award it.
@@ -97,6 +98,10 @@ export function createPointTypesRepository(db: Db, audit: AuditRepository): Poin
 
 			if (existing.retentionPeriod && !input.active) {
 				throw new Error(PART_RETIRE_ERROR);
+			}
+			// Retention is what the 12-slot path adds up to, so it is never a category points can be given in.
+			if (existing.id === RETENTION_POINT_TYPE_ID && input.active) {
+				throw new Error("Retention can't be given as points: it is the total of the retention path.");
 			}
 			const updated = await db.update(pointTypes).set({
 				label,

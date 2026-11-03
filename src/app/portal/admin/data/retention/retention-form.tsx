@@ -50,7 +50,7 @@ export function RetentionForm({
 				Point type
 				<Select
 					name="pointTypeId"
-					defaultValue={pointTypeOptions.find((option) => option.key === "retention")?.id ?? ""}
+					defaultValue={pointTypeOptions[0]?.id ?? ""}
 					required
 				>
 					{pointTypeOptions.map((option) => (
