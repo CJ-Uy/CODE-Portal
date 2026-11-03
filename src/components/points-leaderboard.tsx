@@ -5,7 +5,7 @@ import { EmptyState } from "@/components/portal/empty-state";
 import { MemberAvatar } from "@/components/portal/member-avatar";
 import type { LeaderboardRow } from "@/db/repositories/retention";
 import { formatPoints } from "@/lib/points";
-import { competitionRanks } from "@/lib/leaderboard";
+import { competitionRanks, shownThroughRank } from "@/lib/leaderboard";
 import { cn } from "@/lib/utils";
 
 function initialsFrom(name: string): string {
@@ -159,8 +159,10 @@ export function PointsLeaderboard({ rows, meId }: { rows: LeaderboardRow[]; meId
 		);
 	}
 
-	const podium = rows.slice(0, 3);
-	const rest = rows.slice(3);
+	// The board lists the top 10 and finishes a rank tied at 10th; "Your rank" and the stats above still count everyone.
+	const shown = rows.slice(0, shownThroughRank(ranks, 10));
+	const podium = shown.slice(0, 3);
+	const rest = shown.slice(3);
 
 	return (
 		<div className="grid gap-4">
