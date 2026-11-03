@@ -2,7 +2,7 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "code-portal-prod",
 	"account_id": "83376df5e0bae067afa197b07430168d",
-	"main": ".open-next/worker.js",
+	"main": "custom-worker.ts",
 	"workers_dev": true,
 	"routes": [
 		{
@@ -44,11 +44,19 @@
 		// Unfinished surfaces stay hidden in production until each one ships. Only "true" enables.
 		"FEATURE_RETENTION": "true",
 		"FEATURE_LIBRARY": "false",
-		"FEATURE_ANNOUNCEMENTS": "false",
-		"FEATURE_NOTIFICATIONS": "false",
+		"FEATURE_ANNOUNCEMENTS": "true",
+		"FEATURE_NOTIFICATIONS": "true",
 		"FEATURE_SURVEYS": "false",
 		"FEATURE_PUBLIC_SITE": "false",
-		"FEATURE_LEADERBOARD": "false"
+		"FEATURE_LEADERBOARD": "true",
+		"FEATURE_LIBRARY_SMART_SEARCH": "false",
+		"FEATURE_EMAIL": "true",
+		"FEATURE_MENTS": "true",
+		"FEATURE_GALLERY": "false",
+		"EMAIL_INBOX_ADDRESS": "inbox@ateneocode.org",
+		"EMAIL_PUBLIC_BASE_URL": "https://ateneocode.org",
+		"EMAIL_BATCH_PER_TICK": "25",
+		"EMAIL_DAILY_CAP": "300"
 	},
 	"d1_databases": [
 		{
@@ -65,5 +73,11 @@
 			"binding": "BUCKET",
 			"bucket_name": "code-nest-prod-uploads"
 		}
-	]
+	],
+	"send_email": [{ "name": "EMAIL" }],
+	"queues": {
+		"producers": [{ "binding": "EMAIL_JOBS", "queue": "code-portal-prod-email" }],
+		"consumers": [{ "queue": "code-portal-prod-email", "max_batch_size": 1, "max_batch_timeout": 0, "max_concurrency": 1, "max_retries": 5, "retry_delay": 60, "dead_letter_queue": "code-portal-prod-email-failed" }]
+	},
+	"triggers": { "crons": ["* * * * *"] }
 }
