@@ -91,14 +91,19 @@ export default async function RetentionHistoryPage({
 				/>
 			) : (
 				<>
-					<PointsLeaderboard rows={leaderboard} meId={actor.memberId} />
-					<aside className="flex items-start gap-3 rounded-xl border border-border bg-secondary/40 p-4 text-sm">
-						<PartyPopper className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden />
-						<p className="min-w-0">
-							<span className="font-semibold">Just for fun:</span> everyone&apos;s points this semester, every category added up, including points
-							that don&apos;t count toward retention. It shows who&apos;s been the most active, not who&apos;s on track to stay a member.
-						</p>
+					<aside className="flex items-start gap-3 rounded-xl border border-accent/25 bg-gradient-to-r from-accent/10 via-accent/5 to-transparent p-4">
+						<span className="grid size-9 shrink-0 place-items-center rounded-full bg-accent/15 text-accent" aria-hidden>
+							<PartyPopper className="size-4" />
+						</span>
+						<div className="grid min-w-0 gap-0.5 text-sm">
+							<p className="font-semibold">Just for fun</p>
+							<p className="text-muted-foreground">
+								Everyone&apos;s points this semester, every category added up, including points that don&apos;t count toward retention. It shows
+								who&apos;s been the most active, not who&apos;s on track to stay a member.
+							</p>
+						</div>
 					</aside>
+					<PointsLeaderboard rows={leaderboard} meId={actor.memberId} />
 				</>
 			)}
 		</div>
