@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { PartyPopper } from "lucide-react";
 import { getRepositories } from "@/db";
 import { PointsLeaderboard } from "@/components/points-leaderboard";
 import { RetentionHistory } from "@/components/retention-history";
@@ -41,7 +42,7 @@ export default async function RetentionHistoryPage({
 
 	const leaderboard =
 		view === "leaderboard" && selectedTermId
-			? await repositories.retention.publicLeaderboard(actor, { termId: selectedTermId, limit: 100 }).catch(() => [])
+			? await repositories.retention.publicLeaderboard(actor, { termId: selectedTermId, limit: 500 }).catch(() => [])
 			: [];
 
 	const tabs = [
@@ -90,11 +91,14 @@ export default async function RetentionHistoryPage({
 				/>
 			) : (
 				<>
-					<p className="max-w-2xl text-sm text-muted-foreground">
-						Just for fun: everyone&apos;s points this semester, every category added up, including points that don&apos;t count toward
-						retention. It shows who&apos;s been the most active, not who&apos;s on track to stay a member.
-					</p>
 					<PointsLeaderboard rows={leaderboard} meId={actor.memberId} />
+					<aside className="flex items-start gap-3 rounded-xl border border-border bg-secondary/40 p-4 text-sm">
+						<PartyPopper className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden />
+						<p className="min-w-0">
+							<span className="font-semibold">Just for fun:</span> everyone&apos;s points this semester, every category added up, including points
+							that don&apos;t count toward retention. It shows who&apos;s been the most active, not who&apos;s on track to stay a member.
+						</p>
+					</aside>
 				</>
 			)}
 		</div>
