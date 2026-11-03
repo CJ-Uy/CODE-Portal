@@ -14,7 +14,10 @@ function initialsFrom(name: string): string {
 	return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || "M";
 }
 
-const displayName = (row: LeaderboardRow) => row.fullName ?? row.name ?? "Member";
+const fullNameOf = (row: LeaderboardRow) => row.fullName ?? row.name ?? "Member";
+/** Members know each other by nickname; the full name sits under it, since nicknames repeat (two Marcuses, two Tims). */
+const displayName = (row: LeaderboardRow) => row.nickname?.trim() || fullNameOf(row);
+const subName = (row: LeaderboardRow) => (row.nickname?.trim() ? fullNameOf(row) : null);
 
 /**
  * Easter egg, on purpose: the portal's builder sits above the board at rank 0 with
@@ -59,12 +62,13 @@ function PodiumSpot({
 	isMe: boolean;
 }) {
 	const name = displayName(row);
+	const sub = subName(row);
 	return (
 		<div className={cn("flex min-w-0 flex-col items-center gap-1.5 text-center", place === 1 ? "order-2" : place === 2 ? "order-1" : "order-3")}>
 			<span className="relative">
 				{place === 1 ? <Crown className="absolute -top-4 left-1/2 size-5 -translate-x-1/2 text-amber-500" aria-hidden /> : null}
 				<MemberAvatar
-					initials={initialsFrom(name)}
+					initials={initialsFrom(fullNameOf(row))}
 					className={cn(
 						place === 1 ? "size-16 text-lg ring-4 ring-amber-400" : "size-12 ring-2",
 						place === 2 && "ring-slate-300",
@@ -73,10 +77,17 @@ function PodiumSpot({
 					)}
 				/>
 			</span>
-			<p className="w-full min-w-0 truncate text-sm font-semibold" title={name}>
-				{name}
-				{isMe ? <span className="ml-1 text-xs text-accent">You</span> : null}
-			</p>
+			<div className="grid w-full min-w-0">
+				<p className="min-w-0 truncate text-sm font-semibold" title={name}>
+					{name}
+					{isMe ? <span className="ml-1 text-xs text-accent">You</span> : null}
+				</p>
+				{sub ? (
+					<p className="min-w-0 truncate text-[11px] text-muted-foreground" title={sub}>
+						{sub}
+					</p>
+				) : null}
+			</div>
 			<p className="font-heading text-lg tabular-nums leading-none">{formatPoints(row.totalPoints)}</p>
 			<div
 				className={cn(
@@ -202,6 +213,7 @@ export function PointsLeaderboard({ rows, meId }: { rows: LeaderboardRow[]; meId
 							{rest.map((row, offset) => {
 								const index = offset + 3;
 								const name = displayName(row);
+								const sub = subName(row);
 								const isMe = row.memberId === meId;
 								return (
 									<li key={row.memberId}>
@@ -209,10 +221,11 @@ export function PointsLeaderboard({ rows, meId }: { rows: LeaderboardRow[]; meId
 											<span className="w-7 shrink-0 text-center font-heading text-lg tabular-nums text-muted-foreground">
 												{ranks[index]}
 											</span>
-											<MemberAvatar initials={initialsFrom(name)} className={cn("size-8 text-xs", isMe && "ring-2 ring-accent")} />
+											<MemberAvatar initials={initialsFrom(fullNameOf(row))} className={cn("size-8 text-xs", isMe && "ring-2 ring-accent")} />
 											<div className="grid min-w-0 flex-1 gap-1">
 												<span className="min-w-0 truncate text-sm font-medium">
 													{name}
+													{sub ? <span className="ml-2 text-xs font-normal text-muted-foreground">{sub}</span> : null}
 													{isMe ? <span className="ml-2 text-xs text-accent">You</span> : null}
 												</span>
 												<span className="h-1 overflow-hidden rounded-full bg-muted" aria-hidden>

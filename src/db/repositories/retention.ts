@@ -67,7 +67,7 @@ export type LeaderboardInput = { termId: string; limit?: number; offset?: number
 // The member leaderboard is just for fun: everyone's points this semester, every category summed, retention or not.
 export type PublicLeaderboardInput = LeaderboardInput;
 export type LedgerListOptions = { q?: string; limit?: number; offset?: number };
-export type LeaderboardRow = { memberId: string; fullName: string | null; name: string | null; totalPoints: number };
+export type LeaderboardRow = { memberId: string; fullName: string | null; name: string | null; nickname: string | null; totalPoints: number };
 
 export type MyHistorySummary = {
 	termId: string;
@@ -382,6 +382,7 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 				.select({
 					memberId: retentionRecords.memberId,
 					fullName: members.fullName,
+					nickname: members.nickname,
 					name: members.name,
 					totalPoints: sql<number>`coalesce(sum(${retentionRecords.points}), 0)`,
 				})
@@ -389,7 +390,7 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 				.innerJoin(members, eq(members.id, retentionRecords.memberId))
 				.innerJoin(pointTypes, eq(pointTypes.id, retentionRecords.pointTypeId))
 				.where(and(eq(retentionRecords.termId, input.termId), eq(retentionRecords.pointTypeId, RETENTION_POINT_TYPE_ID)))
-				.groupBy(retentionRecords.memberId, members.fullName, members.name)
+				.groupBy(retentionRecords.memberId, members.fullName, members.name, members.nickname)
 				.orderBy(desc(sql`coalesce(sum(${retentionRecords.points}), 0)`))
 				.limit(Math.min(input.limit ?? 50, 100))
 				.offset(input.offset ?? 0);
@@ -411,6 +412,7 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 				.select({
 					memberId: retentionRecords.memberId,
 					fullName: members.fullName,
+					nickname: members.nickname,
 					name: members.name,
 					totalPoints: sql<number>`coalesce(sum(${retentionRecords.points}), 0)`,
 				})
@@ -418,7 +420,7 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 				.innerJoin(members, eq(members.id, retentionRecords.memberId))
 				.leftJoin(crsEvents, eq(crsEvents.id, retentionRecords.eventId))
 				.where(and(eq(retentionRecords.termId, input.termId), sql`${countsOn} >= ${from.getTime()}`, sql`${countsOn} < ${until.getTime()}`))
-				.groupBy(retentionRecords.memberId, members.fullName, members.name)
+				.groupBy(retentionRecords.memberId, members.fullName, members.name, members.nickname)
 				.orderBy(desc(sql`coalesce(sum(${retentionRecords.points}), 0)`))
 				.limit(Math.min(input.limit ?? 25, 500))
 				.offset(input.offset ?? 0);
