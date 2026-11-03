@@ -3,7 +3,7 @@
 import { useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArchiveRestore, ChevronDown, FolderPlus, Heart, ImageOff, Search, Upload } from "lucide-react";
+import { ArchiveRestore, Bookmark, ChevronDown, FolderPlus, Heart, ImageOff, Search, Upload } from "lucide-react";
 import type { GalleryFolderOption, GalleryHomeView, GallerySort } from "@/db/repositories/gallery";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,6 +69,8 @@ export function GalleryHome({ home, folderOptions }: { home: GalleryHomeView; fo
 					<Input name="q" type="search" placeholder="Search people, events, captions or albums" aria-label="Search the gallery" className="h-11 pl-9 text-base sm:text-sm" />
 				</form>
 				<nav aria-label="Browse photos" className="flex flex-wrap gap-2">
+					<Chip href="/portal/gallery/saved"><Bookmark className="mr-1.5 size-4" aria-hidden />Saved</Chip>
+					<Chip href="/portal/gallery/saved?collection=liked"><Heart className="mr-1.5 size-4" aria-hidden />Liked by you</Chip>
 					{home.photosOfMe ? <Chip href="/portal/gallery/photos?person=me">Photos of you · {home.photosOfMe}</Chip> : null}
 					<Chip href="/portal/gallery/photos?sort=loved">Most loved</Chip>
 					<Chip href="/portal/gallery/photos?sort=viewed">Most viewed</Chip>

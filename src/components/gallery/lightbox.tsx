@@ -70,7 +70,7 @@ export function Lightbox<T extends GalleryTileItem>({
 					{item ? (
 						<>
 							<div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-								<div className="flex items-center justify-between gap-2 px-2 py-2 sm:px-4">
+								<div className="flex flex-wrap items-center justify-between gap-2 px-2 py-2 sm:px-4">
 									<div className="flex min-w-0 items-center gap-2">
 										<Dialog.Close className={stageButton} aria-label="Close">
 											<X className="size-5" />
@@ -79,7 +79,7 @@ export function Lightbox<T extends GalleryTileItem>({
 											{index + 1} of {items.length}
 										</span>
 									</div>
-									<div className="flex items-center gap-1">
+									<div className="flex max-w-full flex-wrap items-center justify-end gap-1">
 										{toolbar?.(item)}
 										{panel ? (
 											<button

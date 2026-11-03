@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BookOpen, CheckSquare, Download, Eye, FolderInput, FolderPlus, Globe, Heart, ImagePlus, LayoutGrid, Link2, Pencil, Plus, Settings2, Trash2, Upload, X } from "lucide-react";
-import type { GalleryEventOption, GalleryFolderCard, GalleryFolderOption, GalleryFolderView, GalleryItemView, GalleryMemberOption } from "@/db/repositories/gallery";
+import { Bookmark, BookOpen, CheckSquare, Download, Eye, FolderInput, FolderPlus, Globe, Heart, ImagePlus, LayoutGrid, Link2, ListPlus, Pencil, Plus, Settings2, Share2, Trash2, Upload, X } from "lucide-react";
+import type { GalleryEventOption, GalleryFolderCard, GalleryFolderOption, GalleryFolderView, GalleryItemView, GalleryList, GalleryMemberOption } from "@/db/repositories/gallery";
 import { Breadcrumb } from "@/components/portal/breadcrumb";
 import { EmptyState } from "@/components/portal/empty-state";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { countLabel, formatBytes, fromManilaInput, GALLERY_BATCH, galleryFileUrl, groupByDay, toManilaInput } from "@/lib/gallery/view";
 import { cn } from "@/lib/utils";
+import { downloadGalleryZip } from "@/lib/gallery/download";
 import {
 	createFolderAction,
 	deleteFolderAction,
@@ -26,6 +27,9 @@ import {
 	removeTagAction,
 	restoreAction,
 	setHeartAction,
+	setSavedAction,
+	saveItemsAction,
+	galleryListsAction,
 	updateFolderAction,
 	updateItemAction,
 	type GalleryActionResult,
@@ -35,6 +39,7 @@ import { GalleryTimeline } from "./gallery-timeline";
 import { Lightbox } from "./lightbox";
 import { Scrapbook } from "./scrapbook";
 import { UploadPanel, useUploadQueue } from "./upload-panel";
+import { SavePhotoForm, SelectedPhotoListPicker } from "./photo-lists";
 
 const ACCEPT = "image/*,video/*,.heic,.heif,.mov,.m4v";
 const uploadedOn = new Intl.DateTimeFormat("en", { timeZone: "Asia/Manila", dateStyle: "medium" });
@@ -67,7 +72,7 @@ export type GalleryBrowserProps = {
 
 type View = "scrapbook" | "grid";
 
-type OpenSheet = { kind: "newFolder" } | { kind: "folder" } | { kind: "move"; itemIds: string[] } | { kind: "moveFolder" } | null;
+type OpenSheet = { kind: "newFolder" } | { kind: "folder" } | { kind: "move"; itemIds: string[] } | { kind: "moveFolder" } | { kind: "save"; item: GalleryItemView; lists: GalleryList[] } | { kind: "saveSelected"; itemIds: string[]; lists: GalleryList[] } | null;
 
 async function inBatches(ids: string[], run: (chunk: string[]) => Promise<GalleryActionResult<unknown>>): Promise<GalleryActionResult<unknown>> {
 	for (let start = 0; start < ids.length; start += GALLERY_BATCH) {
@@ -118,6 +123,8 @@ export function GalleryBrowser({
 	const [sheet, setSheet] = useState<OpenSheet>(null);
 	const [dragging, setDragging] = useState(false);
 	const [busy, setBusy] = useState(false);
+	const [selectionError, setSelectionError] = useState("");
+	const [downloading, setDownloading] = useState(false);
 	const canUpload = uploadFolderId !== undefined;
 	const shownItems = useMemo(
 		() =>
@@ -173,11 +180,11 @@ export function GalleryBrowser({
 	}
 
 	useEffect(() => {
-		if (!selecting) return;
+		if (!selecting || sheet) return;
 		const onKey = (event: KeyboardEvent) => event.key === "Escape" && stopSelecting();
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
-	}, [selecting]);
+	}, [selecting, sheet]);
 
 	function stopSelecting() {
 		setSelecting(false);
@@ -249,14 +256,109 @@ export function GalleryBrowser({
 	}
 
 	async function copyLink(item: GalleryItemView) {
-		const url = new URL(window.location.href);
+		const url = new URL(item.folderId ? `/portal/gallery/${item.folderId}` : "/portal/gallery/unsorted", window.location.origin);
 		url.searchParams.set("photo", item.id);
-		url.searchParams.delete("view");
 		try {
 			await navigator.clipboard.writeText(url.toString());
 			announce("Link copied. Only signed-in members can open it.");
 		} catch {
 			announce("Could not copy the link.");
+		}
+	}
+
+	async function shareAlbum() {
+		if (!folder) return;
+		const url = new URL(`/portal/gallery/${folder.id}`, window.location.origin).toString();
+		try {
+			if (navigator.share) await navigator.share({ title: folder.name, url });
+			else {
+				await navigator.clipboard.writeText(url);
+				announce("Album link copied. Only signed-in members can open it.");
+			}
+		} catch (error) {
+			if (!(error instanceof DOMException && error.name === "AbortError")) announce("Could not share the album link. Try again.");
+		}
+	}
+
+	async function manageSaved(item: GalleryItemView) {
+		try {
+			const result = await galleryListsAction();
+			if (result.ok) setSheet({ kind: "save", item, lists: result.value });
+			else announce(result.error);
+		} catch {
+			announce("Could not load your lists. Try again.");
+		}
+	}
+
+	async function savePhoto(item: GalleryItemView) {
+		if (item.saved) return manageSaved(item);
+		setBusy(true);
+		try {
+			const result = await setSavedAction({ itemId: item.id, on: true });
+			if (!result.ok) return announce(result.error);
+			announce("Saved to your library.", { label: "Add to list", onClick: () => void manageSaved({ ...item, saved: true }) });
+		} catch {
+			announce("Could not save the photo. Try again.");
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	async function saveSelected(itemIds: string[], listId?: string) {
+		setBusy(true);
+		setSelectionError("");
+		try {
+			const result = await inBatches(itemIds, (chunk) => saveItemsAction({ itemIds: chunk, listId }));
+			if (!result.ok) {
+				setSelectionError(result.error);
+				announce(result.error);
+				return;
+			}
+			setSheet(null);
+			stopSelecting();
+			announce(`${itemIds.length} ${itemIds.length === 1 ? "photo" : "photos"} ${listId ? "added to your list and Saved" : "saved to your library"}.`);
+		} catch {
+			const message = "Could not save every photo. Your selection is kept so you can try again.";
+			setSelectionError(message);
+			announce(message);
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	async function chooseList() {
+		setBusy(true);
+		setSelectionError("");
+		try {
+			const result = await galleryListsAction();
+			if (result.ok) setSheet({ kind: "saveSelected", itemIds: [...selected], lists: result.value });
+			else announce(result.error);
+		} catch {
+			announce("Could not load your lists. Try again.");
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	async function downloadSelected() {
+		setBusy(true);
+		setDownloading(true);
+		try {
+			const blob = await downloadGalleryZip(items.filter((item) => selected.has(item.id)));
+			const url = URL.createObjectURL(blob);
+			const link = document.createElement("a");
+			link.href = url;
+			link.download = "code-gallery.zip";
+			document.body.appendChild(link);
+			link.click();
+			link.remove();
+			setTimeout(() => URL.revokeObjectURL(url), 60_000);
+			announce("Your selected photos are ready to download.");
+		} catch (error) {
+			announce(error instanceof Error ? error.message : "Could not download the selected photos. Try again.");
+		} finally {
+			setBusy(false);
+			setDownloading(false);
 		}
 	}
 
@@ -273,7 +375,7 @@ export function GalleryBrowser({
 
 	return (
 		<div
-			className="relative grid gap-6 [--gallery-sticky-top:3.5rem] lg:[--gallery-sticky-top:4.25rem]"
+			className={cn("relative grid gap-6 [--gallery-sticky-top:3.5rem] lg:[--gallery-sticky-top:4.25rem]", selecting && "pb-48")}
 			onDragOver={(event) => {
 				if (!canUpload || !event.dataTransfer.types.includes("Files")) return;
 				event.preventDefault();
@@ -297,6 +399,7 @@ export function GalleryBrowser({
 						{meta ? <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">{meta}</div> : null}
 					</div>
 					<div className="flex flex-wrap items-center gap-2">
+						{folder ? <Button variant="outline" onClick={() => void shareAlbum()}><Share2 />Share album</Button> : null}
 						{canUpload ? (
 							<>
 								<Button ref={uploadButton} onClick={() => fileInput.current?.click()}>
@@ -335,10 +438,10 @@ export function GalleryBrowser({
 						) : null}
 						{items.length ? (
 							<Button
-								variant={selecting ? "secondary" : "ghost"}
+								variant={selecting ? "secondary" : "outline"}
 								aria-pressed={selecting}
-								aria-label={selecting ? "Done selecting" : "Select"}
-								className="max-sm:w-10 max-sm:px-0"
+								aria-label={selecting ? "Done selecting" : "Select photos"}
+								disabled={busy}
 								onClick={() => {
 									if (selecting) return stopSelecting();
 									// Selecting is a grid job: tiles line up and the check discs sit in the same corner.
@@ -347,7 +450,7 @@ export function GalleryBrowser({
 								}}
 							>
 								<CheckSquare />
-								<span className="max-sm:sr-only">{selecting ? "Done" : "Select"}</span>
+								<span>{selecting ? "Done" : "Select photos"}</span>
 							</Button>
 						) : null}
 						{folder ? (
@@ -371,6 +474,7 @@ export function GalleryBrowser({
 					selecting={selecting}
 					selected={selected}
 					onTile={(item) => {
+						if (busy) return;
 						if (!selecting) return openPhoto(item.id);
 						setSelected((current) => {
 							const next = new Set(current);
@@ -396,8 +500,17 @@ export function GalleryBrowser({
 					<p className="mr-auto px-1 text-sm font-semibold tabular-nums" aria-live="polite">
 						{selected.size ? `${selected.size} selected` : "Select photos"}
 					</p>
-					<Button size="sm" variant="ghost" className="text-primary-foreground hover:bg-white/10 hover:text-primary-foreground" onClick={() => setSelected(selected.size === items.length ? new Set() : new Set(items.map((item) => item.id)))}>
+					<Button size="sm" variant="ghost" className="text-primary-foreground hover:bg-white/10 hover:text-primary-foreground" disabled={busy} onClick={() => setSelected(selected.size === items.length ? new Set() : new Set(items.map((item) => item.id)))}>
 						{selected.size === items.length ? "Clear" : "Select all"}
+					</Button>
+					<Button size="sm" variant="ghost" className="text-primary-foreground hover:bg-white/10 hover:text-primary-foreground" disabled={!selected.size || busy} onClick={() => void saveSelected([...selected])}>
+						<Bookmark />Save
+					</Button>
+					<Button size="sm" variant="ghost" className="text-primary-foreground hover:bg-white/10 hover:text-primary-foreground" aria-label="Download selected" disabled={!selected.size || busy} onClick={() => void downloadSelected()}>
+						<Download />{downloading ? "Preparing…" : "Download"}
+					</Button>
+					<Button size="sm" variant="ghost" className="text-primary-foreground hover:bg-white/10 hover:text-primary-foreground" disabled={!selected.size || busy} onClick={() => void chooseList()}>
+						<ListPlus />Add to list
 					</Button>
 					<Button size="sm" variant="ghost" className="text-primary-foreground hover:bg-white/10 hover:text-primary-foreground" disabled={!selected.size || busy} onClick={() => setSheet({ kind: "move", itemIds: [...selected] })}>
 						<FolderInput />
@@ -407,7 +520,7 @@ export function GalleryBrowser({
 						<Trash2 />
 						Delete
 					</Button>
-					<Button size="icon" variant="ghost" className="size-8 text-primary-foreground hover:bg-white/10 hover:text-primary-foreground" aria-label="Stop selecting" onClick={stopSelecting}>
+					<Button size="icon" variant="ghost" className="size-8 text-primary-foreground hover:bg-white/10 hover:text-primary-foreground" aria-label="Stop selecting" disabled={busy} onClick={stopSelecting}>
 						<X />
 					</Button>
 				</div>
@@ -429,6 +542,9 @@ export function GalleryBrowser({
 						>
 							<Heart className={cn("size-5", item.hearted && "fill-[#f08a8a] text-[#f08a8a]")} />
 							{item.heartCount ? <span className="text-sm font-semibold tabular-nums">{item.heartCount}</span> : null}
+						</button>
+						<button type="button" className={lightboxButton} aria-pressed={item.saved} aria-label={item.saved ? "Manage saved photo" : "Save photo"} title={item.saved ? "Manage saved photo" : "Save photo"} disabled={busy} onClick={() => void savePhoto(item)}>
+							<Bookmark className={cn("size-5", item.saved && "fill-current")} />
 						</button>
 						<button type="button" className={cn(lightboxButton, "max-sm:hidden")} aria-label="Copy link" title="Copy link" onClick={() => void copyLink(item)}>
 							<Link2 className="size-5" />
@@ -490,7 +606,13 @@ export function GalleryBrowser({
 			) : null}
 
 			<Sheet open={sheet !== null} onOpenChange={(open) => !open && setSheet(null)}>
-				<SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md">
+				<SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md" onEscapeKeyDown={(event) => event.stopPropagation()}>
+					{sheet?.kind === "saveSelected" ? <SelectedPhotoListPicker count={sheet.itemIds.length} initialLists={sheet.lists} busy={busy} error={selectionError} onPick={(listId) => saveSelected(sheet.itemIds, listId)} /> : null}
+					{sheet?.kind === "save" ? <SavePhotoForm key={sheet.item.id} item={sheet.item} initialLists={sheet.lists} onUnsave={() => {
+						setSheet(null);
+						openPhoto(null);
+						toast({ message: "Removed from Saved and your lists." });
+					}} /> : null}
 					{sheet?.kind === "newFolder" ? (
 						<NewFolderForm
 							parentName={folder?.name ?? "the gallery"}

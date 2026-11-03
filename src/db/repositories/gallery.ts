@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, isNotNull, isNull, lt, sql, type SQL } from "dr
 import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
-import { auditLogs, crsEvents, galleryFolders, galleryHearts, galleryItems, galleryTags, members, terms, type GalleryItemKind, type GalleryTagKind } from "@/db/schema";
+import { auditLogs, crsEvents, galleryFolders, galleryHearts, galleryItems, galleryListItems, galleryLists, gallerySaves, galleryTags, members, terms, type GalleryItemKind, type GalleryTagKind } from "@/db/schema";
 import { createId } from "@/lib/ids";
 import { createFolderTree, daysLeft, purgeCutoff, type FolderTree } from "@/lib/gallery/tree";
 import type { Actor } from "@/server/auth/permissions";
@@ -33,7 +33,7 @@ export type GalleryItemView = Pick<
 	| "uploadedBy"
 	| "createdAt"
 	| "viewCount"
-> & { uploaderName: string; eventTitle: string | null; heartCount: number; hearted: boolean; tags: GalleryTagView[] };
+> & { uploaderName: string; eventTitle: string | null; heartCount: number; hearted: boolean; saved: boolean; listIds: string[]; tags: GalleryTagView[] };
 
 /** A person tag's label is the member's current name; a topic tag's is what was typed. */
 export type GalleryTagView = { id: string; kind: GalleryTagKind; memberId: string | null; label: string };
@@ -102,9 +102,10 @@ export type CreateGalleryItemInput = {
 
 /** How a list of photos is ordered. Every mode except recent only lists photos that have some of what it counts. */
 export type GallerySort = "recent" | "loved" | "viewed" | "tagged";
-export type GalleryBrowseInput = { sort: GallerySort; q?: string; personId?: string };
+export type GalleryBrowseInput = { sort: GallerySort; q?: string; personId?: string; collection?: string };
 export type GalleryBrowseView = { items: GalleryItemView[]; albums: GalleryFolderCard[] };
 export type GalleryMemberOption = { id: string; name: string };
+export type GalleryList = { id: string; name: string };
 
 /**
  * The gallery's front page. Recent events lead (empty ones too, while the event is recent, so there is always
@@ -145,6 +146,12 @@ export type GalleryRepository = {
 	eventAlbum(actor: Actor, eventId: string, now?: Date): Promise<{ id: string } | null>;
 	recordView(actor: Actor, itemId: string): Promise<void>;
 	setHeart(actor: Actor, itemId: string, on: boolean): Promise<{ heartCount: number }>;
+	lists(actor: Actor): Promise<GalleryList[]>;
+	createList(actor: Actor, name: string): Promise<string>;
+	deleteList(actor: Actor, listId: string): Promise<void>;
+	setSaved(actor: Actor, itemId: string, on: boolean): Promise<void>;
+	saveItems(actor: Actor, itemIds: string[], listId?: string): Promise<void>;
+	setListItem(actor: Actor, listId: string, itemId: string, on: boolean): Promise<void>;
 	addTag(actor: Actor, itemId: string, input: { memberId: string } | { label: string }): Promise<void>;
 	removeTag(actor: Actor, tagId: string): Promise<void>;
 	memberOptions(actor: Actor): Promise<GalleryMemberOption[]>;
@@ -199,11 +206,11 @@ async function eventTitles(db: Db, ids: (string | null)[]): Promise<Map<string, 
 	return new Map(rows.map((row) => [row.id, row.title]));
 }
 
-type Decorated = GalleryItem & { uploaderName: string; eventTitle: string | null; heartCount: number; hearted: boolean; tags: GalleryTagView[] };
+type Decorated = GalleryItem & Pick<GalleryItemView, "uploaderName" | "eventTitle" | "heartCount" | "hearted" | "saved" | "listIds" | "tags">;
 
 async function decorate(db: Db, items: GalleryItem[], viewerId: string | null): Promise<Decorated[]> {
 	const ids = items.map((item) => item.id);
-	const [names, titles, heartRows, mine, tagRows] = await Promise.all([
+	const [names, titles, heartRows, mine, tagRows, savedRows, listRows] = await Promise.all([
 		namesFor(db, items.map((item) => item.uploadedBy)),
 		eventTitles(db, items.map((item) => item.eventId)),
 		inChunks(ids, (chunk) =>
@@ -219,10 +226,21 @@ async function decorate(db: Db, items: GalleryItem[], viewerId: string | null): 
 				.where(inArray(galleryTags.itemId, chunk))
 				.orderBy(galleryTags.createdAt),
 		),
+		viewerId
+			? inChunks(ids, (chunk) => db.select({ itemId: gallerySaves.itemId }).from(gallerySaves).where(and(inArray(gallerySaves.itemId, chunk), eq(gallerySaves.memberId, viewerId))))
+			: Promise.resolve([]),
+		viewerId
+			? inChunks(ids, (chunk) => db.select({ itemId: galleryListItems.itemId, listId: galleryListItems.listId }).from(galleryListItems)
+				.innerJoin(galleryLists, eq(galleryLists.id, galleryListItems.listId))
+				.where(and(inArray(galleryListItems.itemId, chunk), eq(galleryLists.memberId, viewerId))))
+			: Promise.resolve([]),
 	]);
 	const people = await namesFor(db, tagRows.map((tag) => tag.memberId));
 	const hearts = new Map(heartRows.map((row) => [row.itemId, Number(row.count)]));
 	const hearted = new Set(mine.map((row) => row.itemId));
+	const saved = new Set(savedRows.map((row) => row.itemId));
+	const listIds = new Map<string, string[]>();
+	for (const row of listRows) listIds.set(row.itemId, [...(listIds.get(row.itemId) ?? []), row.listId]);
 	const tags = new Map<string, GalleryTagView[]>();
 	for (const tag of tagRows) {
 		const label = (tag.memberId && people.get(tag.memberId)) || tag.label;
@@ -235,6 +253,8 @@ async function decorate(db: Db, items: GalleryItem[], viewerId: string | null): 
 		eventTitle: item.eventId ? titles.get(item.eventId) ?? null : null,
 		heartCount: hearts.get(item.id) ?? 0,
 		hearted: hearted.has(item.id),
+		saved: saved.has(item.id),
+		listIds: listIds.get(item.id) ?? [],
 		tags: tags.get(item.id) ?? [],
 	}));
 }
@@ -260,6 +280,8 @@ function toView(item: Decorated): GalleryItemView {
 		eventTitle: item.eventTitle,
 		heartCount: item.heartCount,
 		hearted: item.hearted,
+		saved: item.saved,
+		listIds: item.listIds,
 		tags: item.tags,
 	};
 }
@@ -369,6 +391,22 @@ export function createGalleryRepository(db: Db): GalleryRepository {
 	const heartCount = sql<number>`(select count(*) from ${galleryHearts} where ${galleryHearts.itemId} = ${galleryItems.id})`;
 	const tagCount = sql<number>`(select count(*) from ${galleryTags} where ${galleryTags.itemId} = ${galleryItems.id})`;
 
+	async function saveItems(actor: Actor, itemIds: string[], listId?: string) {
+		if (listId) {
+			const [list] = await db.select({ id: galleryLists.id }).from(galleryLists).where(and(eq(galleryLists.id, listId), eq(galleryLists.memberId, actor.memberId))).limit(1);
+			if (!list) throw new Error("List not found.");
+		}
+		const items = await liveItems(db, await loadTree(db), itemIds);
+		const statements: BatchItem<"sqlite">[] = [];
+		// Each row binds two values, so 45 rows stay below D1's 100-parameter limit.
+		for (let start = 0; start < items.length; start += ID_CHUNK / 2) {
+			const chunk = items.slice(start, start + ID_CHUNK / 2);
+			statements.push(db.insert(gallerySaves).values(chunk.map((item) => ({ itemId: item.id, memberId: actor.memberId }))).onConflictDoNothing());
+			if (listId) statements.push(db.insert(galleryListItems).values(chunk.map((item) => ({ itemId: item.id, listId }))).onConflictDoNothing());
+		}
+		await commit(db, statements);
+	}
+
 	/**
 	 * Photos across every album. Search matches captions, topics, tagged people (by their current name), the
 	 * photo's own event, and its album's name or event, so "summit" finds the Summit album's photos too. Matching
@@ -379,6 +417,14 @@ export function createGalleryRepository(db: Db): GalleryRepository {
 		const query = (input.q ?? "").replace(/[%_\\]/g, " ").trim().toLowerCase();
 		const pattern = `%${query}%`;
 		const conditions: (SQL | undefined)[] = [isNull(galleryItems.deletedAt)];
+		if (input.collection === "liked") {
+			conditions.push(sql`exists (select 1 from ${galleryHearts} where ${galleryHearts.itemId} = ${galleryItems.id} and ${galleryHearts.memberId} = ${actor.memberId})`);
+		} else if (input.collection === "saved") {
+			conditions.push(sql`exists (select 1 from ${gallerySaves} where ${gallerySaves.itemId} = ${galleryItems.id} and ${gallerySaves.memberId} = ${actor.memberId})`);
+		} else if (input.collection) {
+			conditions.push(sql`exists (select 1 from ${galleryListItems} join ${galleryLists} on ${galleryLists.id} = ${galleryListItems.listId}
+				where ${galleryListItems.itemId} = ${galleryItems.id} and ${galleryLists.id} = ${input.collection} and ${galleryLists.memberId} = ${actor.memberId})`);
+		}
 		if (input.personId) {
 			conditions.push(
 				sql`exists (select 1 from ${galleryTags} where ${galleryTags.itemId} = ${galleryItems.id} and ${galleryTags.kind} = 'person' and ${galleryTags.memberId} = ${input.personId})`,
@@ -414,7 +460,7 @@ export function createGalleryRepository(db: Db): GalleryRepository {
 			.filter((item) => tree.isLive(item.folderId))
 			.slice(0, BROWSE_LIMIT);
 		let albums: GalleryFolderCard[] = [];
-		if (query) {
+		if (query && !input.collection) {
 			const live = tree.all().filter((folder) => tree.isLive(folder.id));
 			const titles = await eventTitles(db, live.map((folder) => folder.eventId));
 			const matches = live.filter((folder) => folder.name.toLowerCase().includes(query) || (folder.eventId && titles.get(folder.eventId)?.toLowerCase().includes(query)));
@@ -687,6 +733,9 @@ export function createGalleryRepository(db: Db): GalleryRepository {
 			assertLiveFolder(tree, parentId);
 			if (tree.wouldCycle(folderId, parentId)) throw new Error("An album cannot go inside itself.");
 			if (folder.parentId === parentId) return;
+			if (tree.isPublic(folderId) !== (folder.isPublic || tree.isPublic(parentId)) && !canManageGallery(actor)) {
+				throw new Error("Only photo gallery admins can change what is public.");
+			}
 			await commit(db, [
 				db.update(galleryFolders).set({ parentId, updatedAt: new Date() }).where(eq(galleryFolders.id, folderId)),
 				db.insert(auditLogs).values(
@@ -861,6 +910,44 @@ export function createGalleryRepository(db: Db): GalleryRepository {
 			else await db.delete(galleryHearts).where(and(eq(galleryHearts.itemId, itemId), eq(galleryHearts.memberId, actor.memberId)));
 			const [row] = await db.select({ count: sql<number>`count(*)` }).from(galleryHearts).where(eq(galleryHearts.itemId, itemId));
 			return { heartCount: Number(row?.count ?? 0) };
+		},
+
+		async lists(actor) {
+			return db.select({ id: galleryLists.id, name: galleryLists.name }).from(galleryLists).where(eq(galleryLists.memberId, actor.memberId)).orderBy(galleryLists.name, galleryLists.id);
+		},
+
+		async createList(actor, name) {
+			name = name.trim();
+			if (!name || name.length > MAX_NAME) throw new Error("Give your list a name of up to 120 characters.");
+			const id = createId("glist");
+			await db.insert(galleryLists).values({ id, name, memberId: actor.memberId });
+			return id;
+		},
+
+		async deleteList(actor, listId) {
+			const deleted = await db.delete(galleryLists).where(and(eq(galleryLists.id, listId), eq(galleryLists.memberId, actor.memberId))).returning({ id: galleryLists.id });
+			if (!deleted.length) throw new Error("List not found.");
+		},
+
+		saveItems,
+
+		async setSaved(actor, itemId, on) {
+			if (on) {
+				await saveItems(actor, [itemId]);
+			} else {
+				await commit(db, [
+					db.delete(galleryListItems).where(and(eq(galleryListItems.itemId, itemId), inArray(galleryListItems.listId,
+						db.select({ id: galleryLists.id }).from(galleryLists).where(eq(galleryLists.memberId, actor.memberId))))),
+					db.delete(gallerySaves).where(and(eq(gallerySaves.itemId, itemId), eq(gallerySaves.memberId, actor.memberId))),
+				]);
+			}
+		},
+
+		async setListItem(actor, listId, itemId, on) {
+			if (on) return saveItems(actor, [itemId], listId);
+			const [list] = await db.select({ id: galleryLists.id }).from(galleryLists).where(and(eq(galleryLists.id, listId), eq(galleryLists.memberId, actor.memberId))).limit(1);
+			if (!list) throw new Error("List not found.");
+			await db.delete(galleryListItems).where(and(eq(galleryListItems.listId, listId), eq(galleryListItems.itemId, itemId)));
 		},
 
 		async addTag(actor, itemId, input) {
@@ -1082,6 +1169,12 @@ export function createUnavailableGalleryRepository(): GalleryRepository {
 		eventAlbum: unavailable,
 		recordView: unavailable,
 		setHeart: unavailable,
+		lists: unavailable,
+		createList: unavailable,
+		deleteList: unavailable,
+		setSaved: unavailable,
+		saveItems: unavailable,
+		setListItem: unavailable,
 		addTag: unavailable,
 		removeTag: unavailable,
 		memberOptions: unavailable,

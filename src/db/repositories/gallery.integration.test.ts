@@ -55,6 +55,111 @@ async function auditRows() {
 	return db.select().from(schema.auditLogs).orderBy(schema.auditLogs.createdAt);
 }
 
+describe("personal gallery library", () => {
+	it("saves selected photos together and adds them to a private list", async () => {
+		const first = await upload(ana);
+		const second = await upload(ben);
+		const untouched = await upload(ana);
+		const list = await gallery.createList(ana, "Selected picks");
+		await gallery.saveItems(ana, [first.id, second.id, first.id], list);
+		expect((await gallery.browse(ana, { sort: "recent", collection: list })).items.map((item) => item.id).sort()).toEqual([first.id, second.id].sort());
+		expect((await gallery.browse(ana, { sort: "recent", collection: "saved" })).items).toHaveLength(2);
+		expect((await gallery.folderView(ana, null))?.items.find((item) => item.id === untouched.id)?.saved).toBe(false);
+		expect((await gallery.browse(ben, { sort: "recent", collection: "saved" })).items).toEqual([]);
+	});
+
+	it("validates the whole selection and list ownership before saving any photo", async () => {
+		const item = await upload(ana);
+		const list = await gallery.createList(ben, "Private picks");
+		await expect(gallery.saveItems(ana, [item.id], list)).rejects.toThrow("List not found");
+		await expect(gallery.saveItems(ana, [item.id, "missing"])).rejects.toThrow();
+		await expect(gallery.saveItems(ana, [])).rejects.toThrow();
+		expect((await gallery.browse(ana, { sort: "recent", collection: "saved" })).items).toEqual([]);
+	});
+
+	it("saves a large selection without exceeding D1's parameter limit", async () => {
+		const ids: string[] = [];
+		for (let index = 0; index < 101; index++) ids.push((await upload(ana)).id);
+		await gallery.saveItems(ana, ids);
+		expect((await gallery.browse(ana, { sort: "recent", collection: "saved" })).items).toHaveLength(101);
+	});
+
+	it("shows only the current member's liked photos", async () => {
+		const mine = await upload(ben);
+		const others = await upload(ana);
+		await gallery.setHeart(ana, mine.id, true);
+		await gallery.setHeart(ben, others.id, true);
+		expect((await gallery.browse(ana, { sort: "recent", collection: "liked" })).items.map((item) => item.id)).toEqual([mine.id]);
+		await gallery.setHeart(ana, mine.id, false);
+		expect((await gallery.browse(ana, { sort: "recent", collection: "liked" })).items).toEqual([]);
+	});
+
+	it("saves a photo once per member without changing its hearts", async () => {
+		const item = await upload(ben);
+		await gallery.setSaved(ana, item.id, true);
+		await gallery.setSaved(ana, item.id, true);
+		const saved = await gallery.browse(ana, { sort: "recent", collection: "saved" });
+		expect(saved.items.map((row) => [row.id, row.saved, row.heartCount])).toEqual([[item.id, true, 0]]);
+		expect((await gallery.browse(ben, { sort: "recent", collection: "saved" })).items).toEqual([]);
+		expect((await gallery.folderView(ben, null))?.items[0].saved).toBe(false);
+	});
+
+	it("keeps custom lists private and includes their photos in Saved", async () => {
+		const item = await upload(ben);
+		const first = await gallery.createList(ana, "  Retreat picks  ");
+		const second = await gallery.createList(ana, "For the yearbook");
+		await gallery.setListItem(ana, first, item.id, true);
+		await gallery.setListItem(ana, first, item.id, true);
+		await gallery.setListItem(ana, second, item.id, true);
+		expect((await gallery.lists(ana)).map((list) => list.name).sort()).toEqual(["For the yearbook", "Retreat picks"]);
+		expect(await gallery.lists(ben)).toEqual([]);
+		expect((await gallery.browse(ana, { sort: "recent", collection: first })).items.map((row) => row.id)).toEqual([item.id]);
+		const [saved] = (await gallery.browse(ana, { sort: "recent", collection: "saved" })).items;
+		expect(saved.listIds.sort()).toEqual([first, second].sort());
+		expect((await gallery.browse(ben, { sort: "recent", collection: first })).items).toEqual([]);
+		await expect(gallery.setListItem(ben, first, item.id, true)).rejects.toThrow("List not found");
+		await expect(gallery.deleteList(boss, first)).rejects.toThrow("List not found");
+		await gallery.setListItem(ana, first, item.id, false);
+		expect((await gallery.browse(ana, { sort: "recent", collection: first })).items).toEqual([]);
+		expect((await gallery.browse(ana, { sort: "recent", collection: "saved" })).items).toHaveLength(1);
+		await gallery.deleteList(ana, second);
+		expect((await gallery.browse(ana, { sort: "recent", collection: "saved" })).items[0].listIds).toEqual([]);
+	});
+
+	it("removes an unsaved photo from every personal list", async () => {
+		const item = await upload(ana);
+		const list = await gallery.createList(ana, "Favorites");
+		await gallery.setListItem(ana, list, item.id, true);
+		await gallery.setSaved(ben, item.id, true);
+		await gallery.setSaved(ana, item.id, false);
+		expect((await gallery.browse(ana, { sort: "recent", collection: list })).items).toEqual([]);
+		expect((await gallery.browse(ana, { sort: "recent", collection: "saved" })).items).toEqual([]);
+		expect((await gallery.browse(ben, { sort: "recent", collection: "saved" })).items).toHaveLength(1);
+	});
+
+	it("hides deleted photos and albums from personal collections", async () => {
+		const folder = await gallery.createFolder(ana, { name: "Trip", parentId: null });
+		const item = await upload(ana, { folderId: folder });
+		const list = await gallery.createList(ana, "Trip picks");
+		await gallery.setListItem(ana, list, item.id, true);
+		await gallery.setHeart(ana, item.id, true);
+		await gallery.deleteFolder(ana, folder);
+		for (const collection of ["saved", "liked", list]) {
+			expect((await gallery.browse(ana, { sort: "recent", collection })).items).toEqual([]);
+		}
+		await expect(gallery.setSaved(ben, item.id, true)).rejects.toThrow();
+		await gallery.restore(ana, { folderIds: [folder], itemIds: [] });
+		expect((await gallery.browse(ana, { sort: "recent", collection: list })).items).toHaveLength(1);
+		await gallery.deleteItems(ana, [item.id]);
+		expect((await gallery.browse(ana, { sort: "recent", collection: "saved" })).items).toEqual([]);
+	});
+
+	it("rejects empty or oversized list names", async () => {
+		await expect(gallery.createList(ana, "   ")).rejects.toThrow();
+		await expect(gallery.createList(ana, "x".repeat(121))).rejects.toThrow();
+	});
+});
+
 describe("gallery uploads and edits", () => {
 	it("records the uploader permanently, including an email that outlives the member row", async () => {
 		const item = await upload(ana, { caption: "  hello  " });
@@ -102,6 +207,20 @@ describe("gallery uploads and edits", () => {
 		const item = await upload(ben, { folderId: folder });
 		expect(await gallery.canReadObject(null, item.id)).toBe(true);
 		expect((await gallery.publicView(null))?.folders.map((card) => card.name)).toEqual(["Open day"]);
+	});
+
+	it("keeps members from publishing a private album by moving it into a public one", async () => {
+		const privateFolder = await gallery.createFolder(ana, { name: "Members only", parentId: null });
+		const publicFolder = await gallery.createFolder(keeper, { name: "Public", parentId: null });
+		const photo = await upload(ana, { folderId: privateFolder });
+		await gallery.updateFolder(keeper, publicFolder, { isPublic: true });
+		await expect(gallery.moveFolder(ben, privateFolder, publicFolder)).rejects.toThrow("Only photo gallery admins");
+		expect(await gallery.canReadObject(null, photo.id)).toBe(false);
+		await gallery.moveFolder(keeper, privateFolder, publicFolder);
+		expect(await gallery.canReadObject(null, photo.id)).toBe(true);
+		await expect(gallery.moveFolder(ben, privateFolder, null)).rejects.toThrow("Only photo gallery admins");
+		await gallery.moveFolder(keeper, privateFolder, null);
+		expect(await gallery.canReadObject(null, photo.id)).toBe(false);
 	});
 
 	it("keeps a folder from moving inside itself", async () => {

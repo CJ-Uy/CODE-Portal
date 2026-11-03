@@ -90,6 +90,39 @@ export async function setHeartAction(input: { itemId: string; on: boolean }) {
 	});
 }
 
+export async function setSavedAction(input: { itemId: string; on: boolean }) {
+	return run((actor, { gallery }) => {
+		const parsed = z.object({ itemId: id, on: z.boolean() }).parse(input);
+		return gallery.setSaved(actor, parsed.itemId, parsed.on);
+	});
+}
+
+export async function saveItemsAction(input: { itemIds: string[]; listId?: string }) {
+	return run((actor, { gallery }) => {
+		const parsed = z.object({ itemIds: ids, listId: id.optional() }).parse(input);
+		return gallery.saveItems(actor, parsed.itemIds, parsed.listId);
+	});
+}
+
+export async function galleryListsAction() {
+	return run((actor, { gallery }) => gallery.lists(actor));
+}
+
+export async function createGalleryListAction(input: { name: string }) {
+	return run((actor, { gallery }) => gallery.createList(actor, z.object({ name: z.string().trim().min(1).max(120) }).parse(input).name));
+}
+
+export async function deleteGalleryListAction(input: { listId: string }) {
+	return run((actor, { gallery }) => gallery.deleteList(actor, z.object({ listId: id }).parse(input).listId));
+}
+
+export async function setGalleryListItemAction(input: { listId: string; itemId: string; on: boolean }) {
+	return run((actor, { gallery }) => {
+		const parsed = z.object({ listId: id, itemId: id, on: z.boolean() }).parse(input);
+		return gallery.setListItem(actor, parsed.listId, parsed.itemId, parsed.on);
+	});
+}
+
 export async function addTagAction(input: { itemId: string; memberId?: string; label?: string }) {
 	return run((actor, { gallery }) => {
 		const parsed = z.object({ itemId: id, memberId: id.optional(), label: z.string().max(200).optional() }).parse(input);

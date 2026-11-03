@@ -1308,6 +1308,37 @@ export const galleryHearts = sqliteTable(
 	(table) => [primaryKey({ columns: [table.itemId, table.memberId] }), index("gallery_hearts_member_idx").on(table.memberId)],
 );
 
+export const gallerySaves = sqliteTable(
+	"gallery_saves",
+	{
+		itemId: text("item_id").notNull().references(() => galleryItems.id, { onDelete: "cascade" }),
+		memberId: text("member_id").notNull().references(() => members.id, { onDelete: "cascade" }),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	},
+	(table) => [primaryKey({ columns: [table.itemId, table.memberId] }), index("gallery_saves_member_idx").on(table.memberId)],
+);
+
+export const galleryLists = sqliteTable(
+	"gallery_lists",
+	{
+		id: text("id").primaryKey(),
+		memberId: text("member_id").notNull().references(() => members.id, { onDelete: "cascade" }),
+		name: text("name").notNull(),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	},
+	(table) => [index("gallery_lists_member_idx").on(table.memberId)],
+);
+
+export const galleryListItems = sqliteTable(
+	"gallery_list_items",
+	{
+		listId: text("list_id").notNull().references(() => galleryLists.id, { onDelete: "cascade" }),
+		itemId: text("item_id").notNull().references(() => galleryItems.id, { onDelete: "cascade" }),
+		createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+	},
+	(table) => [primaryKey({ columns: [table.listId, table.itemId] }), index("gallery_list_items_item_idx").on(table.itemId)],
+);
+
 export type GalleryTagKind = "person" | "topic";
 
 /**
