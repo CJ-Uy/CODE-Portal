@@ -12,6 +12,8 @@ const plainMember: Actor = { memberId: "mem_a", roles: ["member"] };
 
 const TERM_START = new Date("2026-06-01T00:00:00.000Z");
 const TERM_END = new Date("2026-10-31T00:00:00.000Z");
+const FIRST_SEMESTER = new Date("2026-07-01T00:00:00.000Z");
+const SECOND_SEMESTER = new Date("2026-09-15T00:00:00.000Z");
 
 function makeRepo() {
 	const db = drizzle(env.DB, { schema });
@@ -209,39 +211,29 @@ describe("retention repository on D1", () => {
 		await insertRecord({ id: "ret_fraction_b", points: 0.7 });
 
 		const adminBoard = await repo.leaderboard(retentionAdmin, { termId: "term_1" });
-		const publicBoard = await repo.publicLeaderboard(plainMember, {
-			termId: "term_1",
-			pointTypeId: RETENTION_POINT_TYPE_ID,
-		});
+		const publicBoard = await repo.publicLeaderboard(plainMember, { termId: "term_1" }, FIRST_SEMESTER);
 
 		expect(adminBoard[0].totalPoints).toBe(0.8);
 		expect(publicBoard[0].totalPoints).toBe(0.8);
 	});
 
-	it("ranks public leaderboard rows by the selected point type", async () => {
+	it("ranks the public leaderboard by every point earned this semester, all categories summed", async () => {
 		const { repo } = makeRepo();
 		await insertRecord({ id: "ret_a", memberId: "mem_a", pointTypeId: "pt_retention", points: 10 });
 		await insertRecord({ id: "front_a", memberId: "mem_a", pointTypeId: "pt_frontliner", points: 1 });
 		await insertRecord({ id: "ret_b", memberId: "mem_b", pointTypeId: "pt_retention", points: 5 });
 		await insertRecord({ id: "front_b", memberId: "mem_b", pointTypeId: "pt_frontliner", points: 20 });
+		// No 2nd-semester date on this school year, so the midpoint (mid August) splits it.
+		await insertRecord({ id: "sem2_a", memberId: "mem_a", pointTypeId: "pt_frontliner", points: 100, recordedAt: SECOND_SEMESTER.getTime() });
 
-		const retentionTypeBoard = await repo.publicLeaderboard(plainMember, {
-			termId: "term_1",
-			pointTypeId: RETENTION_POINT_TYPE_ID,
-		});
-		const frontlinerBoard = await repo.publicLeaderboard(plainMember, {
-			termId: "term_1",
-			pointTypeId: "pt_frontliner",
-		});
+		const firstSemester = await repo.publicLeaderboard(plainMember, { termId: "term_1" }, FIRST_SEMESTER);
+		const secondSemester = await repo.publicLeaderboard(plainMember, { termId: "term_1" }, SECOND_SEMESTER);
 
-		expect(retentionTypeBoard.map((row) => [row.memberId, row.totalPoints])).toEqual([
-			["mem_a", 10],
-			["mem_b", 5],
+		expect(firstSemester.map((row) => [row.memberId, row.totalPoints])).toEqual([
+			["mem_b", 25],
+			["mem_a", 11],
 		]);
-		expect(frontlinerBoard.map((row) => [row.memberId, row.totalPoints])).toEqual([
-			["mem_b", 20],
-			["mem_a", 1],
-		]);
+		expect(secondSemester.map((row) => [row.memberId, row.totalPoints])).toEqual([["mem_a", 100]]);
 	});
 
 	it("ranks members by total points for the term leaderboard", async () => {

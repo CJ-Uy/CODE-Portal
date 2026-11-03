@@ -98,20 +98,12 @@ function Stat({ label, value }: { label: string; value: string }) {
 	);
 }
 
-export function PointsLeaderboard({
-	rows,
-	meId,
-	pointTypeLabel,
-}: {
-	rows: LeaderboardRow[];
-	meId: string;
-	pointTypeLabel: string;
-}) {
+export function PointsLeaderboard({ rows, meId }: { rows: LeaderboardRow[]; meId: string }) {
 	if (rows.length === 0) {
 		return (
 			<div className="grid gap-4">
 				<RankZero />
-				<EmptyState icon={Trophy} title="No points yet this term" description="Attend events to climb the leaderboard." />
+				<EmptyState icon={Trophy} title="No points yet this semester" description="Attend events to climb the leaderboard." />
 			</div>
 		);
 	}
@@ -128,7 +120,7 @@ export function PointsLeaderboard({
 	if (myIndex === -1) {
 		position = (
 			<p className="text-sm text-muted-foreground">
-				You&apos;re not on the board yet. Earn {pointTypeLabel} points this term to get ranked.
+				You&apos;re not on the board yet. Earn points this semester to get ranked.
 			</p>
 		);
 	} else {
