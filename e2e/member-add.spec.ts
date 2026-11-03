@@ -18,7 +18,7 @@ test("an admin gets progress and confirmation when adding a member", async ({ pa
 	await addForm.getByRole("button", { name: "Add one", exact: true }).click();
 	const addingButton = page.getByRole("button", { name: "Adding member", exact: true });
 	await expect(addingButton).toBeDisabled();
-	await expect(addingButton.locator("svg")).toHaveClass(/animate-spin/);
+	await expect(addingButton.locator("svg:visible")).toHaveClass(/animate-spin/);
 	await expect(page.getByRole("status")).toHaveText("Member added.");
 	await expect(page.getByRole("cell", { name: email, exact: true })).toBeVisible();
 

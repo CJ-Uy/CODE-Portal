@@ -150,7 +150,7 @@ describe("retention repository on D1", () => {
 			expect.objectContaining({ eventId: "evt_gma", surveyId: "srv_gma", surveyStatus: "running", pointTypeId: "pt_gma", pointTypeLabel: "General Membership Activity", points: 0.25 }),
 		]);
 		expect(open.progress?.parts[1].slots[0]).toMatchObject({ earned: 0.75, pending: 0.25, state: "open" });
-		await expect(repo.eventFeedbackShare(plainMember, "evt_gma")).resolves.toMatchObject({ hasForm: true, pending: [expect.objectContaining({ points: 0.25 })] });
+		await expect(repo.eventFeedbackShare(plainMember, "evt_gma", EARLY)).resolves.toMatchObject({ hasForm: true, pending: [expect.objectContaining({ points: 0.25 })] });
 
 		await env.DB.prepare("UPDATE surveys SET status = 'draft' WHERE id = 'srv_gma'").run();
 		expect((await repo.myHistory(plainMember, { termId: "term_1" }, EARLY)).pendingShares[0]).toMatchObject({ surveyStatus: "draft" });
@@ -161,6 +161,18 @@ describe("retention repository on D1", () => {
 		await env.DB.prepare("UPDATE surveys SET closes_at = ? WHERE id = 'srv_gma'").bind(TERM_END.getTime()).run();
 		await env.DB.prepare("INSERT INTO survey_assignments (survey_id, member_id, completed_at) VALUES ('srv_gma', 'mem_a', ?)").bind(EARLY.getTime()).run();
 		expect((await repo.myHistory(plainMember, { termId: "term_1" }, EARLY)).pendingShares).toEqual([]);
+	});
+
+	it("loads retention progress for a roster larger than D1's parameter limit", async () => {
+		const { repo } = makeRepo();
+		await addParts();
+		await insertRecord({ id: "ret_first", memberId: "mem_a", pointTypeId: "pt_ts", points: 1 });
+		await insertRecord({ id: "ret_last", memberId: "mem_b", pointTypeId: "pt_ts", points: 0.5 });
+		const ids = ["mem_a", ...Array.from({ length: 118 }, (_, index) => `mem_roster_${index}`), "mem_b"];
+		const progress = await repo.termProgress(retentionAdmin, "term_1", ids, EARLY);
+		expect(progress.size).toBe(120);
+		expect(progress.get("mem_a")?.parts[0].slots[0].earned).toBe(1);
+		expect(progress.get("mem_b")?.parts[0].slots[0].earned).toBe(0.5);
 	});
 
 	it("tells an event page whether the event has a feedback form", async () => {

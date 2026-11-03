@@ -172,6 +172,33 @@ describe("feedback share of event points", () => {
 		expect(await records("mem_a")).toEqual([]);
 	});
 
+	it("restores an earned feedback share when an undone check-in is recorded again", async () => {
+		const { events, surveys } = repos();
+		const event = await makeEvent();
+		const surveyId = await attachForm(event.id);
+		await events.recordScan(owner, { eventId: event.id, memberId: "mem_a", termId: "term_1" });
+		await surveys.submitResponse(memberA, { surveyId, answers: [] });
+		await events.undoScan(owner, { eventId: event.id, memberId: "mem_a" });
+		await events.recordScan(owner, { eventId: event.id, memberId: "mem_a", termId: "term_1" });
+		expect(await records("mem_a")).toEqual([
+			["event_attendance", "pt_frontliner", 0.38],
+			["event_attendance", "pt_gma", 0.75],
+			["feedback_share", "pt_frontliner", 0.12],
+			["feedback_share", "pt_gma", 0.25],
+		]);
+	});
+
+	it.each([0, 0.01, -1])("keeps completed feedback and attendance totaling an edited award of %s", async (points) => {
+		const { db, events, surveys } = repos();
+		const event = await makeEvent();
+		const surveyId = await attachForm(event.id);
+		await events.recordScan(owner, { eventId: event.id, memberId: "mem_a", termId: "term_1" });
+		await surveys.submitResponse(memberA, { surveyId, answers: [] });
+		await events.setAwards(eventsAdmin, event.id, [{ pointTypeId: "pt_gma", points }]);
+		const rows = await db.select().from(retentionRecords).where(eq(retentionRecords.memberId, "mem_a"));
+		expect(rows.reduce((sum, row) => sum + (row.points ?? 0), 0)).toBe(points);
+	});
+
 	it("keeps points for answering on a form with no event", async () => {
 		const { surveys } = repos();
 		const surveyId = await attachForm(null);

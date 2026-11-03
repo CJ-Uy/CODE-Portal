@@ -780,6 +780,7 @@ export function createEventsRepository(db: Db, audit: AuditRepository): EventsRe
 						scannedBy: actor.memberId,
 						scannedAt,
 					}),
+					buildFeedbackShareUpsert(db, input.eventId, input.memberId),
 					db.insert(auditLogs).values(
 						auditInsertValues(actor, {
 							action: "event:scan_attendance",

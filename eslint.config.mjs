@@ -19,6 +19,8 @@ const eslintConfig = defineConfig([
 		".local/**",
 		// Agent worktrees live here and are whole checkouts of other branches.
 		".claude/**",
+		".worktrees/**",
+		".playwright-mcp/**",
 	]),
 ]);
 

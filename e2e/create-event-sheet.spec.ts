@@ -14,6 +14,7 @@ test("the create event sheet slides in", async ({ page }) => {
 });
 
 test("event creators can make signup answers visible to members", async ({ page }) => {
+	await page.locator("summary").filter({ hasText: "More options" }).click();
 	const checkbox = page.getByRole("checkbox", { name: "Let members see signup answers" });
 	await expect(checkbox).toBeVisible();
 	await expect(checkbox).not.toBeChecked();
@@ -23,6 +24,7 @@ test("invalid event details show a field error without closing the sheet", async
 	await page.getByRole("textbox", { name: "Title" }).fill("Study session");
 	await page.getByRole("textbox", { name: "Place" }).fill("Hall");
 	await page.getByRole("textbox", { name: "Description" }).fill("Study together");
+	await page.locator("summary").filter({ hasText: "More options" }).click();
 	await page.getByRole("spinbutton", { name: /Capacity/ }).fill("0");
 
 	const response = page.waitForResponse((candidate) => candidate.url().endsWith("/portal/calendar") && candidate.request().method() === "POST");

@@ -124,7 +124,7 @@ export type RetentionRepository = {
 	listForMember(actor: Actor, input: ListForMemberInput): Promise<TypedRetentionRecord[]>;
 	memberProgress(actor: Actor, input: MemberTermSummaryInput, now?: Date): Promise<RetentionProgress | null>;
 	termProgress(actor: Actor, termId: string, memberIds: string[], now?: Date): Promise<Map<string, RetentionProgress>>;
-	eventFeedbackShare(actor: Actor, eventId: string): Promise<EventFeedbackShare>;
+	eventFeedbackShare(actor: Actor, eventId: string, now?: Date): Promise<EventFeedbackShare>;
 	nextPartEvents(actor: Actor, now?: Date): Promise<Map<string, NextPartEvent>>;
 	leaderboard(actor: Actor, input: LeaderboardInput): Promise<LeaderboardRow[]>;
 	publicLeaderboard(actor: Actor, input: PublicLeaderboardInput): Promise<LeaderboardRow[]>;
@@ -230,10 +230,15 @@ export async function loadProgress(db: Db, memberIds: string[], termId: string, 
 	if (!term || memberIds.length === 0) return progress;
 	const types = await partTypes(db);
 	const partIds = types.filter((type) => type.retentionPeriod !== null).map((type) => type.id);
-	const rows: Array<{ memberId: string; pointTypeId: string; points: number | null; eventStartsAt: Date | null; recordedAt: Date }> =
-		partIds.length === 0
-			? []
-			: await db
+	const rows: Array<{ memberId: string; pointTypeId: string; points: number | null; eventStartsAt: Date | null; recordedAt: Date }> = [];
+	const pending: Array<PendingShare & { memberId: string }> = [];
+	// Leave room under D1's 100 parameters for the school year and retention parts.
+	for (let start = 0; start < memberIds.length; start += 80) {
+		const ids = memberIds.slice(start, start + 80);
+		const [batchRows, batchPending] = await Promise.all([
+			partIds.length === 0
+				? []
+				: db
 					.select({
 						memberId: retentionRecords.memberId,
 						pointTypeId: retentionRecords.pointTypeId,
@@ -243,8 +248,12 @@ export async function loadProgress(db: Db, memberIds: string[], termId: string, 
 					})
 					.from(retentionRecords)
 					.leftJoin(crsEvents, eq(crsEvents.id, retentionRecords.eventId))
-					.where(and(eq(retentionRecords.termId, termId), inArray(retentionRecords.memberId, memberIds), inArray(retentionRecords.pointTypeId, partIds)));
-	const pending = await pendingShares(db, { memberIds, termId }, now);
+					.where(and(eq(retentionRecords.termId, termId), inArray(retentionRecords.memberId, ids), inArray(retentionRecords.pointTypeId, partIds))),
+			pendingShares(db, { memberIds: ids, termId }, now),
+		]);
+		rows.push(...batchRows);
+		pending.push(...batchPending);
+	}
 	for (const memberId of memberIds) {
 		progress.set(
 			memberId,
@@ -358,10 +367,10 @@ export function createRetentionRepository(db: Db, audit: AuditRepository): Reten
 		},
 
 		// The viewer's own share only, so no permission check beyond being signed in.
-		async eventFeedbackShare(actor, eventId) {
+		async eventFeedbackShare(actor, eventId, now = new Date()) {
 			const [form] = await db.select({ id: surveys.id }).from(surveys).where(eq(surveys.eventId, eventId)).limit(1);
 			if (!form) return { hasForm: false, pending: [] };
-			return { hasForm: true, pending: (await pendingShares(db, { memberIds: [actor.memberId], eventId }, new Date())) };
+			return { hasForm: true, pending: (await pendingShares(db, { memberIds: [actor.memberId], eventId }, now)) };
 		},
 
 		async leaderboard(actor, input) {

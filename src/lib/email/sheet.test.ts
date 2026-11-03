@@ -18,6 +18,12 @@ describe("parseDelimited", () => {
 		expect(detectDelimiter("a,b,c")).toBe(",");
 		expect(detectDelimiter("a;b;c,d")).toBe(";");
 	});
+	it.each([
+		{ text: 'Email;"Last, First"\nana@x.com;"Cruz, Ana"', rows: [["Email", "Last, First"], ["ana@x.com", "Cruz, Ana"]] },
+		{ text: 'Email,"Message; greeting; note"\nana@x.com,Hello', rows: [["Email", "Message; greeting; note"], ["ana@x.com", "Hello"]] },
+	])("detects delimiters outside quoted headers: $text", ({ text, rows }) => {
+		expect(parseDelimited(text)).toEqual(rows);
+	});
 });
 
 describe("variableName", () => {

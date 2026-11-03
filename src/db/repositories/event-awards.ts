@@ -155,7 +155,13 @@ export function buildFeedbackShareUpsert(db: Db, eventId: string, memberId?: str
 				eq(attendance.eventId, eventId),
 				eq(attendance.source, "event_attendance"),
 				memberId ? eq(attendance.memberId, memberId) : undefined,
-				sql`${remainder} > 0`,
+				sql`(${remainder} <> 0 or exists (
+					select 1 from ${retentionRecords}
+					where ${retentionRecords.source} = 'feedback_share'
+					and ${retentionRecords.eventId} = ${attendance.eventId}
+					and ${retentionRecords.memberId} = ${attendance.memberId}
+					and ${retentionRecords.pointTypeId} = ${attendance.pointTypeId}
+				))`,
 			),
 		);
 

@@ -31,7 +31,18 @@ export function parseDelimited(text: string, delimiter = detectDelimiter(text)):
 
 /** Tab wins when present (a clipboard paste); otherwise whichever of comma or semicolon the header row uses more. */
 export function detectDelimiter(text: string): string {
-	const header = text.slice(0, text.search(/\r|\n|$/));
+	let header = "";
+	let quoted = false;
+	for (let i = 0; i < text.length; i++) {
+		const ch = text[i];
+		if (ch === '"') {
+			if (quoted && text[i + 1] === '"') i++;
+			else quoted = !quoted;
+		} else if (!quoted) {
+			if (ch === "\r" || ch === "\n") break;
+			header += ch;
+		}
+	}
 	if (header.includes("\t")) return "\t";
 	return (header.match(/;/g)?.length ?? 0) > (header.match(/,/g)?.length ?? 0) ? ";" : ",";
 }
