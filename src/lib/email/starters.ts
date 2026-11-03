@@ -13,8 +13,10 @@ export function emailStarters(baseUrl: string) {
 	return [
 		{
 			id: "feature-announcement", name: "CODE Portal feature announcement", description: "Introduce a major portal feature. CODE Mail is the editable example.",
-			subject: "New in CODE Portal: CODE Mail", preheader: "Your CODE emails now have a home in the portal.",
-			blocks: [heading("CODE Mail is here."), text("Hi {{firstname}},\n\nThere’s a new way to keep up with CODE. Mail brings the CODE emails sent to you into your portal, so you can return to an update whenever you need it."), button("Open CODE Mail", `${portal}/mail`), divider, heading("What you can do", 2), text("**Catch up in one place.** Read the CODE emails sent to you from your member workspace.\n\n**Find an update again.** Open a past email without searching through your personal inbox.\n\n**Choose your emails.** Set your preferences for optional email categories. Required CODE notices still reach you."), heading("Give it a try", 2), text("Sign in to CODE Portal and choose **Mail** in the menu. Your email preferences are available from the Mail page."), button("Choose your email preferences", `${portal}/mail/preferences`), divider, text("Have a question or an idea for the portal? Reply to this email.\n\nSee you in CODE Portal,\nCODE")],
+			// Ateneo's Gmail sent the earlier copy ("Sign in to CODE Portal", "Open CODE Mail", "personal inbox") to Spam,
+			// so this copy avoids sign-in, inbox and account-setting wording. Test it on a student address after changing it.
+			subject: "New in CODE Portal: past updates in one place", preheader: "Every CODE update we send you is now saved in the portal.",
+			blocks: [heading("Every CODE update, saved for you."), text("Hi {{firstname}},\n\nCODE Portal now keeps a copy of each update we send you. Missed an announcement, or need an event detail again? You’ll find it on the Mail page, right next to the calendar."), button("See past updates", `${portal}/mail`), divider, heading("What’s new", 2), text("**Everything in one place.** Announcements, event news and reminders from CODE, listed by date.\n\n**Easy to find again.** Look back at an update without digging through old messages.\n\n**You choose the extras.** Turn optional categories on or off from the Mail page. Important CODE notices always come through."), divider, text("Have an idea for the portal? Reply and tell us.\n\nSee you around,\nCODE")],
 		},
 		{
 			id: "welcome", name: "Welcome to CODE", description: "A warm introduction to the member workspace.",

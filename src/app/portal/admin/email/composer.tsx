@@ -248,7 +248,7 @@ export function Composer(props: ComposerProps) {
 			<p className="flex items-start gap-2 rounded-lg border border-[#90B4CC] bg-secondary/50 p-3 text-sm">
 				<CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
 				<span className="min-w-0">
-					Send yourself a test before sending. Ateneo&rsquo;s mail filter can quietly hold emails that read like a sign-in or inbox prompt, even when they show as sent. If your test does not arrive, change the wording and test again.
+					Send yourself a test before sending. Ateneo&rsquo;s Gmail can put emails that read like a sign-in or inbox prompt in Spam, even when they show as sent. If your test lands in Spam, change the wording and test again.
 				</span>
 			</p>
 			<div className="flex justify-end">
