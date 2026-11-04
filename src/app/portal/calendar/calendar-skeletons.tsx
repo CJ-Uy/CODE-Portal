@@ -40,6 +40,17 @@ export function MonthGridSkeleton() {
 	);
 }
 
+/** Week/Day placeholder: header row plus the default 7 AM to 10 PM of hour rows, sized like calendar-time-grid.tsx. */
+export function TimeGridSkeleton() {
+	return (
+		<div role="status" aria-label="Loading calendar" className="overflow-hidden rounded-xl border border-border bg-card">
+			<span className="sr-only">Loading calendar</span>
+			<div className="h-14 border-b border-border bg-secondary/30" />
+			<div className="h-[41.25rem] animate-pulse bg-muted/30 motion-reduce:animate-none sm:h-[45rem]" />
+		</div>
+	);
+}
+
 export function EventsListSkeleton() {
 	return (
 		<div role="status" aria-label="Loading events" className="grid animate-pulse gap-3 motion-reduce:animate-none">

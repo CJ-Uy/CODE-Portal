@@ -1,21 +1,23 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { CalendarDays, ChevronLeft, ChevronRight, List } from "lucide-react";
+import { Calendar1, CalendarDays, CalendarRange, ChevronLeft, ChevronRight, List } from "lucide-react";
 import { getRepositories } from "@/db";
 import { allowedEventTypes } from "@/db/repositories/eventTypeRules";
 import { Button } from "@/components/ui/button";
 import { CalendarMonth } from "@/components/calendar-month";
+import { CalendarTimeGrid } from "@/components/calendar-time-grid";
 import { PageHeader } from "@/components/portal/page-header";
 import { loadEventTypes } from "@/lib/event-type-load";
 import { formatEstimate } from "@/lib/feedback/editor-input";
 import { estimateSeconds } from "@/lib/feedback/stats";
-import { utc8Parts } from "@/lib/date-slots";
+import { addDays, dayViewHref, parseIsoDay, weekDays } from "@/lib/calendar-time-grid";
+import { toLocalDate, utc8Parts } from "@/lib/date-slots";
 import { requireActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
 import { isFeatureEnabled } from "@/server/features";
 import { canViewFeedbackArchive } from "@/server/feedback/archive-access";
 import { CreateEventSheet } from "./create-event-sheet";
-import { CreateEventSkeleton, EventsListSkeleton, MonthGridSkeleton } from "./calendar-skeletons";
+import { CreateEventSkeleton, EventsListSkeleton, MonthGridSkeleton, TimeGridSkeleton } from "./calendar-skeletons";
 import { EventsList } from "./events-list";
 import { loadEventList } from "./load-events";
 
@@ -31,30 +33,43 @@ const MONTH_NAMES = [
  * the heading, the view tabs and the month controls paint on the first frame and a tab or
  * arrow responds immediately instead of waiting on a round trip.
  *
- * The boundary is keyed on view, year and month. Without the key React keeps the existing
+ * The boundary is keyed on view, year, month and day. Without the key React keeps the existing
  * boundary mounted and holds the previous month on screen until the new one arrives, which
  * reads as a dead click.
  */
 export default async function CalendarPage({
 	searchParams,
 }: {
-	searchParams: Promise<{ year?: string; month?: string; view?: string }>;
+	searchParams: Promise<{ year?: string; month?: string; view?: string; date?: string }>;
 }) {
 	const params = await searchParams;
-	const view = params.view === "list" ? "list" : "calendar";
+	const view = params.view === "list" || params.view === "week" || params.view === "day" ? params.view : "calendar";
 	// Points overlay only exists where the points surface itself is enabled.
 	const showPoints = isFeatureEnabled("retention");
 	const today = utc8Parts(new Date());
-	const year = Number(params.year) || today.year;
-	const month = Number(params.month) || today.month;
+	const todayIso = toLocalDate(new Date());
+
+	// Week and Day are anchored on a Manila day (?date=); Month on ?year=&month=. Each tab carries the
+	// other's position over, so switching views stays on the same stretch of time.
+	const paramDate = parseIsoDay(params.date);
+	const year = Number(params.year) || (paramDate ? Number(paramDate.slice(0, 4)) : today.year);
+	const month = Number(params.month) || (paramDate ? Number(paramDate.slice(5, 7)) : today.month);
+	const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
+	const anchor = paramDate ?? (todayIso.startsWith(monthStart.slice(0, 7)) ? todayIso : monthStart);
+	const days = view === "week" ? weekDays(anchor) : [anchor];
 
 	const prev = month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
 	const next = month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
 
 	const viewTabs = [
-		{ id: "calendar", label: "Month", icon: CalendarDays, href: "/portal/calendar" },
+		{ id: "calendar", label: "Month", icon: CalendarDays, href: monthHref(year, month) },
+		{ id: "week", label: "Week", icon: CalendarRange, href: weekHref(anchor) },
+		{ id: "day", label: "Day", icon: Calendar1, href: dayViewHref(anchor) },
 		{ id: "list", label: "List", icon: List, href: "/portal/calendar?view=list" },
 	];
+	const step = view === "week" ? 7 : 1;
+	const rangeHref = view === "week" ? weekHref : dayViewHref;
+	const unit = view === "week" ? "week" : "day";
 
 	return (
 		<div className="grid gap-5">
@@ -85,7 +100,7 @@ export default async function CalendarPage({
 										: "inline-flex min-h-10 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
 								}
 							>
-								<Icon className="size-4" />
+								<Icon className="hidden size-4 sm:block" />
 								{tab.label}
 							</Link>
 						);
@@ -111,17 +126,38 @@ export default async function CalendarPage({
 							</Link>
 						</Button>
 					</div>
+				) : view === "week" || view === "day" ? (
+					<div className="flex w-full items-center justify-between gap-1 sm:w-auto sm:justify-start sm:gap-2">
+						<Button asChild variant="outline" size="sm">
+							<Link href={rangeHref(todayIso)}>Today</Link>
+						</Button>
+						<Button asChild variant="outline" size="icon" aria-label={`Previous ${unit}`}>
+							<Link href={rangeHref(addDays(anchor, -step))}>
+								<ChevronLeft />
+							</Link>
+						</Button>
+						<span className="min-w-0 flex-1 text-center text-sm font-semibold sm:min-w-44">{rangeLabel(days)}</span>
+						<Button asChild variant="outline" size="icon" aria-label={`Next ${unit}`}>
+							<Link href={rangeHref(addDays(anchor, step))}>
+								<ChevronRight />
+							</Link>
+						</Button>
+					</div>
 				) : null}
 			</div>
 
 			<Suspense
-				key={`${view}-${year}-${month}`}
-				fallback={view === "calendar" ? <MonthGridSkeleton /> : <EventsListSkeleton />}
+				key={`${view}-${year}-${month}-${days[0]}`}
+				fallback={
+					view === "calendar" ? <MonthGridSkeleton /> : view === "list" ? <EventsListSkeleton /> : <TimeGridSkeleton />
+				}
 			>
 				{view === "calendar" ? (
 					<MonthBody year={year} month={month} showPoints={showPoints} />
-				) : (
+				) : view === "list" ? (
 					<ListBody />
+				) : (
+					<RangeBody days={days} />
 				)}
 			</Suspense>
 		</div>
@@ -174,6 +210,41 @@ async function MonthBody({
 
 function monthHref(year: number, month: number): string {
 	return `/portal/calendar?year=${year}&month=${month}`;
+}
+
+function weekHref(iso: string): string {
+	return `/portal/calendar?view=week&date=${iso}`;
+}
+
+/** "Nov 1 – 7, 2026", "Oct 25 – Nov 1, 2026" or "Wed, Nov 4, 2026". The days are already Manila days. */
+function rangeLabel(days: string[]): string {
+	const at = (iso: string) => new Date(`${iso}T00:00:00Z`);
+	if (days.length === 1) {
+		return new Intl.DateTimeFormat("en", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric", year: "numeric" }).format(at(days[0]));
+	}
+	return new Intl.DateTimeFormat("en", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" }).formatRange(at(days[0]), at(days[days.length - 1]));
+}
+
+/**
+ * The calendar repository reads by month, so a week crossing a month boundary reads both months
+ * (in parallel) and keeps only what overlaps the days shown. Birthdays and deadlines are per month,
+ * so merging by id loses nothing.
+ */
+async function RangeBody({ days }: { days: string[] }) {
+	const actor = await requireActor();
+	const repositories = await getRepositories();
+	const first = days[0];
+	const last = days[days.length - 1];
+	const months = [...new Set([first.slice(0, 7), last.slice(0, 7)])];
+	const lists = await Promise.all(
+		months.map((ym) =>
+			repositories.calendar.getMonth(actor, { year: Number(ym.slice(0, 4)), month: Number(ym.slice(5, 7)) }).catch(() => []),
+		),
+	);
+	const items = [...new Map(lists.flat().map((item) => [item.id, item])).values()].filter(
+		(item) => item.endDate >= first && item.date <= last,
+	);
+	return <CalendarTimeGrid days={days} items={items} />;
 }
 
 async function ListBody() {
