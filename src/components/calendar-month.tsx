@@ -112,7 +112,9 @@ export function CalendarMonth({
 										{/* Reserves the vertical space the absolutely-positioned bars occupy:
 										    MAX_LANES lanes of 1.0625rem plus the 0.125rem gaps between them. */}
 										<div aria-hidden className="h-[3.4375rem]" />
-										{overflow > 0 ? <span className="text-[11px] text-muted-foreground">+{overflow} more</span> : null}
+										{overflow > 0 ? (
+											<DayMore iso={iso} overflow={overflow} items={items.filter((item) => item.date <= iso && iso <= item.endDate)} todayIso={todayIso} />
+										) : null}
 									</div>
 								);
 							})}
@@ -190,45 +192,87 @@ function MonthAgenda({ items, year, month, todayIso }: { items: CalendarItem[]; 
 			<h2 id="month-agenda" className="font-sans text-sm font-semibold text-muted-foreground">
 				{rows.length ? `${MONTHS[month - 1]} at a glance` : `Nothing on the calendar in ${MONTHS[month - 1]}`}
 			</h2>
-			{rows.length ? (
-				<ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
-					{rows.map((item) => {
-						const past = item.endDate < todayIso;
-						const colour = colourClasses(item.colour);
-						const day = (iso: string) => (iso === todayIso ? "Today" : dayLabel(iso));
-						const when = [
-							item.endDate !== item.date ? `${day(item.date)} to ${day(item.endDate)}` : day(item.date),
-							item.startsAt ? formatUtc8Time(new Date(item.startsAt)) : null,
-						]
-							.filter(Boolean)
-							.join(" · ");
-						const body = (
-							<>
-								<span className={cn("mt-1.5 size-2 shrink-0 rounded-full", colour.dot)} aria-hidden />
-								<span className="min-w-0 flex-1">
-									<span className="block font-medium [overflow-wrap:anywhere]">{item.title}</span>
-									<span className="block text-sm text-muted-foreground">
-										{when}
-									</span>
-								</span>
-							</>
-						);
-						const rowClass = cn("flex min-w-0 items-start gap-3 px-4 py-3", past && "opacity-60");
-						return (
-							<li key={item.id}>
-								{item.href ? (
-									<Link href={item.href} className={cn(rowClass, "transition-colors active:bg-secondary/60")}>
-										{body}
-									</Link>
-								) : (
-									<div className={rowClass}>{body}</div>
-								)}
-							</li>
-						);
-					})}
-				</ul>
-			) : null}
+			{rows.length ? <AgendaList items={rows} todayIso={todayIso} /> : null}
 		</section>
+	);
+}
+
+/**
+ * "+N more" opens every item on that day in a native popover: no client JS, and the browser handles
+ * outside-click and Esc dismissal. It sits in the top layer, so the grid's overflow-hidden can't clip it.
+ */
+function DayMore({ iso, overflow, items, todayIso }: { iso: string; overflow: number; items: CalendarItem[]; todayIso: string }) {
+	const id = `day-more-${iso}`;
+	const sorted = [...items].sort((a, b) => `${a.date}${a.startsAt ?? ""}`.localeCompare(`${b.date}${b.startsAt ?? ""}`));
+	return (
+		<>
+			<button
+				type="button"
+				popoverTarget={id}
+				className="rounded px-0.5 text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+			>
+				+{overflow} more
+			</button>
+			<div
+				id={id}
+				popover="auto"
+				aria-label={`Everything on ${dayLabel(iso)}`}
+				className="m-auto max-h-[min(32rem,calc(100dvh-4rem))] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-border bg-card p-0 text-foreground shadow-lg backdrop:bg-black/20"
+			>
+				<div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2.5">
+					<h3 className="font-sans text-sm font-semibold">{iso === todayIso ? "Today" : dayLabel(iso)}</h3>
+					<button
+						type="button"
+						popoverTarget={id}
+						popoverTargetAction="hide"
+						aria-label="Close"
+						className="rounded px-1.5 text-lg leading-none text-muted-foreground hover:text-foreground"
+					>
+						×
+					</button>
+				</div>
+				<AgendaList items={sorted} todayIso={todayIso} bare />
+			</div>
+		</>
+	);
+}
+
+function AgendaList({ items, todayIso, bare = false }: { items: CalendarItem[]; todayIso: string; bare?: boolean }) {
+	return (
+		<ul className={cn("divide-y divide-border", !bare && "overflow-hidden rounded-xl border border-border bg-card")}>
+			{items.map((item) => {
+				const past = item.endDate < todayIso;
+				const colour = colourClasses(item.colour);
+				const day = (iso: string) => (iso === todayIso ? "Today" : dayLabel(iso));
+				const when = [
+					item.endDate !== item.date ? `${day(item.date)} to ${day(item.endDate)}` : day(item.date),
+					item.startsAt && !item.allDay ? formatUtc8Time(new Date(item.startsAt)) : null,
+				]
+					.filter(Boolean)
+					.join(" · ");
+				const body = (
+					<>
+						<span className={cn("mt-1.5 size-2 shrink-0 rounded-full", colour.dot)} aria-hidden />
+						<span className="min-w-0 flex-1">
+							<span className="block font-medium [overflow-wrap:anywhere]">{item.title}</span>
+							<span className="block text-sm text-muted-foreground">{when}</span>
+						</span>
+					</>
+				);
+				const rowClass = cn("flex min-w-0 items-start gap-3 px-4 py-3", past && "opacity-60");
+				return (
+					<li key={item.id}>
+						{item.href ? (
+							<Link href={item.href} className={cn(rowClass, "transition-colors hover:bg-secondary/40 active:bg-secondary/60")}>
+								{body}
+							</Link>
+						) : (
+							<div className={rowClass}>{body}</div>
+						)}
+					</li>
+				);
+			})}
+		</ul>
 	);
 }
 
