@@ -20,7 +20,7 @@ const SEGMENT_LABEL: Record<string, string> = {
 };
 
 function formatWhen(value: Date): string {
-	return new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(value);
+	return new Intl.DateTimeFormat("en", { timeZone: "Asia/Manila", dateStyle: "medium", timeStyle: "short" }).format(value);
 }
 
 export default async function AdminSubmissionsPage({
