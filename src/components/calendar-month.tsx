@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import type { CalendarItem } from "@/lib/calendar";
-import { layoutMonthBars, toWeeks } from "@/lib/calendar-layout";
+import { layoutMonthBars, toWeeks, type CalendarBarInput, type LaidOutBar } from "@/lib/calendar-layout";
+import { dayViewHref } from "@/lib/calendar-time-grid";
 import { colourClasses } from "@/lib/event-type-colours";
 import { formatUtc8Time, toLocalDate } from "@/lib/date-slots";
 import { formatPoints } from "@/lib/points";
@@ -100,14 +101,16 @@ export function CalendarMonth({
 											) : (
 												<span />
 											)}
-											<span
+											<Link
+												href={dayViewHref(iso)}
+												aria-label={`Open ${dayLabel(iso)}`}
 												className={cn(
-													"grid size-6 shrink-0 place-items-center rounded-full text-xs tabular-nums",
-													isToday ? "bg-accent font-semibold text-accent-foreground" : "text-muted-foreground",
+													"grid size-6 shrink-0 place-items-center rounded-full text-xs tabular-nums transition-colors focus-visible:outline-2 focus-visible:outline-ring",
+													isToday ? "bg-accent font-semibold text-accent-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground",
 												)}
 											>
 												{Number(iso.slice(8, 10))}
-											</span>
+											</Link>
 										</div>
 										{/* Reserves the vertical space the absolutely-positioned bars occupy:
 										    MAX_LANES lanes of 1.0625rem plus the 0.125rem gaps between them. */}
@@ -127,44 +130,7 @@ export function CalendarMonth({
 						<div className="pointer-events-none absolute inset-x-0 top-8 grid grid-cols-7 gap-y-0.5 px-1 sm:top-9 sm:px-1.5">
 							{weekBars.map((bar) => {
 								const item = byId.get(bar.item.id);
-								if (!item) return null;
-								const colour = colourClasses(item.colour);
-								const body = (
-									<div
-										className={cn(
-											"flex h-[1.0625rem] items-center gap-1 overflow-hidden px-1 text-[11px] leading-tight sm:text-xs",
-											colour.chip,
-											// Square off the clipped end so a continued bar reads as continuing.
-											bar.continuesLeft ? "rounded-l-none" : "rounded-l",
-											bar.continuesRight ? "rounded-r-none" : "rounded-r",
-										)}
-									>
-										{bar.continuesLeft ? <span className="shrink-0 text-muted-foreground">‹</span> : null}
-										{/* The dot marks where an event STARTS, so any bar carrying its real start gets
-										    one whatever its span. Continuation segments show the chevron instead. */}
-										{bar.continuesLeft ? null : <span className={cn("size-1.5 shrink-0 rounded-full", colour.dot)} />}
-										<span className="min-w-0 flex-1 truncate">{item.title}</span>
-										{bar.continuesRight ? <span className="shrink-0 text-muted-foreground">›</span> : null}
-									</div>
-								);
-								return (
-									<div
-										key={`${bar.item.id}-${bar.weekIndex}`}
-										className="pointer-events-auto min-w-0"
-										style={{ gridColumn: `${bar.startCol} / ${bar.endCol + 1}`, gridRow: bar.lane + 1 }}
-									>
-										{item.href ? (
-											<Link
-												href={item.href}
-												className="block rounded transition-[opacity,transform] hover:opacity-80 active:scale-[0.98]"
-											>
-												{body}
-											</Link>
-										) : (
-											body
-										)}
-									</div>
-								);
+								return item ? <EventBar key={`${bar.item.id}-${bar.weekIndex}`} item={item} bar={bar} /> : null;
 							})}
 						</div>
 					</div>
@@ -173,6 +139,49 @@ export function CalendarMonth({
 
 		</div>
 		<MonthAgenda items={items} year={year} month={month} todayIso={todayIso} />
+		</div>
+	);
+}
+
+/** One laid-out bar in a week row: shared by the month grid and the Week/Day all-day strip. */
+export function EventBar({
+	item,
+	bar,
+}: {
+	item: CalendarItem;
+	bar: Pick<LaidOutBar<CalendarBarInput>, "startCol" | "endCol" | "lane" | "continuesLeft" | "continuesRight">;
+}) {
+	const colour = colourClasses(item.colour);
+	const body = (
+		<div
+			className={cn(
+				"flex h-[1.0625rem] items-center gap-1 overflow-hidden px-1 text-[11px] leading-tight sm:text-xs",
+				colour.chip,
+				// Square off the clipped end so a continued bar reads as continuing.
+				bar.continuesLeft ? "rounded-l-none" : "rounded-l",
+				bar.continuesRight ? "rounded-r-none" : "rounded-r",
+			)}
+		>
+			{bar.continuesLeft ? <span className="shrink-0 text-muted-foreground">‹</span> : null}
+			{/* The dot marks where an event STARTS, so any bar carrying its real start gets
+			    one whatever its span. Continuation segments show the chevron instead. */}
+			{bar.continuesLeft ? null : <span className={cn("size-1.5 shrink-0 rounded-full", colour.dot)} />}
+			<span className="min-w-0 flex-1 truncate">{item.title}</span>
+			{bar.continuesRight ? <span className="shrink-0 text-muted-foreground">›</span> : null}
+		</div>
+	);
+	return (
+		<div
+			className="pointer-events-auto min-w-0"
+			style={{ gridColumn: `${bar.startCol} / ${bar.endCol + 1}`, gridRow: bar.lane + 1 }}
+		>
+			{item.href ? (
+				<Link href={item.href} className="block rounded transition-[opacity,transform] hover:opacity-80 active:scale-[0.98]">
+					{body}
+				</Link>
+			) : (
+				body
+			)}
 		</div>
 	);
 }
@@ -220,7 +229,11 @@ function DayMore({ iso, overflow, items, todayIso }: { iso: string; overflow: nu
 				className="m-auto max-h-[min(32rem,calc(100dvh-4rem))] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-border bg-card p-0 text-foreground shadow-lg backdrop:bg-black/20"
 			>
 				<div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2.5">
-					<h3 className="font-sans text-sm font-semibold">{iso === todayIso ? "Today" : dayLabel(iso)}</h3>
+					<h3 className="font-sans text-sm font-semibold">
+						<Link href={dayViewHref(iso)} className="underline-offset-2 hover:underline">
+							{iso === todayIso ? "Today" : dayLabel(iso)}
+						</Link>
+					</h3>
 					<button
 						type="button"
 						popoverTarget={id}
@@ -237,7 +250,7 @@ function DayMore({ iso, overflow, items, todayIso }: { iso: string; overflow: nu
 	);
 }
 
-function AgendaList({ items, todayIso, bare = false }: { items: CalendarItem[]; todayIso: string; bare?: boolean }) {
+export function AgendaList({ items, todayIso, bare = false }: { items: CalendarItem[]; todayIso: string; bare?: boolean }) {
 	return (
 		<ul className={cn("divide-y divide-border", !bare && "overflow-hidden rounded-xl border border-border bg-card")}>
 			{items.map((item) => {
@@ -276,6 +289,6 @@ function AgendaList({ items, todayIso, bare = false }: { items: CalendarItem[]; 
 	);
 }
 
-function dayLabel(iso: string): string {
+export function dayLabel(iso: string): string {
 	return new Intl.DateTimeFormat("en", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" }).format(new Date(`${iso}T00:00:00Z`));
 }
