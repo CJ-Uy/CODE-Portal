@@ -16,7 +16,7 @@ export function firstParams(params: SearchParams) {
 }
 
 export function formatDate(value: Date) {
-	return new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(value);
+	return new Intl.DateTimeFormat("en", { timeZone: "Asia/Manila", dateStyle: "medium" }).format(value);
 }
 
 export function formatDateTime(value: Date) {
