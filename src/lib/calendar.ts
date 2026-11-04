@@ -14,6 +14,8 @@ export type CalendarItem = {
 	/** Event-type colour token; birthdays and term deadlines carry their source default. */
 	colour: string;
 	readOnly: boolean;
+	/** All-day events keep a midnight `startsAt`; this stops lists printing "12:00 AM" for them. */
+	allDay?: boolean;
 };
 
 /**

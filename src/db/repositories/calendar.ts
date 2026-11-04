@@ -65,6 +65,7 @@ export function createCalendarRepository(db: Db): CalendarRepository {
 						title: crsEvents.title,
 						startsAt: crsEvents.startsAt,
 						endsAt: crsEvents.endsAt,
+						allDay: crsEvents.allDay,
 						readOnly: crsEvents.readOnly,
 						colour: eventTypeRules.colour,
 					})
@@ -106,6 +107,7 @@ export function createCalendarRepository(db: Db): CalendarRepository {
 					// A retired or missing type row degrades to slate rather than blanking the grid.
 					colour: event.colour || "slate",
 					readOnly: Boolean(event.readOnly),
+					allDay: Boolean(event.allDay),
 				});
 			}
 
