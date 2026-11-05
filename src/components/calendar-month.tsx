@@ -247,25 +247,44 @@ function DayMore({ iso, overflow, overflowWide, items, todayIso }: { iso: string
 				id={id}
 				popover="auto"
 				aria-label={`Everything on ${dayLabel(iso)}`}
-				className="m-auto max-h-[min(32rem,calc(100dvh-4rem))] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-border bg-card p-0 text-foreground shadow-lg backdrop:bg-black/20"
+				// open: only. A display class without it would override the browser's hidden state for a closed popover.
+				className="m-auto max-h-[min(36rem,calc(100dvh-4rem))] w-[min(26rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-border bg-card p-0 text-foreground shadow-2xl backdrop:bg-primary/30 open:flex open:flex-col"
 			>
-				<div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2.5">
-					<h3 className="font-sans text-sm font-semibold">
-						<Link href={dayViewHref(iso)} className="underline-offset-2 hover:underline">
-							{iso === todayIso ? "Today" : dayLabel(iso)}
-						</Link>
-					</h3>
+				<header className="flex items-center gap-3 border-b border-border bg-secondary/40 px-4 py-3">
+					<span
+						className={cn(
+							"grid size-11 shrink-0 place-items-center rounded-full font-heading text-xl tabular-nums",
+							iso === todayIso ? "bg-accent text-accent-foreground" : "bg-card text-primary ring-1 ring-border",
+						)}
+					>
+						{Number(iso.slice(8, 10))}
+					</span>
+					<div className="grid min-w-0 flex-1 leading-tight">
+						<h3 className="truncate font-sans text-sm font-semibold">{iso === todayIso ? "Today" : formatDay(iso, { weekday: "long" })}</h3>
+						<p className="truncate text-xs text-muted-foreground">
+							{formatDay(iso, { month: "long", day: "numeric" })} · {items.length} {items.length === 1 ? "item" : "items"}
+						</p>
+					</div>
+					<Link href={dayViewHref(iso)} className="rounded-md px-2 py-1.5 text-xs font-semibold text-accent hover:bg-card">
+						Day view
+					</Link>
 					<button
 						type="button"
 						popoverTarget={id}
 						popoverTargetAction="hide"
 						aria-label="Close"
-						className="rounded px-1.5 text-lg leading-none text-muted-foreground hover:text-foreground"
+						className="grid size-8 place-items-center rounded-full text-lg leading-none text-muted-foreground hover:bg-card hover:text-foreground"
 					>
 						×
 					</button>
-				</div>
-				<AgendaList items={sorted} todayIso={todayIso} bare />
+				</header>
+				<ul className="grid min-h-0 flex-1 content-start gap-1 overflow-y-auto overscroll-contain p-2">
+					{sorted.map((item) => (
+						<li key={item.id}>
+							<DayRow item={item} iso={iso} past={item.endDate < todayIso} />
+						</li>
+					))}
+				</ul>
 			</div>
 		</>
 	);
@@ -308,6 +327,39 @@ export function AgendaList({ items, todayIso, bare = false }: { items: CalendarI
 			})}
 		</ul>
 	);
+}
+
+/** One row in a day's popover: a time column, then the event as a tinted chip in its type colour. */
+function DayRow({ item, iso, past }: { item: CalendarItem; iso: string; past: boolean }) {
+	const colour = colourClasses(item.colour);
+	const multiDay = item.date !== item.endDate;
+	const time = item.startsAt && !item.allDay && item.date === iso ? formatUtc8Time(new Date(item.startsAt)) : "All day";
+	const body = (
+		<>
+			<span className="w-16 shrink-0 pt-2 text-right text-xs tabular-nums text-muted-foreground">{time}</span>
+			<span className={cn("relative min-w-0 flex-1 overflow-hidden rounded-lg py-2 pl-3.5 pr-3", colour.chip)}>
+				<span className={cn("absolute inset-y-0 left-0 w-1", colour.dot)} aria-hidden />
+				<span className="block text-sm font-medium leading-snug [overflow-wrap:anywhere]">{item.title}</span>
+				{multiDay ? (
+					<span className="block text-xs text-muted-foreground">
+						{dayLabel(item.date)} to {dayLabel(item.endDate)}
+					</span>
+				) : null}
+			</span>
+		</>
+	);
+	const rowClass = cn("flex min-w-0 items-start gap-3 rounded-lg p-1", past && "opacity-60");
+	return item.href ? (
+		<Link href={item.href} className={cn(rowClass, "transition-colors hover:bg-secondary/60")}>
+			{body}
+		</Link>
+	) : (
+		<div className={rowClass}>{body}</div>
+	);
+}
+
+function formatDay(iso: string, options: Intl.DateTimeFormatOptions): string {
+	return new Intl.DateTimeFormat("en", { timeZone: "UTC", ...options }).format(new Date(`${iso}T00:00:00Z`));
 }
 
 export function dayLabel(iso: string): string {
