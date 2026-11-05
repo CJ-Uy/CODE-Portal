@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Source_Sans_3, Unna } from "next/font/google";
 import "./globals.css";
 
@@ -18,7 +18,11 @@ const unna = Unna({
 export const metadata: Metadata = {
 	title: { default: "Ateneo CODE", template: "%s · Ateneo CODE" },
 	description: "Ateneo CODE public site and member portal.",
+	// Lets iPhone "Add to Home Screen" open the portal full screen, like an installed app.
+	appleWebApp: { capable: true, title: "CODE", statusBarStyle: "default" },
 };
+
+export const viewport: Viewport = { themeColor: "#06192f" };
 
 export default function RootLayout({
 	children,

@@ -220,7 +220,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 					</div>
 				</header>
 				{inAdmin ? <div className="border-b border-border/60 bg-card px-4 py-2 sm:px-6 lg:hidden"><Breadcrumb items={[{ label: "Portal", href: "/portal" }, ...crumbFor(pathname)]} /></div> : null}
-				<main id="portal-content" tabIndex={-1} className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 pb-28 outline-none sm:px-6 lg:px-8 lg:py-8 lg:pb-10">{children}</main>
+				<main id="portal-content" tabIndex={-1} className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 pb-[calc(7rem+env(safe-area-inset-bottom))] outline-none sm:px-6 lg:px-8 lg:py-8 lg:pb-10">{children}</main>
 			</div>
 
 			{/* Mobile bottom nav with a raised center FAB that opens the "More" sheet. */}
@@ -233,7 +233,7 @@ export function PortalShell({ member, memberId, navPins, showAdmin, adminGroups,
 					</nav>
 				) : (
 				<nav
-					className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-primary text-primary-foreground lg:hidden"
+					className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-primary pb-[env(safe-area-inset-bottom)] text-primary-foreground lg:hidden"
 					aria-label="Portal modules"
 				>
 					<div className="relative mx-auto flex h-16 max-w-md items-center justify-around px-1">
