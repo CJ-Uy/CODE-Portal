@@ -53,7 +53,7 @@ export const GUIDES: Guide[] = [
 			},
 			{
 				title: "iPhone or iPad: add it to your Home Screen",
-				body: "In Safari, tap the ••• button, then Share, then View More. Scroll down, tap Add to Home Screen, keep Open as Web App on, and tap Add.",
+				body: "In Safari, open the menu (the ≡ icon in the address bar on iOS 27, or the ••• button on iOS 26), then tap Share, then View More. Scroll down, tap Add to Home Screen, keep Open as Web App on, and tap Add.",
 				tip: "No Share button in sight? Tap the ⋯ button next to the address bar first. If Add to Home Screen is missing from the list, tap Edit Actions at the bottom to turn it on.",
 			},
 			{

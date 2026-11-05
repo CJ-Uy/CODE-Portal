@@ -3,7 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { Bookmark, BookOpen, FileText, Languages, ChevronDown, Clock, Copy, EllipsisVertical, Glasses, Lightbulb, Lock, Plus, RotateCw, Search, Share, SquarePlus, Star, X } from "lucide-react";
+import { Bookmark, BookOpen, Menu, NotebookPen, FileText, Languages, ChevronDown, Clock, Copy, EllipsisVertical, Glasses, Lightbulb, Lock, Plus, RotateCw, Search, Share, SquarePlus, Star, X } from "lucide-react";
 import { AUDIENCE_BADGE, GUIDE_ICONS } from "@/components/guides/guide-meta";
 import { GuideNeighbours } from "@/components/guides/guide-neighbours";
 import { Breadcrumb } from "@/components/portal/breadcrumb";
@@ -290,16 +290,20 @@ const ANDROID_STEPS: Step[] = [
 ];
 
 /** iOS 26 Safari, drawn from real screenshots: a floating toolbar, a ••• menu, then the share sheet. */
-function SafariToolbar({ highlightMore = false }: { highlightMore?: boolean }) {
+/** iOS 27 Safari: the page menu sits behind the ≡ icon at the left end of the address bar; the right-hand circle is Tabs. */
+function SafariToolbar() {
 	return (
 		<div className="flex items-center gap-2 px-3 pb-3">
 			<span className="grid size-8 shrink-0 place-items-center rounded-full border border-border bg-card text-lg leading-none shadow-sm">‹</span>
-			<span className="flex min-w-0 flex-1 items-center justify-between gap-1 rounded-full border border-border bg-card px-3 py-1.5 text-xs shadow-sm">
-				<span className="truncate">ateneocode.org</span>
+			<span className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-border bg-card py-1 pl-1 pr-3 text-xs shadow-sm">
+				<span className={cn("grid size-6 shrink-0 place-items-center rounded-full", ring)}>
+					<Menu className="size-3.5" />
+				</span>
+				<span className="min-w-0 flex-1 truncate">ateneocode.org</span>
 				<RotateCw className="size-3 shrink-0" />
 			</span>
-			<span className={cn("grid size-8 shrink-0 place-items-center rounded-full border border-border bg-card text-sm font-bold tracking-tight shadow-sm", highlightMore && ring)}>
-				•••
+			<span className="grid size-8 shrink-0 place-items-center rounded-full border border-border bg-card shadow-sm">
+				<Copy className="size-3.5" />
 			</span>
 		</div>
 	);
@@ -321,13 +325,13 @@ function SheetRow({ icon: Icon, label, active = false }: { icon: typeof Share; l
 const IOS_STEPS: Step[] = [
 	{
 		key: "i1",
-		title: "Tap the ••• button",
-		body: "In Safari, open the portal. The ••• button sits at the bottom right, next to the address bar.",
+		title: "Open Safari’s menu",
+		body: "In Safari, open the portal. On iOS 27, tap the ≡ icon at the left end of the address bar. On iOS 26, it’s the ••• button at the bottom right.",
 		tip: "See Share right in Safari’s toolbar instead? That’s Safari’s Bottom or Top tab layout, or an iPad. Tap it and skip to step 3.",
 		mock: (
 			<div className="grid h-full grid-rows-[1fr_auto]">
 				<PageLines />
-				<SafariToolbar highlightMore />
+				<SafariToolbar />
 			</div>
 		),
 	},
@@ -390,6 +394,7 @@ const IOS_STEPS: Step[] = [
 				<DarkSheet>
 					<SheetRow icon={BookOpen} label="Add Bookmark to…" />
 					<SheetRow icon={Star} label="Add to Favorites" />
+					<SheetRow icon={NotebookPen} label="Add to Quick Note" />
 					<SheetRow icon={Search} label="Find on Page" />
 					<SheetRow icon={SquarePlus} label="Add to Home Screen" active />
 				</DarkSheet>
