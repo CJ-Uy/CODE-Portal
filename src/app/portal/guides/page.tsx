@@ -94,7 +94,7 @@ export default async function GuidesPage({ searchParams }: { searchParams: Promi
 							return (
 								<li key={guide.slug} className="min-w-0">
 									<Link
-										href={`/portal/guides/${guide.slug}`}
+										href={guide.href ?? `/portal/guides/${guide.slug}`}
 										className="group block h-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 									>
 										<Card className="flex h-full flex-col gap-4 p-5 transition-colors group-hover:border-accent motion-reduce:transition-none">

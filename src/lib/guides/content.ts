@@ -34,6 +34,8 @@ export type Guide = {
 	minutes: number;
 	/** Hidden unless every listed release flag is on. */
 	requires?: ("surveys" | "retention")[];
+	/** A guide that lives on its own page elsewhere; cards link there and the guide route redirects. */
+	href?: string;
 	steps: GuideStep[];
 };
 
@@ -45,6 +47,8 @@ export const GUIDES: Guide[] = [
 		audience: "member",
 		icon: "smartphone",
 		minutes: 1,
+		// The illustrated, public install page; these steps stay for guide search.
+		href: "/install",
 		steps: [
 			{
 				title: "Open the portal in your phone's browser",
@@ -57,7 +61,7 @@ export const GUIDES: Guide[] = [
 			},
 			{
 				title: "Android: install it from Chrome",
-				body: "Tap the ⋮ menu at the top right, then tap Install app. Some phones call it Add to Home screen. Tap Install to confirm.",
+				body: "Tap the three-dot menu at the top right, then tap Install app. Some phones call it Add to Home screen. Tap Install to confirm.",
 				tip: "Chrome sometimes offers an Install banner on its own. Tapping it does the same thing.",
 			},
 			{
