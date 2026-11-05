@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { Check, CircleAlert, Code2, FlaskConical, LayoutList, Send } from "lucide-react";
 import { AdminIntro } from "@/components/portal/admin-intro";
 import { AudiencePicker, ruleLabel } from "@/components/email/audience-picker";
+import { TemplatePicker } from "@/components/email/template-picker";
 import { BlockEditor, Segmented, type EventOption, type PreviewPerson } from "@/components/email/block-editor";
 import { HtmlEditor } from "@/components/email/html-editor";
 import { TaggedField } from "@/components/email/tagged-field";
@@ -40,7 +41,7 @@ export type ComposerProps = {
 	};
 	senders: { id: string; address: string; displayName: string }[];
 	categories: { id: string; name: string; required: boolean; defaultSenderId: string | null }[];
-	templates: { id: string; name: string; categoryId: string | null; subject: string; preheader: string; blocks: EmailBlock[] }[];
+	templates: { id: string; name: string; description?: string; categoryId: string | null; subject: string; preheader: string; blocks: EmailBlock[] }[];
 	options: AudienceOptions;
 	memberLabels: Record<string, string>;
 	events: EventOption[];
@@ -266,16 +267,15 @@ export function Composer(props: ComposerProps) {
 			<div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
 				<div className="grid min-w-0 content-start gap-3">
 					{!initial.id && templates.length > 0 && blocks.length === 0 ? (
-						<div className="row-enter grid gap-2">
-							<span className="text-sm text-muted-foreground">Start from a template</span>
-							<div className="flex flex-wrap gap-2">
-								{templates.map((t) => (
-									<button key={t.id} type="button" onClick={() => applyTemplate(t)} className="rounded-full border border-border px-3 py-1.5 text-sm transition-colors hover:border-accent">
-										{t.name}
-									</button>
-								))}
-							</div>
-						</div>
+						<TemplatePicker
+							templates={templates}
+							baseUrl={baseUrl}
+							footer={footer}
+							onPick={(id) => {
+								const picked = templates.find((t) => t.id === id);
+								if (picked) applyTemplate(picked);
+							}}
+						/>
 					) : null}
 
 					<Step n={1} title="Sender and category" done={checks.sender} open={open === 1} onToggle={() => toggle(1)} summary={sender && category ? `${sender.displayName} · ${category.name}` : "Not set"}>
