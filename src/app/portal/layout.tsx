@@ -1,3 +1,4 @@
+import type { Viewport } from "next";
 import { redirect } from "next/navigation";
 import { signInPath } from "@/server/auth/sign-in";
 import { getRepositories } from "@/db";
@@ -13,6 +14,11 @@ import { signOutAction } from "./actions";
 import { markAllNotificationsReadAction, markNotificationReadAction } from "./notifications/actions";
 
 export const dynamic = "force-dynamic";
+
+// The installed app draws under the iPhone home indicator; the shell pads its bars with
+// env(safe-area-inset-*), which only reports real values with cover. Scoped to the portal so the
+// public site keeps the default letterboxing.
+export const viewport: Viewport = { viewportFit: "cover" };
 
 function initialsFrom(name: string): string {
 	const parts = name.trim().split(/\s+/).slice(0, 2);

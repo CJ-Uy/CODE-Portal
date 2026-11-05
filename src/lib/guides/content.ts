@@ -10,7 +10,7 @@ export const AUDIENCE_LABEL: Record<GuideAudience, string> = {
 };
 
 /** Mapped to lucide icons in src/components/guides/guide-meta.ts. */
-export type GuideIcon = "qr-code" | "calendar-check" | "message-square" | "award" | "calendar-plus" | "scan" | "clipboard" | "send" | "chart";
+export type GuideIcon = "qr-code" | "calendar-check" | "message-square" | "award" | "calendar-plus" | "scan" | "clipboard" | "send" | "chart" | "smartphone";
 
 /** A numbered pin on a screenshot. x and y are percentages of the image, measured to the pin's centre. */
 export type GuideCallout = { x: number; y: number; label: string };
@@ -38,6 +38,34 @@ export type Guide = {
 };
 
 export const GUIDES: Guide[] = [
+	{
+		slug: "install-app",
+		title: "Install the app on your phone",
+		summary: "Add the portal to your home screen so it opens like an app, full screen and one tap away.",
+		audience: "member",
+		icon: "smartphone",
+		minutes: 1,
+		steps: [
+			{
+				title: "Open the portal in your phone's browser",
+				body: "On an iPhone or iPad, use Safari. On Android, use Chrome. Sign in first, so the app opens straight to your home page.",
+			},
+			{
+				title: "iPhone or iPad: add it to your Home Screen",
+				body: "Tap the Share button, the square with an arrow pointing up. It sits at the bottom of Safari on iPhone and at the top on iPad. Scroll down, tap Add to Home Screen, then tap Add.",
+				tip: "No Share button in sight? Tap the ⋯ button next to the address bar first. If Add to Home Screen is missing from the list, tap Edit Actions at the bottom to turn it on.",
+			},
+			{
+				title: "Android: install it from Chrome",
+				body: "Tap the ⋮ menu at the top right, then tap Install app. Some phones call it Add to Home screen. Tap Install to confirm.",
+				tip: "Chrome sometimes offers an Install banner on its own. Tapping it does the same thing.",
+			},
+			{
+				title: "Open CODE from your home screen",
+				body: "Look for the navy falcon icon named CODE. It opens the portal full screen, without the address bar. It's the same portal as the website, so everything stays in sync.",
+			},
+		],
+	},
 	{
 		slug: "check-in",
 		title: "Check in to an event",
