@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { ArrowRight, Check, EllipsisVertical, Lock, Plus, Share } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { StandaloneRedirect } from "./standalone-redirect";
 
 export const metadata: Metadata = {
 	title: "Install the app",
@@ -25,6 +26,7 @@ export default async function InstallPage({ searchParams }: { searchParams: Prom
 
 	return (
 		<div className="min-h-screen bg-background text-foreground">
+			<StandaloneRedirect />
 			<header className="border-b border-border/60 bg-card">
 				<div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
 					<Link href="/portal" className="flex items-center gap-2">
