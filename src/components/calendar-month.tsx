@@ -12,7 +12,9 @@ const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 // Three bars plus a "+N more" line is what fits a 375px cell without the grid growing unbounded.
+// Wider screens have the room for five, so "+N more" only appears once a day truly runs out of space.
 const MAX_LANES = 3;
+const MAX_LANES_WIDE = 5;
 
 function isoFor(year: number, month: number, day: number): string {
 	return new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10);
@@ -44,11 +46,20 @@ export function CalendarMonth({
 
 	const weeks = toWeeks(cells);
 	const byId = new Map(items.map((item) => [item.id, item]));
+	// Packing is first-fit, so lanes 0-2 come out the same whether the cap is three or five. One layout at
+	// the wide cap serves both: phones hide lanes 3-4 and count them into their own "+N more".
 	const { bars, overflowByDay } = layoutMonthBars(
 		items.map((item) => ({ id: item.id, startDate: item.date, endDate: item.endDate })),
 		weeks,
-		MAX_LANES,
+		MAX_LANES_WIDE,
 	);
+	const narrowOverflow = new Map(overflowByDay);
+	for (const bar of bars) {
+		if (bar.lane < MAX_LANES) continue;
+		for (const iso of weeks[bar.weekIndex].slice(bar.startCol - 1, bar.endCol)) {
+			if (iso) narrowOverflow.set(iso, (narrowOverflow.get(iso) ?? 0) + 1);
+		}
+	}
 
 	return (
 		<div className="grid gap-5">
@@ -78,7 +89,8 @@ export function CalendarMonth({
 									);
 								}
 								const isToday = iso === todayIso;
-								const overflow = overflowByDay.get(iso) ?? 0;
+								const overflow = narrowOverflow.get(iso) ?? 0;
+								const overflowWide = overflowByDay.get(iso) ?? 0;
 								const dayPoints = pointsFor.get(iso) ?? 0;
 								return (
 									<div
@@ -97,6 +109,8 @@ export function CalendarMonth({
 												<span className="min-w-0 truncate rounded bg-accent/15 px-1 text-[11px] font-semibold tabular-nums text-accent">
 													{dayPoints > 0 ? "+" : ""}
 													{formatPoints(dayPoints)}
+													{/* Spelled out where there's room, so a points badge never reads as "+1 more". */}
+													<span className="hidden font-normal sm:inline"> pts</span>
 												</span>
 											) : (
 												<span />
@@ -112,11 +126,11 @@ export function CalendarMonth({
 												{Number(iso.slice(8, 10))}
 											</Link>
 										</div>
-										{/* Reserves the vertical space the absolutely-positioned bars occupy:
-										    MAX_LANES lanes of 1.0625rem plus the 0.125rem gaps between them. */}
-										<div aria-hidden className="h-[3.4375rem]" />
+										{/* Reserves the vertical space the absolutely-positioned bars occupy: lanes of
+										    1.0625rem plus the 0.125rem gaps between them (3 lanes, 5 from sm). */}
+										<div aria-hidden className="h-[3.4375rem] sm:h-[5.8125rem]" />
 										{overflow > 0 ? (
-											<DayMore iso={iso} overflow={overflow} items={items.filter((item) => item.date <= iso && iso <= item.endDate)} todayIso={todayIso} />
+											<DayMore iso={iso} overflow={overflow} overflowWide={overflowWide} items={items.filter((item) => item.date <= iso && iso <= item.endDate)} todayIso={todayIso} />
 										) : null}
 									</div>
 								);
@@ -130,7 +144,7 @@ export function CalendarMonth({
 						<div className="pointer-events-none absolute inset-x-0 top-8 grid grid-cols-7 gap-y-0.5 px-1 sm:top-9 sm:px-1.5">
 							{weekBars.map((bar) => {
 								const item = byId.get(bar.item.id);
-								return item ? <EventBar key={`${bar.item.id}-${bar.weekIndex}`} item={item} bar={bar} /> : null;
+								return item ? <EventBar key={`${bar.item.id}-${bar.weekIndex}`} item={item} bar={bar} wideOnly={bar.lane >= MAX_LANES} /> : null;
 							})}
 						</div>
 					</div>
@@ -147,8 +161,11 @@ export function CalendarMonth({
 export function EventBar({
 	item,
 	bar,
+	wideOnly = false,
 }: {
 	item: CalendarItem;
+	/** Lanes past the phone cap: hidden below sm, where "+N more" counts them instead. */
+	wideOnly?: boolean;
 	bar: Pick<LaidOutBar<CalendarBarInput>, "startCol" | "endCol" | "lane" | "continuesLeft" | "continuesRight">;
 }) {
 	const colour = colourClasses(item.colour);
@@ -172,7 +189,7 @@ export function EventBar({
 	);
 	return (
 		<div
-			className="pointer-events-auto min-w-0"
+			className={cn("pointer-events-auto min-w-0", wideOnly && "hidden sm:block")}
 			style={{ gridColumn: `${bar.startCol} / ${bar.endCol + 1}`, gridRow: bar.lane + 1 }}
 		>
 			{item.href ? (
@@ -210,7 +227,7 @@ function MonthAgenda({ items, year, month, todayIso }: { items: CalendarItem[]; 
  * "+N more" opens every item on that day in a native popover: no client JS, and the browser handles
  * outside-click and Esc dismissal. It sits in the top layer, so the grid's overflow-hidden can't clip it.
  */
-function DayMore({ iso, overflow, items, todayIso }: { iso: string; overflow: number; items: CalendarItem[]; todayIso: string }) {
+function DayMore({ iso, overflow, overflowWide, items, todayIso }: { iso: string; overflow: number; overflowWide: number; items: CalendarItem[]; todayIso: string }) {
 	const id = `day-more-${iso}`;
 	const sorted = [...items].sort((a, b) => `${a.date}${a.startsAt ?? ""}`.localeCompare(`${b.date}${b.startsAt ?? ""}`));
 	return (
@@ -218,9 +235,13 @@ function DayMore({ iso, overflow, items, todayIso }: { iso: string; overflow: nu
 			<button
 				type="button"
 				popoverTarget={id}
-				className="rounded px-0.5 text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+				className={cn(
+					"rounded px-0.5 text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring",
+					overflowWide === 0 && "sm:hidden",
+				)}
 			>
-				+{overflow} more
+				<span className="sm:hidden">+{overflow} more</span>
+				<span className="hidden sm:inline">+{overflowWide} more</span>
 			</button>
 			<div
 				id={id}

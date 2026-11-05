@@ -44,6 +44,8 @@ function birthdayInMonth(birthday: string | null, year: number, month: number): 
 export type CalendarRepository = {
 	getMonth(actor: Actor, input: { year: number; month: number }): Promise<CalendarItem[]>;
 	getEvent(actor: Actor, eventId: string): Promise<EventDetail | null>;
+	/** Ids of the events the viewer said they're going to, and of those they were checked in at. */
+	myEventMarks(actor: Actor): Promise<{ going: string[]; attended: string[] }>;
 };
 
 export function createCalendarRepository(db: Db): CalendarRepository {
@@ -149,6 +151,17 @@ export function createCalendarRepository(db: Db): CalendarRepository {
 
 			items.sort((a, b) => a.date.localeCompare(b.date));
 			return items;
+		},
+
+		async myEventMarks(actor) {
+			const [going, attended] = await Promise.all([
+				db
+					.select({ id: eventRsvps.eventId })
+					.from(eventRsvps)
+					.where(and(eq(eventRsvps.memberId, actor.memberId), eq(eventRsvps.state, "going"))),
+				db.select({ id: crsAttendance.eventId }).from(crsAttendance).where(eq(crsAttendance.memberId, actor.memberId)),
+			]);
+			return { going: going.map((row) => row.id), attended: attended.map((row) => row.id) };
 		},
 
 		async getEvent(actor, eventId) {

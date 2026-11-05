@@ -67,7 +67,7 @@ export function CalendarTimeGrid({ days, items }: { days: string[]; items: Calen
 				</p>
 			) : null}
 
-			<div className="overflow-hidden rounded-xl border border-border bg-card [--gutter:2.5rem] [--hour:2.75rem] sm:[--gutter:3.5rem] sm:[--hour:3rem]">
+			<div className="overflow-hidden rounded-xl border border-border bg-card [--gutter:2.5rem] [--hour:2.75rem] sm:[--gutter:3.5rem] sm:[--hour:3rem] lg:[--hour:4rem]">
 				<div className="grid border-b border-border bg-secondary/30" style={gridStyle}>
 					<div />
 					{days.map((iso) => {
@@ -153,11 +153,21 @@ export function CalendarTimeGrid({ days, items }: { days: string[]; items: Calen
 									const time = item.endsAt
 										? `${formatUtc8Time(new Date(item.startsAt))} – ${formatUtc8Time(new Date(item.endsAt))}`
 										: formatUtc8Time(new Date(item.startsAt));
+									// Like Google Calendar: a short block puts title and start time on one line instead of clipping the time.
+									const short = span.end - span.start < 45;
+									const start = formatUtc8Time(new Date(item.startsAt));
+									// Overlaps cascade like Google Calendar: each block but the last reaches 1.7 columns wide and the
+									// next one sits on top, so titles get room instead of splitting the day into slivers.
+									const share = 100 / split;
+									const left = column * share;
+									const width = column === split - 1 ? share : Math.min(share * 1.7, 100 - left);
 									const style: CSSProperties = {
 										top: `${((span.start - rangeStart) / rangeMinutes) * 100}%`,
 										height: `${((span.end - span.start) / rangeMinutes) * 100}%`,
-										left: `${(column / split) * 100}%`,
-										width: `${100 / split}%`,
+										left: `${left}%`,
+										// A sliver of the column stays free on the right, so the day still reads as a column.
+										width: `calc(${width}% - 0.25rem)`,
+										zIndex: column + 1,
 									};
 									const body = (
 										<>
@@ -165,8 +175,17 @@ export function CalendarTimeGrid({ days, items }: { days: string[]; items: Calen
 											<span className={cn("absolute inset-0", colour.chip)} aria-hidden />
 											<span className={cn("absolute inset-y-0 left-0 w-0.5", colour.dot)} aria-hidden />
 											{/* A phone's week column is ~40px: one clipped line reads better than letters stacked vertically. */}
-											<span className={cn("relative block min-w-0 font-medium [overflow-wrap:anywhere]", isWeek && "whitespace-nowrap sm:whitespace-normal")}>{item.title}</span>
-											<span className={cn("relative block tabular-nums text-muted-foreground", isWeek && "hidden sm:block")}>{time}</span>
+											{short ? (
+												<span className="relative block truncate">
+													<span className="font-medium">{item.title}</span>
+													<span className={cn("tabular-nums text-muted-foreground", isWeek && "hidden sm:inline")}>, {start}</span>
+												</span>
+											) : (
+												<>
+													<span className={cn("relative block min-w-0 font-medium [overflow-wrap:anywhere]", isWeek && "whitespace-nowrap sm:whitespace-normal")}>{item.title}</span>
+													<span className={cn("relative block tabular-nums text-muted-foreground", isWeek && "hidden sm:block")}>{time}</span>
+												</>
+											)}
 										</>
 									);
 									const blockClass = cn(
@@ -193,7 +212,7 @@ export function CalendarTimeGrid({ days, items }: { days: string[]; items: Calen
 								{iso === todayIso && nowMinutes !== null && nowMinutes >= rangeStart && nowMinutes <= rangeStart + rangeMinutes ? (
 									<div
 										aria-hidden
-										className="pointer-events-none absolute inset-x-0 h-0.5 bg-accent"
+										className="pointer-events-none absolute inset-x-0 z-20 h-0.5 bg-accent"
 										style={{ top: `${((nowMinutes - rangeStart) / rangeMinutes) * 100}%` }}
 									>
 										<span className="absolute -left-1 -top-[3px] size-2 rounded-full bg-accent" />
