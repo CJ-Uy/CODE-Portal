@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { groupEventsByTime, type EventListItem } from "./events-list";
+import { filterEvents, groupEventsByTime, type EventListItem } from "./events-list";
 import { loadEventList } from "./load-events";
 
 function event(id: string, start: string, end: string | null = null): EventListItem {
@@ -36,5 +36,21 @@ describe("calendar event list", () => {
 		expect(rows).toHaveLength(101);
 		expect(rows.at(-1)?.id).toBe("future");
 		expect(listPublished.mock.calls.map(([, input]) => input.offset)).toEqual([0, 100]);
+	});
+
+	it("filters by every query word across title, place and type label, plus type and mine", () => {
+		const types = [{ type: "crs", label: "CRS Workshop", colour: "slate", requiredPermission: null, active: true, position: 0 }];
+		const rows = [
+			{ ...event("a", "2026-09-28T04:00:00Z"), title: "Debrief", place: "Bellarmine 201" },
+			{ ...event("b", "2026-09-28T04:00:00Z"), title: "Hackathon", type: "official", myRole: "owner" as const },
+			{ ...event("c", "2026-09-28T04:00:00Z"), title: "Intro to Git" },
+		];
+		const ids = (q: string, type = "", mine = false) => filterEvents(rows, { q, type, mine }, types).map((row) => row.id);
+		expect(ids("")).toEqual(["a", "b", "c"]);
+		expect(ids("bel  DEBRIEF")).toEqual(["a"]);
+		expect(ids("workshop")).toEqual(["a", "c"]);
+		expect(ids("debrief hackathon")).toEqual([]);
+		expect(ids("", "official")).toEqual(["b"]);
+		expect(ids("", "", true)).toEqual(["b"]);
 	});
 });
