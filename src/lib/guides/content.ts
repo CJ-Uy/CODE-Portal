@@ -34,21 +34,18 @@ export type Guide = {
 	minutes: number;
 	/** Hidden unless every listed release flag is on. */
 	requires?: ("surveys" | "retention")[];
-	/** A guide that lives on its own page elsewhere; cards link there and the guide route redirects. */
-	href?: string;
 	steps: GuideStep[];
 };
 
 export const GUIDES: Guide[] = [
 	{
-		slug: "install-app",
+		slug: "install",
 		title: "Install the app on your phone",
 		summary: "Add the portal to your home screen so it opens like an app, full screen and one tap away.",
 		audience: "member",
 		icon: "smartphone",
 		minutes: 1,
-		// The illustrated, public install page; these steps stay for guide search.
-		href: "/install",
+		// Rendered by its own illustrated page, src/app/portal/guides/install. These steps only feed guide search.
 		steps: [
 			{
 				title: "Open the portal in your phone's browser",
@@ -56,7 +53,7 @@ export const GUIDES: Guide[] = [
 			},
 			{
 				title: "iPhone or iPad: add it to your Home Screen",
-				body: "Tap the Share button, the square with an arrow pointing up. It sits at the bottom of Safari on iPhone and at the top on iPad. Scroll down, tap Add to Home Screen, then tap Add.",
+				body: "In Safari, tap the ••• button, then Share, then View More. Scroll down, tap Add to Home Screen, keep Open as Web App on, and tap Add.",
 				tip: "No Share button in sight? Tap the ⋯ button next to the address bar first. If Add to Home Screen is missing from the list, tap Edit Actions at the bottom to turn it on.",
 			},
 			{

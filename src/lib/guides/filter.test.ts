@@ -4,7 +4,7 @@ import { filterByAudience, neighbours, parseAudience, searchGuides, visibleGuide
 
 const ALL_ON: GuideAccess = { canAdmin: true, surveys: true, retention: true };
 const slugs = (list: { slug: string }[]) => list.map((guide) => guide.slug);
-const ALWAYS = ["install-app", "check-in", "sign-up", "create-event", "take-attendance"];
+const ALWAYS = ["install", "check-in", "sign-up", "create-event", "take-attendance"];
 
 describe("visibleGuides", () => {
 	it("shows every guide to an admin when the flags are on", () => {

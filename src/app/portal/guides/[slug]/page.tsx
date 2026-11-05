@@ -1,12 +1,12 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { signInPath } from "@/server/auth/sign-in";
-import { ArrowLeft, ArrowRight, Clock, Lightbulb } from "lucide-react";
+import { Clock, Lightbulb } from "lucide-react";
 import { AnnotatedShot } from "@/components/guides/annotated-shot";
 import { AUDIENCE_BADGE, GUIDE_ICONS } from "@/components/guides/guide-meta";
+import { GuideNeighbours } from "@/components/guides/guide-neighbours";
 import { Breadcrumb } from "@/components/portal/breadcrumb";
 import { Badge } from "@/components/ui/badge";
-import { AUDIENCE_LABEL, GUIDES, type Guide } from "@/lib/guides/content";
+import { AUDIENCE_LABEL, GUIDES } from "@/lib/guides/content";
 import { neighbours, visibleGuides } from "@/lib/guides/filter";
 import { getActor } from "@/server/auth/actor";
 import { can } from "@/server/auth/permissions";
@@ -27,7 +27,6 @@ export default async function GuidePage({ params }: { params: Promise<{ slug: st
 	});
 	const guide = visible.find((item) => item.slug === slug);
 	if (!guide) notFound();
-	if (guide.href) redirect(guide.href);
 	const { prev, next } = neighbours(guide.slug, visible);
 	const Icon = GUIDE_ICONS[guide.icon];
 
@@ -86,34 +85,7 @@ export default async function GuidePage({ params }: { params: Promise<{ slug: st
 				})}
 			</ol>
 
-			{prev || next ? (
-				<nav aria-label="More guides" className="grid min-w-0 gap-3 border-t border-border/60 pt-6 sm:grid-cols-2">
-					{prev ? <Neighbour guide={prev} direction="prev" /> : null}
-					{next ? <Neighbour guide={next} direction="next" /> : null}
-				</nav>
-			) : null}
+			<GuideNeighbours prev={prev} next={next} />
 		</article>
-	);
-}
-
-function Neighbour({ guide, direction }: { guide: Guide; direction: "prev" | "next" }) {
-	const isNext = direction === "next";
-	return (
-		<Link
-			href={guide.href ?? `/portal/guides/${guide.slug}`}
-			className={`group flex min-w-0 items-center gap-3 rounded-lg border border-border bg-card p-4 transition-colors hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none ${
-				isNext ? "flex-row-reverse text-right sm:col-start-2" : ""
-			}`}
-		>
-			{isNext ? (
-				<ArrowRight className="size-4 shrink-0 text-accent" aria-hidden="true" />
-			) : (
-				<ArrowLeft className="size-4 shrink-0 text-accent" aria-hidden="true" />
-			)}
-			<span className="grid min-w-0 gap-0.5">
-				<span className="text-xs text-muted-foreground">{isNext ? "Next guide" : "Previous guide"}</span>
-				<span className="font-medium [overflow-wrap:anywhere]">{guide.title}</span>
-			</span>
-		</Link>
 	);
 }
