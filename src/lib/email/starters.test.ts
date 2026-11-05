@@ -4,10 +4,10 @@ import { emailStarters } from "./starters";
 import { SAMPLE_MERGE_VALUES } from "./merge";
 import { renderEmail, valueResolver } from "./render";
 
-it("ships ten editable, valid CODE starters with working personalizations and links", () => {
+it("ships eleven editable, valid CODE starters with working personalizations and links", () => {
 	const starters = emailStarters("https://beta.ateneocode.org");
-	expect(starters).toHaveLength(10);
-	expect(new Set(starters.map((t) => t.id)).size).toBe(10);
+	expect(starters).toHaveLength(11);
+	expect(new Set(starters.map((t) => t.id)).size).toBe(11);
 	for (const starter of starters) {
 		emailContentSchema.parse(starter);
 		expect(new Set(starter.blocks.map((b) => b.id)).size).toBe(starter.blocks.length);
