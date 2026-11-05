@@ -1,6 +1,13 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, CalendarX2, ChevronRight } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { ArrowRight, CalendarX2, ChevronRight, Search, SearchX } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { DateTile } from "@/components/portal/date-tile";
 import { EmptyState } from "@/components/portal/empty-state";
 import { type EventTypeRow, labelFor } from "@/db/repositories/eventTypeRules";
@@ -113,6 +120,23 @@ export function groupEventsByTime(events: EventListItem[], now = new Date()) {
 	return { current, upcoming, past };
 }
 
+export type EventFilters = { q: string; type: string; mine: boolean };
+
+/**
+ * Every word of the query must appear in the title, place or type label, in any order, so
+ * "debrief bel" finds "Debrief" held in Bellarmine. An empty type means every type.
+ */
+export function filterEvents(events: EventListItem[], filters: EventFilters, types: EventTypeRow[]): EventListItem[] {
+	const words = filters.q.toLowerCase().split(/\s+/).filter(Boolean);
+	return events.filter((event) => {
+		if (filters.type && event.type !== filters.type) return false;
+		if (filters.mine && !event.myRole) return false;
+		if (!words.length) return true;
+		const haystack = `${event.title} ${event.place} ${labelFor(types, event.type)}`.toLowerCase();
+		return words.every((word) => haystack.includes(word));
+	});
+}
+
 export function EventsList({ events, types, loadFailed = false }: { events: EventListItem[]; types: EventTypeRow[]; loadFailed?: boolean }) {
 	if (loadFailed) {
 		return <EmptyState icon={CalendarX2} title="Could not load events" description="Refresh the page to try again." />;
@@ -127,15 +151,124 @@ export function EventsList({ events, types, loadFailed = false }: { events: Even
 		);
 	}
 
-	const { current, upcoming, past } = groupEventsByTime(events);
+	return <FilteredEvents events={events} types={types} />;
+}
+
+/**
+ * Filtering runs in the browser over the already-loaded history, so results update per keystroke.
+ * The filters mirror into the URL with replaceState, so Back from an event lands on the same search.
+ */
+function FilteredEvents({ events, types }: { events: EventListItem[]; types: EventTypeRow[] }) {
+	const params = useSearchParams();
+	const [filters, setFilters] = useState<EventFilters>(() => ({
+		q: params.get("q") ?? "",
+		type: params.get("type") ?? "",
+		mine: params.get("mine") === "1",
+	}));
+	const update = (patch: Partial<EventFilters>) => {
+		const next = { ...filters, ...patch };
+		setFilters(next);
+		const url = new URL(window.location.href);
+		for (const [key, value] of [["q", next.q], ["type", next.type], ["mine", next.mine ? "1" : ""]] as const) {
+			if (value) url.searchParams.set(key, value);
+			else url.searchParams.delete(key);
+		}
+		window.history.replaceState(null, "", url);
+	};
+
+	// Offer only the types that have events, so no choice leads to an empty list.
+	const typeOptions = types.filter((type) => events.some((event) => event.type === type.type));
+	const hasMine = events.some((event) => event.myRole);
+	const filtering = Boolean(filters.q.trim() || filters.type || filters.mine);
+	const shown = filterEvents(events, filters, types);
+	const { current, upcoming, past } = groupEventsByTime(shown);
 
 	return (
 		<div className="grid gap-5">
-			<Section title="Today" events={current} types={types} emptyMessage="Nothing scheduled today." />
-			<Section title="Upcoming" events={upcoming} types={types} emptyMessage="Nothing else coming up yet." />
+			<div role="search" className="flex min-w-0 flex-wrap items-center gap-2">
+				<label htmlFor="event-search" className="sr-only">
+					Search events
+				</label>
+				<div className="relative min-w-0 flex-[1_1_14rem]">
+					<Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+					<Input
+						id="event-search"
+						type="search"
+						value={filters.q}
+						onChange={(e) => update({ q: e.target.value })}
+						placeholder="Search by name or place"
+						className="h-11 pl-9"
+					/>
+				</div>
+				{typeOptions.length > 1 ? (
+					<>
+						<label htmlFor="event-type" className="sr-only">
+							Event type
+						</label>
+						<Select id="event-type" value={filters.type} onChange={(e) => update({ type: e.target.value })} className="h-11 w-auto min-w-0 max-w-full flex-[0_1_auto]">
+							<option value="">All types</option>
+							{typeOptions.map((type) => (
+								<option key={type.type} value={type.type}>
+									{labelFor(types, type.type)}
+								</option>
+							))}
+						</Select>
+					</>
+				) : null}
+				{hasMine ? (
+					<button
+						type="button"
+						aria-pressed={filters.mine}
+						onClick={() => update({ mine: !filters.mine })}
+						className={cn(
+							"inline-flex h-11 items-center rounded-md border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+							filters.mine ? "border-primary bg-primary text-primary-foreground" : "border-input bg-background hover:bg-secondary/60",
+						)}
+					>
+						Mine
+					</button>
+				) : null}
+			</div>
+
+			{filtering ? (
+				<p className="-mt-2 text-sm text-muted-foreground" aria-live="polite">
+					{shown.length} {shown.length === 1 ? "event matches" : "events match"}
+				</p>
+			) : null}
+
+			{filtering && shown.length === 0 ? (
+				<EmptyState
+					icon={SearchX}
+					title="No events match"
+					description="Try fewer words, or another type."
+					action={
+						<Button type="button" variant="outline" onClick={() => update({ q: "", type: "", mine: false })}>
+							Clear filters
+						</Button>
+					}
+				/>
+			) : (
+				<Sections current={current} upcoming={upcoming} past={past} types={types} filtering={filtering} />
+			)}
+		</div>
+	);
+}
+
+function Sections({
+	current,
+	upcoming,
+	past,
+	types,
+	filtering,
+}: ReturnType<typeof groupEventsByTime> & { types: EventTypeRow[]; filtering: boolean }) {
+	return (
+		<>
+			<Section title="Today" events={current} types={types} emptyMessage={filtering ? "No matches today." : "Nothing scheduled today."} />
+			<Section title="Upcoming" events={upcoming} types={types} emptyMessage={filtering ? "No upcoming matches." : "Nothing else coming up yet."} />
 			{/* Past events grow every week; they stay one tap away instead of lengthening the page. */}
 			{past.length ? (
-				<details className="group grid gap-2">
+				// A search usually hunts for something already over, so matches in Past start open.
+				<details className="group grid gap-2" open={filtering}>
 					<summary className="flex min-h-11 w-fit cursor-pointer list-none items-center gap-1.5 rounded-md text-sm font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
 						<ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden />
 						Past events ({past.length})
@@ -145,6 +278,6 @@ export function EventsList({ events, types, loadFailed = false }: { events: Even
 					</div>
 				</details>
 			) : null}
-		</div>
+		</>
 	);
 }
