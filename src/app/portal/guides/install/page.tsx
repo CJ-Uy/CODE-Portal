@@ -3,7 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { Bookmark, BookOpen, ChevronDown, Clock, Copy, EllipsisVertical, Glasses, Lightbulb, Lock, Plus, RotateCw, Search, Share, SquarePlus, Star, X } from "lucide-react";
+import { Bookmark, BookOpen, FileText, Languages, ChevronDown, Clock, Copy, EllipsisVertical, Glasses, Lightbulb, Lock, Plus, RotateCw, Search, Share, SquarePlus, Star, X } from "lucide-react";
 import { AUDIENCE_BADGE, GUIDE_ICONS } from "@/components/guides/guide-meta";
 import { GuideNeighbours } from "@/components/guides/guide-neighbours";
 import { Breadcrumb } from "@/components/portal/breadcrumb";
@@ -90,6 +90,12 @@ export default async function InstallGuidePage({ searchParams }: { searchParams:
 					))}
 				</nav>
 			</div>
+
+			{os === "ios" ? (
+				<Tip>
+					<strong>On any iOS version:</strong> Safari’s menus move around between updates. Whatever yours looks like, find <strong>Share</strong>, then scroll down to <strong>Add to Home Screen</strong>.
+				</Tip>
+			) : null}
 
 			<ol className="grid min-w-0 border-t border-border/60 pt-8">
 				{steps.map((step, index) => {
@@ -328,14 +334,14 @@ const IOS_STEPS: Step[] = [
 	{
 		key: "i2",
 		title: "Tap Share",
-		body: "It’s at the top of the menu.",
+		body: "Find it in the menu. On iOS 27 it sits under Show Reader and Translate.",
 		mock: (
 			<div className="grid h-full content-end justify-items-end bg-secondary/40 p-3">
 				<DarkSheet className="w-44">
+					<SheetRow icon={FileText} label="Show Reader" />
+					<SheetRow icon={Languages} label="Translate" />
 					<SheetRow icon={Share} label="Share" active />
 					<SheetRow icon={Bookmark} label="Add to Bookmarks" />
-					<SheetRow icon={BookOpen} label="Add Bookmark to…" />
-					<SheetRow icon={Plus} label="New Tab" />
 				</DarkSheet>
 			</div>
 		),
