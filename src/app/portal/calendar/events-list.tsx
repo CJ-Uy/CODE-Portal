@@ -27,6 +27,10 @@ export type EventListItem = {
 	readOnly: boolean;
 	myRole: "owner" | "admin" | "scanner" | null;
 	canModerate: boolean;
+	/** The viewer's RSVP is "going". */
+	going: boolean;
+	/** The viewer was checked in. */
+	attended: boolean;
 };
 
 const ROLE_LABEL: Record<NonNullable<EventListItem["myRole"]>, string> = {
@@ -62,6 +66,11 @@ function Row({ event, types }: { event: EventListItem; types: EventTypeRow[] }) 
 					{event.myRole ? (
 						<Badge variant="secondary" className="shrink-0 text-[11px]">
 							{ROLE_LABEL[event.myRole]}
+						</Badge>
+					) : null}
+					{event.attended || event.going ? (
+						<Badge variant="secondary" className="shrink-0 text-[11px]">
+							{event.attended ? "Attended" : "Going"}
 						</Badge>
 					) : null}
 					{event.readOnly ? (
@@ -120,7 +129,18 @@ export function groupEventsByTime(events: EventListItem[], now = new Date()) {
 	return { current, upcoming, past };
 }
 
-export type EventFilters = { q: string; type: string; mine: boolean };
+const SHOW_OPTIONS = [
+	{ value: "", label: "All events" },
+	{ value: "going", label: "I'm going" },
+	{ value: "attended", label: "I attended" },
+	{ value: "hosting", label: "I'm hosting" },
+] as const;
+export type EventShow = (typeof SHOW_OPTIONS)[number]["value"];
+export type EventFilters = { q: string; type: string; show: EventShow };
+
+function parseShow(value: string | null): EventShow {
+	return SHOW_OPTIONS.find((option) => option.value === value)?.value ?? "";
+}
 
 /**
  * Every word of the query must appear in the title, place or type label, in any order, so
@@ -130,7 +150,10 @@ export function filterEvents(events: EventListItem[], filters: EventFilters, typ
 	const words = filters.q.toLowerCase().split(/\s+/).filter(Boolean);
 	return events.filter((event) => {
 		if (filters.type && event.type !== filters.type) return false;
-		if (filters.mine && !event.myRole) return false;
+		if (filters.show === "going" && !event.going) return false;
+		if (filters.show === "attended" && !event.attended) return false;
+		// Hosting means created it. Moderators read as "admin" on every event, so staff roles can't narrow anything for them.
+		if (filters.show === "hosting" && event.myRole !== "owner") return false;
 		if (!words.length) return true;
 		const haystack = `${event.title} ${event.place} ${labelFor(types, event.type)}`.toLowerCase();
 		return words.every((word) => haystack.includes(word));
@@ -163,13 +186,13 @@ function FilteredEvents({ events, types }: { events: EventListItem[]; types: Eve
 	const [filters, setFilters] = useState<EventFilters>(() => ({
 		q: params.get("q") ?? "",
 		type: params.get("type") ?? "",
-		mine: params.get("mine") === "1",
+		show: parseShow(params.get("show")),
 	}));
 	const update = (patch: Partial<EventFilters>) => {
 		const next = { ...filters, ...patch };
 		setFilters(next);
 		const url = new URL(window.location.href);
-		for (const [key, value] of [["q", next.q], ["type", next.type], ["mine", next.mine ? "1" : ""]] as const) {
+		for (const [key, value] of [["q", next.q], ["type", next.type], ["show", next.show]] as const) {
 			if (value) url.searchParams.set(key, value);
 			else url.searchParams.delete(key);
 		}
@@ -178,8 +201,7 @@ function FilteredEvents({ events, types }: { events: EventListItem[]; types: Eve
 
 	// Offer only the types that have events, so no choice leads to an empty list.
 	const typeOptions = types.filter((type) => events.some((event) => event.type === type.type));
-	const hasMine = events.some((event) => event.myRole);
-	const filtering = Boolean(filters.q.trim() || filters.type || filters.mine);
+	const filtering = Boolean(filters.q.trim() || filters.type || filters.show);
 	const shown = filterEvents(events, filters, types);
 	const { current, upcoming, past } = groupEventsByTime(shown);
 
@@ -215,19 +237,16 @@ function FilteredEvents({ events, types }: { events: EventListItem[]; types: Eve
 						</Select>
 					</>
 				) : null}
-				{hasMine ? (
-					<button
-						type="button"
-						aria-pressed={filters.mine}
-						onClick={() => update({ mine: !filters.mine })}
-						className={cn(
-							"inline-flex h-11 items-center rounded-md border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-							filters.mine ? "border-primary bg-primary text-primary-foreground" : "border-input bg-background hover:bg-secondary/60",
-						)}
-					>
-						Mine
-					</button>
-				) : null}
+				<label htmlFor="event-show" className="sr-only">
+					Show
+				</label>
+				<Select id="event-show" value={filters.show} onChange={(e) => update({ show: parseShow(e.target.value) })} className="h-11 w-auto min-w-0 max-w-full flex-[0_1_auto]">
+					{SHOW_OPTIONS.map((option) => (
+						<option key={option.value} value={option.value}>
+							{option.label}
+						</option>
+					))}
+				</Select>
 			</div>
 
 			{filtering ? (
@@ -240,9 +259,9 @@ function FilteredEvents({ events, types }: { events: EventListItem[]; types: Eve
 				<EmptyState
 					icon={SearchX}
 					title="No events match"
-					description="Try fewer words, or another type."
+					description="Try fewer words, another type, or All events."
 					action={
-						<Button type="button" variant="outline" onClick={() => update({ q: "", type: "", mine: false })}>
+						<Button type="button" variant="outline" onClick={() => update({ q: "", type: "", show: "" })}>
 							Clear filters
 						</Button>
 					}

@@ -126,7 +126,7 @@ function createUnavailableCalendarRepository(): CalendarRepository {
 	const unavailable = () => {
 		throw new Error("Calendar is unavailable through this repository adapter.");
 	};
-	return { getMonth: unavailable, getEvent: unavailable };
+	return { getMonth: unavailable, getEvent: unavailable, myEventMarks: unavailable };
 }
 
 export function createSharedRepositories(adapter: DatabaseAdapter): Repositories {
