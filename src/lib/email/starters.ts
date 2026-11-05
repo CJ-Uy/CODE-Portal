@@ -4,6 +4,7 @@ import type { EmailBlock } from "./types";
 const heading = (text: string, level: 1 | 2 = 1): EmailBlock => ({ id: "h", type: "heading", props: { text, level } });
 const text = (text: string): EmailBlock => ({ id: "t", type: "text", props: { text } });
 const button = (label: string, href: string): EmailBlock => ({ id: "b", type: "button", props: { label, href } });
+const image = (src: string, alt: string, href?: string): EmailBlock => ({ id: "i", type: "image", props: { src, alt, ...(href ? { href } : {}) } });
 const divider: EmailBlock = { id: "d", type: "divider", props: {} };
 const htmlBody = (html: string): EmailBlock => ({ id: "html", type: "html", props: { html } });
 
@@ -19,10 +20,29 @@ export function emailStarters(baseUrl: string) {
 			blocks: [heading("Every CODE update, saved for you."), text("Hi {{firstname}},\n\nCODE Portal now keeps a copy of each update we send you. Missed an announcement, or need an event detail again? You’ll find it on the Mail page, right next to the calendar."), button("See past updates", `${portal}/mail`), divider, heading("What’s new", 2), text("**Everything in one place.** Announcements, event news and reminders from CODE, listed by date.\n\n**Easy to find again.** Look back at an update without digging through old messages.\n\n**You choose the extras.** Turn optional categories on or off from the Mail page. Important CODE notices always come through."), divider, text("Have an idea for the portal? Reply and tell us.\n\nSee you around,\nCODE")],
 		},
 		{
-			id: "app-install", name: "CODE Portal as an app, plus calendar updates", description: "Tell members they can add the portal to their home screen, with notes on the new calendar views.",
-			// Same Gmail caution as above: no sign-in, inbox or account wording.
-			subject: "CODE Portal, now on your home screen", preheader: "Add it once and open it like any other app. Plus: new ways to see the calendar.",
-			blocks: [heading("CODE Portal, one tap away."), text("Hi {{firstname}},\n\nYou can now add CODE Portal to your phone’s home screen. It opens full screen like an app, keeps the calendar and your check-in code close at hand, and updates itself."), button("See how to add it", `${portal}/guides/install-app`), divider, heading("How to add it", 2), text("**iPhone or iPad:** open the portal in Safari, tap Share, then Add to Home Screen.\n\n**Android:** open the portal in Chrome, tap the three-dot menu, then Install app.\n\nThere’s nothing to update by hand. Each time you open it, you get the newest version."), divider, heading("Also new: a roomier calendar", 2), text("**Day and Week views.** See a single day or a whole week laid out by the hour, right next to Month.\n\n**Every event on a busy day.** Tap “+ more” on a crowded date to see that day’s full list.\n\n**Search the list.** In List view, search by name or place, filter by event type, or show only the events you’re running."), button("Open the calendar", `${portal}/calendar`), divider, text("Spot something off? Reply and tell us.\n\nSee you around,\nCODE")],
+			id: "app-install", name: "CODE Portal is now an app", description: "Launch email for the installable portal: a hero, picture steps for iPhone and Android, and the new calendar features.",
+			// Same Gmail caution as above: no sign-in, inbox or account wording. Images are served from the portal's own /email folder.
+			subject: "CODE Portal is now an app", preheader: "Put it on your home screen in under a minute. Plus: a roomier calendar.",
+			blocks: [
+				image(`${baseUrl}/email/app-launch/hero.jpg`, "CODE Portal is now an app: the navy CODE icon on a phone's home screen.", `${baseUrl}/install`),
+				heading("One tap, and you’re in."),
+				text("Hi {{firstname}},\n\nNo more digging through tabs and bookmarks. CODE Portal now lives on your home screen, right next to your other apps. It opens full screen, keeps the calendar and your check-in code close at hand, and updates itself.\n\nThere’s no app store and nothing to download. It takes about a minute."),
+				button("Add it to your phone", `${baseUrl}/install`),
+				divider,
+				heading("On iPhone or iPad", 2),
+				image(`${baseUrl}/email/app-launch/iphone-steps.jpg`, "In Safari, tap Share, then Add to Home Screen, then Add.", `${baseUrl}/install?os=ios`),
+				text("Open the portal in **Safari**. Tap **Share**, then **Add to Home Screen**, then **Add**."),
+				heading("On Android", 2),
+				image(`${baseUrl}/email/app-launch/android-steps.jpg`, "In Chrome, tap the three-dot menu, then Install app, then Install.", `${baseUrl}/install?os=android`),
+				text("Open the portal in **Chrome**. Tap the **three-dot menu**, then **Install app**, then **Install**."),
+				text("That’s it. Look for the navy falcon on your home screen.\n\nOpened this in Gmail or Messenger? Open the portal in Safari or Chrome first, because in-app browsers can’t add apps."),
+				divider,
+				heading("Also new: a roomier calendar", 2),
+				text("**Day and Week views.** See a day or a whole week laid out by the hour, right next to Month.\n\n**Busy days, sorted.** When a date is packed, tap “+ more” to see its full list.\n\n**Find any event.** In List view, search by name or place, filter by type, or show only events you’re going to, attended, or are hosting."),
+				button("Open the calendar", `${portal}/calendar`),
+				divider,
+				text("Spot something off, or have an idea? Reply and tell us.\n\nSee you around,\nCODE"),
+			],
 		},
 		{
 			id: "welcome", name: "Welcome to CODE", description: "A warm introduction to the member workspace.",
