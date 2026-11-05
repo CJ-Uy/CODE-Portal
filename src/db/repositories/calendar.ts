@@ -87,7 +87,14 @@ export function createCalendarRepository(db: Db): CalendarRepository {
 				// admin-managed `birthday` type row for colour. A missing row degrades to accent.
 				db.select({ colour: eventTypeRules.colour }).from(eventTypeRules).where(eq(eventTypeRules.type, BIRTHDAY_EVENT_TYPE)),
 				db
-					.select({ id: members.id, name: members.name, birthday: members.birthday, birthdayPrivate: members.birthdayPrivate })
+					.select({
+							id: members.id,
+							name: members.name,
+							nickname: members.nickname,
+							fullName: members.fullName,
+							birthday: members.birthday,
+							birthdayPrivate: members.birthdayPrivate,
+						})
 					.from(members),
 				db
 					.select({ id: terms.id, name: terms.name, endsAt: terms.endsAt })
@@ -121,7 +128,8 @@ export function createCalendarRepository(db: Db): CalendarRepository {
 				items.push({
 					id: `birthday:${member.id}`,
 					source: "birthday",
-					title: `${member.name ?? "Member"} birthday`,
+					// Imported members often have only a full name, so fall back through nickname, name, then first name.
+					title: `${member.nickname?.trim() || member.name?.trim() || member.fullName?.trim().split(/\s+/)[0] || "A member"}’s birthday`,
 					date,
 					endDate: date,
 					startsAt: null,

@@ -27,6 +27,7 @@ export default async function GuidePage({ params }: { params: Promise<{ slug: st
 	});
 	const guide = visible.find((item) => item.slug === slug);
 	if (!guide) notFound();
+	if (guide.href) redirect(guide.href);
 	const { prev, next } = neighbours(guide.slug, visible);
 	const Icon = GUIDE_ICONS[guide.icon];
 
@@ -99,7 +100,7 @@ function Neighbour({ guide, direction }: { guide: Guide; direction: "prev" | "ne
 	const isNext = direction === "next";
 	return (
 		<Link
-			href={`/portal/guides/${guide.slug}`}
+			href={guide.href ?? `/portal/guides/${guide.slug}`}
 			className={`group flex min-w-0 items-center gap-3 rounded-lg border border-border bg-card p-4 transition-colors hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none ${
 				isNext ? "flex-row-reverse text-right sm:col-start-2" : ""
 			}`}
