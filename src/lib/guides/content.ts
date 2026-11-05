@@ -63,6 +63,7 @@ export const GUIDES: Guide[] = [
 			{
 				title: "Open CODE from your home screen",
 				body: "Look for the navy falcon icon named CODE. It opens the portal full screen, without the address bar. It's the same portal as the website, so everything stays in sync.",
+				tip: "The app updates itself. Each time it opens, it loads the newest version of the portal, so there's nothing to reinstall. If it was left open in the background, close it and open it again to get the latest.",
 			},
 		],
 	},
