@@ -247,6 +247,7 @@ const ANDROID_STEPS: Step[] = [
 		key: "a2",
 		title: "Tap Install app",
 		body: "Some phones call it Add to Home screen.",
+		tip: "If Chrome asks you to choose between Install and Create shortcut, pick Install. A shortcut only opens the website, not the app.",
 		mock: (
 			<div className="relative h-full">
 				<UrlBar />
