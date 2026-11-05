@@ -273,9 +273,9 @@ const IOS_STEPS: { text: string; mock: React.ReactNode }[] = [
 		text: "Tap Add at the top right. The navy CODE icon lands on your home screen.",
 		mock: (
 			<div className="grid h-full content-start gap-4 bg-secondary/30 p-3">
-				<div className="flex items-center justify-between text-xs font-semibold text-[#1a73e8]">
+				<div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 text-xs font-semibold text-[#1a73e8]">
 					<span className="font-normal">Cancel</span>
-					<span className="text-foreground">Add to Home Screen</span>
+					<span className="truncate text-center text-[11px] text-foreground">Add to Home Screen</span>
 					<span className={cn("rounded-md px-1.5 py-0.5", ring)}>Add</span>
 				</div>
 				<div className="rounded-xl bg-card p-3">
