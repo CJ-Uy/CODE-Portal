@@ -3,6 +3,7 @@
  *
  *   pnpm tsx scripts/library-cleanup/run.ts report   report.md (before and after, plus what needs a person) and cleanup.sql
  *   pnpm tsx scripts/library-cleanup/run.ts local    also loads the cleaned items into LOCAL_SQLITE_PATH for a local preview
+ *                                                     (replaces the demo seed items there; local SQLite only)
  *
  * Inputs (private, gitignored):
  *   items.json      [id without "lib_imp_", title, summary (cut at 160 chars), confidential 0/1, type label, by, year][]
@@ -19,7 +20,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "@/db/schema";
 import { buildSearchText } from "@/lib/library/blocks";
 import { KIND_LABELS, type LibraryAuthor, type LibraryKind, type LibrarySource } from "@/lib/library/taxonomy";
-import { cleanAuthor, cleanTitle, cleanTopics, fallbackTitle, isPlaceholderTitle } from "./rules";
+import { cleanAuthor, cleanTitle, cleanTopics, fallbackTitle, isPlaceholderTitle, undoLineJoin } from "./rules";
 
 const ROOT = path.resolve(".local/library-cleanup");
 const at = (file: string) => path.join(ROOT, file);
@@ -66,8 +67,11 @@ export function plan(rows: Row[], overrides: Record<string, Override>): Planned[
 		const dekCut = dek.length >= SUMMARY_CUT;
 		const topics = dek.split(/,\s*/);
 
-		let newTitle = override.title ?? cleanTitle(title);
+		// Beta titles went through the old "; " line join, so it is undone here (never in the importer).
+		let newTitle = override.title ?? cleanTitle(undoLineJoin(title));
 		if (isPlaceholderTitle(newTitle)) {
+			// The importer prefixes the real file code. Beta's list view does not show the code, so "Untitled module"
+			// stands in for it: a bare topic would read like a real title. The note asks a person for the name.
 			const fallback = fallbackTitle(kind === "code_document" ? "Untitled module" : null, dekCut ? [] : topics);
 			newTitle = fallback ?? newTitle;
 			notes.push("The sheet had no title. This one is made from its topic; ask the author for the real name.");
@@ -102,30 +106,33 @@ export function plan(rows: Row[], overrides: Record<string, Override>): Planned[
 
 const changed = (p: Planned) => p.before.title !== p.after.title || p.before.dek !== p.after.dek || p.authorFixes.length > 0 || p.dropUnknownAuthor;
 const q = (text: string) => `'${text.replace(/'/g, "''")}'`;
-const jsonString = (text: string) => JSON.stringify(text).slice(1, -1);
+const NOW = "CAST(unixepoch('subsec') * 1000 AS INTEGER)";
 
 export function toSql(planned: Planned[]): string {
 	const lines = [
 		"-- Library cleanup. Review every line, then run it against one database at a time.",
 		"-- It changes titles, summaries and author names only. Afterwards, rebuild search text and the index from the admin library page.",
-		"BEGIN;",
+		"-- No BEGIN/COMMIT: wrangler d1 execute --file rejects them and runs the file as one batch. Needs SQLite 3.42+ (D1 has it) for unixepoch('subsec').",
+		"-- Every statement is guarded, so running the file twice changes nothing the second time.",
 	];
 	for (const p of planned.filter(changed)) {
 		lines.push(`-- ${p.id}`);
-		const sets: string[] = [];
-		if (p.before.title !== p.after.title) sets.push(`title = ${q(p.after.title)}`);
-		if (p.before.dek !== p.after.dek) sets.push(`dek = ${q(p.after.dek)}`);
-		if (sets.length) lines.push(`UPDATE library_items SET ${sets.join(", ")}, updated_at = CAST(unixepoch('subsec') * 1000 AS INTEGER) WHERE id = ${q(p.id)} AND title = ${q(p.before.title)};`);
+		const where = `WHERE id = ${q(p.id)}`;
+		if (p.before.title !== p.after.title) lines.push(`UPDATE library_items SET title = ${q(p.after.title)}, updated_at = ${NOW} ${where} AND title = ${q(p.before.title)};`);
+		if (p.before.dek !== p.after.dek) lines.push(`UPDATE library_items SET dek = ${q(p.after.dek)}, updated_at = ${NOW} ${where} AND dek = ${q(p.before.dek)};`);
 		for (const [from, to] of p.authorFixes) {
-			lines.push(`UPDATE library_items SET authors_json = replace(authors_json, ${q(`"${jsonString(from)}"`)}, ${q(`"${jsonString(to)}"`)}) WHERE id = ${q(p.id)};`);
+			// Rebuilds the list, changing only an entry whose name is exactly `from`; memberId and the order stay.
+			lines.push(
+				`UPDATE library_items SET authors_json = (SELECT json_group_array(CASE WHEN json_extract(value, '$.name') = ${q(from)} THEN json_set(value, '$.name', ${q(to)}) ELSE json(value) END) FROM json_each(authors_json)), updated_at = ${NOW} ${where} AND EXISTS (SELECT 1 FROM json_each(authors_json) WHERE json_extract(value, '$.name') = ${q(from)});`,
+			);
 		}
 		if (p.dropUnknownAuthor) {
 			lines.push(
-				`UPDATE library_items SET authors_json = (SELECT json_group_array(json(value)) FROM json_each(authors_json) WHERE lower(trim(json_extract(value, '$.name'))) <> 'unknown') WHERE id = ${q(p.id)};`,
+				`UPDATE library_items SET authors_json = (SELECT json_group_array(json(value)) FROM json_each(authors_json) WHERE lower(trim(json_extract(value, '$.name'))) <> 'unknown'), updated_at = ${NOW} ${where} AND EXISTS (SELECT 1 FROM json_each(authors_json) WHERE lower(trim(json_extract(value, '$.name'))) = 'unknown');`,
 			);
 		}
 	}
-	lines.push("COMMIT;", "");
+	lines.push("");
 	return lines.join("\n");
 }
 

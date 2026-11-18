@@ -1,16 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { cleanAuthor, cleanTitle, cleanTopics, fallbackTitle, isPlaceholderTitle, titleFor } from "./rules";
+import { cleanAuthor, cleanTitle, cleanTopics, fallbackTitle, isPlaceholderTitle, titleFor, undoLineJoin } from "./rules";
 
 describe("cleanTitle", () => {
-	it("joins a title that was wrapped over lines, whether it has raw breaks or the old '; ' join", () => {
-		expect(cleanTitle("The workshop design; sprint:; warm-up (day 1)")).toBe("The workshop design sprint: warm-up (day 1)");
-		expect(cleanTitle("Icebreakers,; and Exercises")).toBe("Icebreakers, and Exercises");
+	it("joins a title wrapped over lines, and keeps a real semicolon", () => {
 		expect(cleanTitle("Notes on a\nsample\n  title")).toBe("Notes on a sample title");
+		expect(cleanTitle("Leadership; a primer")).toBe("Leadership; a primer");
+	});
+
+	it("undoes the old '; ' line join only when asked", () => {
+		expect(undoLineJoin("The workshop design; sprint:; warm-up (day 1)")).toBe("The workshop design sprint: warm-up (day 1)");
+		expect(undoLineJoin("Icebreakers,; and Exercises")).toBe("Icebreakers, and Exercises");
 	});
 
 	it("fixes known misspellings as whole words only", () => {
 		expect(cleanTitle("Vision and Advocay Alignment")).toBe("Vision and Advocacy Alignment");
 		expect(cleanTitle("Advocays")).toBe("Advocays");
+		expect(cleanTitle("Advocay's Porass' model")).toBe("Advocacy's Porras' model");
 	});
 
 	it("writes every redaction marker the same way", () => {
@@ -56,7 +61,7 @@ describe("titles the sheet left as placeholders", () => {
 	});
 
 	it("keeps a real title and replaces only a placeholder", () => {
-		expect(titleFor("Sample; Title", null, ["Topic"])).toBe("Sample Title");
+		expect(titleFor("Sample\nTitle", null, ["Topic"])).toBe("Sample Title");
 		expect(titleFor("*", null, ["Goal Setting"])).toBe("Goal Setting");
 	});
 });

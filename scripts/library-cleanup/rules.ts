@@ -15,25 +15,25 @@ export const TYPO_FIXES: Record<string, string> = {
 	Analaysis: "Analysis",
 	Advocay: "Advocacy",
 	Porass: "Porras",
-	"Porass'": "Porras'",
 };
 
-const fixTypos = (text: string) => text.replace(/[A-Za-z']+/g, (word) => TYPO_FIXES[word] ?? word);
+const fixTypos = (text: string) => text.replace(/[A-Za-z]+/g, (word) => TYPO_FIXES[word] ?? word);
 const squash = (text: string) => text.replace(/\s+/g, " ").trim();
 
 export const isPlaceholderTitle = (title: string) => PLACEHOLDER_TITLES.has(title.trim().toLowerCase());
 
 /**
- * A title that was wrapped over several lines in a sheet cell. The old import joined lines with "; ",
- * which suits a list of topics but not a title, so "The product design; sprint:; decide" reads as three parts.
- * Accepts raw text (real line breaks) or text that already went through that join.
+ * Undoes the old import's line join. It turned each line break in a title cell into "; ", so
+ * "The product design; sprint:; decide" reads as three parts. Only for text that went through that join:
+ * it cannot tell those from a real semicolon, so never run it on a fresh sheet cell.
  */
+export function undoLineJoin(joined: string): string {
+	return joined.replace(/([,:])\s*;\s*/g, "$1 ").replace(/\s*;\s*/g, " ");
+}
+
+/** A title from a sheet cell: line breaks become spaces, known misspellings and redaction markers are made consistent. Real semicolons stay. */
 export function cleanTitle(raw: string): string {
-	const joined = raw
-		.replace(/\s*\n\s*/g, " ")
-		.replace(/([,:])\s*;\s*/g, "$1 ")
-		.replace(/\s*;\s*/g, " ");
-	return squash(fixTypos(joined)).replace(/\{redacted\}|\[redacted\]/gi, "[Redacted]");
+	return squash(fixTypos(raw.replace(/\s*\n\s*/g, " "))).replace(/\{redacted\}|\[redacted\]/gi, "[Redacted]");
 }
 
 /** A topics line: line breaks become commas, dangling commas go, and known misspellings are fixed. */

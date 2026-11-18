@@ -128,7 +128,7 @@ export default async function LibraryListPage({ params }: { params: Promise<{ id
 					{!isOwner && list.shared && !takenDown ? <ReportButton listId={list.id} /> : null}
 					{list.role === "editor" ? <LeaveListButton listId={list.id} memberId={actor.memberId} /> : null}
 				</div>
-				{canEdit && !takenDown ? <p className="min-w-0 text-sm text-muted-foreground">Already in the library? Open it and use Add to list to put it in this list.</p> : null}
+				{canEdit && !takenDown ? <p className="min-w-0 text-sm text-muted-foreground">Already in the library? Open it and tap Add to list.</p> : null}
 			</header>
 
 			{isOwner ? (
@@ -170,7 +170,7 @@ export default async function LibraryListPage({ params }: { params: Promise<{ id
 						title="Nothing in this list yet"
 						description={
 							canEdit
-								? "Add a new item above, or open any library item and use Add to list to put it here."
+								? "Add a new item above, or open any library item and tap Add to list."
 								: "Nobody has added anything to this list yet."
 						}
 					/>

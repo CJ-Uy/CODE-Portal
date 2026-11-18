@@ -92,7 +92,7 @@ export function SavePicker({ itemId, lists, savedIn }: { itemId: string; lists: 
 
 	return (
 		<>
-			<Button type="button" variant={inSaved ? "default" : "outline"} aria-pressed={inSaved} disabled={busy === SAVED} onClick={() => toggle(entries[0])}>
+			<Button type="button" variant={inSaved ? "default" : "outline"} disabled={busy === SAVED} onClick={() => toggle({ id: SAVED, name: entries[0].name })}>
 				<Bookmark className={inSaved ? "fill-current" : undefined} aria-hidden />
 				{inSaved ? "Saved" : "Save"}
 			</Button>
@@ -106,7 +106,14 @@ export function SavePicker({ itemId, lists, savedIn }: { itemId: string; lists: 
 					{error}
 				</p>
 			) : null}
-			<Modal open={open} onOpenChange={setOpen} labelledBy="save-picker-title">
+			<Modal
+				open={open}
+				onOpenChange={(next) => {
+					setOpen(next);
+					if (!next) setError("");
+				}}
+				labelledBy="save-picker-title"
+			>
 				<div className="grid gap-4 p-5">
 					<h2 id="save-picker-title" className="font-heading text-2xl">
 						Save to a list
@@ -144,7 +151,13 @@ export function SavePicker({ itemId, lists, savedIn }: { itemId: string; lists: 
 						{error}
 					</p>
 					<div className="flex justify-end">
-						<Button type="button" onClick={() => setOpen(false)}>
+						<Button
+							type="button"
+							onClick={() => {
+								setOpen(false);
+								setError("");
+							}}
+						>
 							Done
 						</Button>
 					</div>
