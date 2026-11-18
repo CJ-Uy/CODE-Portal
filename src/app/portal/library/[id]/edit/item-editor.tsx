@@ -440,7 +440,7 @@ export function ItemEditor({ item, tags, itemPicker, isOwner }: { item: EditorIt
 		<div className="mx-auto grid max-w-6xl gap-5">
 			<LibraryCrumbs
 				trail={[
-					{ label: "My items", href: "/portal/library/mine" },
+					{ label: "Added by me", href: "/portal/library/mine" },
 					...(item.status === "draft" ? [] : [{ label: title.trim() || "Untitled", href: `/portal/library/${item.id}` }]),
 					{ label: "Edit" },
 				]}

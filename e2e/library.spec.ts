@@ -146,7 +146,7 @@ test("an admin shares a list with a member editor, who adds a note and a comment
 
 		// Save the item to a brand-new list.
 		await page.goto(`/portal/library/${itemId}`);
-		await page.getByRole("button", { name: "Save", exact: true }).click();
+		await page.getByRole("button", { name: "Add to list", exact: true }).click();
 		const picker = page.getByRole("dialog");
 		await picker.getByLabel("New list name").fill(listName);
 		await picker.getByRole("button", { name: "Add", exact: true }).click();

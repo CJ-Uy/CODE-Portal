@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Bookmark, Plus } from "lucide-react";
+import { Bookmark, ListPlus, Plus } from "lucide-react";
 import type { LibraryListSummary } from "@/db/repositories/library-lists";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +23,10 @@ function entriesFor(lists: LibraryListSummary[]): Entry[] {
 	return [{ id: SAVED, name: saved?.name ?? "Saved" }, ...lists.filter((list) => !isOwnSaved(list) && !list.takenDownAt).map((list) => ({ id: list.id, name: list.name }))];
 }
 
-/** The Save button and its list picker: one tap per list, "New list" at the bottom. An item can sit in several lists. */
+/**
+ * Save puts the item in the member's Saved list in one tap, and a second tap takes it out.
+ * "Add to list" opens the picker: one tap per list, "New list" at the bottom. An item can sit in several lists.
+ */
 export function SavePicker({ itemId, lists, savedIn }: { itemId: string; lists: LibraryListSummary[]; savedIn: string[] }) {
 	const [open, setOpen] = useState(false);
 	const [saved, setSaved] = useState(() => {
@@ -39,8 +42,9 @@ export function SavePicker({ itemId, lists, savedIn }: { itemId: string; lists: 
 	const base = entriesFor(lists);
 	// A list made here shows at once; once the page re-renders it arrives in `lists` too, so it is listed only once.
 	const entries = [...base, ...added.filter((entry) => !base.some((known) => known.id === entry.id))];
+	const inSaved = saved.has(SAVED);
 	// Only the lists shown count: the item may also sit in a list that is hidden here, and the button must match what is ticked.
-	const anySaved = entries.some((entry) => saved.has(entry.id));
+	const otherLists = entries.filter((entry) => entry.id !== SAVED && saved.has(entry.id)).length;
 
 	const mark = (id: string, on: boolean) =>
 		setSaved((current) => {
@@ -88,11 +92,28 @@ export function SavePicker({ itemId, lists, savedIn }: { itemId: string; lists: 
 
 	return (
 		<>
-			<Button type="button" variant={anySaved ? "default" : "outline"} aria-haspopup="dialog" onClick={() => setOpen(true)}>
-				<Bookmark className={anySaved ? "fill-current" : undefined} aria-hidden />
-				{anySaved ? "Saved" : "Save"}
+			<Button type="button" variant={inSaved ? "default" : "outline"} disabled={busy === SAVED} onClick={() => toggle({ id: SAVED, name: entries[0].name })}>
+				<Bookmark className={inSaved ? "fill-current" : undefined} aria-hidden />
+				{inSaved ? "Saved" : "Save"}
 			</Button>
-			<Modal open={open} onOpenChange={setOpen} labelledBy="save-picker-title">
+			<Button type="button" variant="outline" aria-haspopup="dialog" onClick={() => setOpen(true)}>
+				<ListPlus aria-hidden />
+				{otherLists > 0 ? `In ${otherLists} ${otherLists === 1 ? "list" : "lists"}` : "Add to list"}
+			</Button>
+			{/* Errors from the one-tap Save show here; the picker has its own line below. */}
+			{!open && error ? (
+				<p aria-live="polite" className="basis-full text-sm text-destructive [overflow-wrap:anywhere]">
+					{error}
+				</p>
+			) : null}
+			<Modal
+				open={open}
+				onOpenChange={(next) => {
+					setOpen(next);
+					if (!next) setError("");
+				}}
+				labelledBy="save-picker-title"
+			>
 				<div className="grid gap-4 p-5">
 					<h2 id="save-picker-title" className="font-heading text-2xl">
 						Save to a list
@@ -130,7 +151,13 @@ export function SavePicker({ itemId, lists, savedIn }: { itemId: string; lists: 
 						{error}
 					</p>
 					<div className="flex justify-end">
-						<Button type="button" onClick={() => setOpen(false)}>
+						<Button
+							type="button"
+							onClick={() => {
+								setOpen(false);
+								setError("");
+							}}
+						>
 							Done
 						</Button>
 					</div>

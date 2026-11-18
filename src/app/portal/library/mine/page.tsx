@@ -148,7 +148,7 @@ export default async function MyLibraryPage() {
 				<EmptyState
 					icon={BookOpen}
 					title="Nothing here yet"
-					description="Upload a file, write a page or share a link. It stays a draft until you publish it."
+					description="Upload a file, write a page or share a link. It stays a draft until you publish it. Looking for something you saved? It is under Saved & lists."
 					action={
 						<Button asChild>
 							<Link href="/portal/library/new">Add to the library</Link>

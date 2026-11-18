@@ -39,8 +39,8 @@ const WHY_NOT_BUSINESS: { title: string; body: string }[] = [
 // The library's four places in plain words, for anyone who opens it and wonders where things are.
 const WAYS_IN: { title: string; href: string; body: string }[] = [
 	{ title: "Browse", href: "/portal/library", body: "Search, or tap a type. The newest items sit at the top, and everything else follows from A to Z as you scroll. More filters has source, tags and smart search." },
-	{ title: "Lists", href: "/portal/library/lists", body: "Save anything to your Saved list, make your own lists, share a reading pack, and open the collections moderators put together." },
-	{ title: "My items", href: "/portal/library/mine", body: "Your drafts and everything you have published, with how each one is doing." },
+	{ title: "Saved & lists", href: "/portal/library/lists", body: "Save anything to your Saved list, make your own lists, share a reading pack, and open the collections moderators put together." },
+	{ title: "Added by me", href: "/portal/library/mine", body: "Your drafts and everything you have published, with how each one is doing." },
 	{ title: "Add to the library", href: "/portal/library/new", body: "Upload a file, write a page or share a link. It stays a draft, seen only by you, until you publish it." },
 ];
 
