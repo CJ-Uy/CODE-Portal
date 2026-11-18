@@ -6,8 +6,8 @@ import { BackToLibrary } from "./back-to-library";
 
 const TABS = [
 	{ key: "browse", label: "Browse", href: "/portal/library" },
-	{ key: "lists", label: "Lists", href: "/portal/library/lists" },
-	{ key: "mine", label: "My items", href: "/portal/library/mine" },
+	{ key: "lists", label: "Saved & lists", href: "/portal/library/lists" },
+	{ key: "mine", label: "Added by me", href: "/portal/library/mine" },
 	{ key: "about", label: "About", href: "/portal/library/about" },
 ] as const;
 

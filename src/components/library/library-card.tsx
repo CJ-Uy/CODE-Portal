@@ -11,7 +11,8 @@ const MAX_TAGS = 3;
  * The one card every library surface shows an item with. Server- or client-renderable: it is a plain link.
  * The title is the link and stretches over the card, so a screen reader hears the title, not the whole card.
  * Type, source and tags are plain text, not pills, so nothing on a card looks like a filter it is not.
- * It carries no per-member reading data, only the save count (from 3 up) and what a moderator marked public-ready.
+ * It carries no per-member reading data, only the save count (from 3 up) and a "Ready for public" note.
+ * Inside the members-only library "Not for public release" is the normal state, so cards leave it out; the item page still says it.
  * It takes display fields only (`toCardFields` makes them), so a client component never receives a member id.
  * `compact` drops the summary and tags, for narrow shelves and the dashboard.
  */
@@ -20,7 +21,7 @@ export function LibraryItemCard({ card, compact = false, className }: { card: Li
 	const byline = [authors, card.year ? String(card.year) : ""].filter(Boolean).join(" · ");
 	const tags = card.tagNames.slice(0, MAX_TAGS);
 	const saved = showSaveCount(card.saves) ? `Saved by ${card.saves.toLocaleString("en-US")}` : "";
-	const readiness = card.publicReadiness ? READINESS_LABELS[card.publicReadiness] : "";
+	const readiness = card.publicReadiness === "public_ready" ? READINESS_LABELS.public_ready : "";
 	const footer = [saved, readiness].filter(Boolean);
 
 	return (

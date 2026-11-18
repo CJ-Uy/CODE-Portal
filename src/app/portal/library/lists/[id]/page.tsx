@@ -61,7 +61,7 @@ export default async function LibraryListPage({ params }: { params: Promise<{ id
 
 	return (
 		<div className="mx-auto grid min-w-0 max-w-4xl gap-6">
-			<LibraryCrumbs trail={[{ label: "Lists", href: "/portal/library/lists" }, { label: list.name }]} />
+			<LibraryCrumbs trail={[{ label: "Saved & lists", href: "/portal/library/lists" }, { label: list.name }]} />
 
 			{takenDown ? (
 				<p role="status" className="min-w-0 rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm [overflow-wrap:anywhere]">
@@ -128,7 +128,7 @@ export default async function LibraryListPage({ params }: { params: Promise<{ id
 					{!isOwner && list.shared && !takenDown ? <ReportButton listId={list.id} /> : null}
 					{list.role === "editor" ? <LeaveListButton listId={list.id} memberId={actor.memberId} /> : null}
 				</div>
-				{canEdit && !takenDown ? <p className="min-w-0 text-sm text-muted-foreground">Already in the library? Open it and use Save to add it to this list.</p> : null}
+				{canEdit && !takenDown ? <p className="min-w-0 text-sm text-muted-foreground">Already in the library? Open it and use Add to list to put it in this list.</p> : null}
 			</header>
 
 			{isOwner ? (
@@ -170,7 +170,7 @@ export default async function LibraryListPage({ params }: { params: Promise<{ id
 						title="Nothing in this list yet"
 						description={
 							canEdit
-								? "Add a new item above, or open any library item and tap Save to put it here."
+								? "Add a new item above, or open any library item and use Add to list to put it here."
 								: "Nobody has added anything to this list yet."
 						}
 					/>

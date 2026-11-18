@@ -33,6 +33,7 @@ import {
 	type Verdict,
 } from "./sql";
 import { assertTagMapComplete, proposeTagMap, type TagMap } from "./tag-map";
+import { cleanAuthor, cleanTitle, cleanTopics, titleFor } from "../library-cleanup/rules";
 
 const ROOT = path.resolve(".local/library-import");
 const at = (...parts: string[]) => path.join(ROOT, ...parts);
@@ -57,6 +58,8 @@ const cell = (row: Row, column: string) => String(row[column] ?? "").trim();
 const driveId = (url: string) => /(?:\/d\/|[?&]id=)([-\w]{20,})/.exec(url)?.[1] ?? null;
 const https = (url: string) => url.trim().replace(/^http:\/\//i, "https://");
 const clip = (text: string, max: number) => (text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`);
+/** Authors without "unknown" placeholders, tidied. */
+const cleanAuthors = (names: string[]) => names.map(cleanAuthor).filter((name): name is string => name !== null);
 const oneLine = (text: string) => text.replace(/\s*\n\s*/g, "; ").replace(/\s+/g, " ").trim();
 const yearOf = (raw: string) => {
 	const year = Math.trunc(Number.parseFloat(raw));
@@ -283,15 +286,16 @@ function plan(): void {
 		const topicsCell = cell(row, "D");
 		const docType = normalizeDocType(cell(row, "E"));
 		const topics = splitTopics(topicsCell, KNOWN_PHRASES);
-		const { authors, owner } = authorsOf(splitAuthors(cell(row, "G"), "code_document"));
+		const { authors, owner } = authorsOf(cleanAuthors(splitAuthors(cell(row, "G"), "code_document")));
 		const reviewed = verdicts[id];
-		const title = cell(row, "C") || (topics[0] ? `${code}: ${topics[0]}` : code);
+		// The sheet sometimes says "*" or "unknown" for a title; those fall back to the code and first topic.
+		const title = titleFor(cell(row, "C"), code, topics) ?? code;
 		const draft: Draft = {
 			...base("code_document", "file", importedAt, yearOf(cell(row, "H"))),
 			id: `lib_imp_${id}`,
 			origin,
-			title: clip(oneLine(title), 200),
-			dek: clip(oneLine(topicsCell), 500),
+			title: clip(title, 200),
+			dek: clip(cleanTopics(topicsCell), 500),
 			fileCode: code,
 			// A bare value normalizeDocType does not recognise is still a module, of an unknown format.
 			subtype: docType.subtype ?? "Module",
@@ -315,7 +319,7 @@ function plan(): void {
 	// Books and papers.
 	const readingTab = "⚙️ External Library Data";
 	for (const { n, row } of rowsOf(sheet, readingTab)) {
-		const title = oneLine(cell(row, "D"));
+		const title = cleanTitle(cell(row, "D"));
 		if (n <= 6 || !title) continue;
 		const origin = `${readingTab} row ${n}`;
 		const id = driveId(cell(row, "H_url"));
@@ -324,7 +328,7 @@ function plan(): void {
 			...base("reading", "file", importedAt, yearOf(cell(row, "E"))),
 			origin,
 			title: clip(title, 200),
-			authors: splitAuthors(cell(row, "C"), "reading")
+			authors: cleanAuthors(splitAuthors(cell(row, "C"), "reading"))
 				.slice(0, 20)
 				.map((name) => ({ name: clip(name, 120) })),
 			subtype: readingSubtype(cell(row, "G")),
@@ -348,7 +352,7 @@ function plan(): void {
 		if (!number) continue;
 		const id = `lib_imp_fmrw_${number.padStart(3, "0")}`;
 		const origin = `${frameworkTab} row ${n}`;
-		const name = oneLine(cell(row, "B"));
+		const name = cleanTitle(cell(row, "B"));
 		const imageRows = frameworkRows.filter(({ row: other }) => cell(other, "S") === code);
 		if (imageRows.length > 1) throw new Error(`${origin}: ${imageRows.length} diagram rows carry code ${code}.`);
 		const imageRow = imageRows[0]?.row;
@@ -391,7 +395,7 @@ function plan(): void {
 			...base("website", "link", importedAt, null),
 			id: `lib_imp_web_${host.replace(/[^a-z0-9]+/g, "-")}`,
 			origin: `${linkTab} row ${n}`,
-			title: clip(oneLine(cell(row, "C")), 200),
+			title: clip(cleanTitle(cell(row, "C")), 200),
 			dek: clip(oneLine(cell(row, "D")), 500),
 			url: https(url),
 		});

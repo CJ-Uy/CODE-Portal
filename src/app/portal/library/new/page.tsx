@@ -40,7 +40,7 @@ export default async function NewLibraryItemPage({ searchParams }: { searchParam
 		<div className="mx-auto grid max-w-6xl gap-6">
 			<LibraryCrumbs
 				trail={[
-					...(target ? [{ label: "Lists", href: "/portal/library/lists" }, { label: target.name, href: `/portal/library/lists/${target.id}` }] : []),
+					...(target ? [{ label: "Saved & lists", href: "/portal/library/lists" }, { label: target.name, href: `/portal/library/lists/${target.id}` }] : []),
 					{ label: "Add to the library" },
 				]}
 			/>
