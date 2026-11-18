@@ -138,18 +138,21 @@ export async function smartSearch(
 		// A tag chip only boosts what the search already found. Unbound by the query, a wrong tag's most-saved item would
 		// rank as high as plain search's best match. Word chips stay free to find more.
 		const candidates = [...new Set([...vectorIds, ...plainIds])];
-		const tagLists = candidates.length
-			? await Promise.all(
-					chips
-						.filter((chip) => chip.tagId)
-						.map((chip) => idsOf(deps.repos.library.search(actor, { ...filters, onlyIds: candidates, tagIds: [...(filters.tagIds ?? []), chip.tagId!], sort: "most_saved", limit: CHIP_LIMIT }))),
-				)
-			: [];
-		const fused = fuseRankings(vectorIds, plainIds, ...wordLists, ...tagLists);
-		if (fused.length === 0) return { chips, ids: [] };
+		const tagChips = chips.filter((chip) => chip.tagId);
+		const tagSearch = (chip: SmartChip, onlyIds?: string[]) =>
+			idsOf(deps.repos.library.search(actor, { ...filters, ...(onlyIds ? { onlyIds } : {}), tagIds: [...(filters.tagIds ?? []), chip.tagId!], sort: "most_saved", limit: CHIP_LIMIT }));
+		const tagLists = candidates.length ? await Promise.all(tagChips.map((chip) => tagSearch(chip, candidates))) : [];
 		// The visibility filter. Vectorize knows nothing about drafts, confidential or deleted items; D1 does.
-		const { cards } = await deps.repos.library.search(actor, { ...filters, onlyIds: fused, sort: "relevance", limit: SMART_LIMIT });
-		return { chips, ids: cards.map((card) => card.id) };
+		const visible = async (ids: string[]) =>
+			ids.length ? (await deps.repos.library.search(actor, { ...filters, onlyIds: ids, sort: "relevance", limit: SMART_LIMIT })).cards.map((card) => card.id) : [];
+		const found = await visible(fuseRankings(vectorIds, plainIds, ...wordLists, ...tagLists));
+		// Nothing the member can see matched (a typo, say), so there is no best match to outrank: tag chips search on their own.
+		// Otherwise the page would say "Also searching for" a tag that found nothing. Vectorize always returns its nearest
+		// neighbours, so this is decided after the visibility filter, not from the raw ids.
+		if (found.length === 0 && tagChips.length) {
+			return { chips, ids: await visible(fuseRankings(...(await Promise.all(tagChips.map((chip) => tagSearch(chip)))))) };
+		}
+		return { chips, ids: found };
 	} catch (error) {
 		fellBack(reasonOf(error));
 		return null;

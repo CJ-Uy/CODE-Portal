@@ -141,6 +141,48 @@ describe("smartSearch", () => {
 		expect(res?.ids).toEqual([keyword, meaning]);
 	});
 
+	it("lets a tag chip search on its own when nothing the member can see matched", async () => {
+		const notes = await insertItem({ title: "Notes on human-centered work" });
+		const toolkit = await insertItem({ title: "Field toolkit" });
+		await insertItem({ title: "Budget template" });
+		await addTag("ltg_dt", "Design Thinking / HCD", [notes, toolkit]);
+		// toolkit is the tag's most-saved item, so it leads.
+		await db.insert(schema.libraryLists).values({ id: "lst_1", memberId: "owner", name: "Saves" });
+		await db.insert(schema.libraryListItems).values({ listId: "lst_1", libraryItemId: toolkit, addedBy: "owner" });
+		const ai = fakeAi({ keywords: async () => '{"tags":["Design Thinking / HCD"]}' });
+
+		// A typo: plain search and the vectors find nothing.
+		const res = await smartSearch(actors.other, "desgin thinkng", { ai, vectorize: fakeVectorize([]), repos });
+		expect(res?.chips).toEqual([{ label: "Design Thinking / HCD", tagId: "ltg_dt" }]);
+		expect(res?.ids).toEqual([toolkit, notes]);
+
+		// Removing the chip takes its results with it.
+		const without = await smartSearch(actors.other, "desgin thinkng", { ai, vectorize: fakeVectorize([]), repos }, { without: ["design thinking / hcd"] });
+		expect(without?.ids).toEqual([]);
+	});
+
+	it("still lets the tag chip search on its own when the vectors return only items the member cannot see", async () => {
+		const open = await insertItem({ title: "Field toolkit" });
+		const secret = await insertItem({ title: "Client notes", confidentiality: "confidential" });
+		const draft = await insertItem({ title: "Unfinished guide", status: "draft", createdBy: "owner" });
+		await addTag("ltg_dt", "Design Thinking / HCD", [open, secret, draft]);
+		const ai = fakeAi({ keywords: async () => '{"tags":["Design Thinking / HCD"]}' });
+
+		// Live Vectorize always answers with its nearest neighbours, here only hidden ones.
+		const res = await smartSearch(actors.other, "desgin thinkng", { ai, vectorize: fakeVectorize([`${secret}:0`, `${draft}:0`]), repos });
+		expect(res?.ids).toEqual([open]);
+	});
+
+	it("keeps a tag chip boosting only, when a word chip found something", async () => {
+		const worded = await insertItem({ title: "Attendance tracker" });
+		const tagged = await insertItem({ title: "Roll call" });
+		await addTag("ltg_mot", "Motivation", [tagged]);
+		const ai = fakeAi({ keywords: async () => '{"tags":["Motivation"],"words":["attendance"]}' });
+
+		const res = await smartSearch(actors.other, "zzqx", { ai, vectorize: fakeVectorize([]), repos });
+		expect(res?.ids).toEqual([worded]);
+	});
+
 	it("drops a word chip that only repeats the search", async () => {
 		const ai = fakeAi({ keywords: async () => '{"words":["Burnout","rest"]}' });
 		const res = await smartSearch(actors.other, "burnout", { ai, vectorize: fakeVectorize([]), repos });
