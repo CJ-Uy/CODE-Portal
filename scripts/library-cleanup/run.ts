@@ -27,7 +27,8 @@ const at = (file: string) => path.join(ROOT, file);
 const SUMMARY_CUT = 160;
 
 type Row = [string, string, string, 0 | 1, string, string, string];
-type Override = { title?: string; authors?: [string, string][]; note?: string };
+/** `distinct`: same title as another item, but checked to be a different module, so it is not flagged. */
+type Override = { title?: string; authors?: [string, string][]; note?: string; distinct?: boolean };
 export type Planned = {
 	id: string;
 	kind: LibraryKind;
@@ -69,7 +70,7 @@ export function plan(rows: Row[], overrides: Record<string, Override>): Planned[
 
 		// Beta titles went through the old "; " line join, so it is undone here (never in the importer).
 		let newTitle = override.title ?? cleanTitle(undoLineJoin(title));
-		if (isPlaceholderTitle(newTitle)) {
+		if (!override.title && isPlaceholderTitle(newTitle)) {
 			// The importer prefixes the real file code. Beta's list view does not show the code, so "Untitled module"
 			// stands in for it: a bare topic would read like a real title. The note asks a person for the name.
 			const fallback = fallbackTitle(kind === "code_document" ? "Untitled module" : null, dekCut ? [] : topics);
@@ -77,7 +78,7 @@ export function plan(rows: Row[], overrides: Record<string, Override>): Planned[
 			notes.push("The sheet had no title. This one is made from its topic; ask the author for the real name.");
 		}
 		if (/^(IDF|MOD)-\d+$/.test(newTitle)) notes.push("Only a file code, no name or topics. Needs a person to name it.");
-		if ((titleCount.get(title.toLowerCase()) ?? 0) > 1 && kind !== "reading") notes.push(`Another item has the same title ("${title}"). Duplicate, or two versions?`);
+		if ((titleCount.get(title.toLowerCase()) ?? 0) > 1 && kind !== "reading" && !override.distinct) notes.push(`Another item has the same title ("${title}"). Duplicate, or two versions?`);
 
 		const names = splitBy(by, kind);
 		const dropUnknownAuthor = names.some((name) => cleanAuthor(name) === null);
